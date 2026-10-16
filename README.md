@@ -238,8 +238,9 @@ If `app.go` starts to grow, you can split it into multiple files.
 For a large number of injections, [wire](https://github.com/google/wire) can be used.
 
 The `migrate.go` file applies the database schema at startup with [Atlas](https://atlasgo.io/).
-The desired schema is defined declaratively in `internal/app/schema/schema.hcl` — there are no
-migration files; on every boot Atlas diffs the file against the database and applies what is missing.
+The desired schema is defined declaratively in `internal/app/schema/*.hcl`, one file per table —
+there are no migration files; on every boot Atlas diffs the directory against the database and
+applies what is missing.
 It is included if an argument with the _migrate_ tag is specified.
 For example:
 

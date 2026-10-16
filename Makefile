@@ -102,7 +102,7 @@ mock: ### run mockgen
 
 schema-apply: ### apply desired schema to the database (Atlas)
 	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
-		--to file://internal/app/schema/schema.hcl \
+		--to file://internal/app/schema \
 		--dev-url 'docker://postgres/18/dev?search_path=public'
 .PHONY: schema-apply
 

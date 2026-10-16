@@ -4,8 +4,9 @@ package app
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"time"
@@ -13,8 +14,8 @@ import (
 	"ariga.io/atlas/atlasexec"
 )
 
-//go:embed schema/schema.hcl
-var schemaHCL string
+//go:embed schema
+var schemaFS embed.FS
 
 const (
 	_defaultAttempts = 20
@@ -63,8 +64,13 @@ func applySchema(databaseURL, devURL string) error {
 	}
 	defer workdir.Close()
 
-	if _, err = workdir.WriteFile("schema.hcl", []byte(schemaHCL)); err != nil {
-		return fmt.Errorf("migrate - workdir.WriteFile: %w", err)
+	sub, err := fs.Sub(schemaFS, "schema")
+	if err != nil {
+		return fmt.Errorf("migrate - fs.Sub: %w", err)
+	}
+
+	if err = workdir.CopyFS("schema", sub); err != nil {
+		return fmt.Errorf("migrate - workdir.CopyFS: %w", err)
 	}
 
 	client, err := atlasexec.NewClient(workdir.Path(), "atlas")
@@ -74,7 +80,7 @@ func applySchema(databaseURL, devURL string) error {
 
 	if _, err = client.SchemaApply(context.Background(), &atlasexec.SchemaApplyParams{
 		URL:         databaseURL,
-		To:          "file://schema.hcl",
+		To:          "file://schema",
 		DevURL:      devURL,
 		AutoApprove: true,
 	}); err != nil {

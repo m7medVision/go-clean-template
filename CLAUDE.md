@@ -209,7 +209,7 @@ before writing.
 
 1. **Entity** — `internal/entity/<domain>.go` with the type and its invariants; new sentinel errors
    go in `internal/entity/errors.go`.
-2. **Schema** — add the table to `internal/app/schema/schema.hcl` (Atlas declarative workflow);
+2. **Schema** — add the table as `internal/app/schema/<domain>.hcl` (Atlas declarative workflow);
    set any new env vars in `docker-compose.yml` and `.env.example`.
 3. **Repo contract** — add the interface to `internal/repo/contracts.go`.
 4. **Repo implementation** — `internal/repo/persistent/<domain>/<domain>.go` (`package <domain>`,
@@ -241,11 +241,12 @@ with worked examples per transport; follow it rather than inventing a scheme.
 ## Database
 
 The database schema is managed with [Atlas](https://atlasgo.io/) using the declarative workflow:
-the desired state lives in `internal/app/schema/schema.hcl` (embedded into the binary); change the
-schema by editing that file, review the diff with `make schema-apply` (host-side, uses Atlas's
-docker dev-database driver), and let Atlas apply it. The app applies the schema itself at startup
-only when built with the `migrate` build tag (`internal/app/migrate.go`) — that is what `make run`
-and the Dockerfile do; startup apply needs `PG_URL` and an empty, dedicated `ATLAS_DEV_URL`.
+the desired state lives in `internal/app/schema/*.hcl`, one file per table, embedded into the
+binary; change the schema by editing the matching file, review the diff with `make schema-apply`
+(host-side, uses Atlas's docker dev-database driver), and let Atlas apply it. The app applies the
+schema itself at startup only when built with the `migrate` build tag (`internal/app/migrate.go`)
+— that is what `make run` and the Dockerfile do; startup apply needs `PG_URL` and an empty,
+dedicated `ATLAS_DEV_URL`.
 The compose stack provides that dev database as the `atlas-dev` service. Queries are built with
 Squirrel via the embedded `*postgres.Postgres`; there is no ORM and no raw string concatenation.
 
