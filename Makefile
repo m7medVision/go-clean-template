@@ -100,17 +100,15 @@ mock: ### run mockgen
 	mockgen -source ./internal/usecase/contracts.go -package usecase_test > ./internal/usecase/mocks_usecase_test.go
 .PHONY: mock
 
-migrate-create:  ### create new migration
-	migrate create -ext sql -dir migrations '$(word 2,$(MAKECMDGOALS))'
-.PHONY: migrate-create
-
-migrate-up: ### migration up
-	migrate -path migrations -database '$(PG_URL)?sslmode=disable' up
-.PHONY: migrate-up
+schema-apply: ### apply desired schema to the database (Atlas)
+	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
+		--to file://internal/app/schema/schema.hcl \
+		--dev-url 'docker://postgres/18/dev?search_path=public'
+.PHONY: schema-apply
 
 bin-deps: ### install tools
 	go install tool
-	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate
+	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | sh
 .PHONY: bin-deps
 
 pre-commit: deps swag-v1 proto-v1 mock format linter-golangci test ### run pre-commit

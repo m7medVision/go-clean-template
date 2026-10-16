@@ -12,7 +12,7 @@ different settings than CI. Use the target, not the tool.
 
 | Task | Use this | Not this |
 | --- | --- | --- |
-| Install tool binaries (`swag`, `mockgen`, `migrate`, linters) | `make bin-deps` | `go install ...` |
+| Install tool binaries (`swag`, `mockgen`, linters, `atlas`) | `make bin-deps` | `go install ...` |
 | Unit tests | `make test` | `go test ./...` — the target adds `-race -covermode atomic` and scopes to `./internal/... ./pkg/...` |
 | Integration tests | `make compose-up-integration-test` | `make integration-test` — see below |
 | Lint | `make linter-golangci` | `golangci-lint run` |
@@ -26,8 +26,7 @@ different settings than CI. Use the target, not the tool.
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
-| Create a migration | `make migrate-create <name>` | `migrate create ...` |
-| Apply migrations | `make migrate-up` | `migrate -path ... up` |
+| Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
 
 `make help` lists every target.
@@ -37,9 +36,6 @@ Three traps in these targets:
 - **`make integration-test` is not the one you want.** It runs `go test ./integration-test/...` on
   the host, where the suite cannot resolve the container hostnames it needs, so it always fails.
   `make compose-up-integration-test` is the real entry point.
-- **`make migrate-create <name>` prints an error after it succeeds.** The target reads the name via
-  `$(word 2,$(MAKECMDGOALS))`, so `make` then tries to build `<name>` as a target and reports
-  `No rule to make target`. The migration files are already created; ignore that line.
 - **`make run` and `make pre-commit` depend on `swag-v1` and `proto-v1`**, so they need `swag` and
   `protoc` on `PATH`. Run `make bin-deps` first (`protoc` itself is not installed by it).
 
@@ -213,8 +209,8 @@ before writing.
 
 1. **Entity** — `internal/entity/<domain>.go` with the type and its invariants; new sentinel errors
    go in `internal/entity/errors.go`.
-2. **Migration** — `make migrate-create create_<table>`, then fill both the `.up.sql` and the
-   `.down.sql`. A missing down-migration is a review failure.
+2. **Schema** — add the table to `internal/app/schema/schema.hcl` (Atlas declarative workflow);
+   set any new env vars in `docker-compose.yml` and `.env.example`.
 3. **Repo contract** — add the interface to `internal/repo/contracts.go`.
 4. **Repo implementation** — `internal/repo/persistent/<domain>/<domain>.go` (`package <domain>`,
    Squirrel queries, driver errors mapped to sentinels) plus `tracing.go` next to it, and a `New`
@@ -244,11 +240,14 @@ with worked examples per transport; follow it rather than inventing a scheme.
 
 ## Database
 
-`migrations/` holds golang-migrate pairs (`<timestamp>_<name>.up.sql` / `.down.sql`). Create with
-`make migrate-create <name>`, apply with `make migrate-up`. The app applies them itself at startup
+The database schema is managed with [Atlas](https://atlasgo.io/) using the declarative workflow:
+the desired state lives in `internal/app/schema/schema.hcl` (embedded into the binary); change the
+schema by editing that file, review the diff with `make schema-apply` (host-side, uses Atlas's
+docker dev-database driver), and let Atlas apply it. The app applies the schema itself at startup
 only when built with the `migrate` build tag (`internal/app/migrate.go`) — that is what `make run`
-and the Dockerfile do. Queries are built with Squirrel via the embedded `*postgres.Postgres`;
-there is no ORM and no raw string concatenation.
+and the Dockerfile do; startup apply needs `PG_URL` and an empty, dedicated `ATLAS_DEV_URL`.
+The compose stack provides that dev database as the `atlas-dev` service. Queries are built with
+Squirrel via the embedded `*postgres.Postgres`; there is no ORM and no raw string concatenation.
 
 ## Tests
 

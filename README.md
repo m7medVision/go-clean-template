@@ -16,7 +16,7 @@ Clean Architecture template for Golang services
 [![Validation](https://img.shields.io/badge/Validator-Data%20Integrity-blue)](https://github.com/go-playground/validator)
 [![JSON Handling](https://img.shields.io/badge/Go--JSON-Fast%20Serialization-blue)](https://github.com/goccy/go-json)
 [![Query Builder](https://img.shields.io/badge/Squirrel-SQL%20Query%20Builder-blue)](https://github.com/Masterminds/squirrel)
-[![Database Migrations](https://img.shields.io/badge/Migrations-Seamless%20Schema%20Updates-blue)](https://github.com/golang-migrate/migrate)
+[![Database Migrations](https://img.shields.io/badge/Migrations-Seamless%20Schema%20Updates-blue)](https://atlasgo.io/)
 [![Logging](https://img.shields.io/badge/ZeroLog-Structured%20Logging-blue)](https://github.com/rs/zerolog)
 [![Metrics](https://img.shields.io/badge/Prometheus-Metrics%20Integration-blue)](https://github.com/ansrivas/fiberprometheus)
 [![Tracing](https://img.shields.io/badge/OpenTelemetry-Distributed%20Tracing-blue)](https://opentelemetry.io/)
@@ -237,7 +237,9 @@ If `app.go` starts to grow, you can split it into multiple files.
 
 For a large number of injections, [wire](https://github.com/google/wire) can be used.
 
-The `migrate.go` file is used for database auto migrations.
+The `migrate.go` file applies the database schema at startup with [Atlas](https://atlasgo.io/).
+The desired schema is defined declaratively in `internal/app/schema/schema.hcl` — there are no
+migration files; on every boot Atlas diffs the file against the database and applies what is missing.
 It is included if an argument with the _migrate_ tag is specified.
 For example:
 

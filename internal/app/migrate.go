@@ -3,16 +3,18 @@
 package app
 
 import (
-	"errors"
+	"context"
+	_ "embed"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	// migrate tools
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"ariga.io/atlas/atlasexec"
 )
+
+//go:embed schema/schema.hcl
+var schemaHCL string
 
 const (
 	_defaultAttempts = 20
@@ -24,17 +26,20 @@ func init() {
 	if !ok || len(databaseURL) == 0 {
 		log.Fatalf("migrate: environment variable not declared: PG_URL")
 	}
-
 	databaseURL += "?sslmode=disable"
+
+	devURL, ok := os.LookupEnv("ATLAS_DEV_URL")
+	if !ok || len(devURL) == 0 {
+		log.Fatalf("migrate: environment variable not declared: ATLAS_DEV_URL")
+	}
 
 	var (
 		attempts = _defaultAttempts
 		err      error
-		m        *migrate.Migrate
 	)
 
 	for attempts > 0 {
-		m, err = migrate.New("file://migrations", databaseURL)
+		err = applySchema(databaseURL, devURL)
 		if err == nil {
 			break
 		}
@@ -45,19 +50,36 @@ func init() {
 	}
 
 	if err != nil {
-		log.Fatalf("Migrate: postgres connect error: %s", err)
+		log.Fatalf("Migrate: schema apply error: %s", err)
 	}
 
-	err = m.Up()
-	defer m.Close()
-	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		log.Fatalf("Migrate: up error: %s", err)
+	log.Printf("Migrate: schema is synced")
+}
+
+func applySchema(databaseURL, devURL string) error {
+	workdir, err := atlasexec.NewWorkingDir()
+	if err != nil {
+		return fmt.Errorf("migrate - atlasexec.NewWorkingDir: %w", err)
+	}
+	defer workdir.Close()
+
+	if _, err = workdir.WriteFile("schema.hcl", []byte(schemaHCL)); err != nil {
+		return fmt.Errorf("migrate - workdir.WriteFile: %w", err)
 	}
 
-	if errors.Is(err, migrate.ErrNoChange) {
-		log.Printf("Migrate: no change")
-		return
+	client, err := atlasexec.NewClient(workdir.Path(), "atlas")
+	if err != nil {
+		return fmt.Errorf("migrate - atlasexec.NewClient: %w", err)
 	}
 
-	log.Printf("Migrate: up success")
+	if _, err = client.SchemaApply(context.Background(), &atlasexec.SchemaApplyParams{
+		URL:         databaseURL,
+		To:          "file://schema.hcl",
+		DevURL:      devURL,
+		AutoApprove: true,
+	}); err != nil {
+		return fmt.Errorf("migrate - client.SchemaApply: %w", err)
+	}
+
+	return nil
 }
