@@ -1,7 +1,7 @@
 # go-clean-template
 
 Go clean-architecture reference service. Three domains (`user`, `task`, `translation`) exposed
-over five transports (REST — chi + Huma v2, gRPC, RabbitMQ RPC, NATS RPC, and GraphQL via gqlgen at
+over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
 `/graphql` on the REST port, tasks only, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
 Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
 
@@ -23,7 +23,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
-| Start dependencies (Postgres, RabbitMQ, NATS) | `make compose-up` | `docker compose up` |
+| Start dependencies (Postgres) | `make compose-up` | `docker compose up` |
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
@@ -94,8 +94,8 @@ Every controller method, on every transport, does the same six things in the sam
 shape from a neighbouring handler in the same transport.
 
 1. **Get the caller.** REST: `middleware.UserID(ctx)` (the chi `middleware.Auth` middleware stores
-   it in the request context). gRPC: `grpcmw.UserIDFromContext(ctx)`.
-   AMQP / NATS: `extractUserID(d, r.j)`. A failure here is an auth error, not a 500.
+   it in the request context). gRPC: `grpcmw.UserIDFromContext(ctx)`. GraphQL: `caller(ctx)`.
+   A failure here is an auth error, not a 500.
 2. **Decode into a transport-local DTO** from `<transport>/v1/request/`. On REST the DTO is the
    `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass a
    `request.*` type into a use case.
@@ -116,12 +116,6 @@ shape from a neighbouring handler in the same transport.
    Anything with a wrapper, a projection or a different field set gets a type in
    `<transport>/v1/response/` used as the Huma output `Body` (`response.TaskList`,
    `response.Token`). gRPC always converts through `response.New*Response`.
-
-AMQP and NATS handlers are closures returning that transport's `server.CallHandler` —
-`func(ctx, *amqp.Delivery) (any, error)` and `func(ctx, *nats.Msg) (any, error)`. Each transport
-has its own `extractUserID` in `v1/auth.go` taking its own message type. Handlers return a plain
-wrapped `error`; the RPC server turns it into a generic `ErrInternalServer` / `ErrBadHandler`
-reply. Do not hand-build an error envelope there.
 
 ## Conventions that will bite you
 
@@ -194,8 +188,6 @@ set to keep aligned. Update it whenever a change touches what it documents:
      `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in
      `internal/controller/grpc/v1/`.
-   - AMQP / NATS: handler returning a `CallHandler` + a `"v1.<domain>.<action>"` key in the
-     transport's `v1/router.go`.
 
 Transports are independent by design; adding a method to only one is a legitimate choice, not an
 oversight — but say which ones you covered.
@@ -233,8 +225,7 @@ before writing.
 Routes are grouped under a version package (`<transport>/v1/`). A v2 means a new sibling package
 with the same layout, registered alongside v1 in the transport's top-level `router.go` — REST adds
 operations under the new `/v2/...` paths from a `v2.NewRoutes(api, ...)` in `restapi/router.go`,
-gRPC registers a second set of `NewXRoutes`, AMQP/NATS add more
-`"v2.<domain>.<action>"` keys to the same route map. v1 stays untouched. `README.md` documents this
+and gRPC registers a second set of `NewXRoutes`. v1 stays untouched. `README.md` documents this
 with worked examples per transport; follow it rather than inventing a scheme.
 
 ## Database
@@ -254,5 +245,5 @@ Squirrel via the embedded `*postgres.Postgres`; there is no ORM and no raw strin
 - Unit: `internal/...` and `pkg/...`, run by `make test` with `-race`. Use-case tests use the
   generated gomock mocks, are table-driven, and call `t.Parallel()` (`paralleltest` enforces it).
 - Integration: `integration-test/` runs *inside* the docker network — it resolves the service as
-  host `app` and talks to `rabbitmq` / `nats` by container name, so it fails on the host machine.
+  host `app` by container name, so it fails on the host machine.
   Always run it through `make compose-up-integration-test`.

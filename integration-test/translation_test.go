@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	protov1 "github.com/evrone/go-clean-template/docs/proto/v1"
-	natsClient "github.com/evrone/go-clean-template/pkg/nats/nats_rpc/client"
-	rmqClient "github.com/evrone/go-clean-template/pkg/rabbitmq/rmq_rpc/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -151,78 +149,6 @@ func TestGRPCTranslationV1(t *testing.T) {
 		_, err = translationClient.GetHistory(grpcAuthCtx(t, token), &protov1.GetHistoryRequest{})
 		if err != nil {
 			t.Fatal("gRPC Client - remote call error - translationClient.GetHistory", err)
-		}
-	}
-}
-
-// RabbitMQ RPC Client V1: getHistory.
-func TestRMQTranslationV1(t *testing.T) {
-	token := registerAndLoginRMQ(t)
-
-	client, err := rmqClient.New(rmqURL, rpcServerExchange, rpcClientExchange)
-	if err != nil {
-		t.Fatal("RabbitMQ RPC Client - init error - rmqClient.New", err)
-	}
-
-	defer func() {
-		if serr := client.Shutdown(); serr != nil {
-			t.Fatal("RabbitMQ RPC Client - shutdown error - client.Shutdown", serr)
-		}
-	}()
-
-	type Translation struct {
-		Source      string `json:"source"`
-		Destination string `json:"destination"`
-		Original    string `json:"original"`
-		Translation string `json:"translation"`
-	}
-
-	type historyResponse struct {
-		History []Translation `json:"history"`
-	}
-
-	for range requests {
-		var history historyResponse
-
-		err = client.RemoteCall("v1.translation.getHistory", authenticatedPayload(token, nil), &history)
-		if err != nil {
-			t.Fatal("RabbitMQ RPC Client - remote call error - client.RemoteCall", err)
-		}
-	}
-}
-
-// NATS RPC Client V1: getHistory.
-func TestNATSTranslationV1(t *testing.T) {
-	token := registerAndLoginNATS(t)
-
-	client, err := natsClient.New(natsURL, rpcServerExchange)
-	if err != nil {
-		t.Fatal("NATS RPC Client - init error - natsClient.New", err)
-	}
-
-	defer func() {
-		if serr := client.Shutdown(); serr != nil {
-			t.Fatal("NATS RPC Client - shutdown error - client.Shutdown", serr)
-		}
-	}()
-
-	type Translation struct {
-		Source      string `json:"source"`
-		Destination string `json:"destination"`
-		Original    string `json:"original"`
-		Translation string `json:"translation"`
-	}
-
-	type historyResponse struct {
-		History []Translation `json:"history"`
-	}
-
-	for range requests {
-		var history historyResponse
-
-		err = client.RemoteCall("v1.translation.getHistory", authenticatedPayload(token, nil), &history)
-		if err != nil {
-			t.Fatal("NATS RPC Client - remote call error - client.RemoteCall", err)
 		}
 	}
 }

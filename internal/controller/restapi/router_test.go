@@ -107,11 +107,6 @@ func TestMain(m *testing.M) {
 		{"PG_POOL_MAX", "1"},
 		{"PG_URL", "postgres://localhost/db"},
 		{"GRPC_PORT", "0"},
-		{"RMQ_RPC_SERVER", "rpc_server"},
-		{"RMQ_RPC_CLIENT", "rpc_client"},
-		{"RMQ_URL", "amqp://rabbitmq/"},
-		{"NATS_RPC_SERVER", "rpc_server"},
-		{"NATS_URL", "nats://nats/"},
 		{"JWT_SECRET", "test-secret"},
 		{"DOCS_ENABLED", "true"},
 	} {

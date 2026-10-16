@@ -32,12 +32,8 @@ Using the principles of Robert Martin (aka Uncle Bob).
 [Go-clean-template](https://evrone.com/go-clean-template?utm_source=github&utm_campaign=go-clean-template) is created &
 supported by [Evrone](https://evrone.com/?utm_source=github&utm_campaign=go-clean-template).
 
-This template implements five types of servers:
+This template implements three types of servers:
 
-- AMQP RPC (based on RabbitMQ as [transport](https://github.com/rabbitmq/amqp091-go)
-  and [Request-Reply pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/RequestReply.html))
-- MQ RPC (based on NATS as [transport](https://github.com/nats-io/nats.go)
-  and [Request-Reply pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/RequestReply.html))
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
 - GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
@@ -48,7 +44,7 @@ The template includes three domains to demonstrate multi-service architecture:
 - **Task Management** — CRUD operations with status transitions (todo, in_progress, done)
 - **Translation** — text translation with history tracking
 
-All domains are available over REST, gRPC, AMQP RPC and NATS RPC. GraphQL exposes tasks only.
+All domains are available over REST and gRPC. GraphQL exposes tasks only.
 
 ## Content
 
@@ -61,7 +57,7 @@ All domains are available over REST, gRPC, AMQP RPC and NATS RPC. GraphQL expose
 
 ## Domains
 
-The template includes three fully implemented domains, each available over REST, gRPC, AMQP RPC and NATS RPC. GraphQL covers tasks only.
+The template includes three fully implemented domains, each available over REST and gRPC. GraphQL covers tasks only.
 
 ### User Authentication
 
@@ -108,7 +104,7 @@ Text translation via external API with history tracking.
 ### Local development
 
 ```sh
-# Postgres, RabbitMQ, NATS
+# Postgres
 make compose-up
 # Run app with migrations
 make run
@@ -129,13 +125,6 @@ make compose-up-all
 
 Check services:
 
-- AMQP RPC:
-  - URL: `amqp://guest:guest@127.0.0.1:5672/`
-  - Client Exchange: `rpc_client`
-  - Server Exchange: `rpc_server`
-- NATS RPC:
-  - URL: `nats://guest:guest@127.0.0.1:4222/`
-  - Server Exchange: `rpc_server`
 - REST API:
   - http://app.lvh.me/healthz | http://127.0.0.1:8080/healthz
   - http://app.lvh.me/metrics | http://127.0.0.1:8080/metrics
@@ -155,12 +144,6 @@ Check services:
   - [v1/translation.history.proto](docs/proto/v1/translation.history.proto)
 - PostgreSQL:
   - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db`
-- RabbitMQ:
-  - http://rabbitmq.lvh.me | http://127.0.0.1:15672
-  - Credentials: `guest` / `guest`
-- NATS monitoring:
-  - http://nats.lvh.me | http://127.0.0.1:8222/
-  - Credentials: `guest` / `guest`
 - Jaeger (traces UI):
   - http://jaeger.lvh.me | http://127.0.0.1:16686
 
@@ -169,11 +152,9 @@ Check services:
 Distributed tracing is provided by [OpenTelemetry](https://opentelemetry.io/). Spans are exported over OTLP/gRPC to a
 collector — [Jaeger](https://www.jaegertracing.io/) in the docker stack.
 
-- **Context propagation** — W3C `traceparent` + `baggage`, so a single trace spans all four transports. REST uses the
-  [otelhttp](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp) middleware, gRPC uses the
-  [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler, and AMQP RPC / NATS RPC carry the
-  trace context in message headers via custom carriers (`pkg/rabbitmq/rmq_rpc/otel_carrier.go`,
-  `pkg/nats/nats_rpc/otel_carrier.go`).
+- **Context propagation** — W3C `traceparent` + `baggage`, so a single trace spans every transport. REST and GraphQL use the
+  [otelhttp](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp) middleware, and gRPC uses the
+  [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler.
 - **Instrumented layers** — use cases and repositories are wrapped in tracing decorators (`*/tracing.go`), so a trace
   shows the full path: controller → usecase → repo / webapi.
 - **No-op when disabled** — with `TRACING_ENABLED=false` a no-op tracer provider is installed, so instrumentation runs
@@ -250,10 +231,8 @@ go run -tags migrate ./cmd/app
 
 ### `internal/controller`
 
-Server handler layer (MVC controllers). The template shows 5 servers:
+Server handler layer (MVC controllers). The template shows 3 servers:
 
-- AMQP RPC (based on RabbitMQ as transport)
-- NATS RPC (based on NATS as transport)
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
 - GraphQL ([gqlgen](https://github.com/99designs/gqlgen), tasks only)
@@ -263,24 +242,6 @@ Server routers are written in the same style:
 - Handlers are grouped by area of application (by a common basis)
 - For each group, its own router structure is created, the methods of which process paths
 - The structure of the business logic is injected into the router structure, which will be called by the handlers
-
-#### `internal/controller/amqp_rpc`
-
-Simple RPC versioning.
-For v2, we will need to add the `amqp_rpc/v2` folder with the same content.
-And in the file `internal/controller/amqp_rpc/router.go` add the line:
-
-```go
-routes := make(map[string]server.CallHandler)
-
-{
-    v1.NewRoutes(routes, t, u, tk, j, l)
-}
-
-{
-    v2.NewTranslationRoutes(routes, t, l)
-}
-```
 
 #### `internal/controller/graphql`
 
@@ -312,24 +273,6 @@ And in the file `internal/controller/grpc/router.go` add the line:
 }
 
 reflection.Register(app)
-```
-
-#### `internal/controller/nats_rpc`
-
-Simple RPC versioning.
-For v2, we will need to add the `nats_rpc/v2` folder with the same content.
-And in the file `internal/controller/nats_rpc/router.go` add the line:
-
-```go
-routes := make(map[string]server.CallHandler)
-
-{
-    v1.NewRoutes(routes, t, u, tk, j, l)
-}
-
-{
-    v2.NewTranslationRoutes(routes, t, l)
-}
 ```
 
 #### `internal/controller/restapi`
@@ -382,7 +325,7 @@ Business logic.
 - Each group has its own structure
 - One file - one structure
 
-Repositories, webapi, rpc, and other business logic structures are injected into business logic structures
+Repositories, webapi, and other business logic structures are injected into business logic structures
 (see [Dependency Injection](#dependency-injection)).
 
 #### `internal/repo/persistent`
@@ -394,14 +337,6 @@ A repository is an abstract storage (database) that business logic works with.
 It is an abstract web API that business logic works with.
 For example, it could be another microservice that business logic accesses via the REST API.
 The package name changes depending on the purpose.
-
-### `pkg/rabbitmq`
-
-RabbitMQ RPC pattern:
-
-- There is no routing inside RabbitMQ
-- Exchange fanout is used, to which 1 exclusive queue is bound, this is the most productive config
-- Reconnect on the loss of connection
 
 ### `pkg/tracing`
 

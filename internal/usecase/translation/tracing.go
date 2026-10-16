@@ -14,7 +14,7 @@ import (
 const _tracerName = "github.com/evrone/go-clean-template/internal/usecase/translation"
 
 // tracedUseCase wraps a Translation usecase with OpenTelemetry spans, closing
-// the gap between transport spans (HTTP/gRPC/AMQP/NATS) and repository spans.
+// the gap between transport spans (HTTP/gRPC/GraphQL) and repository spans.
 type tracedUseCase struct {
 	next usecase.Translation
 }

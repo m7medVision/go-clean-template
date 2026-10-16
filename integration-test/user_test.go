@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	protov1 "github.com/evrone/go-clean-template/docs/proto/v1"
-	natsClient "github.com/evrone/go-clean-template/pkg/nats/nats_rpc/client"
-	rmqClient "github.com/evrone/go-clean-template/pkg/rabbitmq/rmq_rpc/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -271,119 +269,5 @@ func TestGRPCAuthProfileV1(t *testing.T) {
 
 	if profileResp.GetEmail() == "" {
 		t.Error("Expected non-empty email")
-	}
-}
-
-// RabbitMQ RPC: register + login smoke test.
-func TestRMQUserV1(t *testing.T) {
-	name := sanitizeTestName(t)
-	email := name + "@test.com"
-	password := testPassword
-
-	client, err := rmqClient.New(rmqURL, rpcServerExchange, rpcClientExchange)
-	if err != nil {
-		t.Fatalf("rmqClient.New: %v", err)
-	}
-
-	defer func() {
-		if serr := client.Shutdown(); serr != nil {
-			t.Fatalf("client.Shutdown: %v", serr)
-		}
-	}()
-
-	// Register.
-	registerPayload := map[string]string{
-		"username": name,
-		"email":    email,
-		"password": password,
-	}
-
-	var registerResp struct {
-		ID string `json:"id"`
-	}
-
-	err = client.RemoteCall("v1.auth.register", registerPayload, &registerResp)
-	if err != nil {
-		t.Fatalf("register: %v", err)
-	}
-
-	if registerResp.ID == "" {
-		t.Error("Expected non-empty user ID from register")
-	}
-
-	// Login.
-	loginPayload := map[string]string{
-		"email":    email,
-		"password": password,
-	}
-
-	var loginResp struct {
-		Token string `json:"token"`
-	}
-
-	err = client.RemoteCall("v1.auth.login", loginPayload, &loginResp)
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
-
-	if loginResp.Token == "" {
-		t.Error("Expected non-empty token from login")
-	}
-}
-
-// NATS RPC: register + login smoke test.
-func TestNATSUserV1(t *testing.T) {
-	name := sanitizeTestName(t)
-	email := name + "@test.com"
-	password := testPassword
-
-	client, err := natsClient.New(natsURL, rpcServerExchange)
-	if err != nil {
-		t.Fatalf("natsClient.New: %v", err)
-	}
-
-	defer func() {
-		if serr := client.Shutdown(); serr != nil {
-			t.Fatalf("client.Shutdown: %v", serr)
-		}
-	}()
-
-	// Register.
-	registerPayload := map[string]string{
-		"username": name,
-		"email":    email,
-		"password": password,
-	}
-
-	var registerResp struct {
-		ID string `json:"id"`
-	}
-
-	err = client.RemoteCall("v1.auth.register", registerPayload, &registerResp)
-	if err != nil {
-		t.Fatalf("register: %v", err)
-	}
-
-	if registerResp.ID == "" {
-		t.Error("Expected non-empty user ID from register")
-	}
-
-	// Login.
-	loginPayload := map[string]string{
-		"email":    email,
-		"password": password,
-	}
-
-	var loginResp struct {
-		Token string `json:"token"`
-	}
-
-	err = client.RemoteCall("v1.auth.login", loginPayload, &loginResp)
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
-
-	if loginResp.Token == "" {
-		t.Error("Expected non-empty token from login")
 	}
 }
