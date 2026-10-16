@@ -1,28 +1,26 @@
 version: 2
 
+# Every ecosystem lands in one pull request, merged by dependabot-auto-merge.yml once CI is green.
+multi-ecosystem-groups:
+  all:
+    schedule:
+      interval: daily
+      time: "02:00"
 
 updates:
   - package-ecosystem: gomod
     directory: "/"
-    schedule:
-      interval: daily
-      time: "02:00"
-    open-pull-requests-limit: 10
+    patterns: ["*"]
+    multi-ecosystem-group: all
   - package-ecosystem: github-actions
     directory: "/"
-    schedule:
-      interval: daily
-      time: "02:00"
-    open-pull-requests-limit: 10
+    patterns: ["*"]
+    multi-ecosystem-group: all
   - package-ecosystem: docker
-    directory: "/"
-    schedule:
-      interval: daily
-      time: "02:00"
-    open-pull-requests-limit: 10
+    directories: ["/", "/caddy", "/integration-test"]
+    patterns: ["*"]
+    multi-ecosystem-group: all
   - package-ecosystem: docker-compose
     directory: "/"
-    schedule:
-      interval: daily
-      time: "02:00"
-    open-pull-requests-limit: 10
+    patterns: ["*"]
+    multi-ecosystem-group: all
