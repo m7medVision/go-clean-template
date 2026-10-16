@@ -46,7 +46,7 @@ func TestHTTPDoTranslateV1(t *testing.T) {
 				"destination": "en",
 				"original": "текст для перевода"
 			}`,
-			expected: http.StatusBadRequest,
+			expected: http.StatusUnprocessableEntity,
 		},
 	}
 

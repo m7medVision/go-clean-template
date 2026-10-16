@@ -1,59 +1,71 @@
+// Package restapi contains server handlers for the HTTP transport, built on chi
+// and Huma. The docs UI (Stoplight Elements) and the OpenAPI spec are served by
+// Huma itself at /docs and /openapi.[json|yaml].
 package restapi
 
 import (
 	"net/http"
 
-	"github.com/ansrivas/fiberprometheus/v2"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/evrone/go-clean-template/config"
-	_ "github.com/evrone/go-clean-template/docs" // Swagger docs.
 	"github.com/evrone/go-clean-template/internal/controller/restapi/middleware"
 	v1 "github.com/evrone/go-clean-template/internal/controller/restapi/v1"
 	"github.com/evrone/go-clean-template/internal/usecase"
 	"github.com/evrone/go-clean-template/pkg/jwt"
 	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/gofiber/contrib/otelfiber/v2"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/swagger"
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// NewRouter -.
-// Swagger spec:
-//
-//	@title       Go Clean Template API
-//	@description Multi-domain clean architecture template with translation, user, and task management
-//	@version     1.0
-//	@host        localhost:8080
-//	@BasePath    /v1
-//	@securityDefinitions.apikey BearerAuth
-//	@in header
-//	@name Authorization
-func NewRouter(app *fiber.App, cfg *config.Config, t usecase.Translation, u usecase.User, tk usecase.Task, jwtManager *jwt.Manager, l logger.Interface) {
-	// Options
-	app.Use(middleware.Logger(l))
-	app.Use(middleware.Recovery(l))
+const _apiTitle = "Go Clean Template API"
 
-	// Prometheus metrics
+// NewRouter builds the HTTP handler for every REST surface of the app.
+func NewRouter(
+	cfg *config.Config,
+	t usecase.Translation,
+	u usecase.User,
+	tk usecase.Task,
+	jwtManager *jwt.Manager,
+	l logger.Interface,
+) http.Handler {
+	apiConfig := huma.DefaultConfig(_apiTitle, cfg.App.Version)
+	if !cfg.Docs.Enabled {
+		apiConfig.DocsPath = ""
+		apiConfig.OpenAPIPath = ""
+		apiConfig.SchemasPath = ""
+	}
+
+	r := chi.NewRouter()
+
+	r.Use(chimw.StripSlashes)
+	r.Use(middleware.Logger(l))
+	r.Use(middleware.Recovery(l))
+
+	if cfg.Tracing.Enabled {
+		r.Use(middleware.Tracing())
+	}
+
 	if cfg.Metrics.Enabled {
-		prometheus := fiberprometheus.New("my-service-name")
-		prometheus.RegisterAt(app, "/metrics")
-		app.Use(prometheus.Middleware)
+		prometheusMiddleware := middleware.NewMetrics(prometheus.DefaultRegisterer)
+		r.Use(prometheusMiddleware.Middleware)
 	}
 
-	// Swagger
-	if cfg.Swagger.Enabled {
-		app.Get("/swagger/*", swagger.HandlerDefault)
+	r.Use(middleware.Auth(jwtManager, l))
+
+	if cfg.Metrics.Enabled {
+		r.Get("/metrics", promhttp.Handler().ServeHTTP)
 	}
 
-	// K8s probe
-	app.Get("/healthz", func(ctx *fiber.Ctx) error { return ctx.SendStatus(http.StatusOK) })
+	r.Get("/healthz", healthz)
 
-	// Routers
-	apiV1Group := app.Group("/v1")
-	{
-		if cfg.Tracing.Enabled {
-			apiV1Group.Use(otelfiber.Middleware())
-		}
+	v1.NewRoutes(humachi.New(r, apiConfig), t, u, tk, l)
 
-		v1.NewRoutes(apiV1Group, t, u, tk, jwtManager, l)
-	}
+	return r
+}
+
+func healthz(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }

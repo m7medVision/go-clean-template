@@ -284,7 +284,7 @@ func TestHTTPTaskErrorsV1(t *testing.T) {
 		}
 	})
 
-	t.Run("create with invalid body returns 400", func(t *testing.T) {
+	t.Run("create with invalid body returns 422", func(t *testing.T) {
 		token := registerAndLogin(t)
 
 		ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
@@ -299,8 +299,8 @@ func TestHTTPTaskErrorsV1(t *testing.T) {
 
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("Expected status 400, got %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("Expected status 422, got %d", resp.StatusCode)
 		}
 	})
 }

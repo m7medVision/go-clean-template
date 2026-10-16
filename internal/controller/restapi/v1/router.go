@@ -1,46 +1,43 @@
 package v1
 
 import (
-	"github.com/evrone/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/evrone/go-clean-template/internal/usecase"
-	"github.com/evrone/go-clean-template/pkg/jwt"
 	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
 )
 
-// NewRoutes -.
-func NewRoutes(apiV1Group fiber.Router, t usecase.Translation, u usecase.User, tk usecase.Task, jwtManager *jwt.Manager, l logger.Interface) {
-	r := &V1{t: t, u: u, tk: tk, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
+const (
+	_bearerAuthScheme = "BearerAuth"
+	_authTag          = "auth"
+	_usersTag         = "users"
+	_tasksTag         = "tasks"
+	_translationTag   = "translation"
+)
 
-	// Public routes
-	authGroup := apiV1Group.Group("/auth")
-	{
-		authGroup.Post("/register", r.register)
-		authGroup.Post("/login", r.login)
+// NewRoutes registers every v1 REST operation on the Huma API and sets up the
+// security scheme reproducing the BearerAuth header of the previous transport.
+func NewRoutes(api huma.API, t usecase.Translation, u usecase.User, tk usecase.Task, l logger.Interface) {
+	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+		_bearerAuthScheme: {
+			Type: "apiKey",
+			In:   "header",
+			Name: "Authorization",
+		},
 	}
 
-	// Protected routes
-	protected := apiV1Group.Group("", middleware.Auth(jwtManager))
+	r := &V1{t: t, u: u, tk: tk, l: l}
 
-	userGroup := protected.Group("/user")
-	{
-		userGroup.Get("/profile", r.profile)
-	}
+	r.register(api)
+	r.login(api)
+	r.profile(api)
 
-	taskGroup := protected.Group("/tasks")
-	{
-		taskGroup.Post("/", r.createTask)
-		taskGroup.Get("/", r.listTasks)
-		taskGroup.Get("/:id", r.getTask)
-		taskGroup.Put("/:id", r.updateTask)
-		taskGroup.Patch("/:id/status", r.transitionTask)
-		taskGroup.Delete("/:id", r.deleteTask)
-	}
+	r.createTask(api)
+	r.listTasks(api)
+	r.getTask(api)
+	r.updateTask(api)
+	r.transitionTask(api)
+	r.deleteTask(api)
 
-	translationGroup := protected.Group("/translation")
-	{
-		translationGroup.Get("/history", r.history)
-		translationGroup.Post("/do-translate", r.doTranslate)
-	}
+	r.history(api)
+	r.doTranslate(api)
 }

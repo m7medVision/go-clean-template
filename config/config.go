@@ -19,7 +19,7 @@ type (
 		NATS    nats
 		JWT     jwt
 		Metrics metrics
-		Swagger swagger
+		Docs    docs
 		Tracing tracing
 	}
 
@@ -31,8 +31,7 @@ type (
 
 	// HTTP -.
 	http struct {
-		Port           string `env:"HTTP_PORT,required"`
-		UsePreforkMode bool   `env:"HTTP_USE_PREFORK_MODE" envDefault:"false"`
+		Port string `env:"HTTP_PORT,required"`
 	}
 
 	// Log -.
@@ -75,9 +74,9 @@ type (
 		Enabled bool `env:"METRICS_ENABLED" envDefault:"true"`
 	}
 
-	// Swagger -.
-	swagger struct {
-		Enabled bool `env:"SWAGGER_ENABLED" envDefault:"false"`
+	// Docs -.
+	docs struct {
+		Enabled bool `env:"DOCS_ENABLED" envDefault:"false"`
 	}
 
 	// Tracing -.

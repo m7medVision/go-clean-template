@@ -1,35 +1,61 @@
 package middleware
 
 import (
-	"strconv"
-	"strings"
+	"fmt"
+	"net"
+	"net/http"
 
 	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/gofiber/fiber/v2"
 )
 
-func buildRequestMessage(ctx *fiber.Ctx) string {
-	var result strings.Builder
+type statusRecorder struct {
+	http.ResponseWriter
 
-	result.WriteString(ctx.IP())
-	result.WriteString(" - ")
-	result.WriteString(ctx.Method())
-	result.WriteString(" ")
-	result.WriteString(ctx.OriginalURL())
-	result.WriteString(" - ")
-	result.WriteString(strconv.Itoa(ctx.Response().StatusCode()))
-	result.WriteString(" ")
-	result.WriteString(strconv.Itoa(len(ctx.Response().Body())))
-
-	return result.String()
+	status int
+	bytes  int
 }
 
-func Logger(l logger.Interface) func(c *fiber.Ctx) error {
-	return func(ctx *fiber.Ctx) error {
-		err := ctx.Next()
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
 
-		l.Info("%s", buildRequestMessage(ctx))
+func (r *statusRecorder) Write(body []byte) (int, error) {
+	written, err := r.ResponseWriter.Write(body)
+	r.bytes += written
 
-		return err
+	return written, err
+}
+
+// Logger returns a middleware that logs method, path, status code, and body size
+// of every response.
+func Logger(l logger.Interface) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+			next.ServeHTTP(rec, r)
+
+			l.Info("%s", buildRequestMessage(r, rec))
+		})
 	}
+}
+
+func buildRequestMessage(r *http.Request, rec *statusRecorder) string {
+	return fmt.Sprintf("%s - %s %s - %d %d",
+		clientAddr(r),
+		r.Method,
+		r.URL.RequestURI(),
+		rec.status,
+		rec.bytes,
+	)
+}
+
+func clientAddr(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+
+	return host
 }

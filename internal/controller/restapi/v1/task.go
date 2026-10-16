@@ -1,296 +1,260 @@
 package v1
 
 import (
+	"context"
 	"errors"
 	"net/http"
-	"strconv"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/evrone/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/evrone/go-clean-template/internal/controller/restapi/v1/request"
 	"github.com/evrone/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/gofiber/fiber/v2"
 )
 
-// @Summary     Create task
-// @Description Create a new task for the current user
-// @ID          create-task
-// @Tags        tasks
-// @Accept      json
-// @Produce     json
-// @Param       request body     request.CreateTask true "Task data"
-// @Success     201     {object} entity.Task
-// @Failure     400     {object} response.Error
-// @Failure     401     {object} response.Error
-// @Failure     500     {object} response.Error
-// @Security    BearerAuth
-// @Router      /tasks [post]
-func (r *V1) createTask(ctx *fiber.Ctx) error {
-	userID, ok := ctx.Locals("userID").(string)
-	if !ok {
-		return errorResponse(ctx, http.StatusUnauthorized, "unauthorized")
-	}
-
-	var body request.CreateTask
-
-	if err := ctx.BodyParser(&body); err != nil {
-		r.l.Error(err, "restapi - v1 - createTask")
-
-		return errorResponse(ctx, http.StatusBadRequest, "invalid request body")
-	}
-
-	if err := r.v.Struct(body); err != nil {
-		r.l.Error(err, "restapi - v1 - createTask")
-
-		return errorResponse(ctx, http.StatusBadRequest, "invalid request body")
-	}
-
-	task, err := r.tk.Create(ctx.UserContext(), userID, body.Title, body.Description)
-	if err != nil {
-		r.l.Error(err, "restapi - v1 - createTask")
-
-		return errorResponse(ctx, http.StatusInternalServerError, "internal server error")
-	}
-
-	return ctx.Status(http.StatusCreated).JSON(task)
+type createTaskInput struct {
+	Body request.CreateTask
 }
 
-// @Summary     List tasks
-// @Description List tasks for the current user with optional filtering
-// @ID          list-tasks
-// @Tags        tasks
-// @Produce     json
-// @Param       status query    string false "Filter by status" Enums(todo, in_progress, done)
-// @Param       limit  query    int    false "Limit"  default(10)
-// @Param       offset query    int    false "Offset" default(0)
-// @Success     200    {object} response.TaskList
-// @Failure     401    {object} response.Error
-// @Failure     500    {object} response.Error
-// @Security    BearerAuth
-// @Router      /tasks [get]
-func (r *V1) listTasks(ctx *fiber.Ctx) error {
-	userID, ok := ctx.Locals("userID").(string)
-	if !ok {
-		return errorResponse(ctx, http.StatusUnauthorized, "unauthorized")
-	}
+type createTaskOutput struct {
+	Body entity.Task
+}
 
-	var status *entity.TaskStatus
+type listTasksInput struct {
+	Status entity.TaskStatus `query:"status" required:"false" enum:"todo,in_progress,done" example:"todo"`
+	Limit  int               `query:"limit" default:"10" minimum:"1"`
+	Offset int               `query:"offset" default:"0" minimum:"0"`
+}
 
-	if s := ctx.Query("status"); s != "" {
-		ts := entity.TaskStatus(s)
-		if !ts.Valid() {
-			return errorResponse(ctx, http.StatusBadRequest, "invalid task status")
+type listTasksOutput struct {
+	Body response.TaskList
+}
+
+type taskPathInput struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+type updateTaskInput struct {
+	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Body request.UpdateTask
+}
+
+type updateTaskOutput struct {
+	Body entity.Task
+}
+
+type transitionTaskInput struct {
+	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Body request.TransitionTask
+}
+
+type transitionTaskOutput struct {
+	Body entity.Task
+}
+
+type deleteTaskOutput struct {
+	Status int
+}
+
+func (r *V1) createTask(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-task",
+		Summary:       "Create task",
+		Description:   "Create a new task for the current user",
+		Method:        http.MethodPost,
+		Path:          "/v1/tasks",
+		Tags:          []string{_tasksTag},
+		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
+		DefaultStatus: http.StatusCreated,
+		Errors:        []int{http.StatusUnauthorized, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *createTaskInput) (*createTaskOutput, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		status = &ts
-	}
+		task, err := r.tk.Create(ctx, userID, input.Body.Title, input.Body.Description)
+		if err != nil {
+			r.l.Error(err, "restapi - v1 - createTask")
 
-	limit, err := strconv.Atoi(ctx.Query("limit", "10"))
-	if err != nil {
-		limit = 10
-	}
+			return nil, huma.Error500InternalServerError("internal server error")
+		}
 
-	offset, err := strconv.Atoi(ctx.Query("offset", "0"))
-	if err != nil {
-		offset = 0
-	}
-
-	tasks, total, err := r.tk.List(ctx.UserContext(), userID, status, limit, offset)
-	if err != nil {
-		r.l.Error(err, "restapi - v1 - listTasks")
-
-		return errorResponse(ctx, http.StatusInternalServerError, "internal server error")
-	}
-
-	return ctx.Status(http.StatusOK).JSON(response.TaskList{
-		Tasks: tasks,
-		Total: total,
+		return &createTaskOutput{Body: task}, nil
 	})
 }
 
-// @Summary     Get task
-// @Description Get a task by ID
-// @ID          get-task
-// @Tags        tasks
-// @Produce     json
-// @Param       id  path     string true "Task ID"
-// @Success     200 {object} entity.Task
-// @Failure     401 {object} response.Error
-// @Failure     403 {object} response.Error
-// @Failure     404 {object} response.Error
-// @Failure     500 {object} response.Error
-// @Security    BearerAuth
-// @Router      /tasks/{id} [get]
-func (r *V1) getTask(ctx *fiber.Ctx) error {
-	userID, ok := ctx.Locals("userID").(string)
-	if !ok {
-		return errorResponse(ctx, http.StatusUnauthorized, "unauthorized")
-	}
-
-	taskID := ctx.Params("id")
-
-	task, err := r.tk.Get(ctx.UserContext(), userID, taskID)
-	if err != nil {
-		r.l.Error(err, "restapi - v1 - getTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return errorResponse(ctx, http.StatusNotFound, "task not found")
+func (r *V1) listTasks(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-tasks",
+		Summary:     "List tasks",
+		Description: "List tasks for the current user with optional filtering",
+		Method:      http.MethodGet,
+		Path:        "/v1/tasks",
+		Tags:        []string{_tasksTag},
+		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		if errors.Is(err, entity.ErrTaskForbidden) {
-			return errorResponse(ctx, http.StatusForbidden, "forbidden")
+		var status *entity.TaskStatus
+
+		if input.Status != "" {
+			local := input.Status
+			status = &local
 		}
 
-		return errorResponse(ctx, http.StatusInternalServerError, "internal server error")
-	}
+		tasks, total, err := r.tk.List(ctx, userID, status, input.Limit, input.Offset)
+		if err != nil {
+			r.l.Error(err, "restapi - v1 - listTasks")
 
-	return ctx.Status(http.StatusOK).JSON(task)
+			return nil, huma.Error500InternalServerError("internal server error")
+		}
+
+		return &listTasksOutput{Body: response.TaskList{Tasks: tasks, Total: total}}, nil
+	})
 }
 
-// @Summary     Update task
-// @Description Update task title and description
-// @ID          update-task
-// @Tags        tasks
-// @Accept      json
-// @Produce     json
-// @Param       id      path     string            true "Task ID"
-// @Param       request body     request.UpdateTask  true "Updated task data"
-// @Success     200     {object} entity.Task
-// @Failure     400     {object} response.Error
-// @Failure     401     {object} response.Error
-// @Failure     403     {object} response.Error
-// @Failure     404     {object} response.Error
-// @Failure     500     {object} response.Error
-// @Security    BearerAuth
-// @Router      /tasks/{id} [put]
-func (r *V1) updateTask(ctx *fiber.Ctx) error {
-	userID, ok := ctx.Locals("userID").(string)
-	if !ok {
-		return errorResponse(ctx, http.StatusUnauthorized, "unauthorized")
-	}
-
-	taskID := ctx.Params("id")
-
-	var body request.UpdateTask
-
-	if err := ctx.BodyParser(&body); err != nil {
-		r.l.Error(err, "restapi - v1 - updateTask")
-
-		return errorResponse(ctx, http.StatusBadRequest, "invalid request body")
-	}
-
-	if err := r.v.Struct(body); err != nil {
-		r.l.Error(err, "restapi - v1 - updateTask")
-
-		return errorResponse(ctx, http.StatusBadRequest, "invalid request body")
-	}
-
-	task, err := r.tk.Update(ctx.UserContext(), userID, taskID, body.Title, body.Description)
-	if err != nil {
-		r.l.Error(err, "restapi - v1 - updateTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return errorResponse(ctx, http.StatusNotFound, "task not found")
+func (r *V1) getTask(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-task",
+		Summary:     "Get task",
+		Description: "Get a task by ID",
+		Method:      http.MethodGet,
+		Path:        "/v1/tasks/{id}",
+		Tags:        []string{_tasksTag},
+		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *taskPathInput) (*updateTaskOutput, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		if errors.Is(err, entity.ErrTaskForbidden) {
-			return errorResponse(ctx, http.StatusForbidden, "forbidden")
+		task, err := r.tk.Get(ctx, userID, input.ID)
+		if err != nil {
+			r.l.Error(err, "restapi - v1 - getTask")
+
+			if errors.Is(err, entity.ErrTaskForbidden) {
+				return nil, huma.Error403Forbidden("forbidden")
+			}
+
+			if errors.Is(err, entity.ErrTaskNotFound) {
+				return nil, huma.Error404NotFound("task not found")
+			}
+
+			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return errorResponse(ctx, http.StatusInternalServerError, "internal server error")
-	}
-
-	return ctx.Status(http.StatusOK).JSON(task)
+		return &updateTaskOutput{Body: task}, nil
+	})
 }
 
-// @Summary     Transition task status
-// @Description Change task status (todo -> in_progress -> done, or in_progress -> todo)
-// @ID          transition-task
-// @Tags        tasks
-// @Accept      json
-// @Produce     json
-// @Param       id      path     string                true "Task ID"
-// @Param       request body     request.TransitionTask  true "New status"
-// @Success     200     {object} entity.Task
-// @Failure     400     {object} response.Error
-// @Failure     401     {object} response.Error
-// @Failure     403     {object} response.Error
-// @Failure     404     {object} response.Error
-// @Failure     500     {object} response.Error
-// @Security    BearerAuth
-// @Router      /tasks/{id}/status [patch]
-func (r *V1) transitionTask(ctx *fiber.Ctx) error {
-	userID, ok := ctx.Locals("userID").(string)
-	if !ok {
-		return errorResponse(ctx, http.StatusUnauthorized, "unauthorized")
-	}
-
-	taskID := ctx.Params("id")
-
-	var body request.TransitionTask
-
-	if err := ctx.BodyParser(&body); err != nil {
-		r.l.Error(err, "restapi - v1 - transitionTask")
-
-		return errorResponse(ctx, http.StatusBadRequest, "invalid request body")
-	}
-
-	if err := r.v.Struct(body); err != nil {
-		r.l.Error(err, "restapi - v1 - transitionTask")
-
-		return errorResponse(ctx, http.StatusBadRequest, "invalid request body")
-	}
-
-	task, err := r.tk.Transition(ctx.UserContext(), userID, taskID, body.Status)
-	if err != nil {
-		r.l.Error(err, "restapi - v1 - transitionTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return errorResponse(ctx, http.StatusNotFound, "task not found")
+func (r *V1) updateTask(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-task",
+		Summary:     "Update task",
+		Description: "Update task title and description",
+		Method:      http.MethodPut,
+		Path:        "/v1/tasks/{id}",
+		Tags:        []string{_tasksTag},
+		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *updateTaskInput) (*updateTaskOutput, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		if errors.Is(err, entity.ErrTaskForbidden) {
-			return errorResponse(ctx, http.StatusForbidden, "forbidden")
+		task, err := r.tk.Update(ctx, userID, input.ID, input.Body.Title, input.Body.Description)
+		if err != nil {
+			r.l.Error(err, "restapi - v1 - updateTask")
+
+			if errors.Is(err, entity.ErrTaskForbidden) {
+				return nil, huma.Error403Forbidden("forbidden")
+			}
+
+			if errors.Is(err, entity.ErrTaskNotFound) {
+				return nil, huma.Error404NotFound("task not found")
+			}
+
+			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		if errors.Is(err, entity.ErrInvalidTransition) {
-			return errorResponse(ctx, http.StatusBadRequest, "invalid status transition")
-		}
-
-		return errorResponse(ctx, http.StatusInternalServerError, "internal server error")
-	}
-
-	return ctx.Status(http.StatusOK).JSON(task)
+		return &updateTaskOutput{Body: task}, nil
+	})
 }
 
-// @Summary     Delete task
-// @Description Delete a task by ID
-// @ID          delete-task
-// @Tags        tasks
-// @Param       id  path     string true "Task ID"
-// @Success     204 "No Content"
-// @Failure     401 {object} response.Error
-// @Failure     404 {object} response.Error
-// @Failure     500 {object} response.Error
-// @Security    BearerAuth
-// @Router      /tasks/{id} [delete]
-func (r *V1) deleteTask(ctx *fiber.Ctx) error {
-	userID, ok := ctx.Locals("userID").(string)
-	if !ok {
-		return errorResponse(ctx, http.StatusUnauthorized, "unauthorized")
-	}
-
-	taskID := ctx.Params("id")
-
-	err := r.tk.Delete(ctx.UserContext(), userID, taskID)
-	if err != nil {
-		r.l.Error(err, "restapi - v1 - deleteTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return errorResponse(ctx, http.StatusNotFound, "task not found")
+func (r *V1) transitionTask(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "transition-task",
+		Summary:     "Transition task status",
+		Description: "Change task status (todo -> in_progress -> done, or in_progress -> todo)",
+		Method:      http.MethodPatch,
+		Path:        "/v1/tasks/{id}/status",
+		Tags:        []string{_tasksTag},
+		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Errors:      []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *transitionTaskInput) (*transitionTaskOutput, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		return errorResponse(ctx, http.StatusInternalServerError, "internal server error")
-	}
+		task, err := r.tk.Transition(ctx, userID, input.ID, input.Body.Status)
+		if err != nil {
+			r.l.Error(err, "restapi - v1 - transitionTask")
 
-	return ctx.SendStatus(http.StatusNoContent)
+			if errors.Is(err, entity.ErrInvalidTransition) {
+				return nil, huma.Error400BadRequest("invalid status transition")
+			}
+
+			if errors.Is(err, entity.ErrTaskForbidden) {
+				return nil, huma.Error403Forbidden("forbidden")
+			}
+
+			if errors.Is(err, entity.ErrTaskNotFound) {
+				return nil, huma.Error404NotFound("task not found")
+			}
+
+			return nil, huma.Error500InternalServerError("internal server error")
+		}
+
+		return &transitionTaskOutput{Body: task}, nil
+	})
+}
+
+func (r *V1) deleteTask(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-task",
+		Summary:       "Delete task",
+		Description:   "Delete a task by ID",
+		Method:        http.MethodDelete,
+		Path:          "/v1/tasks/{id}",
+		Tags:          []string{_tasksTag},
+		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
+		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusNotFound, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *taskPathInput) (*deleteTaskOutput, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		err := r.tk.Delete(ctx, userID, input.ID)
+		if err != nil {
+			r.l.Error(err, "restapi - v1 - deleteTask")
+
+			if errors.Is(err, entity.ErrTaskNotFound) {
+				return nil, huma.Error404NotFound("task not found")
+			}
+
+			return nil, huma.Error500InternalServerError("internal server error")
+		}
+
+		return &deleteTaskOutput{Status: http.StatusNoContent}, nil
+	})
 }

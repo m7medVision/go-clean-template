@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"net"
+	"net/http"
 	"time"
 )
 
@@ -15,10 +16,10 @@ func Port(port string) Option {
 	}
 }
 
-// Prefork -.
-func Prefork(prefork bool) Option {
+// Handler -.
+func Handler(handler http.Handler) Option {
 	return func(s *Server) {
-		s.prefork = prefork
+		s.handler = handler
 	}
 }
 

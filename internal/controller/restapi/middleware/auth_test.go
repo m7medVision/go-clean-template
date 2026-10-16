@@ -1,7 +1,7 @@
 package middleware_test
 
 import (
-	"io"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,34 +9,44 @@ import (
 
 	"github.com/evrone/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/evrone/go-clean-template/pkg/jwt"
-	"github.com/gofiber/fiber/v2"
+	"github.com/evrone/go-clean-template/pkg/logger"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestApp(t *testing.T) (*fiber.App, *jwt.Manager) {
-	t.Helper()
+type noopLogger struct{}
 
-	jwtManager := jwt.New("test-secret", time.Hour)
+func (noopLogger) Debug(any, ...any)   {}
+func (noopLogger) Info(string, ...any) {}
+func (noopLogger) Warn(string, ...any) {}
+func (noopLogger) Error(any, ...any)   {}
+func (noopLogger) Fatal(any, ...any)   {}
 
-	app := fiber.New()
-	app.Use(middleware.Auth(jwtManager))
-	app.Get("/test", func(c *fiber.Ctx) error {
-		userID, ok := c.Locals("userID").(string)
+var _ logger.Interface = noopLogger{}
+
+func newTestHandler(jwtManager *jwt.Manager) http.Handler {
+	r := chi.NewRouter()
+	r.Use(middleware.Auth(jwtManager, noopLogger{}))
+	r.Get("/v1/test", func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := middleware.UserID(r.Context())
 		if !ok {
-			return c.SendStatus(http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
+
+			return
 		}
 
-		return c.SendString(userID)
+		fmt.Fprint(w, userID)
 	})
 
-	return app, jwtManager
+	return r
 }
 
 func TestAuthMiddleware(t *testing.T) {
 	t.Parallel()
 
-	app, jwtManager := newTestApp(t)
+	jwtManager := jwt.New("test-secret", time.Hour)
+	handler := newTestHandler(jwtManager)
 
 	validToken, err := jwtManager.GenerateToken("user-id-123")
 	require.NoError(t, err)
@@ -76,22 +86,18 @@ func TestAuthMiddleware(t *testing.T) {
 		t.Run(localTc.name, func(t *testing.T) {
 			t.Parallel()
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
 			if localTc.authHeader != "" {
 				req.Header.Set("Authorization", localTc.authHeader)
 			}
 
-			resp, err := app.Test(req)
-			require.NoError(t, err)
+			resp := httptest.NewRecorder()
+			handler.ServeHTTP(resp, req)
 
-			defer resp.Body.Close()
-
-			assert.Equal(t, localTc.expectedStatus, resp.StatusCode)
+			assert.Equal(t, localTc.expectedStatus, resp.Code)
 
 			if localTc.expectedBody != "" {
-				body, readErr := io.ReadAll(resp.Body)
-				require.NoError(t, readErr)
-				assert.Equal(t, localTc.expectedBody, string(body))
+				assert.Equal(t, localTc.expectedBody, resp.Body.String())
 			}
 		})
 	}

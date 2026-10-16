@@ -1,7 +1,7 @@
 # go-clean-template
 
 Go clean-architecture reference service. Three domains (`user`, `task`, `translation`) exposed
-over four transports (REST/Fiber, gRPC, RabbitMQ RPC, NATS RPC) from one shared use-case layer.
+over four transports (REST — chi + Huma v2, gRPC, RabbitMQ RPC, NATS RPC) from one shared use-case layer.
 Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
 
 ## Commands — drive everything through the Makefile
@@ -12,13 +12,12 @@ different settings than CI. Use the target, not the tool.
 
 | Task | Use this | Not this |
 | --- | --- | --- |
-| Install tool binaries (`swag`, `mockgen`, linters, `atlas`) | `make bin-deps` | `go install ...` |
+| Install tool binaries (`mockgen`, linters, `atlas`) | `make bin-deps` | `go install ...` |
 | Unit tests | `make test` | `go test ./...` — the target adds `-race -covermode atomic` and scopes to `./internal/... ./pkg/...` |
 | Integration tests | `make compose-up-integration-test` | `make integration-test` — see below |
 | Lint | `make linter-golangci` | `golangci-lint run` |
 | Format | `make format` | `gofmt` — the target runs `go fix`, `gofumpt`, and `gci` with the repo's import grouping |
 | Regenerate mocks | `make mock` | `mockgen ...` |
-| Regenerate Swagger | `make swag-v1` | `swag init` — the target passes `--parseDependency -g internal/controller/restapi/router.go` |
 | Regenerate protobuf | `make proto-v1` | `protoc ...` |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
@@ -36,8 +35,8 @@ Three traps in these targets:
 - **`make integration-test` is not the one you want.** It runs `go test ./integration-test/...` on
   the host, where the suite cannot resolve the container hostnames it needs, so it always fails.
   `make compose-up-integration-test` is the real entry point.
-- **`make run` and `make pre-commit` depend on `swag-v1` and `proto-v1`**, so they need `swag` and
-  `protoc` on `PATH`. Run `make bin-deps` first (`protoc` itself is not installed by it).
+- **`make run` and `make pre-commit` depend on `proto-v1`**, so they need `protoc` on `PATH`.
+  Run `make bin-deps` first (`protoc` itself is not installed by it).
 
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
 
@@ -92,24 +91,29 @@ Layout rules:
 Every controller method, on every transport, does the same six things in the same order. Copy the
 shape from a neighbouring handler in the same transport.
 
-1. **Get the caller.** REST: `ctx.Locals("userID").(string)`. gRPC: `grpcmw.UserIDFromContext(ctx)`.
+1. **Get the caller.** REST: `middleware.UserID(ctx)` (the chi `middleware.Auth` middleware stores
+   it in the request context). gRPC: `grpcmw.UserIDFromContext(ctx)`.
    AMQP / NATS: `extractUserID(d, r.j)`. A failure here is an auth error, not a 500.
-2. **Decode into a transport-local DTO** from `<transport>/v1/request/`. Never decode into an
-   `entity` type, and never pass a `request.*` type into a use case.
-3. **Validate the DTO** with the injected `*validator.Validate` (`r.v.Struct(req)`). Structural
-   validation (required, min, max, oneof) lives here. Domain validation — anything that needs to
-   know the rules, like a status transition — lives on the entity or the use case and must not be
-   duplicated in the controller.
-4. **Call the use case** with the request context: `ctx.UserContext()` in Fiber (**not**
-   `ctx.Context()`, which drops the trace), the handler's `ctx` everywhere else. `context.Context`
+2. **Decode into a transport-local DTO** from `<transport>/v1/request/`. On REST the DTO is the
+   `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass a
+   `request.*` type into a use case.
+3. **Validate the DTO structurally through Huma's built-in validation** on the REST transport:
+   length, format, enum, and default constraints live on the input struct / request DTO tags, and
+   the REST v1 controller takes no `*validator.Validate` (other transports still construct their
+   own). Domain validation — anything that needs to know the rules, like a status transition —
+   lives on the entity or the use case and must not be duplicated in the controller.
+4. **Call the use case** with the request context: the Huma handler's `ctx` on REST (do not build a
+   second context), the handler's `ctx` everywhere else. `context.Context`
    is the first parameter of every method that crosses a layer.
-5. **Map the error.** `errors.Is` against the `entity.Err*` sentinels → a transport status. Log the
+5. **Map the error.** `errors.Is` against the `entity.Err*` sentinels → a transport status. On REST
+   the sentinel maps to a `huma.Error*` constructor, which renders the standard RFC 9457
+   `application/problem+json` model — no custom error type. Log the
    wrapped error, return a generic message to the caller.
 6. **Encode the response.** Return an `entity` type directly only when its JSON shape is already
    the API shape — `entity.User` is safe this way because `PasswordHash` is tagged `json:"-"`.
    Anything with a wrapper, a projection or a different field set gets a type in
-   `<transport>/v1/response/` (`response.TaskList`, `response.Token`). gRPC always converts through
-   `response.New*Response`.
+   `<transport>/v1/response/` used as the Huma output `Body` (`response.TaskList`,
+   `response.Token`). gRPC always converts through `response.New*Response`.
 
 AMQP and NATS handlers are closures returning that transport's `server.CallHandler` —
 `func(ctx, *amqp.Delivery) (any, error)` and `func(ctx, *nats.Msg) (any, error)`. Each transport
@@ -148,10 +152,11 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 ## Generated files — do not hand-edit
 
-- `docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml` ← `make swag-v1`, driven by the
-  annotation comments above REST handlers and on `NewRouter` in `internal/controller/restapi/router.go`.
 - `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
 - `internal/usecase/mocks_*_test.go` ← `make mock`.
+
+The REST OpenAPI document is generated in memory by Huma at startup — it is not a checked-in
+artifact, so there is nothing to regenerate or review but the input/output struct tags.
 
 ## READMEs must be updated as a set
 
@@ -192,8 +197,8 @@ Rules for the translations:
 4. `make mock`, then extend `internal/usecase/<domain>_test.go` (table-driven, gomock, `t.Parallel()` —
    `paralleltest` enforces it).
 5. Expose it on whichever transports need it:
-   - REST: handler in `internal/controller/restapi/v1/<domain>.go` + route in that package's
-     `router.go` + swagger annotations, then `make swag-v1`.
+   - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
+     (op registered in the same domain file; nothing to regenerate — the spec follows the code).
    - gRPC: `.proto` change → `make proto-v1` → controller method in
      `internal/controller/grpc/v1/`.
    - AMQP / NATS: handler returning a `CallHandler` + a `"v1.<domain>.<action>"` key in the
@@ -225,8 +230,8 @@ before writing.
    `<transport>/v1/<domain>.go`, registration in that transport's `v1/router.go`, and the use case
    added to the `V1` / controller struct in `<transport>/v1/controller.go`. gRPC also needs
    `docs/proto/v1/<domain>.proto` and `make proto-v1`.
-10. **Docs** — swagger annotations on the REST handlers, `make swag-v1`, and the README updates
-    listed above in all three languages.
+10. **Docs** — REST generates nothing (the OpenAPI spec is derived from the code at startup); just
+    do the README updates listed above.
 11. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
     transports you exposed.
 
@@ -234,7 +239,8 @@ before writing.
 
 Routes are grouped under a version package (`<transport>/v1/`). A v2 means a new sibling package
 with the same layout, registered alongside v1 in the transport's top-level `router.go` — REST adds
-an `app.Group("/v2")`, gRPC registers a second set of `NewXRoutes`, AMQP/NATS add more
+operations under the new `/v2/...` paths from a `v2.NewRoutes(api, ...)` in `restapi/router.go`,
+gRPC registers a second set of `NewXRoutes`, AMQP/NATS add more
 `"v2.<domain>.<action>"` keys to the same route map. v1 stays untouched. `README.md` documents this
 with worked examples per transport; follow it rather than inventing a scheme.
 

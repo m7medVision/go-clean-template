@@ -4,11 +4,10 @@ package httpserver
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/goccy/go-json"
-	"github.com/gofiber/fiber/v2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -21,14 +20,13 @@ const (
 
 // Server -.
 type Server struct {
-	ctx context.Context
-	eg  *errgroup.Group
-
-	App    *fiber.App
+	ctx    context.Context
+	eg     *errgroup.Group
 	notify chan error
 
+	srv             *http.Server
 	address         string
-	prefork         bool
+	handler         http.Handler
 	readTimeout     time.Duration
 	writeTimeout    time.Duration
 	shutdownTimeout time.Duration
@@ -44,7 +42,6 @@ func New(l logger.Interface, opts ...Option) *Server {
 	s := &Server{
 		ctx:             ctx,
 		eg:              group,
-		App:             nil,
 		notify:          make(chan error, 1),
 		address:         _defaultAddr,
 		readTimeout:     _defaultReadTimeout,
@@ -58,15 +55,12 @@ func New(l logger.Interface, opts ...Option) *Server {
 		opt(s)
 	}
 
-	app := fiber.New(fiber.Config{
-		Prefork:      s.prefork,
+	s.srv = &http.Server{
+		Addr:         s.address,
+		Handler:      s.handler,
 		ReadTimeout:  s.readTimeout,
 		WriteTimeout: s.writeTimeout,
-		JSONDecoder:  json.Unmarshal,
-		JSONEncoder:  json.Marshal,
-	})
-
-	s.App = app
+	}
 
 	return s
 }
@@ -74,8 +68,8 @@ func New(l logger.Interface, opts ...Option) *Server {
 // Start -.
 func (s *Server) Start() {
 	s.eg.Go(func() error {
-		err := s.App.Listen(s.address)
-		if err != nil {
+		err := s.srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.notify <- err
 
 			close(s.notify)
@@ -86,7 +80,7 @@ func (s *Server) Start() {
 		return nil
 	})
 
-	s.logger.Info("restapi server - Server - Started")
+	s.logger.Info("httpserver server - Server - Started")
 }
 
 // Notify -.
@@ -98,22 +92,25 @@ func (s *Server) Notify() <-chan error {
 func (s *Server) Shutdown() error {
 	var shutdownErrors []error
 
-	err := s.App.ShutdownWithTimeout(s.shutdownTimeout)
-	if err != nil && !errors.Is(err, context.Canceled) {
-		s.logger.Error(err, "restapi server - Server - Shutdown - s.App.ShutdownWithTimeout")
+	shutdownCtx, cancel := context.WithTimeout(s.ctx, s.shutdownTimeout)
+	defer cancel()
+
+	err := s.srv.Shutdown(shutdownCtx)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		s.logger.Error(err, "httpserver server - Server - Shutdown - s.srv.Shutdown")
 
 		shutdownErrors = append(shutdownErrors, err)
 	}
 
 	// Wait for all goroutines to finish and get any error
 	err = s.eg.Wait()
-	if err != nil && !errors.Is(err, context.Canceled) {
-		s.logger.Error(err, "restapi server - Server - Shutdown - s.eg.Wait")
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		s.logger.Error(err, "httpserver server - Server - Shutdown - s.eg.Wait")
 
 		shutdownErrors = append(shutdownErrors, err)
 	}
 
-	s.logger.Info("restapi server - Server - Shutdown")
+	s.logger.Info("httpserver server - Server - Shutdown")
 
 	return errors.Join(shutdownErrors...)
 }

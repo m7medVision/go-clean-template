@@ -54,14 +54,14 @@ func TestHTTPRegisterV1(t *testing.T) {
 			username:    name + "_nopw",
 			email:       name + "_nopw@test.com",
 			password:    "",
-			expected:    http.StatusBadRequest,
+			expected:    http.StatusUnprocessableEntity,
 		},
 		{
 			description: "short username",
 			username:    "ab",
 			email:       name + "_short@test.com",
 			password:    testPassword,
-			expected:    http.StatusBadRequest,
+			expected:    http.StatusUnprocessableEntity,
 		},
 	}
 
@@ -111,7 +111,7 @@ func TestHTTPLoginV1(t *testing.T) {
 		{
 			description: "missing email",
 			body:        fmt.Sprintf(`{"password":%q}`, password),
-			expected:    http.StatusBadRequest,
+			expected:    http.StatusUnprocessableEntity,
 		},
 	}
 

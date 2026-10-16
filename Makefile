@@ -36,10 +36,6 @@ compose-down: ### Down docker compose
 	$(ALL_STACK) down --remove-orphans
 .PHONY: compose-down
 
-swag-v1: ### swag init
-	swag init --parseDependency -g internal/controller/restapi/router.go
-.PHONY: swag-v1
-
 proto-v1: ### generate source files from proto
 	protoc --go_out=. \
 		--go_opt=paths=source_relative \
@@ -66,7 +62,7 @@ format: ### Run code formatter
 	gci write . --skip-generated -s standard -s default
 .PHONY: format
 
-run: deps swag-v1 proto-v1 ### swag run for API v1
+run: deps proto-v1 ### run the app for API v1
 	go mod download && \
 	CGO_ENABLED=0 go run -tags migrate ./cmd/app
 .PHONY: run
@@ -111,5 +107,5 @@ bin-deps: ### install tools
 	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | sh
 .PHONY: bin-deps
 
-pre-commit: deps swag-v1 proto-v1 mock format linter-golangci test ### run pre-commit
+pre-commit: deps proto-v1 mock format linter-golangci test ### run pre-commit
 .PHONY: pre-commit
