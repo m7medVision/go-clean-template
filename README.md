@@ -37,6 +37,7 @@ This template implements three types of servers:
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
 - GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
+- Reverse proxy ([Caddy](https://caddyserver.com/) with the caddy-waf firewall and the Souin HTTP cache)
 
 The template includes three domains to demonstrate multi-service architecture:
 
@@ -123,6 +124,14 @@ make compose-up-integration-test
 make compose-up-all 
 ```
 
+The reverse proxy is [Caddy](https://caddyserver.com/), built from [`caddy/Dockerfile`](caddy/Dockerfile) with two
+modules and configured in [`caddy/Caddyfile`](caddy/Caddyfile):
+
+- [caddy-waf](https://github.com/fabriziosalmi/caddy-waf) inspects every request to `app.lvh.me` with its bundled
+  rule set and answers `403` to a match. It is licensed AGPL-3.0, unlike this template.
+- [Souin](https://github.com/darkweak/souin) caches the public documents (`/docs`, `/openapi.*`, `/schemas/*`) in
+  memory and reports a `Cache-Status` header. API responses are per caller and are never cached.
+
 Check services:
 
 - REST API:
@@ -138,7 +147,7 @@ Check services:
   - Playground (when `DOCS_ENABLED=true`): http://app.lvh.me/graphql/playground | http://127.0.0.1:8080/graphql/playground.
     Set `{"Authorization": "Bearer <token>"}` in its headers pane.
 - gRPC:
-  - URL: `tcp://grpc.lvh.me:8081` | `tcp://127.0.0.1:8081`
+  - URL: `grpc.lvh.me:80` (h2c through Caddy) | `127.0.0.1:8081`
   - [v1/auth.proto](docs/proto/v1/auth.proto)
   - [v1/task.proto](docs/proto/v1/task.proto)
   - [v1/translation.history.proto](docs/proto/v1/translation.history.proto)

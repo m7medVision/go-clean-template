@@ -1,0 +1,41 @@
+{
+	auto_https off
+
+	# h2c lets gRPC clients reach grpc.lvh.me over plain HTTP on port 80.
+	servers :80 {
+		protocols h1 h2c
+	}
+
+	cache {
+		ttl 120s
+		otter
+	}
+}
+
+http://app.lvh.me {
+	route {
+		# The WAF runs first so cache hits are still inspected.
+		waf {
+			rule_file /etc/caddy/waf/rules.json
+			log_path /data/waf.json
+		}
+
+		# Only the public, user-independent documents are cached. API responses are
+		# per caller and change on every write, so they always go to the app.
+		@public {
+			method GET HEAD
+			path /docs /docs/* /openapi.json /openapi.yaml /schemas/*
+		}
+		cache @public
+
+		reverse_proxy app:8080
+	}
+}
+
+http://grpc.lvh.me {
+	reverse_proxy h2c://app:8081
+}
+
+http://jaeger.lvh.me {
+	reverse_proxy jaeger:16686
+}
