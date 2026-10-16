@@ -10,7 +10,7 @@ RUN xcaddy build \
         --with github.com/darkweak/storages/otter/caddy@v0.0.20 \
     && cp "$(go env GOMODCACHE)/github.com/fabriziosalmi/caddy-waf@${CADDY_WAF_VERSION}/rules.json" /waf-rules.json
 
-FROM caddy:2.11.6-alpine
+FROM caddy:2.11.7-alpine
 
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 COPY --from=builder /waf-rules.json /etc/caddy/waf/rules.json
