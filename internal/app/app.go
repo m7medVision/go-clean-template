@@ -10,6 +10,7 @@ import (
 
 	"github.com/evrone/go-clean-template/config"
 	amqprpc "github.com/evrone/go-clean-template/internal/controller/amqp_rpc"
+	"github.com/evrone/go-clean-template/internal/controller/graphql"
 	"github.com/evrone/go-clean-template/internal/controller/grpc"
 	grpcmw "github.com/evrone/go-clean-template/internal/controller/grpc/middleware"
 	natsrpc "github.com/evrone/go-clean-template/internal/controller/nats_rpc"
@@ -88,10 +89,17 @@ func initServers(cfg *config.Config, uc useCases, jwtManager *jwt.Manager, l log
 	grpc.NewRouter(grpcServer.App, uc.translation, uc.user, uc.task, l)
 
 	// HTTP Server
+	router := restapi.NewRouter(cfg, uc.translation, uc.user, uc.task, jwtManager, l)
+	router.Handle("/graphql", graphql.NewHandler(uc.task, jwtManager, l))
+
+	if cfg.Docs.Enabled {
+		router.Handle("/graphql/playground", graphql.NewPlayground("/graphql"))
+	}
+
 	httpServer := httpserver.New(
 		l,
 		httpserver.Port(cfg.HTTP.Port),
-		httpserver.Handler(restapi.NewRouter(cfg, uc.translation, uc.user, uc.task, jwtManager, l)),
+		httpserver.Handler(router),
 	)
 
 	return servers{

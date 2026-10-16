@@ -1,0 +1,30 @@
+scalar Time
+
+enum TaskStatus { TODO IN_PROGRESS DONE }
+
+type Task {
+  id: ID!
+  userId: ID!
+  title: String!
+  description: String!
+  status: TaskStatus!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type TaskList { tasks: [Task!]!  total: Int! }
+
+input CreateTaskInput { title: String!  description: String }
+input UpdateTaskInput { title: String!  description: String }
+
+type Query {
+  task(id: ID!): Task!
+  tasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
+}
+
+type Mutation {
+  createTask(input: CreateTaskInput!): Task!
+  updateTask(id: ID!, input: UpdateTaskInput!): Task!
+  transitionTask(id: ID!, status: TaskStatus!): Task!
+  deleteTask(id: ID!): Boolean!
+}

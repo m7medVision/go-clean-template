@@ -30,7 +30,7 @@ func NewRouter(
 	tk usecase.Task,
 	jwtManager *jwt.Manager,
 	l logger.Interface,
-) http.Handler {
+) *chi.Mux {
 	apiConfig := huma.DefaultConfig(_apiTitle, cfg.App.Version)
 	// The default hook adds a `$schema` field and a `Link` header to every response body.
 	apiConfig.CreateHooks = nil

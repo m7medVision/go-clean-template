@@ -1,0 +1,34 @@
+schema:
+  - schema/*.graphqls
+
+exec:
+  package: generated
+  layout: single-file
+  filename: generated/generated.go
+
+model:
+  package: model
+  filename: model/models_gen.go
+
+resolver:
+  package: graphql
+  layout: follow-schema
+  dir: .
+  filename_template: "{name}.resolvers.go"
+  omit_template_comment: true
+
+omit_slice_element_pointers: true
+omit_getters: true
+
+models:
+  Task:
+    model: github.com/evrone/go-clean-template/internal/entity.Task
+  TaskStatus:
+    model: github.com/evrone/go-clean-template/internal/entity.TaskStatus
+    enum_values:
+      TODO:
+        value: github.com/evrone/go-clean-template/internal/entity.TaskStatusTodo
+      IN_PROGRESS:
+        value: github.com/evrone/go-clean-template/internal/entity.TaskStatusInProgress
+      DONE:
+        value: github.com/evrone/go-clean-template/internal/entity.TaskStatusDone

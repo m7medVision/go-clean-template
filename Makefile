@@ -44,6 +44,10 @@ proto-v1: ### generate source files from proto
 		docs/proto/v1/*.proto
 .PHONY: proto-v1
 
+graphql: ### generate GraphQL server code from schema (gqlgen)
+	cd internal/controller/graphql && go tool gqlgen generate
+.PHONY: graphql
+
 deps: ### deps tidy + verify
 	go mod tidy && go mod verify
 .PHONY: deps

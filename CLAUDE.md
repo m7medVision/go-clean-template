@@ -1,7 +1,8 @@
 # go-clean-template
 
 Go clean-architecture reference service. Three domains (`user`, `task`, `translation`) exposed
-over four transports (REST — chi + Huma v2, gRPC, RabbitMQ RPC, NATS RPC) from one shared use-case layer.
+over five transports (REST — chi + Huma v2, gRPC, RabbitMQ RPC, NATS RPC, and GraphQL via gqlgen at
+`/graphql` on the REST port, tasks only, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
 Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
 
 ## Commands — drive everything through the Makefile
@@ -19,6 +20,7 @@ different settings than CI. Use the target, not the tool.
 | Format | `make format` | `gofmt` — the target runs `go fix`, `gofumpt`, and `gci` with the repo's import grouping |
 | Regenerate mocks | `make mock` | `mockgen ...` |
 | Regenerate protobuf | `make proto-v1` | `protoc ...` |
+| Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
 | Start dependencies (Postgres, RabbitMQ, NATS) | `make compose-up` | `docker compose up` |
@@ -154,6 +156,10 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 - `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
 - `internal/usecase/mocks_*_test.go` ← `make mock`.
+- `internal/controller/graphql/generated/` and `internal/controller/graphql/model/` ← `make graphql`
+  from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. The resolver bodies in
+  `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
+  place on every run (signatures follow the schema, bodies are kept).
 
 The REST OpenAPI document is generated in memory by Huma at startup — it is not a checked-in
 artifact, so there is nothing to regenerate or review but the input/output struct tags.
@@ -184,6 +190,8 @@ set to keep aligned. Update it whenever a change touches what it documents:
 5. Expose it on whichever transports need it:
    - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
      (op registered in the same domain file; nothing to regenerate — the spec follows the code).
+   - GraphQL (task only today): schema change in `internal/controller/graphql/schema/` →
+     `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in
      `internal/controller/grpc/v1/`.
    - AMQP / NATS: handler returning a `CallHandler` + a `"v1.<domain>.<action>"` key in the

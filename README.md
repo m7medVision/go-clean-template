@@ -32,7 +32,7 @@ Using the principles of Robert Martin (aka Uncle Bob).
 [Go-clean-template](https://evrone.com/go-clean-template?utm_source=github&utm_campaign=go-clean-template) is created &
 supported by [Evrone](https://evrone.com/?utm_source=github&utm_campaign=go-clean-template).
 
-This template implements four types of servers:
+This template implements five types of servers:
 
 - AMQP RPC (based on RabbitMQ as [transport](https://github.com/rabbitmq/amqp091-go)
   and [Request-Reply pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/RequestReply.html))
@@ -40,6 +40,7 @@ This template implements four types of servers:
   and [Request-Reply pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/RequestReply.html))
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
+- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
 
 The template includes three domains to demonstrate multi-service architecture:
 
@@ -47,7 +48,7 @@ The template includes three domains to demonstrate multi-service architecture:
 - **Task Management** — CRUD operations with status transitions (todo, in_progress, done)
 - **Translation** — text translation with history tracking
 
-All domains are available across all four transports (REST, gRPC, AMQP RPC, NATS RPC).
+All domains are available over REST, gRPC, AMQP RPC and NATS RPC. GraphQL exposes tasks only.
 
 ## Content
 
@@ -60,7 +61,7 @@ All domains are available across all four transports (REST, gRPC, AMQP RPC, NATS
 
 ## Domains
 
-The template includes three fully implemented domains, each available across all four transports (REST, gRPC, AMQP RPC, NATS RPC).
+The template includes three fully implemented domains, each available over REST, gRPC, AMQP RPC and NATS RPC. GraphQL covers tasks only.
 
 ### User Authentication
 
@@ -80,14 +81,14 @@ Registration, login, and JWT-based authorization.
 
 CRUD operations with a status state machine.
 
-| Operation  | REST                         | gRPC                         |
-|------------|------------------------------|------------------------------|
-| Create     | `POST /v1/tasks`             | `TaskService/CreateTask`     |
-| List       | `GET /v1/tasks`              | `TaskService/ListTasks`      |
-| Get        | `GET /v1/tasks/:id`          | `TaskService/GetTask`        |
-| Update     | `PUT /v1/tasks/:id`          | `TaskService/UpdateTask`     |
-| Transition | `PATCH /v1/tasks/:id/status` | `TaskService/TransitionTask` |
-| Delete     | `DELETE /v1/tasks/:id`       | `TaskService/DeleteTask`     |
+| Operation  | REST                         | gRPC                         | GraphQL (`POST /graphql`) |
+|------------|------------------------------|------------------------------|---------------------------|
+| Create     | `POST /v1/tasks`             | `TaskService/CreateTask`     | `mutation createTask`     |
+| List       | `GET /v1/tasks`              | `TaskService/ListTasks`      | `query tasks`             |
+| Get        | `GET /v1/tasks/:id`          | `TaskService/GetTask`        | `query task`              |
+| Update     | `PUT /v1/tasks/:id`          | `TaskService/UpdateTask`     | `mutation updateTask`     |
+| Transition | `PATCH /v1/tasks/:id/status` | `TaskService/TransitionTask` | `mutation transitionTask` |
+| Delete     | `DELETE /v1/tasks/:id`       | `TaskService/DeleteTask`     | `mutation deleteTask`     |
 
 - Status transitions: `todo` → `in_progress` → `done` (and `in_progress` → `todo`)
 - Pagination with `limit`/`offset` and optional status filter
@@ -142,6 +143,11 @@ Check services:
   - http://app.lvh.me/openapi.json | http://127.0.0.1:8080/openapi.json
   - http://app.lvh.me/openapi.yaml | http://127.0.0.1:8080/openapi.yaml
   - http://app.lvh.me/schemas/{schema} | http://127.0.0.1:8080/schemas/{schema}
+- GraphQL:
+  - http://app.lvh.me/graphql | http://127.0.0.1:8080/graphql (POST only, `Authorization: Bearer <token>`)
+  - Schema: [task.graphqls](internal/controller/graphql/schema/task.graphqls)
+  - Playground (when `DOCS_ENABLED=true`): http://app.lvh.me/graphql/playground | http://127.0.0.1:8080/graphql/playground.
+    Set `{"Authorization": "Bearer <token>"}` in its headers pane.
 - gRPC:
   - URL: `tcp://grpc.lvh.me:8081` | `tcp://127.0.0.1:8081`
   - [v1/auth.proto](docs/proto/v1/auth.proto)
@@ -244,12 +250,13 @@ go run -tags migrate ./cmd/app
 
 ### `internal/controller`
 
-Server handler layer (MVC controllers). The template shows 4 servers:
+Server handler layer (MVC controllers). The template shows 5 servers:
 
 - AMQP RPC (based on RabbitMQ as transport)
 - NATS RPC (based on NATS as transport)
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
+- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), tasks only)
 
 Server routers are written in the same style:
 
@@ -274,6 +281,15 @@ routes := make(map[string]server.CallHandler)
     v2.NewTranslationRoutes(routes, t, l)
 }
 ```
+
+#### `internal/controller/graphql`
+
+GraphQL endpoint for tasks, mounted at `/graphql` on the REST router. The schema lives in
+`schema/task.graphqls`; `make graphql` regenerates `generated/` and `model/` and updates the
+resolver signatures in `task.resolvers.go`. `Task` and `TaskStatus` bind to the `entity` types
+through `gqlgen.yml`. Resolvers authenticate the bearer token themselves, so introspection works
+without one, and errors carry `extensions.code` (`UNAUTHENTICATED`, `BAD_USER_INPUT`,
+`NOT_FOUND`, `FORBIDDEN`, `INTERNAL`).
 
 #### `internal/controller/grpc`
 
