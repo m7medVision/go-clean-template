@@ -34,8 +34,7 @@ table "history" {
   }
   foreign_key "history_user_id_fkey" {
     columns     = [column.user_id]
-    ref_columns = [column.id]
-    ref_table   = table.users
+    ref_columns = [table.users.column.id]
     on_delete   = CASCADE
   }
 }
