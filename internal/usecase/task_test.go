@@ -104,8 +104,8 @@ func TestTaskList(t *testing.T) {
 		uc, mockRepo := newTaskUseCase(t)
 		mockRepo.EXPECT().List(gomock.Any(), "user-id-123", repo.TaskFilter{
 			Status: nil,
-			Limit:  uint64(10),
-			Offset: uint64(0),
+			Limit:  10,
+			Offset: 0,
 		}).Return([]entity.Task{task1, task2}, 2, nil)
 
 		tasks, total, err := uc.List(context.Background(), "user-id-123", nil, 0, -1)
@@ -311,7 +311,7 @@ func TestTaskList_RepoError(t *testing.T) {
 	uc, mockRepo := newTaskUseCase(t)
 
 	mockRepo.EXPECT().
-		List(gomock.Any(), "user-id-123", repo.TaskFilter{Limit: uint64(10), Offset: uint64(0)}).
+		List(gomock.Any(), "user-id-123", repo.TaskFilter{Limit: 10, Offset: 0}).
 		Return(nil, 0, errRepoGeneric)
 
 	_, _, err := uc.List(context.Background(), "user-id-123", nil, 10, 0)

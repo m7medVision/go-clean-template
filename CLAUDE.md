@@ -20,6 +20,7 @@ different settings than CI. Use the target, not the tool.
 | Format | `make format` | `gofmt` — the target runs `go fix`, `gofumpt`, and `gci` with the repo's import grouping |
 | Regenerate mocks | `make mock` | `mockgen ...` |
 | Regenerate protobuf | `make proto-v1` | `protoc ...` |
+| Regenerate SQL query code | `make sqlc` | `sqlc generate` — the target first renders the HCL schema to SQL with Atlas (needs Docker for `ATLAS_DEV_URL`), then runs the sqlc pinned in `go.mod` |
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
@@ -71,7 +72,8 @@ Decide by asking what the code knows about:
 | --- | --- | --- |
 | nothing but the domain | `internal/entity/<name>.go` | struct + methods (`Task.Transition`, `TaskStatus.Valid`) |
 | a domain rule that spans repositories | `internal/usecase/<domain>/<domain>.go` | method on `UseCase` |
-| SQL, a table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | method on `Repo` |
+| SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
+| a table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | method on `Repo` calling the generated query |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | an HTTP status, a gRPC code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
@@ -150,6 +152,10 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 - `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
 - `internal/usecase/mocks_*_test.go` ← `make mock`.
+- `internal/repo/persistent/queries/schema/schema.sql` ← `make sqlc`, rendered by Atlas from
+  `internal/app/schema/*.hcl`. It exists only because sqlc cannot read HCL; CI fails when it is stale.
+- `internal/repo/persistent/queries/*.go` ← `make sqlc` from the `.sql` query files beside them,
+  that rendered schema, and `sqlc.yaml`.
 - `internal/controller/graphql/generated/` and `internal/controller/graphql/model/` ← `make graphql`
   from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. The resolver bodies in
   `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
@@ -178,7 +184,8 @@ set to keep aligned. Update it whenever a change touches what it documents:
 2. Implement it in `internal/usecase/<domain>/<domain>.go` and mirror it in the same package's
    `tracing.go`.
 3. If it needs new persistence, repeat the same three steps in `internal/repo/contracts.go`,
-   `internal/repo/persistent/<domain>/`, and that package's `tracing.go`.
+   `internal/repo/persistent/<domain>/`, and that package's `tracing.go`. A new query goes in
+   `internal/repo/persistent/queries/<domain>.sql`, then `make sqlc`.
 4. `make mock`, then extend `internal/usecase/<domain>_test.go` (table-driven, gomock, `t.Parallel()` —
    `paralleltest` enforces it).
 5. Expose it on whichever transports need it:
@@ -199,12 +206,14 @@ before writing.
 
 1. **Entity** — `internal/entity/<domain>.go` with the type and its invariants; new sentinel errors
    go in `internal/entity/errors.go`.
-2. **Schema** — add the table as `internal/app/schema/<domain>.hcl` (Atlas declarative workflow);
+2. **Schema** — add the table as `internal/app/schema/<domain>.hcl` (Atlas declarative workflow),
+   then `make sqlc` to refresh the rendered schema sqlc reads;
    set any new env vars in `docker-compose.yml` and `.env.example`.
 3. **Repo contract** — add the interface to `internal/repo/contracts.go`.
 4. **Repo implementation** — `internal/repo/persistent/<domain>/<domain>.go` (`package <domain>`,
-   Squirrel queries, driver errors mapped to sentinels) plus `tracing.go` next to it, and a `New`
-   returning the interface wrapped in `newTraced`.
+   calling the sqlc queries from `internal/repo/persistent/queries/<domain>.sql` after `make sqlc`,
+   driver errors mapped to sentinels) plus `tracing.go` next to it, and a `New` returning the
+   interface wrapped in `newTraced`.
 5. **Use-case contract** — add the interface to `internal/usecase/contracts.go`.
 6. **Use-case implementation** — `internal/usecase/<domain>/<domain>.go` plus its `tracing.go`,
    same `New` pattern.
@@ -237,8 +246,13 @@ binary; change the schema by editing the matching file, review the diff with `ma
 schema itself at startup only when built with the `migrate` build tag (`internal/app/migrate.go`)
 — that is what `make run` and the Dockerfile do; startup apply needs `PG_URL` and an empty,
 dedicated `ATLAS_DEV_URL`.
-The compose stack provides that dev database as the `atlas-dev` service. Queries are built with
-Squirrel via the embedded `*postgres.Postgres`; there is no ORM and no raw string concatenation.
+The compose stack provides that dev database as the `atlas-dev` service. Queries are plain SQL
+in `internal/repo/persistent/queries/*.sql`, compiled by [sqlc](https://sqlc.dev/) into typed Go
+(`make sqlc`). sqlc cannot read HCL, so `make sqlc` first has Atlas render the HCL schema to
+`internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The repositories call the generated
+`*queries.Queries` and convert its rows to `entity` types; there is no ORM and no query building
+at runtime. Generated row structs share the entities' field order, so `entity.Task(row)` is a
+plain conversion. A schema change that breaks that alignment fails to compile.
 
 ## Tests
 

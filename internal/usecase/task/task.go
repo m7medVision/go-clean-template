@@ -65,8 +65,8 @@ func (uc *UseCase) List(ctx context.Context, userID string, status *entity.TaskS
 
 	tasks, total, err := uc.repo.List(ctx, userID, repo.TaskFilter{
 		Status: status,
-		Limit:  uint64(limit),
-		Offset: uint64(offset),
+		Limit:  int64(limit),
+		Offset: int64(offset),
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("TaskUseCase - List - uc.repo.List: %w", err)

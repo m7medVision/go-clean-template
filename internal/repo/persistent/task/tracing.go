@@ -2,7 +2,6 @@ package task
 
 import (
 	"context"
-	"math"
 
 	"github.com/evrone/go-clean-template/internal/entity"
 	"github.com/evrone/go-clean-template/internal/repo"
@@ -37,14 +36,6 @@ func endSpan(span trace.Span, err error) {
 	span.End()
 }
 
-func safeUint64ToInt64(v uint64) int64 {
-	if v > math.MaxInt64 {
-		return math.MaxInt64
-	}
-
-	return int64(v)
-}
-
 func (r *tracedRepo) Store(ctx context.Context, task *entity.Task) error {
 	ctx, span := startSpan(
 		ctx, "TaskRepo.Store",
@@ -74,8 +65,8 @@ func (r *tracedRepo) GetByID(ctx context.Context, userID, taskID string) (entity
 func (r *tracedRepo) List(ctx context.Context, userID string, filter repo.TaskFilter) ([]entity.Task, int, error) {
 	attrs := []attribute.KeyValue{
 		attribute.String("user.id", userID),
-		attribute.Int64("task.limit", safeUint64ToInt64(filter.Limit)),
-		attribute.Int64("task.offset", safeUint64ToInt64(filter.Offset)),
+		attribute.Int64("task.limit", filter.Limit),
+		attribute.Int64("task.offset", filter.Offset),
 	}
 	if filter.Status != nil {
 		attrs = append(attrs, attribute.String("task.status", string(*filter.Status)))

@@ -1,0 +1,28 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: internal/repo/persistent/queries/schema/schema.sql
+    queries: internal/repo/persistent/queries
+    gen:
+      go:
+        package: queries
+        out: internal/repo/persistent/queries
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: pg_catalog.timestamp
+            go_type: time.Time
+          - column: tasks.status
+            go_type: github.com/evrone/go-clean-template/internal/entity.TaskStatus
+          - column: tasks.description
+            go_type: string
+          - column: history.source
+            go_type: string
+          - column: history.destination
+            go_type: string
+          - column: history.original
+            go_type: string
+          - column: history.translation
+            go_type: string

@@ -6,37 +6,27 @@ import (
 	"errors"
 	"fmt"
 
-	sq "github.com/Masterminds/squirrel"
 	"github.com/evrone/go-clean-template/internal/entity"
 	"github.com/evrone/go-clean-template/internal/repo"
+	"github.com/evrone/go-clean-template/internal/repo/persistent/queries"
 	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/jackc/pgx/v5"
 )
 
 // Repo -.
 type Repo struct {
-	*postgres.Postgres
+	q *queries.Queries
 }
 
 // New returns a Task repository instrumented with OpenTelemetry tracing spans.
 func New(pg *postgres.Postgres) repo.TaskRepo {
-	return newTraced(&Repo{pg})
+	return newTraced(&Repo{queries.New(pg.Pool)})
 }
 
 // Store -.
 func (r *Repo) Store(ctx context.Context, task *entity.Task) error {
-	sql, args, err := r.Builder.
-		Insert("tasks").
-		Columns("id, user_id, title, description, status, created_at, updated_at").
-		Values(task.ID, task.UserID, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt).
-		ToSql()
-	if err != nil {
-		return fmt.Errorf("TaskRepo - Store - r.Builder: %w", err)
-	}
-
-	_, err = r.Pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return fmt.Errorf("TaskRepo - Store - r.Pool.Exec: %w", err)
+	if err := r.q.CreateTask(ctx, queries.CreateTaskParams(*task)); err != nil {
+		return fmt.Errorf("TaskRepo - Store - r.q.CreateTask: %w", err)
 	}
 
 	return nil
@@ -44,120 +34,64 @@ func (r *Repo) Store(ctx context.Context, task *entity.Task) error {
 
 // GetByID -.
 func (r *Repo) GetByID(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	sql, args, err := r.Builder.
-		Select("id, user_id, title, description, status, created_at, updated_at").
-		From("tasks").
-		Where(sq.Eq{"id": taskID}).
-		ToSql()
-	if err != nil {
-		return entity.Task{}, fmt.Errorf("TaskRepo - GetByID - r.Builder: %w", err)
-	}
-
-	var task entity.Task
-
-	err = r.Pool.QueryRow(ctx, sql, args...).
-		Scan(&task.ID, &task.UserID, &task.Title, &task.Description, &task.Status, &task.CreatedAt, &task.UpdatedAt)
+	task, err := r.q.GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Task{}, entity.ErrTaskNotFound
 		}
 
-		return entity.Task{}, fmt.Errorf("TaskRepo - GetByID - r.Pool.QueryRow: %w", err)
+		return entity.Task{}, fmt.Errorf("TaskRepo - GetByID - r.q.GetTask: %w", err)
 	}
 
 	if task.UserID != userID {
 		return entity.Task{}, entity.ErrTaskForbidden
 	}
 
-	return task, nil
+	return entity.Task(task), nil
 }
 
 // List -.
 func (r *Repo) List(ctx context.Context, userID string, filter repo.TaskFilter) ([]entity.Task, int, error) {
-	countBuilder := r.Builder.
-		Select("COUNT(*)").
-		From("tasks").
-		Where(sq.Eq{"user_id": userID})
+	status := (*string)(filter.Status)
 
-	if filter.Status != nil {
-		countBuilder = countBuilder.Where(sq.Eq{"status": *filter.Status})
-	}
-
-	countSQL, countArgs, err := countBuilder.ToSql()
+	total, err := r.q.CountTasks(ctx, queries.CountTasksParams{UserID: userID, Status: status})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - countBuilder: %w", err)
+		return nil, 0, fmt.Errorf("TaskRepo - List - r.q.CountTasks: %w", err)
 	}
 
-	var total int
-
-	err = r.Pool.QueryRow(ctx, countSQL, countArgs...).Scan(&total)
+	rows, err := r.q.ListTasks(ctx, queries.ListTasksParams{
+		UserID: userID,
+		Status: status,
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - count query: %w", err)
+		return nil, 0, fmt.Errorf("TaskRepo - List - r.q.ListTasks: %w", err)
 	}
 
-	dataBuilder := r.Builder.
-		Select("id, user_id, title, description, status, created_at, updated_at").
-		From("tasks").
-		Where(sq.Eq{"user_id": userID}).
-		OrderBy("created_at DESC").
-		Limit(filter.Limit).
-		Offset(filter.Offset)
-
-	if filter.Status != nil {
-		dataBuilder = dataBuilder.Where(sq.Eq{"status": *filter.Status})
+	tasks := make([]entity.Task, len(rows))
+	for i := range rows {
+		tasks[i] = entity.Task(rows[i])
 	}
 
-	dataSQL, dataArgs, err := dataBuilder.ToSql()
-	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - dataBuilder: %w", err)
-	}
-
-	rows, err := r.Pool.Query(ctx, dataSQL, dataArgs...)
-	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - r.Pool.Query: %w", err)
-	}
-	defer rows.Close()
-
-	tasks := make([]entity.Task, 0, filter.Limit)
-
-	for rows.Next() {
-		var t entity.Task
-
-		err = rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Description, &t.Status, &t.CreatedAt, &t.UpdatedAt)
-		if err != nil {
-			return nil, 0, fmt.Errorf("TaskRepo - List - rows.Scan: %w", err)
-		}
-
-		tasks = append(tasks, t)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - rows.Err: %w", err)
-	}
-
-	return tasks, total, nil
+	return tasks, int(total), nil
 }
 
 // Update -.
 func (r *Repo) Update(ctx context.Context, task *entity.Task) error {
-	sql, args, err := r.Builder.
-		Update("tasks").
-		Set("title", task.Title).
-		Set("description", task.Description).
-		Set("status", task.Status).
-		Set("updated_at", task.UpdatedAt).
-		Where(sq.Eq{"id": task.ID, "user_id": task.UserID}).
-		ToSql()
+	affected, err := r.q.UpdateTask(ctx, queries.UpdateTaskParams{
+		ID:          task.ID,
+		UserID:      task.UserID,
+		Title:       task.Title,
+		Description: task.Description,
+		Status:      task.Status,
+		UpdatedAt:   task.UpdatedAt,
+	})
 	if err != nil {
-		return fmt.Errorf("TaskRepo - Update - r.Builder: %w", err)
+		return fmt.Errorf("TaskRepo - Update - r.q.UpdateTask: %w", err)
 	}
 
-	result, err := r.Pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return fmt.Errorf("TaskRepo - Update - r.Pool.Exec: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
+	if affected == 0 {
 		return entity.ErrTaskNotFound
 	}
 
@@ -166,20 +100,12 @@ func (r *Repo) Update(ctx context.Context, task *entity.Task) error {
 
 // Delete -.
 func (r *Repo) Delete(ctx context.Context, userID, taskID string) error {
-	sql, args, err := r.Builder.
-		Delete("tasks").
-		Where(sq.Eq{"id": taskID, "user_id": userID}).
-		ToSql()
+	affected, err := r.q.DeleteTask(ctx, queries.DeleteTaskParams{ID: taskID, UserID: userID})
 	if err != nil {
-		return fmt.Errorf("TaskRepo - Delete - r.Builder: %w", err)
+		return fmt.Errorf("TaskRepo - Delete - r.q.DeleteTask: %w", err)
 	}
 
-	result, err := r.Pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return fmt.Errorf("TaskRepo - Delete - r.Pool.Exec: %w", err)
-	}
-
-	if result.RowsAffected() == 0 {
+	if affected == 0 {
 		return entity.ErrTaskNotFound
 	}
 

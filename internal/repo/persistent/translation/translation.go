@@ -6,53 +6,30 @@ import (
 
 	"github.com/evrone/go-clean-template/internal/entity"
 	"github.com/evrone/go-clean-template/internal/repo"
+	"github.com/evrone/go-clean-template/internal/repo/persistent/queries"
 	"github.com/evrone/go-clean-template/pkg/postgres"
 )
 
-const _defaultEntityCap = 64
-
 // Repo -.
 type Repo struct {
-	*postgres.Postgres
+	q *queries.Queries
 }
 
 // New returns a Translation repository instrumented with OpenTelemetry tracing spans.
 func New(pg *postgres.Postgres) repo.TranslationRepo {
-	return newTraced(&Repo{pg})
+	return newTraced(&Repo{queries.New(pg.Pool)})
 }
 
 // GetHistory -.
 func (r *Repo) GetHistory(ctx context.Context, userID string) ([]entity.Translation, error) {
-	sql, args, err := r.Builder.
-		Select("source, destination, original, translation").
-		From("history").
-		Where("user_id = ?", userID).
-		ToSql()
+	rows, err := r.q.ListHistory(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("TranslationRepo - GetHistory - r.Builder: %w", err)
+		return nil, fmt.Errorf("TranslationRepo - GetHistory - r.q.ListHistory: %w", err)
 	}
 
-	rows, err := r.Pool.Query(ctx, sql, args...)
-	if err != nil {
-		return nil, fmt.Errorf("TranslationRepo - GetHistory - r.Pool.Query: %w", err)
-	}
-	defer rows.Close()
-
-	entities := make([]entity.Translation, 0, _defaultEntityCap)
-
-	for rows.Next() {
-		e := entity.Translation{}
-
-		err = rows.Scan(&e.Source, &e.Destination, &e.Original, &e.Translation)
-		if err != nil {
-			return nil, fmt.Errorf("TranslationRepo - GetHistory - rows.Scan: %w", err)
-		}
-
-		entities = append(entities, e)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("TranslationRepo - GetHistory - rows.Err: %w", err)
+	entities := make([]entity.Translation, len(rows))
+	for i, row := range rows {
+		entities[i] = entity.Translation(row)
 	}
 
 	return entities, nil
@@ -60,18 +37,15 @@ func (r *Repo) GetHistory(ctx context.Context, userID string) ([]entity.Translat
 
 // Store -.
 func (r *Repo) Store(ctx context.Context, userID string, t entity.Translation) error {
-	sql, args, err := r.Builder.
-		Insert("history").
-		Columns("user_id, source, destination, original, translation").
-		Values(userID, t.Source, t.Destination, t.Original, t.Translation).
-		ToSql()
+	err := r.q.CreateHistory(ctx, queries.CreateHistoryParams{
+		UserID:      userID,
+		Source:      t.Source,
+		Destination: t.Destination,
+		Original:    t.Original,
+		Translation: t.Translation,
+	})
 	if err != nil {
-		return fmt.Errorf("TranslationRepo - Store - r.Builder: %w", err)
-	}
-
-	_, err = r.Pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return fmt.Errorf("TranslationRepo - Store - r.Pool.Exec: %w", err)
+		return fmt.Errorf("TranslationRepo - Store - r.q.CreateHistory: %w", err)
 	}
 
 	return nil

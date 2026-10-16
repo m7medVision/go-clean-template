@@ -11,7 +11,7 @@ Clean Architecture template for Golang services
 [![Web Framework](https://img.shields.io/badge/Chi%20%2B%20Huma-Web%20Framework-blue)](https://github.com/danielgtaylor/huma)
 [![API Documentation](https://img.shields.io/badge/OpenAPI-Documentation-blue)](https://github.com/danielgtaylor/huma)
 [![JSON Handling](https://img.shields.io/badge/Go--JSON-Fast%20Serialization-blue)](https://github.com/goccy/go-json)
-[![Query Builder](https://img.shields.io/badge/Squirrel-SQL%20Query%20Builder-blue)](https://github.com/Masterminds/squirrel)
+[![SQL](https://img.shields.io/badge/sqlc-Type--safe%20SQL-blue)](https://github.com/sqlc-dev/sqlc)
 [![Database Migrations](https://img.shields.io/badge/Migrations-Seamless%20Schema%20Updates-blue)](https://atlasgo.io/)
 [![Logging](https://img.shields.io/badge/ZeroLog-Structured%20Logging-blue)](https://github.com/rs/zerolog)
 [![Metrics](https://img.shields.io/badge/Prometheus-Metrics%20Integration-blue)](https://github.com/prometheus/client_golang)
@@ -331,6 +331,9 @@ Repositories, webapi, and other business logic structures are injected into busi
 #### `internal/repo/persistent`
 
 A repository is an abstract storage (database) that business logic works with.
+SQL queries live in `queries/*.sql`; [sqlc](https://github.com/sqlc-dev/sqlc) compiles them into typed Go in the same `queries` package.
+sqlc cannot read HCL, so `make sqlc` first renders `internal/app/schema/*.hcl` to `queries/schema/schema.sql` with Atlas
+(Docker is needed for the dev database). Run `make sqlc` after changing the schema or a query.
 
 #### `internal/repo/webapi`
 
