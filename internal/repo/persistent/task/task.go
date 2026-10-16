@@ -131,6 +131,10 @@ func (r *Repo) List(ctx context.Context, userID string, filter repo.TaskFilter) 
 		tasks = append(tasks, t)
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("TaskRepo - List - rows.Err: %w", err)
+	}
+
 	return tasks, total, nil
 }
 
