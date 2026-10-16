@@ -355,3 +355,72 @@ func TestDoTranslate(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, resp.Code)
 	})
 }
+
+type panickingTask struct {
+	usecase.Task
+}
+
+func (panickingTask) Get(context.Context, string, string) (entity.Task, error) {
+	panic("boom")
+}
+
+func TestResponseBodyHasNoSchemaLink(t *testing.T) {
+	t.Parallel()
+
+	handler := newRouter(newTestConfig(t), &fakeTranslation{}, &fakeUser{
+		registered: entity.User{ID: "user-1"},
+	}, &fakeTask{})
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/user/profile", newToken(t), "")
+	require.Equal(t, http.StatusOK, resp.Code)
+	assert.NotContains(t, resp.Body.String(), "$schema")
+	assert.Empty(t, resp.Header().Get("Link"))
+}
+
+func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
+	t.Parallel()
+
+	handler := newRouter(newTestConfig(t), &fakeTranslation{}, &fakeUser{}, &fakeTask{
+		stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
+	})
+
+	resp := doRequest(t.Context(), handler, http.MethodPut, "/v1/tasks/task-1", newToken(t),
+		`{"id":"task-1","title":"t","description":"","status":"todo","created_at":"2026-01-01T00:00:00Z"}`)
+	assert.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+}
+
+func TestValidationErrorDoesNotEchoInput(t *testing.T) {
+	t.Parallel()
+
+	handler := newRouter(newTestConfig(t), &fakeTranslation{}, &fakeUser{}, &fakeTask{})
+
+	resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/auth/register", "",
+		`{"username":"johndoe","email":"john@example.com","password":"s3cr"}`)
+	require.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+	assert.Contains(t, resp.Body.String(), "body.password")
+	assert.NotContains(t, resp.Body.String(), "s3cr")
+}
+
+func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
+	t.Parallel()
+
+	handler := newRouter(newTestConfig(t), &fakeTranslation{}, &fakeUser{}, &fakeTask{})
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
+	assert.Equal(t, http.StatusUnauthorized, resp.Code)
+}
+
+func TestPanicAnswers500AndIsCounted(t *testing.T) {
+	t.Parallel()
+
+	handler := newRouter(newTestConfig(t), &fakeTranslation{}, &fakeUser{}, panickingTask{})
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", newToken(t), "")
+	assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+
+	metrics := doRequest(t.Context(), handler, http.MethodGet, "/metrics", "", "")
+	body, err := io.ReadAll(metrics.Body)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), `http_requests_total{code="500",method="GET",route="/v1/tasks/{id}"}`)
+}

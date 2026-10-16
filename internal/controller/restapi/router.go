@@ -32,6 +32,10 @@ func NewRouter(
 	l logger.Interface,
 ) http.Handler {
 	apiConfig := huma.DefaultConfig(_apiTitle, cfg.App.Version)
+	// The default hook adds a `$schema` field and a `Link` header to every response body.
+	apiConfig.CreateHooks = nil
+	apiConfig.Transformers = append(apiConfig.Transformers, hideErrorValues)
+
 	if !cfg.Docs.Enabled {
 		apiConfig.DocsPath = ""
 		apiConfig.OpenAPIPath = ""
@@ -42,7 +46,6 @@ func NewRouter(
 
 	r.Use(chimw.StripSlashes)
 	r.Use(middleware.Logger(l))
-	r.Use(middleware.Recovery(l))
 
 	if cfg.Tracing.Enabled {
 		r.Use(middleware.Tracing())
@@ -53,6 +56,7 @@ func NewRouter(
 		r.Use(prometheusMiddleware.Middleware)
 	}
 
+	r.Use(middleware.Recovery(l))
 	r.Use(middleware.Auth(jwtManager, l))
 
 	if cfg.Metrics.Enabled {
@@ -68,4 +72,16 @@ func NewRouter(
 
 func healthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
+}
+
+func hideErrorValues(_ huma.Context, _ string, v any) (any, error) {
+	if model, ok := v.(*huma.ErrorModel); ok {
+		for _, detail := range model.Errors {
+			if detail != nil {
+				detail.Value = nil
+			}
+		}
+	}
+
+	return v, nil
 }

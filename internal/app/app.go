@@ -173,6 +173,8 @@ func Run(cfg *config.Config) {
 		}
 	}()
 
+	syncSchema()
+
 	// Repository
 	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
 	if err != nil {

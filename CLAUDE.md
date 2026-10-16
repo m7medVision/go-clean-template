@@ -158,34 +158,19 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 The REST OpenAPI document is generated in memory by Huma at startup — it is not a checked-in
 artifact, so there is nothing to regenerate or review but the input/output struct tags.
 
-## READMEs must be updated as a set
+## Keep README.md current
 
-`README.md` (English) is canonical. `README_RU.md` and `README_CN.md` are full translations that
-mirror it **section for section, table row for table row** — same headings in the same order, same
-tables, same code blocks, same links. Changing one and not the other two is the most common
-regression in this repo.
+`README.md` is the only README. The Russian and Chinese translations were removed, so there is no
+set to keep aligned. Update it whenever a change touches what it documents:
 
-Update all three whenever a change touches what they document:
-
-| Change | What to update in every README |
+| Change | What to update in `README.md` |
 | --- | --- |
-| New or changed REST / gRPC endpoint | the domain table under `Domains` (`Домены` / `领域`) |
+| New or changed REST / gRPC endpoint | the domain table under `Domains` |
 | New domain | the `Overview` bullet list, `Content` index, and a new `Domains` subsection |
 | New or renamed env var | the config table under `Observability` if tracing-related; otherwise the `config` section |
 | New transport, server, port or service URL | the `Quick start` service list |
 | New `make` target used in the getting-started flow | the `Quick start` code blocks |
 | Renamed or moved package under `internal/` or `pkg/` | the matching `Project structure` subsection |
-
-Rules for the translations:
-
-- Translate the prose; leave identifiers, paths, `make` targets, URLs, env var names, code blocks
-  and route strings verbatim in English.
-- Headings are translated, so the `Content` index anchors are localized too (`#домены`, `#领域`).
-  Adding or renaming a section means updating that file's own anchors — an anchor copied from the
-  English file will not resolve.
-- Keep the heading level identical across the three files.
-- If you genuinely cannot produce a translation, still add the section in English to the other two
-  files so the structure stays aligned, and say so in the change description.
 
 ## Adding a use case to an existing domain
 

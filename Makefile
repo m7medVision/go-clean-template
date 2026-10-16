@@ -99,12 +99,12 @@ mock: ### run mockgen
 schema-apply: ### apply desired schema to the database (Atlas)
 	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
 		--to file://internal/app/schema \
-		--dev-url 'docker://postgres/18/dev?search_path=public'
+		--dev-url '$(ATLAS_DEV_URL)'
 .PHONY: schema-apply
 
 bin-deps: ### install tools
 	go install tool
-	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | sh
+	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh
 .PHONY: bin-deps
 
 pre-commit: deps proto-v1 mock format linter-golangci test ### run pre-commit

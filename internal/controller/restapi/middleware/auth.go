@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	_apiPrefix        = "/v1"
-	_authPrefix       = "/v1/auth"
+	_apiPrefix        = "/v1/"
+	_authPrefix       = "/v1/auth/"
 	_bearerParts      = 2
 	_problemTypeBlank = "about:blank"
 )

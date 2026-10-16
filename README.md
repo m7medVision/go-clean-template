@@ -2,9 +2,6 @@
 
 # Go Clean template
 
-[🇨🇳 中文](README_CN.md)
-[🇷🇺 RU](README_RU.md)
-
 Clean Architecture template for Golang services
 
 [![Release](https://img.shields.io/github/v/release/evrone/go-clean-template.svg)](https://github.com/evrone/go-clean-template/releases/)
@@ -337,13 +334,20 @@ And in the file `internal/controller/restapi/router.go` add the line:
 
 Huma generates the OpenAPI spec and serves `/docs`, `/openapi.json`, and `/openapi.yaml` — routes,
 validation rules, and the BearerAuth security scheme all follow the registered input and output
-structs, so there are no annotation comments to maintain. Two REST behavior notes against the
+structs, so there are no annotation comments to maintain. REST behavior notes against the
 previous Fiber release:
 
-- The request-count and duration metric names are `http_requests_total` and
-  `http_request_duration_seconds`, labeled by `code` only; the fiberprometheus series and labels
-  stopped with that dependency.
-- Requests failing Huma's structural validation answer `422` (RFC 9457), not the old `400`.
+- The request-count and duration metrics are `http_requests_total` and
+  `http_request_duration_seconds`, labeled by `method`, `route` (the chi route pattern, or
+  `unmatched`) and `code`; the fiberprometheus series names stopped with that dependency.
+- Error bodies are RFC 9457 `application/problem+json` (`type`, `title`, `status`, `detail`, and
+  `errors` for validation failures) instead of `{"error": "..."}`. Read `detail` for the message.
+  Validation errors name the failing `location` but never echo the submitted value.
+- Requests failing Huma's structural validation answer `422`, not the old `400`. That includes
+  `GET /v1/tasks` query parameters: `limit` must be an integer of at least 1, `offset` at least 0,
+  and `status` one of `todo`, `in_progress`, `done`. Out-of-range or unparsable values no longer
+  fall back to the defaults.
+- Unknown fields in a request body are ignored, as before.
 
 For v2, register the v2 operations with the same `api` object in
 `internal/controller/restapi/router.go`: the v2 paths (`/v2/...`) are plain chi routes in the same

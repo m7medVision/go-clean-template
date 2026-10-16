@@ -9,9 +9,11 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"ariga.io/atlas/atlasexec"
+	"github.com/jackc/pgx/v5"
 )
 
 //go:embed schema
@@ -20,44 +22,72 @@ var schemaFS embed.FS
 const (
 	_defaultAttempts = 20
 	_defaultTimeout  = time.Second
+	_applyTimeout    = 5 * time.Minute
 )
 
-func init() {
+func syncSchema() {
 	databaseURL, ok := os.LookupEnv("PG_URL")
-	if !ok || len(databaseURL) == 0 {
+	if !ok || databaseURL == "" {
 		log.Fatalf("migrate: environment variable not declared: PG_URL")
 	}
+
 	databaseURL += "?sslmode=disable"
 
 	devURL, ok := os.LookupEnv("ATLAS_DEV_URL")
-	if !ok || len(devURL) == 0 {
+	if !ok || devURL == "" {
 		log.Fatalf("migrate: environment variable not declared: ATLAS_DEV_URL")
 	}
 
-	var (
-		attempts = _defaultAttempts
-		err      error
-	)
+	waitForPostgres(databaseURL)
 
-	for attempts > 0 {
-		err = applySchema(databaseURL, devURL)
-		if err == nil {
-			break
-		}
-
-		log.Printf("Migrate: postgres is trying to connect, attempts left: %d", attempts)
-		time.Sleep(_defaultTimeout)
-		attempts--
+	if strings.HasPrefix(devURL, "postgres://") {
+		waitForPostgres(devURL)
 	}
 
-	if err != nil {
+	if err := applySchema(databaseURL, devURL); err != nil {
 		log.Fatalf("Migrate: schema apply error: %s", err)
 	}
 
 	log.Printf("Migrate: schema is synced")
 }
 
+func waitForPostgres(url string) {
+	var err error
+
+	for attempts := _defaultAttempts; attempts > 0; attempts-- {
+		err = ping(url)
+		if err == nil {
+			return
+		}
+
+		log.Printf("Migrate: postgres is trying to connect, attempts left: %d", attempts)
+		time.Sleep(_defaultTimeout)
+	}
+
+	log.Fatalf("Migrate: postgres connect error: %s", err)
+}
+
+func ping(url string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), _defaultTimeout)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		return fmt.Errorf("migrate - pgx.Connect: %w", err)
+	}
+	defer conn.Close(ctx)
+
+	if err = conn.Ping(ctx); err != nil {
+		return fmt.Errorf("migrate - conn.Ping: %w", err)
+	}
+
+	return nil
+}
+
 func applySchema(databaseURL, devURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), _applyTimeout)
+	defer cancel()
+
 	workdir, err := atlasexec.NewWorkingDir()
 	if err != nil {
 		return fmt.Errorf("migrate - atlasexec.NewWorkingDir: %w", err)
@@ -78,7 +108,7 @@ func applySchema(databaseURL, devURL string) error {
 		return fmt.Errorf("migrate - atlasexec.NewClient: %w", err)
 	}
 
-	if _, err = client.SchemaApply(context.Background(), &atlasexec.SchemaApplyParams{
+	if _, err = client.SchemaApply(ctx, &atlasexec.SchemaApplyParams{
 		URL:         databaseURL,
 		To:          "file://schema",
 		DevURL:      devURL,

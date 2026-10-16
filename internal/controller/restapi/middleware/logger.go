@@ -11,20 +11,33 @@ import (
 type statusRecorder struct {
 	http.ResponseWriter
 
-	status int
-	bytes  int
+	status      int
+	bytes       int
+	wroteHeader bool
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
-	r.status = status
+	if !r.wroteHeader {
+		r.status = status
+		r.wroteHeader = true
+	}
+
 	r.ResponseWriter.WriteHeader(status)
 }
 
 func (r *statusRecorder) Write(body []byte) (int, error) {
+	r.wroteHeader = true
+
 	written, err := r.ResponseWriter.Write(body)
 	r.bytes += written
 
 	return written, err
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer for
+// Flush, Hijack and the read and write deadlines.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
 }
 
 // Logger returns a middleware that logs method, path, status code, and body size
@@ -34,9 +47,11 @@ func Logger(l logger.Interface) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
-			next.ServeHTTP(rec, r)
+			defer func() {
+				l.Info("%s", buildRequestMessage(r, rec))
+			}()
 
-			l.Info("%s", buildRequestMessage(r, rec))
+			next.ServeHTTP(rec, r)
 		})
 	}
 }
