@@ -10,4 +10,4 @@ type User struct {
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"  example:"2026-01-01T00:00:00Z"`
 	UpdatedAt    time.Time `json:"updated_at"  example:"2026-01-01T00:00:00Z"`
-} // @name entity.User
+}

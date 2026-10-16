@@ -144,6 +144,7 @@ Check services:
   - http://app.lvh.me/docs | http://127.0.0.1:8080/docs
   - http://app.lvh.me/openapi.json | http://127.0.0.1:8080/openapi.json
   - http://app.lvh.me/openapi.yaml | http://127.0.0.1:8080/openapi.yaml
+  - http://app.lvh.me/schemas/{schema} | http://127.0.0.1:8080/schemas/{schema}
 - gRPC:
   - URL: `tcp://grpc.lvh.me:8081` | `tcp://127.0.0.1:8081`
   - [v1/auth.proto](docs/proto/v1/auth.proto)
@@ -336,7 +337,13 @@ And in the file `internal/controller/restapi/router.go` add the line:
 
 Huma generates the OpenAPI spec and serves `/docs`, `/openapi.json`, and `/openapi.yaml` — routes,
 validation rules, and the BearerAuth security scheme all follow the registered input and output
-structs, so there are no annotation comments to maintain.
+structs, so there are no annotation comments to maintain. Two REST behavior notes against the
+previous Fiber release:
+
+- The request-count and duration metric names are `http_requests_total` and
+  `http_request_duration_seconds`, labeled by `code` only; the fiberprometheus series and labels
+  stopped with that dependency.
+- Requests failing Huma's structural validation answer `422` (RFC 9457), not the old `400`.
 
 For v2, register the v2 operations with the same `api` object in
 `internal/controller/restapi/router.go`: the v2 paths (`/v2/...`) are plain chi routes in the same

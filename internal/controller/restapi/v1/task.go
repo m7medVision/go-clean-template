@@ -197,7 +197,7 @@ func (r *V1) transitionTask(api huma.API) {
 		Path:        "/v1/tasks/{id}/status",
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
-		Errors:      []int{http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *transitionTaskInput) (*transitionTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -237,7 +237,7 @@ func (r *V1) deleteTask(api huma.API) {
 		Tags:          []string{_tasksTag},
 		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusNotFound, http.StatusInternalServerError},
+		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *taskPathInput) (*deleteTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {

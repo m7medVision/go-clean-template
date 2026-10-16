@@ -6,7 +6,7 @@ import (
 )
 
 // TaskStatus -.
-type TaskStatus string // @name entity.TaskStatus
+type TaskStatus string
 
 const (
 	TaskStatusTodo       TaskStatus = "todo"
@@ -23,7 +23,7 @@ type Task struct {
 	Status      TaskStatus `json:"status"      example:"todo"`
 	CreatedAt   time.Time  `json:"created_at"  example:"2026-01-01T00:00:00Z"`
 	UpdatedAt   time.Time  `json:"updated_at"  example:"2026-01-01T00:00:00Z"`
-} // @name entity.Task
+}
 
 // Valid reports whether s is a known task status.
 func (s TaskStatus) Valid() bool {

@@ -11,14 +11,16 @@ import (
 )
 
 const (
-	_apiPrefix   = "/v1"
-	_authPrefix  = "/v1/auth"
-	_bearerParts = 2
+	_apiPrefix        = "/v1"
+	_authPrefix       = "/v1/auth"
+	_bearerParts      = 2
+	_problemTypeBlank = "about:blank"
 )
 
 type authContextKey struct{}
 
 type problem struct {
+	Type   string `json:"type"`
 	Title  string `json:"title"`
 	Status int    `json:"status"`
 	Detail string `json:"detail"`
@@ -73,6 +75,7 @@ func Auth(jwtManager *jwt.Manager, l logger.Interface) func(http.Handler) http.H
 // writeProblem writes an RFC 9457 problem response on the auth failures.
 func writeProblem(l logger.Interface, w http.ResponseWriter, status int, detail string) {
 	body, err := json.Marshal(problem{
+		Type:   _problemTypeBlank,
 		Title:  http.StatusText(status),
 		Status: status,
 		Detail: detail,
