@@ -31,10 +31,7 @@ func NewRouter(
 	jwtManager *jwt.Manager,
 	l logger.Interface,
 ) *chi.Mux {
-	apiConfig := huma.DefaultConfig(_apiTitle, cfg.App.Version)
-	// The default hook adds a `$schema` field and a `Link` header to every response body.
-	apiConfig.CreateHooks = nil
-	apiConfig.Transformers = append(apiConfig.Transformers, hideErrorValues)
+	apiConfig := newAPIConfig(cfg.App.Version)
 
 	if !cfg.Docs.Enabled {
 		apiConfig.DocsPath = ""
@@ -68,6 +65,16 @@ func NewRouter(
 	v1.NewRoutes(humachi.New(r, apiConfig), t, u, tk, l)
 
 	return r
+}
+
+// newAPIConfig is shared by NewRouter and OpenAPI so the exported document matches the served one.
+func newAPIConfig(version string) huma.Config {
+	apiConfig := huma.DefaultConfig(_apiTitle, version)
+	// The default hook adds a `$schema` field and a `Link` header to every response body.
+	apiConfig.CreateHooks = nil
+	apiConfig.Transformers = append(apiConfig.Transformers, hideErrorValues)
+
+	return apiConfig
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {

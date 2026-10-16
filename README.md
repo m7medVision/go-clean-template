@@ -189,6 +189,11 @@ Configuration (see [.env.example](.env.example)):
 Configuration and logger initialization. Then the main function "continues" in
 `internal/app/app.go`.
 
+### `cmd/openapi/main.go`
+
+Prints the REST OpenAPI document without starting a server or touching the database.
+`make openapi` writes it to `docs/openapi/v1.json`, and CI fails when that file is stale.
+
 ### `config`
 
 The twelve-factor app stores config in environment variables (often shortened to `env vars` or `env`). Env vars are easy
@@ -201,6 +206,12 @@ Config: [config.go](config/config.go)
 Example: [.env.example](.env.example)
 
 [docker-compose.yml](docker-compose.yml) uses `env` variables to configure services.
+
+#### `docs/openapi`
+
+The REST OpenAPI document, exported from the Huma registrations by `make openapi`. It is the same
+document Huma serves at `/openapi.json`, checked in so contract changes are reviewable and clients
+can generate types from it. Don't edit it by hand.
 
 #### `docs/proto`
 
