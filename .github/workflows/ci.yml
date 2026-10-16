@@ -98,3 +98,18 @@ jobs:
         run: |
           git status --porcelain
           test -z "$(git status --porcelain)"
+
+  openapi-generated:
+    name: runner / openapi / document is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.27
+      - name: Regenerate
+        run: make openapi
+      - name: Fail on drift
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"

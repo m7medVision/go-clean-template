@@ -21,6 +21,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate mocks | `make mock` | `mockgen ...` |
 | Regenerate protobuf | `make proto-v1` | `protoc ...` |
 | Regenerate SQL query code | `make sqlc` | `sqlc generate` — the target first renders the HCL schema to SQL with Atlas (needs Docker for `ATLAS_DEV_URL`), then runs the sqlc pinned in `go.mod` |
+| Regenerate the REST OpenAPI document | `make openapi` | `go run ./cmd/openapi` — the target writes through a temp file so a failed run never truncates `docs/openapi/v1.json` |
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
@@ -160,9 +161,10 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. The resolver bodies in
   `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
   place on every run (signatures follow the schema, bodies are kept).
-
-The REST OpenAPI document is generated in memory by Huma at startup — it is not a checked-in
-artifact, so there is nothing to regenerate or review but the input/output struct tags.
+- `docs/openapi/v1.json` ← `make openapi`, exported by `cmd/openapi` from the same Huma config the
+  server uses (`restapi.OpenAPI`). Huma still serves the live document at `/openapi.json` when
+  `DOCS_ENABLED`; the checked-in copy exists so REST contract changes show up as a reviewable diff
+  and so clients can generate types without a running server. CI fails when it is stale.
 
 ## Keep README.md current
 
@@ -190,7 +192,7 @@ set to keep aligned. Update it whenever a change touches what it documents:
    `paralleltest` enforces it).
 5. Expose it on whichever transports need it:
    - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
-     (op registered in the same domain file; nothing to regenerate — the spec follows the code).
+     (op registered in the same domain file), then `make openapi` and commit the `docs/openapi/v1.json` diff.
    - GraphQL (task only today): schema change in `internal/controller/graphql/schema/` →
      `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in
@@ -224,8 +226,8 @@ before writing.
    `<transport>/v1/<domain>.go`, registration in that transport's `v1/router.go`, and the use case
    added to the `V1` / controller struct in `<transport>/v1/controller.go`. gRPC also needs
    `docs/proto/v1/<domain>.proto` and `make proto-v1`.
-10. **Docs** — REST generates nothing (the OpenAPI spec is derived from the code at startup); just
-    do the README updates listed above.
+10. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the README updates listed
+    above.
 11. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
     transports you exposed.
 
