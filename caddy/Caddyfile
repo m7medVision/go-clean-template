@@ -14,7 +14,7 @@
 
 http://app.lvh.me {
 	route {
-		# The WAF runs first so cache hits are still inspected.
+		# The WAF runs first so cache hits and static files are still inspected.
 		waf {
 			rule_file /etc/caddy/waf/rules.json
 			log_path /data/waf.json
@@ -28,7 +28,33 @@ http://app.lvh.me {
 		}
 		cache @public
 
-		reverse_proxy app:8080
+		# Everything the Go app owns. Keep in sync with restapi.NewRouter, internal/app/app.go
+		# and the proxy list in web/vite.config.ts.
+		@backend path /v1/* /graphql /graphql/* /docs /docs/* /openapi.json /openapi.yaml /schemas/* /healthz /metrics
+		handle @backend {
+			reverse_proxy app:8080
+		}
+
+		# Everything else is the React client, with history fallback to index.html.
+		handle {
+			root * /srv/web
+			encode zstd gzip
+
+			# The CSP is scoped here so the Stoplight docs UI under /docs keeps working.
+			header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+			header X-Content-Type-Options nosniff
+			header Referrer-Policy no-referrer
+
+			# `header` runs before `try_files`, so match on the requested path, not the rewritten one.
+			# Vite content-hashes everything under /assets; the HTML shell must always revalidate.
+			@hashed path /assets/*
+			header @hashed Cache-Control "public, max-age=31536000, immutable"
+			@shell not path /assets/*
+			header @shell Cache-Control "no-cache"
+
+			try_files {path} /index.html
+			file_server
+		}
 	}
 }
 
