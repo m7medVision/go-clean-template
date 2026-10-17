@@ -13,7 +13,7 @@ COPY --chown=vp:vp web/ ./
 RUN vp build
 
 # Souin ships no storage of its own since v1.7.0, so the in-memory otter storage is built in too.
-FROM caddy:2.11.6-builder AS builder
+FROM caddy:2.11.7-builder AS builder
 
 ARG CADDY_WAF_VERSION=v0.4.15
 
