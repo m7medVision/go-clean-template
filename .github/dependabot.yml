@@ -16,6 +16,13 @@ updates:
     directory: "/"
     patterns: ["*"]
     multi-ecosystem-group: all
+  - package-ecosystem: bun
+    directory: "/web"
+    patterns: ["*"]
+    multi-ecosystem-group: all
+    # Auto-merge is on, so wait out a freshly published (possibly compromised) release.
+    cooldown:
+      default-days: 7
   - package-ecosystem: docker
     directories: ["/", "/caddy", "/integration-test"]
     patterns: ["*"]
