@@ -2,6 +2,7 @@ package restapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -418,4 +419,27 @@ func TestPanicAnswers500AndIsCounted(t *testing.T) {
 	body, err := io.ReadAll(metrics.Body)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), `http_requests_total{code="500",method="GET",route="/v1/tasks/{id}"}`)
+}
+
+func TestOpenAPIExportsEveryOperation(t *testing.T) {
+	t.Parallel()
+
+	doc, err := restapi.OpenAPI("test")
+	require.NoError(t, err)
+
+	var spec struct {
+		Info  struct{ Version string } `json:"info"`
+		Paths map[string]any           `json:"paths"`
+	}
+
+	require.NoError(t, json.Unmarshal(doc, &spec))
+	assert.Equal(t, "test", spec.Info.Version)
+
+	for _, path := range []string{
+		"/v1/auth/register", "/v1/auth/login", "/v1/user/profile",
+		"/v1/tasks", "/v1/tasks/{id}", "/v1/tasks/{id}/status",
+		"/v1/translation/history", "/v1/translation/do-translate",
+	} {
+		assert.Contains(t, spec.Paths, path)
+	}
 }
