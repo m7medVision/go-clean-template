@@ -39,6 +39,10 @@ This template implements three types of servers:
 - GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
 - Reverse proxy ([Caddy](https://caddyserver.com/) with the caddy-waf firewall and the Souin HTTP cache)
 
+It also ships a React web client in `web/` ([TanStack Router](https://tanstack.com/router) +
+[TanStack Query](https://tanstack.com/query), built with [Vite+](https://viteplus.dev/)) that calls the REST
+API through types generated from the OpenAPI document.
+
 The template includes three domains to demonstrate multi-service architecture:
 
 - **User Authentication** — registration, login, JWT-based authorization
@@ -109,6 +113,14 @@ Text translation via external API with history tracking.
 make compose-up
 # Run app with migrations
 make run
+```
+
+### Web client (needs the [Vite+](https://viteplus.dev/) `vp` CLI)
+
+```sh
+make web-deps
+# Vite+ dev server on http://localhost:3000, proxying the API to the app on HTTP_PORT
+make web-dev
 ```
 
 ### Integration tests (can be run in CI)
@@ -366,6 +378,14 @@ The package name changes depending on the purpose.
 OpenTelemetry setup: configures a global `TracerProvider` with an OTLP/gRPC exporter and W3C trace-context + baggage
 propagators. When tracing is disabled, a no-op provider is installed so instrumentation code runs unconditionally.
 See [Observability](#observability).
+
+### `web`
+
+The React client. Routes are files in `web/src/routes/` (TanStack Router); server state goes through
+TanStack Query. `web/src/api/schema.gen.ts` is generated from `docs/openapi/v1.json` by
+`make web-api`, so a REST contract change shows up as a type error here. In development the Vite+
+dev server proxies the API paths to the Go app, so the client and API share one origin and no CORS
+is needed. `make web-check` formats, lints, type-checks and tests it.
 
 ## Dependency Injection
 

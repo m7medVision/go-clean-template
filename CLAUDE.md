@@ -4,6 +4,7 @@ Go clean-architecture reference service. Three domains (`user`, `task`, `transla
 over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
 `/graphql` on the REST port, tasks only, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
 Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
+A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
 ## Commands — drive everything through the Makefile
 
@@ -22,6 +23,11 @@ different settings than CI. Use the target, not the tool.
 | Regenerate protobuf | `make proto-v1` | `protoc ...` |
 | Regenerate SQL query code | `make sqlc` | `sqlc generate` — the target first renders the HCL schema to SQL with Atlas (needs Docker for `ATLAS_DEV_URL`), then runs the sqlc pinned in `go.mod` |
 | Regenerate the REST OpenAPI document | `make openapi` | `go run ./cmd/openapi` — the target writes through a temp file so a failed run never truncates `docs/openapi/v1.json` |
+| Install frontend dependencies | `make web-deps` | `bun install` / `vp install` — the target uses the frozen lockfile |
+| Regenerate frontend REST types | `make web-api` | `npx openapi-typescript ...` — the target refreshes `docs/openapi/v1.json` first |
+| Run the frontend dev server | `make web-dev` | `vp dev` — the target exports `HTTP_PORT`, which the Vite proxy targets |
+| Format / lint / test the frontend | `make web-format`, `make web-check` | `vp check`, `vp test`, `tsc`, `eslint`, `prettier` |
+| Build the frontend | `make web-build` | `vp build` |
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
@@ -41,8 +47,11 @@ Three traps in these targets:
   `make compose-up-integration-test` is the real entry point.
 - **`make run` and `make pre-commit` depend on `proto-v1`**, so they need `protoc` on `PATH`.
   Run `make bin-deps` first (`protoc` itself is not installed by it).
+- **`make pre-commit` also runs the frontend targets**, so it needs the `vp` CLI (Vite+) on `PATH`;
+  `vp` provisions the Node version in `web/.node-version` and bun itself.
 
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
+For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too.
 
 ## Dependency rule
 
@@ -161,10 +170,29 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. The resolver bodies in
   `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
   place on every run (signatures follow the schema, bodies are kept).
+- `web/src/api/schema.gen.ts` ← `make web-api` (openapi-typescript) from `docs/openapi/v1.json`.
+- `web/src/routeTree.gen.ts` ← the TanStack Router Vite plugin, on every `vp dev` / `vp build`.
 - `docs/openapi/v1.json` ← `make openapi`, exported by `cmd/openapi` from the same Huma config the
   server uses (`restapi.OpenAPI`). Huma still serves the live document at `/openapi.json` when
   `DOCS_ENABLED`; the checked-in copy exists so REST contract changes show up as a reviewable diff
   and so clients can generate types without a running server. CI fails when it is stale.
+
+## Frontend
+
+`web/` is a client-rendered React app: TanStack Router (file-based routes in `web/src/routes/`) and
+TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest) and bun.
+
+- It talks to the backend only over REST, on the same origin (the Vite proxy in dev), so there is no
+  CORS. It imports nothing from Go, and nothing in Go imports or embeds it; `go.mod` has
+  `ignore ./web` and `make format` skips it, because npm packages can ship `.go` files.
+- Types come from `docs/openapi/v1.json`, never hand-written: call the API through `$api`
+  (openapi-react-query) or `api` (openapi-fetch) from `web/src/api/client.ts`. A Huma change that
+  breaks the client fails the type check in the same PR.
+- The JWT lives in memory, mirrored to `sessionStorage` (`web/src/auth/token.ts`). Screens that need
+  a user go under the `_authed` layout route.
+- Client routes must not use the prefixes the Go app owns: `/v1`, `/graphql`, `/docs`,
+  `/openapi.*`, `/schemas`, `/healthz`, `/metrics`.
+- Tests import from `vite-plus/test` and sit next to the code as `*.test.ts`.
 
 ## Keep README.md current
 
@@ -192,7 +220,8 @@ set to keep aligned. Update it whenever a change touches what it documents:
    `paralleltest` enforces it).
 5. Expose it on whichever transports need it:
    - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
-     (op registered in the same domain file), then `make openapi` and commit the `docs/openapi/v1.json` diff.
+     (op registered in the same domain file), then `make web-api` (which runs `make openapi`), commit both
+     generated diffs, and fix any `make web-check` errors in `web/`.
    - GraphQL (task only today): schema change in `internal/controller/graphql/schema/` →
      `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in

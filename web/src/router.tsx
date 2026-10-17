@@ -1,0 +1,30 @@
+import { QueryClient } from "@tanstack/react-query";
+import { createRouter } from "@tanstack/react-router";
+
+import { onUnauthorized } from "#/api/client";
+import { auth } from "#/auth/token";
+import { routeTree } from "./routeTree.gen";
+
+export const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000 } },
+});
+
+export const router = createRouter({
+  routeTree,
+  context: { queryClient, auth },
+  defaultPreload: "intent",
+  // TanStack Query owns freshness, so the router always asks it.
+  defaultPreloadStaleTime: 0,
+  scrollRestoration: true,
+});
+
+onUnauthorized(() => {
+  queryClient.clear();
+  void router.navigate({ to: "/login", search: { redirect: router.state.location.href } });
+});
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
