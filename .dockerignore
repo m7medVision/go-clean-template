@@ -2,6 +2,7 @@
 .git
 .github
 caddy
+web
 
 .dockerignore
 .env

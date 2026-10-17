@@ -2,6 +2,9 @@ module github.com/evrone/go-clean-template
 
 go 1.27
 
+// The React frontend; npm packages can ship .go files that must not join ./... patterns.
+ignore ./web
+
 tool (
 	github.com/99designs/gqlgen
 	github.com/daixiang0/gci
