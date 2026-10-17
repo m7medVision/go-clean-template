@@ -1,0 +1,7 @@
+# BuildKit reads this instead of the root .dockerignore, which excludes caddy/ and web/ for the app image.
+*
+!caddy/Caddyfile
+!web/
+web/node_modules
+web/dist
+web/.tanstack

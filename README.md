@@ -137,7 +137,10 @@ make compose-up-all
 ```
 
 The reverse proxy is [Caddy](https://caddyserver.com/), built from [`caddy/Dockerfile`](caddy/Dockerfile) with two
-modules and configured in [`caddy/Caddyfile`](caddy/Caddyfile):
+modules and configured in [`caddy/Caddyfile`](caddy/Caddyfile). The same image builds `web/` with Vite+ and serves
+it on `app.lvh.me`: the paths the Go app owns (`/v1`, `/graphql`, `/docs`, `/openapi.*`, `/schemas`, `/healthz`,
+`/metrics`) go to the app, and everything else is the web client, with a Content-Security-Policy and history
+fallback to `index.html`. The client and the API share one origin, so there is no CORS.
 
 - [caddy-waf](https://github.com/fabriziosalmi/caddy-waf) inspects every request to `app.lvh.me` with its bundled
   rule set and answers `403` to a match. It is licensed AGPL-3.0, unlike this template.
@@ -146,6 +149,7 @@ modules and configured in [`caddy/Caddyfile`](caddy/Caddyfile):
 
 Check services:
 
+- Web client: http://app.lvh.me/ | http://localhost:3000 (`make web-dev`)
 - REST API:
   - http://app.lvh.me/healthz | http://127.0.0.1:8080/healthz
   - http://app.lvh.me/metrics | http://127.0.0.1:8080/metrics

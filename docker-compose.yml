@@ -109,7 +109,9 @@ services:
   caddy:
     container_name: caddy
     build:
-      context: ./caddy
+      # The repository root, so the image can build web/ too; see caddy/Dockerfile.dockerignore.
+      context: .
+      dockerfile: caddy/Dockerfile
     ports:
       - "80:80"
     depends_on:
