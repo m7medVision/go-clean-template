@@ -126,7 +126,8 @@ jobs:
       - uses: voidzero-dev/setup-vp@v1.21.1
         with:
           working-directory: web
-          node-version-file: web/.node-version
+          # Resolved relative to working-directory.
+          node-version-file: .node-version
           cache: true
       - name: Regenerate OpenAPI document and REST types
         run: make web-api
