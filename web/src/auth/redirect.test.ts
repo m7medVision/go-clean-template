@@ -6,11 +6,11 @@ describe("safeRedirect", () => {
   it.each([
     ["/profile", "/profile"],
     ["/tasks?status=done", "/tasks?status=done"],
-    ["https://evil.example", "/profile"],
-    ["//evil.example", "/profile"],
-    ["/\\evil.example", "/profile"],
-    ["profile", "/profile"],
-    [undefined, "/profile"],
+    ["https://evil.example", "/tasks"],
+    ["//evil.example", "/tasks"],
+    ["/\\evil.example", "/tasks"],
+    ["profile", "/tasks"],
+    [undefined, "/tasks"],
   ])("%s -> %s", (target, want) => {
     expect(safeRedirect(target)).toBe(want);
   });

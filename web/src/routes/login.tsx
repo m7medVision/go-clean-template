@@ -1,9 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { $api } from "#/api/client";
-import { problemMessage } from "#/api/problem";
 import { safeRedirect } from "#/auth/redirect";
+import { loginSchema } from "#/auth/schema";
+import { AuthCard } from "#/components/auth-card";
+import { FormError } from "#/components/form/form-components";
+import { useAppForm, zodValidation } from "#/components/form/use-app-form";
 
 type LoginSearch = { redirect?: string };
 
@@ -17,8 +19,6 @@ function Login() {
   const { auth } = Route.useRouteContext();
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   const login = $api.useMutation("post", "/v1/auth/login", {
     onSuccess: ({ token }) => {
@@ -27,48 +27,49 @@ function Login() {
     },
   });
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    login.mutate({ body: { email, password } });
-  };
+  const form = useAppForm({
+    defaultValues: { email: "", password: "" },
+    ...zodValidation(loginSchema),
+    onSubmit: ({ value }) => login.mutateAsync({ body: loginSchema.parse(value) }),
+  });
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <h1 className="text-2xl font-bold">Log in</h1>
-      <label className="block">
-        Email
-        <input
-          type="email"
-          required
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-      </label>
-      <label className="block">
-        Password
-        <input
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 block w-full rounded border px-3 py-2"
-        />
-      </label>
-      {login.isError && (
-        <p role="alert" className="text-red-700">
-          {problemMessage(login.error)}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={login.isPending}
-        className="rounded bg-black px-4 py-2 text-white"
-      >
-        {login.isPending ? "Logging in…" : "Log in"}
-      </button>
-    </form>
+    <AuthCard title="Welcome back" description="Enter your details to sign in">
+      <form.AppForm>
+        <form.Form>
+          <form.AppField name="email">
+            {(field) => (
+              <field.TextField
+                label="Email address"
+                required
+                type="email"
+                autoComplete="email"
+                placeholder="Enter your email address"
+              />
+            )}
+          </form.AppField>
+          <form.AppField name="password">
+            {(field) => (
+              <field.PasswordField
+                label="Password"
+                required
+                autoComplete="current-password"
+                placeholder="••••••••••••"
+              />
+            )}
+          </form.AppField>
+          <FormError error={login.error} />
+          <form.SubmitButton size="lg" className="w-full" pending="Signing in…">
+            Sign in
+          </form.SubmitButton>
+        </form.Form>
+      </form.AppForm>
+      <p className="mt-4 text-center text-muted-foreground">
+        New here?{" "}
+        <Link to="/register" className="text-foreground hover:underline">
+          Create an account
+        </Link>
+      </p>
+    </AuthCard>
   );
 }
