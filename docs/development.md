@@ -71,6 +71,26 @@ cannot drift apart.
 
 Before pushing, `make pre-commit` runs the generators, format, lint, and the Go and web tests.
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and on every push to `master`, in stages:
+
+| Stage | Jobs | Runs when |
+| --- | --- | --- |
+| 1 | `changes` | always; sorts the diff into `backend`, `web` and `sqlc` |
+| 2 | `lint`: yamllint, hadolint, dotenv-linter (PRs only, on added lines), golangci-lint and govulncheck (backend) | always |
+| 3 | `unit-tests` (backend), `sqlc-generated` (sqlc), `web` (web, also the OpenAPI drift check), side by side | after `lint` passes |
+| 4 | `integration-tests` | backend, after `unit-tests` passes |
+| 5 | `ci-ok` | always; fails if any job failed or was cancelled |
+
+`ci-ok` is the check to require in branch protection: a job skipped because its paths did not change
+counts as a pass. The `backend` and `web` filters list the paths that are safe to skip, so a new
+directory runs everything until someone adds it to a skip list; add one only when no file under it
+can change that side's result. A new push to a PR cancels the run it supersedes.
+
+`unit-tests` restores Go's build cache from the latest `master` run, so `go test` reruns only the
+packages whose code, dependencies or test inputs changed.
+
 ## Full stack behind Caddy
 
 ```sh
