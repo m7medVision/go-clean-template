@@ -14,8 +14,63 @@ import (
 	reflect "reflect"
 
 	entity "github.com/evrone/go-clean-template/internal/entity"
+	decimal "github.com/shopspring/decimal"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockExchange is a mock of Exchange interface.
+type MockExchange struct {
+	ctrl     *gomock.Controller
+	recorder *MockExchangeMockRecorder
+	isgomock struct{}
+}
+
+// MockExchangeMockRecorder is the mock recorder for MockExchange.
+type MockExchangeMockRecorder struct {
+	mock *MockExchange
+}
+
+// NewMockExchange creates a new mock instance.
+func NewMockExchange(ctrl *gomock.Controller) *MockExchange {
+	mock := &MockExchange{ctrl: ctrl}
+	mock.recorder = &MockExchangeMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExchange) EXPECT() *MockExchangeMockRecorder {
+	return m.recorder
+}
+
+// Convert mocks base method.
+func (m *MockExchange) Convert(ctx context.Context, userID, from, to string, amount decimal.Decimal) (entity.Conversion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Convert", ctx, userID, from, to, amount)
+	ret0, _ := ret[0].(entity.Conversion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Convert indicates an expected call of Convert.
+func (mr *MockExchangeMockRecorder) Convert(ctx, userID, from, to, amount any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Convert", reflect.TypeOf((*MockExchange)(nil).Convert), ctx, userID, from, to, amount)
+}
+
+// History mocks base method.
+func (m *MockExchange) History(ctx context.Context, userID string) (entity.ExchangeHistory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "History", ctx, userID)
+	ret0, _ := ret[0].(entity.ExchangeHistory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// History indicates an expected call of History.
+func (mr *MockExchangeMockRecorder) History(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockExchange)(nil).History), ctx, userID)
+}
 
 // MockUser is a mock of User interface.
 type MockUser struct {
