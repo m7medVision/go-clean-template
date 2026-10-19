@@ -114,12 +114,36 @@ Text translation via external API with history tracking.
 
 ### Local development
 
+`make dev` runs everything in one [tmux](https://github.com/tmux/tmux) window. Postgres and Mailpit run in docker. The
+app and the worker run on the host under [air](https://github.com/air-verse/air) and rebuild when you save a file. The
+Vite+ web dev server runs on http://localhost:3000. Tracing is off and Jaeger is not started. It needs `tmux`, `curl`
+and the Vite+ `vp` CLI (`make web-deps` once first).
+
+```sh
+make dev       # attach; run it again to re-attach after detaching (prefix + d)
+make dev-down  # close the tmux session and stop Postgres and Mailpit
+```
+
+The four panes are:
+
+- **app**: `.air.app.toml`, built with `-tags migrate`. It rebuilds on `.go`, `.hcl` and `.tmpl` changes, so saving
+  a schema file re-syncs the database.
+- **worker**: `.air.worker.toml`. It starts once the app answers `/healthz`, because only the app applies the schema.
+- **web**: the Vite+ dev server.
+- **db + mailpit**: the container logs.
+
+If something else on the host already listens on 5432, set `PG_PORT` in `.env` (for example `PG_PORT=5433`). It moves
+the published port of the compose `db` service and the port in `PG_URL` together. Without it, the app connects to
+whatever already owns 5432, and the startup schema apply will try to make that database match this schema.
+
+The same pieces without tmux, one terminal each:
+
 ```sh
 # Postgres, and Mailpit to catch email (inbox on http://127.0.0.1:8025)
 make compose-up
 # Run app with migrations
 make run
-# Run the queue worker (in another terminal)
+# Run the queue worker
 make run-worker
 ```
 
@@ -176,7 +200,7 @@ Check services:
   - [v1/task.proto](docs/proto/v1/task.proto)
   - [v1/translation.history.proto](docs/proto/v1/translation.history.proto)
 - PostgreSQL:
-  - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db`
+  - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db` (the port is `PG_PORT`)
 - Worker (no port; `docker logs -f worker`). Send it a message:
   - `psql ... -c "INSERT INTO queue_messages (queue, body) VALUES ('example', '{\"text\": \"hi\"}')"`
 - Mailpit (catches every email the worker sends; register a user to get one):
@@ -238,7 +262,9 @@ Config: [config.go](config/config.go)
 
 Example: [.env.example](.env.example)
 
-[docker-compose.yml](docker-compose.yml) uses `env` variables to configure services.
+[docker-compose.yml](docker-compose.yml) uses `env` variables to configure services. `PG_PORT` (default `5432`) is the
+host port the compose `db` service publishes, and `PG_URL` in `.env.example` is built from it. `ATLAS_DEV_URL` is read
+only by `make sqlc`; the app does not use it.
 
 Email is sent only by the worker, so none of these is required:
 
@@ -292,8 +318,9 @@ For a large number of injections, [wire](https://github.com/google/wire) can be 
 
 The `migrate.go` file applies the database schema at startup with [Atlas](https://atlasgo.io/).
 The desired schema is defined declaratively in `internal/app/schema/*.hcl`, one file per table —
-there are no migration files; on every boot Atlas diffs the directory against the database and
-applies what is missing.
+there are no migration files. On every boot Atlas diffs the directory against the app database and makes the
+database match it: it creates what is missing and drops tables and columns the HCL does not declare. There is no
+separate Atlas dev database, and the stack runs exactly one database.
 It is included if an argument with the _migrate_ tag is specified.
 For example:
 
@@ -414,7 +441,8 @@ Repositories, webapi, and other business logic structures are injected into busi
 A repository is an abstract storage (database) that business logic works with.
 SQL queries live in `queries/*.sql`; [sqlc](https://github.com/sqlc-dev/sqlc) compiles them into typed Go in the same `queries` package.
 sqlc cannot read HCL, so `make sqlc` first renders `internal/app/schema/*.hcl` to `queries/schema/schema.sql` with Atlas
-(Docker is needed for the dev database). Run `make sqlc` after changing the schema or a query.
+in a throwaway Postgres container (`ATLAS_DEV_URL=docker://postgres/18/dev`) that exists only while the command runs,
+so Docker is needed. Run `make sqlc` after changing the schema or a query.
 
 `queue/` is the message queue the worker binary consumes (see [`pkg/worker`](#pkgworker)): `Send`,
 `Read` and `Delete` over the `queue_messages` table.

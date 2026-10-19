@@ -38,6 +38,7 @@ different settings than CI. Use the target, not the tool.
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
 | Run the queue worker locally | `make run-worker` | `go run ./cmd/worker` |
+| Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
 
@@ -308,11 +309,14 @@ with worked examples per transport; follow it rather than inventing a scheme.
 The database schema is managed with [Atlas](https://atlasgo.io/) using the declarative workflow:
 the desired state lives in `internal/app/schema/*.hcl`, one file per table, embedded into the
 binary; change the schema by editing the matching file, review the diff with `make schema-apply`
-(host-side, uses Atlas's docker dev-database driver), and let Atlas apply it. The app applies the
+(host-side), and let Atlas apply it. The app applies the
 schema itself at startup only when built with the `migrate` build tag (`internal/app/migrate.go`)
-— that is what `make run` and the Dockerfile do; startup apply needs `PG_URL` and an empty,
-dedicated `ATLAS_DEV_URL`.
-The compose stack provides that dev database as the `atlas-dev` service. Queries are plain SQL
+— that is what `make run`, `make dev` (`.air.app.toml`) and the Dockerfile do; startup apply needs only `PG_URL`.
+There is no Atlas dev database: the stack runs exactly one database, and the apply diffs the HCL
+straight against it. Do not add one back. The apply is declarative, so it **drops** tables and
+columns the HCL does not declare. Make sure `PG_URL` points at this project's database before you
+start the app. `PG_PORT` moves the compose `db` host port and `PG_URL` together. `ATLAS_DEV_URL` is
+read only by `make sqlc`, where it is a throwaway `docker://` container. Queries are plain SQL
 in `internal/repo/persistent/queries/*.sql`, compiled by [sqlc](https://sqlc.dev/) into typed Go
 (`make sqlc`). sqlc cannot read HCL, so `make sqlc` first has Atlas render the HCL schema to
 `internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The repositories call the generated
