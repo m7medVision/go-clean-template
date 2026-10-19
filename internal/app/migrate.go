@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"ariga.io/atlas/atlasexec"
@@ -33,18 +32,9 @@ func syncSchema() {
 
 	databaseURL += "?sslmode=disable"
 
-	devURL, ok := os.LookupEnv("ATLAS_DEV_URL")
-	if !ok || devURL == "" {
-		log.Fatalf("migrate: environment variable not declared: ATLAS_DEV_URL")
-	}
-
 	waitForPostgres(databaseURL)
 
-	if strings.HasPrefix(devURL, "postgres://") {
-		waitForPostgres(devURL)
-	}
-
-	if err := applySchema(databaseURL, devURL); err != nil {
+	if err := applySchema(databaseURL); err != nil {
 		log.Fatalf("Migrate: schema apply error: %s", err)
 	}
 
@@ -84,7 +74,9 @@ func ping(url string) error {
 	return nil
 }
 
-func applySchema(databaseURL, devURL string) error {
+// applySchema diffs the HCL schema directly against the app database: no Atlas dev database, so the
+// stack runs exactly one database.
+func applySchema(databaseURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), _applyTimeout)
 	defer cancel()
 
@@ -111,7 +103,6 @@ func applySchema(databaseURL, devURL string) error {
 	if _, err = client.SchemaApply(ctx, &atlasexec.SchemaApplyParams{
 		URL:         databaseURL,
 		To:          "file://schema",
-		DevURL:      devURL,
 		AutoApprove: true,
 	}); err != nil {
 		return fmt.Errorf("migrate - client.SchemaApply: %w", err)

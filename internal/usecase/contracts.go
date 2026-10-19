@@ -32,4 +32,10 @@ type (
 		Transition(ctx context.Context, userID, taskID string, newStatus entity.TaskStatus) (entity.Task, error)
 		Delete(ctx context.Context, userID, taskID string) error
 	}
+
+	// Mail delivers email. Use cases do not call it: they enqueue with repo.QueueRepo, and the
+	// worker calls Deliver for each message on entity.EmailQueue.
+	Mail interface {
+		Deliver(ctx context.Context, email entity.Email) error
+	}
 )

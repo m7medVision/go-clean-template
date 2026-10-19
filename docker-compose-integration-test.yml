@@ -1,4 +1,21 @@
 services:
+  # Stands in for translate.google.com so the translation tests do not hit Google's rate limits.
+  translate:
+    container_name: translate
+    image: caddy:2.11.7-alpine
+    volumes:
+      - ./integration-test/translate-stub/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      app_network:
+        aliases:
+          - translate.lvh.me
+
+  app:
+    environment:
+      TRANSLATION_SERVICE_URL: "translate:8443"
+    depends_on:
+      - translate
+
   integration-test:
     container_name: integration-test
     platform: linux/amd64
@@ -12,6 +29,7 @@ services:
     depends_on:
       - app
       - worker
+      - mailpit
     networks:
       app_network:
         aliases:

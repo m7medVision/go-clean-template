@@ -10,6 +10,7 @@ import (
 	"github.com/evrone/go-clean-template/config"
 	workerctl "github.com/evrone/go-clean-template/internal/controller/worker"
 	"github.com/evrone/go-clean-template/internal/repo/persistent/queue"
+	"github.com/evrone/go-clean-template/pkg/jwt"
 	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/evrone/go-clean-template/pkg/worker"
@@ -40,7 +41,13 @@ func RunWorker(cfg *config.Config) {
 	}
 	defer pg.Close()
 
-	// Worker; handlers that need a use case get it from initUseCases, as the servers do
+	// Use cases, built as the app builds them; the worker's handlers use only some
+	uc, err := initUseCases(cfg, pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry))
+	if err != nil {
+		l.Fatal(fmt.Errorf("app - RunWorker - initUseCases: %w", err))
+	}
+
+	// Worker
 	w := worker.New(
 		l,
 		queue.New(pg),
@@ -49,7 +56,7 @@ func RunWorker(cfg *config.Config) {
 		worker.BatchSize(cfg.Worker.BatchSize),
 		worker.ShutdownTimeout(cfg.Worker.ShutdownTimeout),
 	)
-	workerctl.NewRouter(w, l)
+	workerctl.NewRouter(w, uc.mail, l)
 
 	w.Start()
 

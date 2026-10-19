@@ -38,6 +38,7 @@ different settings than CI. Use the target, not the tool.
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
 | Run the queue worker locally | `make run-worker` | `go run ./cmd/worker` |
+| Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
 
@@ -90,6 +91,8 @@ Decide by asking what the code knows about:
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | an HTTP status, a gRPC code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
 | a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
+| the data an email shows | `internal/entity/email.go` | struct with `Template()`/`Recipient()`, plus a case in `DecodeEmail` |
+| an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
 
 Layout rules:
@@ -200,6 +203,15 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   them from `initUseCases`, like the servers. The Dockerfile builds `/app` and `/worker` into one
   image; the compose `worker` service runs `/worker`. Only the app applies the schema.
 - A use case enqueues by taking `repo.QueueRepo` and calling `Send`.
+- Email goes through the `mail` queue (`entity.EmailQueue`): the use case writes the body with
+  `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
+  handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
+  The `mail` use case (`Deliver`) renders with `internal/repo/mailtmpl` and sends through `pkg/smtp`;
+  only the worker calls it. `initUseCases` builds it for both binaries, and fails if a template is broken.
+- `.env.example` is read both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so
+  values there must not need quoting: no spaces. `MAIL_FROM` is a bare address for that reason.
+- Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
+  integration tests; `integration-test/mail_test.go` asserts on it.
 
 ## Frontend
 
@@ -297,11 +309,14 @@ with worked examples per transport; follow it rather than inventing a scheme.
 The database schema is managed with [Atlas](https://atlasgo.io/) using the declarative workflow:
 the desired state lives in `internal/app/schema/*.hcl`, one file per table, embedded into the
 binary; change the schema by editing the matching file, review the diff with `make schema-apply`
-(host-side, uses Atlas's docker dev-database driver), and let Atlas apply it. The app applies the
+(host-side), and let Atlas apply it. The app applies the
 schema itself at startup only when built with the `migrate` build tag (`internal/app/migrate.go`)
-— that is what `make run` and the Dockerfile do; startup apply needs `PG_URL` and an empty,
-dedicated `ATLAS_DEV_URL`.
-The compose stack provides that dev database as the `atlas-dev` service. Queries are plain SQL
+— that is what `make run`, `make dev` (`.air.app.toml`) and the Dockerfile do; startup apply needs only `PG_URL`.
+There is no Atlas dev database: the stack runs exactly one database, and the apply diffs the HCL
+straight against it. Do not add one back. The apply is declarative, so it **drops** tables and
+columns the HCL does not declare. Make sure `PG_URL` points at this project's database before you
+start the app. `PG_PORT` moves the compose `db` host port and `PG_URL` together. `ATLAS_DEV_URL` is
+read only by `make sqlc`, where it is a throwaway `docker://` container. Queries are plain SQL
 in `internal/repo/persistent/queries/*.sql`, compiled by [sqlc](https://sqlc.dev/) into typed Go
 (`make sqlc`). sqlc cannot read HCL, so `make sqlc` first has Atlas render the HCL schema to
 `internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The repositories call the generated
@@ -316,3 +331,5 @@ plain conversion. A schema change that breaks that alignment fails to compile.
 - Integration: `integration-test/` runs *inside* the docker network — it resolves the service as
   host `app` by container name, so it fails on the host machine.
   Always run it through `make compose-up-integration-test`.
+- Mail templates: `internal/repo/mailtmpl/testdata/*.golden.*` are compared by the render test;
+  after an intended template change, `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/` and review the diff.

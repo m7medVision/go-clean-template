@@ -10,22 +10,26 @@ import (
 type (
 	// Config -.
 	Config struct {
-		App     app
-		HTTP    http
-		Log     log
-		PG      pg
-		GRPC    grpc
-		JWT     jwt
-		Metrics metrics
-		Docs    docs
-		Tracing tracing
-		Worker  worker
+		App         app
+		HTTP        http
+		Log         log
+		PG          pg
+		GRPC        grpc
+		JWT         jwt
+		Metrics     metrics
+		Docs        docs
+		Tracing     tracing
+		Worker      worker
+		Mail        mail
+		Translation translation
 	}
 
 	// App -.
 	app struct {
 		Name    string `env:"APP_NAME,required"`
 		Version string `env:"APP_VERSION,required"`
+		// BaseURL is where the web client is served; links in emails point under it.
+		BaseURL string `env:"APP_BASE_URL" envDefault:"http://localhost"`
 	}
 
 	// HTTP -.
@@ -79,6 +83,22 @@ type (
 		VisibilityTimeout time.Duration `env:"WORKER_VISIBILITY_TIMEOUT" envDefault:"30s"`
 		BatchSize         int           `env:"WORKER_BATCH_SIZE" envDefault:"10"`
 		ShutdownTimeout   time.Duration `env:"WORKER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	}
+
+	// Mail -. Only the worker sends, so none of it is required.
+	mail struct {
+		SMTPHost     string `env:"SMTP_HOST" envDefault:"localhost"`
+		SMTPPort     int    `env:"SMTP_PORT" envDefault:"1025"`
+		SMTPUsername string `env:"SMTP_USERNAME"`
+		SMTPPassword string `env:"SMTP_PASSWORD"`
+		From         string `env:"MAIL_FROM" envDefault:"Go Clean Template <noreply@example.com>"`
+	}
+
+	// Translation -.
+	translation struct {
+		// ServiceURL is the host (and optional port) the Google Translate client calls over HTTPS.
+		// The integration tests point it at a local stub.
+		ServiceURL string `env:"TRANSLATION_SERVICE_URL" envDefault:"translate.google.com"`
 	}
 )
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/evrone/go-clean-template/config"
@@ -13,11 +14,14 @@ import (
 	"github.com/evrone/go-clean-template/internal/controller/grpc"
 	grpcmw "github.com/evrone/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/evrone/go-clean-template/internal/controller/restapi"
+	"github.com/evrone/go-clean-template/internal/repo/mailtmpl"
+	"github.com/evrone/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/evrone/go-clean-template/internal/repo/persistent/task"
 	persistTranslationRepo "github.com/evrone/go-clean-template/internal/repo/persistent/translation"
 	persistUserRepo "github.com/evrone/go-clean-template/internal/repo/persistent/user"
 	"github.com/evrone/go-clean-template/internal/repo/webapi"
 	"github.com/evrone/go-clean-template/internal/usecase"
+	"github.com/evrone/go-clean-template/internal/usecase/mail"
 	"github.com/evrone/go-clean-template/internal/usecase/task"
 	"github.com/evrone/go-clean-template/internal/usecase/translation"
 	"github.com/evrone/go-clean-template/internal/usecase/user"
@@ -26,6 +30,7 @@ import (
 	"github.com/evrone/go-clean-template/pkg/jwt"
 	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/evrone/go-clean-template/pkg/postgres"
+	"github.com/evrone/go-clean-template/pkg/smtp"
 	"github.com/evrone/go-clean-template/pkg/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	pbgrpc "google.golang.org/grpc"
@@ -35,6 +40,7 @@ type useCases struct {
 	translation usecase.Translation
 	user        usecase.User
 	task        usecase.Task
+	mail        usecase.Mail
 }
 
 type servers struct {
@@ -42,16 +48,32 @@ type servers struct {
 	http *httpserver.Server
 }
 
-func initUseCases(pg *postgres.Postgres, jwtManager *jwt.Manager) useCases {
+// initUseCases builds every use case for both binaries. It fails only when an embedded mail
+// template is broken.
+func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager) (useCases, error) {
 	translationRepo := persistTranslationRepo.New(pg)
 	taskRepo := persistTaskRepo.New(pg)
 	userRepo := persistUserRepo.New(pg)
+	queueRepo := queue.New(pg)
+
+	mailRenderer, err := mailtmpl.New()
+	if err != nil {
+		return useCases{}, fmt.Errorf("mailtmpl.New: %w", err)
+	}
+
+	mailer := smtp.New(
+		cfg.Mail.SMTPHost,
+		cfg.Mail.SMTPPort,
+		cfg.Mail.From,
+		smtp.Auth(cfg.Mail.SMTPUsername, cfg.Mail.SMTPPassword),
+	)
 
 	return useCases{
-		user:        user.New(userRepo, jwtManager),
+		user:        user.New(userRepo, queueRepo, jwtManager, strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
 		task:        task.New(taskRepo),
-		translation: translation.New(translationRepo, webapi.New()),
-	}
+		translation: translation.New(translationRepo, webapi.New(cfg.Translation.ServiceURL)),
+		mail:        mail.New(mailRenderer, mailer),
+	}, nil
 }
 
 func initServers(cfg *config.Config, uc useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
@@ -164,7 +186,11 @@ func Run(cfg *config.Config) {
 	// JWT
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	uc := initUseCases(pg, jwtManager)
+	uc, err := initUseCases(cfg, pg, jwtManager)
+	if err != nil {
+		l.Fatal(fmt.Errorf("app - Run - initUseCases: %w", err))
+	}
+
 	s := initServers(cfg, uc, jwtManager, l)
 	s.startServers()
 	s.waitForShutdown(l)

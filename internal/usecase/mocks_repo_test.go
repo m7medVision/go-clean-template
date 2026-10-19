@@ -17,6 +17,7 @@ import (
 
 	entity "github.com/evrone/go-clean-template/internal/entity"
 	repo "github.com/evrone/go-clean-template/internal/repo"
+	smtp "github.com/evrone/go-clean-template/pkg/smtp"
 	worker "github.com/evrone/go-clean-template/pkg/worker"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -344,4 +345,81 @@ func (m *MockQueueRepo) Send(ctx context.Context, queue string, body json.RawMes
 func (mr *MockQueueRepoMockRecorder) Send(ctx, queue, body any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockQueueRepo)(nil).Send), ctx, queue, body)
+}
+
+// MockMailRenderer is a mock of MailRenderer interface.
+type MockMailRenderer struct {
+	ctrl     *gomock.Controller
+	recorder *MockMailRendererMockRecorder
+	isgomock struct{}
+}
+
+// MockMailRendererMockRecorder is the mock recorder for MockMailRenderer.
+type MockMailRendererMockRecorder struct {
+	mock *MockMailRenderer
+}
+
+// NewMockMailRenderer creates a new mock instance.
+func NewMockMailRenderer(ctrl *gomock.Controller) *MockMailRenderer {
+	mock := &MockMailRenderer{ctrl: ctrl}
+	mock.recorder = &MockMailRendererMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockMailRenderer) EXPECT() *MockMailRendererMockRecorder {
+	return m.recorder
+}
+
+// Render mocks base method.
+func (m *MockMailRenderer) Render(ctx context.Context, email entity.Email) (smtp.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Render", ctx, email)
+	ret0, _ := ret[0].(smtp.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Render indicates an expected call of Render.
+func (mr *MockMailRendererMockRecorder) Render(ctx, email any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Render", reflect.TypeOf((*MockMailRenderer)(nil).Render), ctx, email)
+}
+
+// MockMailer is a mock of Mailer interface.
+type MockMailer struct {
+	ctrl     *gomock.Controller
+	recorder *MockMailerMockRecorder
+	isgomock struct{}
+}
+
+// MockMailerMockRecorder is the mock recorder for MockMailer.
+type MockMailerMockRecorder struct {
+	mock *MockMailer
+}
+
+// NewMockMailer creates a new mock instance.
+func NewMockMailer(ctrl *gomock.Controller) *MockMailer {
+	mock := &MockMailer{ctrl: ctrl}
+	mock.recorder = &MockMailerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockMailer) EXPECT() *MockMailerMockRecorder {
+	return m.recorder
+}
+
+// Send mocks base method.
+func (m_2 *MockMailer) Send(ctx context.Context, m smtp.Message) error {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "Send", ctx, m)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Send indicates an expected call of Send.
+func (mr *MockMailerMockRecorder) Send(ctx, m any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockMailer)(nil).Send), ctx, m)
 }

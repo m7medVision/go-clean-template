@@ -1,0 +1,16 @@
+{{/* Building blocks for an email's "content". Styles are inline: most mail clients drop <style>. */}}
+
+{{define "heading"}}<h1 style="margin:0 0 16px;font-size:22px;line-height:30px;font-weight:600;color:#18181b;">{{.}}</h1>{{end}}
+
+{{define "paragraph"}}<p style="margin:0 0 16px;">{{.}}</p>{{end}}
+
+{{/* (args "URL" … "Label" …) */}}
+{{define "button"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px;">
+<tr>
+<td style="border-radius:6px;background-color:#18181b;">
+<a href="{{.URL}}" style="display:inline-block;padding:12px 20px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">{{.Label}}</a>
+</td>
+</tr>
+</table>{{end}}
+
+{{define "footnote"}}<p style="margin:0;font-size:14px;line-height:20px;color:#71717a;">{{.}}</p>{{end}}

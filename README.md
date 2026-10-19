@@ -40,7 +40,8 @@ This template implements three types of servers:
 - Reverse proxy ([Caddy](https://caddyserver.com/) with the caddy-waf firewall and the Souin HTTP cache)
 
 Background work goes through a minimal queue in Postgres (one `queue_messages` table), consumed by
-a separate worker binary (`cmd/worker`). No domain uses it yet; it ships one example queue to build on.
+a separate worker binary (`cmd/worker`). Registration uses it to send a welcome email (Go `html/template`
+templates embedded in the binary, delivered over SMTP), and an example queue shows the bare shape.
 
 It also ships a React web client in `web/` ([TanStack Router](https://tanstack.com/router) +
 [TanStack Query](https://tanstack.com/query), built with [Vite+](https://viteplus.dev/)) that calls the REST
@@ -80,6 +81,8 @@ Registration, login, and JWT-based authorization.
 - Passwords hashed with bcrypt
 - JWT tokens with configurable expiry
 - Auth middleware on all transports
+- A welcome email on registration, queued by the use case and sent by the worker
+  (see [`internal/repo/mailtmpl`](#internalrepomailtmpl))
 
 ### Task Management
 
@@ -111,12 +114,36 @@ Text translation via external API with history tracking.
 
 ### Local development
 
+`make dev` runs everything in one [tmux](https://github.com/tmux/tmux) window. Postgres and Mailpit run in docker. The
+app and the worker run on the host under [air](https://github.com/air-verse/air) and rebuild when you save a file. The
+Vite+ web dev server runs on http://localhost:3000. Tracing is off and Jaeger is not started. It needs `tmux`, `curl`
+and the Vite+ `vp` CLI (`make web-deps` once first).
+
 ```sh
-# Postgres
+make dev       # attach; run it again to re-attach after detaching (prefix + d)
+make dev-down  # close the tmux session and stop Postgres and Mailpit
+```
+
+The four panes are:
+
+- **app**: `.air.app.toml`, built with `-tags migrate`. It rebuilds on `.go`, `.hcl` and `.tmpl` changes, so saving
+  a schema file re-syncs the database.
+- **worker**: `.air.worker.toml`. It starts once the app answers `/healthz`, because only the app applies the schema.
+- **web**: the Vite+ dev server.
+- **db + mailpit**: the container logs.
+
+If something else on the host already listens on 5432, set `PG_PORT` in `.env` (for example `PG_PORT=5433`). It moves
+the published port of the compose `db` service and the port in `PG_URL` together. Without it, the app connects to
+whatever already owns 5432, and the startup schema apply will try to make that database match this schema.
+
+The same pieces without tmux, one terminal each:
+
+```sh
+# Postgres, and Mailpit to catch email (inbox on http://127.0.0.1:8025)
 make compose-up
 # Run app with migrations
 make run
-# Run the queue worker (in another terminal)
+# Run the queue worker
 make run-worker
 ```
 
@@ -131,7 +158,7 @@ make web-dev
 ### Integration tests (can be run in CI)
 
 ```sh
-# DB, app + migrations, worker, integration tests
+# DB, app + migrations, worker, Mailpit, integration tests
 make compose-up-integration-test
 ```
 
@@ -173,9 +200,11 @@ Check services:
   - [v1/task.proto](docs/proto/v1/task.proto)
   - [v1/translation.history.proto](docs/proto/v1/translation.history.proto)
 - PostgreSQL:
-  - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db`
+  - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db` (the port is `PG_PORT`)
 - Worker (no port; `docker logs -f worker`). Send it a message:
   - `psql ... -c "INSERT INTO queue_messages (queue, body) VALUES ('example', '{\"text\": \"hi\"}')"`
+- Mailpit (catches every email the worker sends; register a user to get one):
+  - http://127.0.0.1:8025 (inbox and API) | SMTP on `127.0.0.1:1025`
 - Jaeger (traces UI):
   - http://jaeger.lvh.me | http://127.0.0.1:16686
 
@@ -233,7 +262,26 @@ Config: [config.go](config/config.go)
 
 Example: [.env.example](.env.example)
 
-[docker-compose.yml](docker-compose.yml) uses `env` variables to configure services.
+[docker-compose.yml](docker-compose.yml) uses `env` variables to configure services. `PG_PORT` (default `5432`) is the
+host port the compose `db` service publishes, and `PG_URL` in `.env.example` is built from it. `ATLAS_DEV_URL` is read
+only by `make sqlc`; the app does not use it.
+
+Email is sent only by the worker, so none of these is required:
+
+| Env var | Default | |
+| --- | --- | --- |
+| `APP_BASE_URL` | `http://localhost` | where the web client is served; email links point under it |
+| `SMTP_HOST` | `localhost` | SMTP relay (`mailpit` in compose) |
+| `SMTP_PORT` | `1025` | |
+| `SMTP_USERNAME` | empty | empty turns auth off; set, it uses PLAIN, sent only over TLS or to localhost |
+| `SMTP_PASSWORD` | empty | |
+| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; keep `.env` values free of spaces, since both `make` and the shell read that file |
+
+The translation domain calls Google Translate:
+
+| Env var | Default | |
+| --- | --- | --- |
+| `TRANSLATION_SERVICE_URL` | `translate.google.com` | host (and optional port) the client calls over HTTPS; the integration tests point it at a local stub |
 
 #### `docs/openapi`
 
@@ -251,6 +299,8 @@ You don't need to correct anything by yourself.
 
 Integration tests.
 They are launched as a separate container, next to the application container.
+Translation calls go to a Caddy stub ([integration-test/translate-stub/Caddyfile](integration-test/translate-stub/Caddyfile))
+instead of Google, so the suite does not depend on Google's rate limits.
 
 ### `internal/app`
 
@@ -268,8 +318,9 @@ For a large number of injections, [wire](https://github.com/google/wire) can be 
 
 The `migrate.go` file applies the database schema at startup with [Atlas](https://atlasgo.io/).
 The desired schema is defined declaratively in `internal/app/schema/*.hcl`, one file per table —
-there are no migration files; on every boot Atlas diffs the directory against the database and
-applies what is missing.
+there are no migration files. On every boot Atlas diffs the directory against the app database and makes the
+database match it: it creates what is missing and drops tables and columns the HCL does not declare. There is no
+separate Atlas dev database, and the stack runs exactly one database.
 It is included if an argument with the _migrate_ tag is specified.
 For example:
 
@@ -296,7 +347,9 @@ Server routers are written in the same style:
 Queue handlers for the worker binary. A queue message is an inbound request like an HTTP call, so a
 handler has the same shape as one: decode the body into a `v1/request` DTO, call a use case with the
 handler's `ctx`, and return its error. Registration is in `v1/router.go` (`w.Handle(queue, handler)`).
-`v1/example.go` only logs the message.
+`v1/example.go` only logs the message. `v1/mail.go` delivers email from the `mail` queue; its body is
+the envelope `entity.EncodeEmail` writes, decoded with `entity.DecodeEmail` instead of a request DTO,
+because the use case that enqueues it must write the same shape.
 
 #### `internal/controller/graphql`
 
@@ -388,10 +441,39 @@ Repositories, webapi, and other business logic structures are injected into busi
 A repository is an abstract storage (database) that business logic works with.
 SQL queries live in `queries/*.sql`; [sqlc](https://github.com/sqlc-dev/sqlc) compiles them into typed Go in the same `queries` package.
 sqlc cannot read HCL, so `make sqlc` first renders `internal/app/schema/*.hcl` to `queries/schema/schema.sql` with Atlas
-(Docker is needed for the dev database). Run `make sqlc` after changing the schema or a query.
+in a throwaway Postgres container (`ATLAS_DEV_URL=docker://postgres/18/dev`) that exists only while the command runs,
+so Docker is needed. Run `make sqlc` after changing the schema or a query.
 
 `queue/` is the message queue the worker binary consumes (see [`pkg/worker`](#pkgworker)): `Send`,
 `Read` and `Delete` over the `queue_messages` table.
+
+#### `internal/repo/mailtmpl`
+
+Renders transactional email from Go templates embedded in the binary: the HTML part with
+`html/template` (which escapes user data), the subject and plain-text part with `text/template`.
+
+- `templates/layout/` holds what every email shares: `layout.html.tmpl` (table markup, inline styles),
+  `partials.html.tmpl` (`heading`, `paragraph`, `button`, `footnote`) and `layout.txt.tmpl`.
+- An email is two files, `templates/<name>.html.tmpl` defining `content` and
+  `templates/<name>.txt.tmpl` defining `subject` and `text`, executed against the `entity.Email`
+  whose `Template()` returns `<name>`.
+- Templates are parsed at startup, so a broken one stops the binary. A template that reads a field its
+  struct lacks fails `make test`: the render test executes every email against a full and a zero-value
+  fixture and compares it with `testdata/<name>.golden.{html,txt}` (`UPDATE_GOLDEN=1` rewrites them).
+
+Sending is asynchronous: a use case enqueues on `entity.EmailQueue` with `repo.QueueRepo`, and the
+worker's `mail` handler calls the `mail` use case, which renders and sends through
+[`pkg/smtp`](#pkgsmtp). Delivery is at-least-once, so an email can arrive twice if the worker stops
+between the relay accepting it and the queue row being deleted.
+
+Adding an email:
+
+1. Struct in `internal/entity/email.go` with `Template()` and `Recipient()`, and a case for it in
+   `DecodeEmail`.
+2. `templates/<name>.html.tmpl` and `templates/<name>.txt.tmpl`.
+3. A full and a zero-value fixture in `mailtmpl_test.go`, then `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/`
+   and review the golden files.
+4. In the use case: `body, err := entity.EncodeEmail(e)`, then `queue.Send(ctx, entity.EmailQueue, body)`.
 
 #### `internal/repo/webapi`
 
@@ -428,6 +510,13 @@ Adding a queue:
 | `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery |
 | `WORKER_BATCH_SIZE` | `10` | messages per read |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
+
+### `pkg/smtp`
+
+An SMTP client on the standard library's `net/smtp`: one connection per message, STARTTLS when the
+server offers it, PLAIN auth when a username is set. A message goes out as `multipart/alternative`
+(text, then HTML, both quoted-printable), with a Q-encoded subject that cannot carry a header. It
+implements `repo.Mailer`; another provider is another implementation of that interface.
 
 ### `pkg/tracing`
 

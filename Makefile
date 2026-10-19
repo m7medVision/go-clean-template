@@ -25,8 +25,8 @@ GO_DIRS = $(filter-out web,$(patsubst %/,%,$(wildcard */)))
 help: ## Display this help screen
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-compose-up: ### Run docker compose (without backend and reverse proxy)
-	$(BASE_STACK) up --build -d db && docker compose logs -f
+compose-up: ### Run docker compose: Postgres and Mailpit (without backend and reverse proxy)
+	$(BASE_STACK) up --build -d db mailpit && docker compose logs -f
 .PHONY: compose-up
 
 compose-up-all: ### Run docker compose (with backend and reverse proxy)
@@ -120,6 +120,15 @@ run-worker: ### run the queue worker (start the app first: it applies the schema
 	CGO_ENABLED=0 go run ./cmd/worker
 .PHONY: run-worker
 
+dev: ### run everything in dev mode in tmux: db + Mailpit in docker, app + worker under air, web dev server
+	./scripts/dev.sh
+.PHONY: dev
+
+dev-down: ### stop make dev: close its tmux session, stop db and Mailpit
+	-tmux kill-session -t =go-clean-template 2>/dev/null
+	$(BASE_STACK) stop db mailpit
+.PHONY: dev-down
+
 docker-rm-volume: ### remove docker volume
 	docker volume rm go-clean-template_pg-data
 .PHONY: docker-rm-volume
@@ -151,8 +160,7 @@ mock: ### run mockgen
 
 schema-apply: ### apply desired schema to the database (Atlas)
 	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
-		--to file://internal/app/schema \
-		--dev-url '$(ATLAS_DEV_URL)'
+		--to file://internal/app/schema
 .PHONY: schema-apply
 
 bin-deps: ### install tools

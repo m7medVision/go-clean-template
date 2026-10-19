@@ -1,0 +1,8 @@
+Hi johndoe,
+
+Your account is ready. Sign in to start organizing your tasks:
+
+https://example.com/login
+
+--
+You received this email because of an action on your Go Clean Template account.
