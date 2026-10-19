@@ -58,18 +58,18 @@ func (mr *MockExchangeMockRecorder) Convert(ctx, userID, from, to, amount any) *
 }
 
 // History mocks base method.
-func (m *MockExchange) History(ctx context.Context, userID string) (entity.ExchangeHistory, error) {
+func (m *MockExchange) History(ctx context.Context, userID string, limit, offset int) (entity.ExchangeHistory, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "History", ctx, userID)
+	ret := m.ctrl.Call(m, "History", ctx, userID, limit, offset)
 	ret0, _ := ret[0].(entity.ExchangeHistory)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // History indicates an expected call of History.
-func (mr *MockExchangeMockRecorder) History(ctx, userID any) *gomock.Call {
+func (mr *MockExchangeMockRecorder) History(ctx, userID, limit, offset any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockExchange)(nil).History), ctx, userID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockExchange)(nil).History), ctx, userID, limit, offset)
 }
 
 // MockUser is a mock of User interface.

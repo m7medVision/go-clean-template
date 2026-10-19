@@ -38,6 +38,20 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	Conversion struct {
+		Amount   func(childComplexity int) int
+		From     func(childComplexity int) int
+		Rate     func(childComplexity int) int
+		RateDate func(childComplexity int) int
+		Result   func(childComplexity int) int
+		To       func(childComplexity int) int
+	}
+
+	ConversionList struct {
+		Conversions func(childComplexity int) int
+		Total       func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateTask     func(childComplexity int, input model.CreateTaskInput) int
 		DeleteTask     func(childComplexity int, id string) int
@@ -46,8 +60,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Task  func(childComplexity int, id string) int
-		Tasks func(childComplexity int, status *entity.TaskStatus, limit int, offset int) int
+		ExchangeHistory func(childComplexity int, limit int, offset int) int
+		Task            func(childComplexity int, id string) int
+		Tasks           func(childComplexity int, status *entity.TaskStatus, limit int, offset int) int
 	}
 
 	Task struct {
@@ -79,6 +94,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	Task(ctx context.Context, id string) (*entity.Task, error)
 	Tasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
+	ExchangeHistory(ctx context.Context, limit int, offset int) (*model.ConversionList, error)
 }
 
 // endregion ************************** generated!.gotpl **************************
@@ -98,6 +114,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
+
+	case "Conversion.amount":
+		if e.ComplexityRoot.Conversion.Amount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Conversion.Amount(childComplexity), true
+	case "Conversion.from":
+		if e.ComplexityRoot.Conversion.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Conversion.From(childComplexity), true
+	case "Conversion.rate":
+		if e.ComplexityRoot.Conversion.Rate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Conversion.Rate(childComplexity), true
+	case "Conversion.rateDate":
+		if e.ComplexityRoot.Conversion.RateDate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Conversion.RateDate(childComplexity), true
+	case "Conversion.result":
+		if e.ComplexityRoot.Conversion.Result == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Conversion.Result(childComplexity), true
+	case "Conversion.to":
+		if e.ComplexityRoot.Conversion.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Conversion.To(childComplexity), true
+
+	case "ConversionList.conversions":
+		if e.ComplexityRoot.ConversionList.Conversions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConversionList.Conversions(childComplexity), true
+	case "ConversionList.total":
+		if e.ComplexityRoot.ConversionList.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConversionList.Total(childComplexity), true
 
 	case "Mutation.createTask":
 		if e.ComplexityRoot.Mutation.CreateTask == nil {
@@ -143,6 +209,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateTask(childComplexity, args["id"].(string), args["input"].(model.UpdateTaskInput)), true
+
+	case "Query.exchangeHistory":
+		if e.ComplexityRoot.Query.ExchangeHistory == nil {
+			break
+		}
+
+		args, err := ec.field_Query_exchangeHistory_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ExchangeHistory(childComplexity, args["limit"].(int), args["offset"].(int)), true
 
 	case "Query.task":
 		if e.ComplexityRoot.Query.Task == nil {
@@ -308,6 +386,26 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
+	{Name: "../schema/exchange.graphqls", Input: `"""
+A currency conversion. Amounts and rates are decimal strings, so no precision is lost to
+floating point. rateDate is the day the rate was published (YYYY-MM-DD).
+"""
+type Conversion {
+  from: String!
+  to: String!
+  amount: String!
+  rate: String!
+  result: String!
+  rateDate: String!
+}
+
+type ConversionList { conversions: [Conversion!]!  total: Int! }
+
+extend type Query {
+  "One page of the caller's conversions, newest first. limit is 1–100."
+  exchangeHistory(limit: Int! = 10, offset: Int! = 0): ConversionList!
+}
+`, BuiltIn: false},
 	{Name: "../schema/task.graphqls", Input: `scalar Time
 
 enum TaskStatus { TODO IN_PROGRESS DONE }
@@ -345,6 +443,34 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // childFields_* functions provide shared child field context lookups.
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
+
+func (ec *executionContext) childFields_Conversion(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "from":
+		return ec.fieldContext_Conversion_from(ctx, field)
+	case "to":
+		return ec.fieldContext_Conversion_to(ctx, field)
+	case "amount":
+		return ec.fieldContext_Conversion_amount(ctx, field)
+	case "rate":
+		return ec.fieldContext_Conversion_rate(ctx, field)
+	case "result":
+		return ec.fieldContext_Conversion_result(ctx, field)
+	case "rateDate":
+		return ec.fieldContext_Conversion_rateDate(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Conversion", field.Name)
+}
+
+func (ec *executionContext) childFields_ConversionList(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "conversions":
+		return ec.fieldContext_ConversionList_conversions(ctx, field)
+	case "total":
+		return ec.fieldContext_ConversionList_total(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ConversionList", field.Name)
+}
 
 func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
@@ -578,6 +704,28 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_exchangeHistory_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_task_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -681,6 +829,199 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ***************************** args.gotpl *****************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _Conversion_from(ctx context.Context, field graphql.CollectedField, obj *model.Conversion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Conversion_from(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Conversion_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Conversion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Conversion_to(ctx context.Context, field graphql.CollectedField, obj *model.Conversion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Conversion_to(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Conversion_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Conversion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Conversion_amount(ctx context.Context, field graphql.CollectedField, obj *model.Conversion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Conversion_amount(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Amount, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Conversion_amount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Conversion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Conversion_rate(ctx context.Context, field graphql.CollectedField, obj *model.Conversion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Conversion_rate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Rate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Conversion_rate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Conversion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Conversion_result(ctx context.Context, field graphql.CollectedField, obj *model.Conversion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Conversion_result(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Result, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Conversion_result(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Conversion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Conversion_rateDate(ctx context.Context, field graphql.CollectedField, obj *model.Conversion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Conversion_rateDate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RateDate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Conversion_rateDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Conversion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ConversionList_conversions(ctx context.Context, field graphql.CollectedField, obj *model.ConversionList) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ConversionList_conversions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Conversions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []model.Conversion) graphql.Marshaler {
+			return ec.marshalNConversion2ᚕgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ConversionList_conversions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConversionList",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Conversion(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConversionList_total(ctx context.Context, field graphql.CollectedField, obj *model.ConversionList) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ConversionList_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ConversionList_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ConversionList", field, false, false, errors.New("field of type Int does not have child fields"))
+}
 
 func (ec *executionContext) _Mutation_createTask(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -940,6 +1281,50 @@ func (ec *executionContext) fieldContext_Query_tasks(ctx context.Context, field 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_tasks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_exchangeHistory(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_exchangeHistory(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ExchangeHistory(ctx, fc.Args["limit"].(int), fc.Args["offset"].(int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.ConversionList) graphql.Marshaler {
+			return ec.marshalNConversionList2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionList(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_exchangeHistory(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ConversionList(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_exchangeHistory_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2379,6 +2764,112 @@ func (ec *executionContext) unmarshalInputUpdateTaskInput(ctx context.Context, o
 
 // region    **************************** object.gotpl ****************************
 
+var conversionImplementors = []string{"Conversion"}
+
+func (ec *executionContext) _Conversion(ctx context.Context, sel ast.SelectionSet, obj *model.Conversion) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, conversionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Conversion")
+		case "from":
+			out.Values[i] = ec._Conversion_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._Conversion_to(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "amount":
+			out.Values[i] = ec._Conversion_amount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rate":
+			out.Values[i] = ec._Conversion_rate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "result":
+			out.Values[i] = ec._Conversion_result(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rateDate":
+			out.Values[i] = ec._Conversion_rateDate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var conversionListImplementors = []string{"ConversionList"}
+
+func (ec *executionContext) _ConversionList(ctx context.Context, sel ast.SelectionSet, obj *model.ConversionList) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, conversionListImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ConversionList")
+		case "conversions":
+			out.Values[i] = ec._ConversionList_conversions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._ConversionList_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -2500,6 +2991,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_tasks(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "exchangeHistory":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_exchangeHistory(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -3064,6 +3577,36 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNConversion2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversion(ctx context.Context, sel ast.SelectionSet, v model.Conversion) graphql.Marshaler {
+	return ec._Conversion(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNConversion2ᚕgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionᚄ(ctx context.Context, sel ast.SelectionSet, v []model.Conversion) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNConversion2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversion(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNConversionList2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionList(ctx context.Context, sel ast.SelectionSet, v *model.ConversionList) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ConversionList(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNCreateTaskInput2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐCreateTaskInput(ctx context.Context, v any) (model.CreateTaskInput, error) {

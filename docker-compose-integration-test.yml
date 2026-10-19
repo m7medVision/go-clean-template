@@ -1,11 +1,11 @@
 services:
-  # Stands in for api.frankfurter.dev so the exchange tests never call a third party.
+  # Stands in for open.er-api.com so the exchange tests never call a third party.
   exchange:
     container_name: exchange
     image: caddy:2.11.7-alpine
     volumes:
       - ./integration-test/exchange-stub/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./internal/repo/webapi/testdata/frankfurter_latest.json:/srv/frankfurter_latest.json:ro
+      - ./internal/repo/webapi/testdata/openerapi_latest_omr.json:/srv/openerapi_latest_omr.json:ro
     networks:
       app_network:
         aliases:

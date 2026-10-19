@@ -48,18 +48,19 @@ func (m *MockExchangeRepo) EXPECT() *MockExchangeRepoMockRecorder {
 }
 
 // GetHistory mocks base method.
-func (m *MockExchangeRepo) GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error) {
+func (m *MockExchangeRepo) GetHistory(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHistory", ctx, userID)
+	ret := m.ctrl.Call(m, "GetHistory", ctx, userID, limit, offset)
 	ret0, _ := ret[0].([]entity.Conversion)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetHistory indicates an expected call of GetHistory.
-func (mr *MockExchangeRepoMockRecorder) GetHistory(ctx, userID any) *gomock.Call {
+func (mr *MockExchangeRepoMockRecorder) GetHistory(ctx, userID, limit, offset any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHistory", reflect.TypeOf((*MockExchangeRepo)(nil).GetHistory), ctx, userID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHistory", reflect.TypeOf((*MockExchangeRepo)(nil).GetHistory), ctx, userID, limit, offset)
 }
 
 // Store mocks base method.

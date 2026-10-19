@@ -15,6 +15,7 @@ import * as types from './graphql';
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
+    "\n  query ExchangeHistory($limit: Int!, $offset: Int!) {\n    exchangeHistory(limit: $limit, offset: $offset) {\n      total\n      conversions {\n        from\n        to\n        amount\n        rate\n        result\n        rateDate\n      }\n    }\n  }\n": typeof types.ExchangeHistoryDocument,
     "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": typeof types.TasksDocument,
     "\n  mutation CreateTask($input: CreateTaskInput!) {\n    createTask(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateTaskDocument,
     "\n  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {\n    updateTask(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateTaskDocument,
@@ -22,6 +23,7 @@ type Documents = {
     "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n": typeof types.DeleteTaskDocument,
 };
 const documents: Documents = {
+    "\n  query ExchangeHistory($limit: Int!, $offset: Int!) {\n    exchangeHistory(limit: $limit, offset: $offset) {\n      total\n      conversions {\n        from\n        to\n        amount\n        rate\n        result\n        rateDate\n      }\n    }\n  }\n": types.ExchangeHistoryDocument,
     "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": types.TasksDocument,
     "\n  mutation CreateTask($input: CreateTaskInput!) {\n    createTask(input: $input) {\n      id\n    }\n  }\n": types.CreateTaskDocument,
     "\n  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {\n    updateTask(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateTaskDocument,
@@ -29,6 +31,10 @@ const documents: Documents = {
     "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n": types.DeleteTaskDocument,
 };
 
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ExchangeHistory($limit: Int!, $offset: Int!) {\n    exchangeHistory(limit: $limit, offset: $offset) {\n      total\n      conversions {\n        from\n        to\n        amount\n        rate\n        result\n        rateDate\n      }\n    }\n  }\n"): typeof import('./graphql').ExchangeHistoryDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

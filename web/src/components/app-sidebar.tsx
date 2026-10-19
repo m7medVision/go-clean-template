@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import {
+  ArrowLeftRightIcon,
   ChevronsUpDownIcon,
   ListTodoIcon,
   ListChecksIcon,
@@ -34,6 +35,7 @@ import {
 
 const navigation = [
   { to: "/tasks", label: "Tasks", icon: ListTodoIcon },
+  { to: "/exchange", label: "Exchange", icon: ArrowLeftRightIcon },
   { to: "/profile", label: "Profile", icon: UserIcon },
 ] as const;
 

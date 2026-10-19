@@ -36,7 +36,7 @@ This template implements three types of servers:
 
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
-- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
+- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port: tasks and the exchange history)
 - Reverse proxy ([Caddy](https://caddyserver.com/) with the caddy-waf firewall and the Souin HTTP cache)
 
 Background work goes through a minimal queue in Postgres (one `queue_messages` table), consumed by
@@ -51,9 +51,9 @@ The template includes three domains to demonstrate multi-service architecture:
 
 - **User Authentication** — registration, login, JWT-based authorization
 - **Task Management** — CRUD operations with status transitions (todo, in_progress, done)
-- **Currency Exchange** — currency conversion at European Central Bank reference rates, with history
+- **Currency Exchange** — currency conversion at daily rates (about 160 currencies), with history and a web page
 
-All domains are available over REST and gRPC. GraphQL exposes tasks only.
+All domains are available over REST and gRPC. GraphQL exposes tasks and the exchange history.
 
 ## Content
 
@@ -66,7 +66,7 @@ All domains are available over REST and gRPC. GraphQL exposes tasks only.
 
 ## Domains
 
-The template includes three fully implemented domains, each available over REST and gRPC. GraphQL covers tasks only.
+The template includes three fully implemented domains, each available over REST and gRPC. GraphQL covers tasks and the exchange history.
 
 ### User Authentication
 
@@ -103,22 +103,23 @@ CRUD operations with a status state machine.
 
 ### Currency Exchange
 
-Converts an amount between currencies at the latest European Central Bank reference rate, fetched from
-the [Frankfurter API](https://frankfurter.dev) (keyless, documented, self-hostable), and keeps each
+Converts an amount between currencies at the latest daily rate, fetched from the
+[ExchangeRate-API open access endpoint](https://www.exchangerate-api.com/docs/free) (keyless, about 160
+currencies including the Gulf currencies, e.g. Omani Rial → Chinese Yuan), and keeps each
 user's history. It is the template's example of an outbound HTTP API behind a repository
 interface ([`internal/repo/webapi`](#internalrepowebapi)).
 
-| Operation | REST                         | gRPC                         |
-|-----------|------------------------------|------------------------------|
-| Convert   | `POST /v1/exchange/convert`  | `ExchangeService/Convert`    |
-| History   | `GET /v1/exchange/history`   | `ExchangeService/GetHistory` |
+| Operation | REST                         | gRPC                         | GraphQL (`POST /graphql`) |
+|-----------|------------------------------|------------------------------|---------------------------|
+| Convert   | `POST /v1/exchange/convert`  | `ExchangeService/Convert`    |                           |
+| History   | `GET /v1/exchange/history`   | `ExchangeService/GetHistory` | `query exchangeHistory`   |
 
-- Request: `{"from": "EUR", "to": "USD", "amount": "100.10"}`; codes are case-insensitive
+- Request: `{"from": "OMR", "to": "CNY", "amount": "100.10"}`; codes are case-insensitive
 - Amounts and rates are decimal strings, computed with exact decimals (no `float64`); the result is
   rounded half-even to 2 places
-- Rates are ECB daily reference rates (about 30 currencies, published on working days), not live
-  market rates; the response carries the rate's `rate_date`
-- Unknown currency or `from` = `to` → 400 (`InvalidArgument` on gRPC); history returns the newest 100
+- Rates update once a day and are not live market rates; the response carries the rate's `rate_date`.
+  The provider's terms require a link back to it wherever the rates are shown (the web page has one)
+- Unknown currency or `from` = `to` → 400 (`InvalidArgument` on gRPC); history is paged with `limit`/`offset` and returns a `total`
 
 ## Quick start
 
@@ -201,7 +202,8 @@ Check services:
   - http://app.lvh.me/schemas/{schema} | http://127.0.0.1:8080/schemas/{schema}
 - GraphQL:
   - http://app.lvh.me/graphql | http://127.0.0.1:8080/graphql (POST only, `Authorization: Bearer <token>`)
-  - Schema: [task.graphqls](internal/controller/graphql/schema/task.graphqls)
+  - Schemas: [task.graphqls](internal/controller/graphql/schema/task.graphqls),
+    [exchange.graphqls](internal/controller/graphql/schema/exchange.graphqls)
   - Playground (when `DOCS_ENABLED=true`): http://app.lvh.me/graphql/playground | http://127.0.0.1:8080/graphql/playground.
     Set `{"Authorization": "Bearer <token>"}` in its headers pane.
 - gRPC:
@@ -287,11 +289,11 @@ Email is sent only by the worker, so none of these is required:
 | `SMTP_PASSWORD` | empty | |
 | `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; keep `.env` values free of spaces, since both `make` and the shell read that file |
 
-The exchange domain reads rates from the Frankfurter API:
+The exchange domain reads rates from the ExchangeRate-API open access endpoint:
 
 | Env var | Default | |
 | --- | --- | --- |
-| `EXCHANGE_SERVICE_URL` | `https://api.frankfurter.dev` | base URL of the Frankfurter API; point it at a self-hosted instance, or at the stub as the integration tests do |
+| `EXCHANGE_SERVICE_URL` | `https://open.er-api.com` | base URL of the rate provider; the integration tests point it at a stub |
 
 #### `docs/openapi`
 
@@ -310,8 +312,8 @@ You don't need to correct anything by yourself.
 Integration tests.
 They are launched as a separate container, next to the application container.
 Exchange-rate calls go to a Caddy stub ([integration-test/exchange-stub/Caddyfile](integration-test/exchange-stub/Caddyfile))
-instead of Frankfurter, so the suite never calls a third party. The stub serves the same recorded response
-(`internal/repo/webapi/testdata/frankfurter_latest.json`) the webapi unit test reads, so the two cannot drift apart.
+instead of open.er-api.com, so the suite never calls a third party. The stub serves the same recorded response
+(`internal/repo/webapi/testdata/openerapi_latest_omr.json`) the webapi unit test reads, so the two cannot drift apart.
 
 ### `internal/app`
 
@@ -345,7 +347,7 @@ Server handler layer (MVC controllers). The template shows 3 servers:
 
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
-- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), tasks only)
+- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), tasks and the exchange history)
 
 Server routers are written in the same style:
 
@@ -364,9 +366,9 @@ because the use case that enqueues it must write the same shape.
 
 #### `internal/controller/graphql`
 
-GraphQL endpoint for tasks, mounted at `/graphql` on the REST router. The schema lives in
-`schema/task.graphqls`; `make graphql` regenerates `generated/` and `model/` and updates the
-resolver signatures in `task.resolvers.go`. `Task` and `TaskStatus` bind to the `entity` types
+GraphQL endpoint for tasks and the exchange history, mounted at `/graphql` on the REST router. The
+schemas live in `schema/*.graphqls`, one per domain; `make graphql` regenerates `generated/` and
+`model/` and updates the resolver signatures in `<domain>.resolvers.go`. `Task` and `TaskStatus` bind to the `entity` types
 through `gqlgen.yml`. Resolvers authenticate the bearer token themselves, so introspection works
 without one, and errors carry `extensions.code` (`UNAUTHENTICATED`, `BAD_USER_INPUT`,
 `NOT_FOUND`, `FORBIDDEN`, `INTERNAL`).
@@ -492,9 +494,9 @@ It is an abstract web API that business logic works with.
 For example, it could be another microservice that business logic accesses via the REST API.
 The package name changes depending on the purpose.
 
-`exchange_frankfurter.go` implements `repo.ExchangeWebAPI` with plain `net/http` (an `otelhttp`
+`exchange_openerapi.go` implements `repo.ExchangeWebAPI` with plain `net/http` (an `otelhttp`
 transport, so the outbound call joins the trace). It decodes rates straight into `decimal.Decimal`
-and maps Frankfurter's 404 to `entity.ErrUnsupportedCurrency`. Its unit test serves the recorded
+and maps the provider's `unsupported-code` error (sent with HTTP 200) to `entity.ErrUnsupportedCurrency`. Its unit test serves the recorded
 response in `testdata/` from an `httptest` server.
 
 ### `pkg/worker`
@@ -550,8 +552,12 @@ is needed. `make web-check` formats, lints, type-checks and tests it.
 
 The UI is built from [shadcn/ui](https://ui.shadcn.com/) components (`web/components.json`; the
 generated components live in `web/src/components/ui/`). Add one with
-`vp dlx shadcn@latest add <component>` from `web/`. Signed-in screens (`/tasks`, `/profile`) share a
+`vp dlx shadcn@latest add <component>` from `web/`. Signed-in screens (`/tasks`, `/exchange`, `/profile`) share a
 sidebar layout; `/login` and `/register` use a centred card.
+
+`/exchange` converts an amount (Omani Rial to Chinese Yuan by default) with a REST form and lists
+the history in a GraphQL-backed data table; it links to the rate provider, as its terms require.
+A currency picker is `field.SelectField` from `web/src/components/form/fields.tsx`.
 
 Tables are shadcn data tables on [TanStack Table](https://tanstack.com/table) and read their rows
 over GraphQL (`/graphql`), so a list fetches only the columns it shows; forms and the profile use

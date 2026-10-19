@@ -21,7 +21,7 @@ type (
 	// ExchangeRepo stores each user's currency conversions.
 	ExchangeRepo interface {
 		Store(ctx context.Context, userID string, c *entity.Conversion) error
-		GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error)
+		GetHistory(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error)
 	}
 
 	// ExchangeWebAPI fetches the reference rate from one currency to another, and the date it

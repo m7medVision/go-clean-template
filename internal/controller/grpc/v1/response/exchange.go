@@ -1,6 +1,7 @@
 package response
 
 import (
+	"math"
 	"time"
 
 	v1 "github.com/evrone/go-clean-template/docs/proto/v1"
@@ -29,5 +30,18 @@ func NewExchangeHistoryResponse(h entity.ExchangeHistory) *v1.ExchangeHistoryRes
 		history[i] = NewConversionResponse(&h.History[i])
 	}
 
-	return &v1.ExchangeHistoryResponse{History: history}
+	return &v1.ExchangeHistoryResponse{History: history, Total: clampInt32(h.Total)}
+}
+
+// clampInt32 narrows a count to the proto's int32.
+func clampInt32(n int) int32 {
+	if n < 0 {
+		return 0
+	}
+
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+
+	return int32(n)
 }

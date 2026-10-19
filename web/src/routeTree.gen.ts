@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as AuthedExchangeRouteImport } from './routes/_authed/exchange'
 import { Route as AuthedProfileRouteImport } from './routes/_authed/profile'
 import { Route as AuthedTasksRouteImport } from './routes/_authed/tasks'
 
@@ -35,6 +36,11 @@ const RegisterRoute = RegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedExchangeRoute = AuthedExchangeRouteImport.update({
+  id: '/exchange',
+  path: '/exchange',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedProfileRoute = AuthedProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -50,6 +56,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/exchange': typeof AuthedExchangeRoute
   '/profile': typeof AuthedProfileRoute
   '/tasks': typeof AuthedTasksRoute
 }
@@ -57,6 +64,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/exchange': typeof AuthedExchangeRoute
   '/profile': typeof AuthedProfileRoute
   '/tasks': typeof AuthedTasksRoute
 }
@@ -66,20 +74,22 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/_authed/exchange': typeof AuthedExchangeRoute
   '/_authed/profile': typeof AuthedProfileRoute
   '/_authed/tasks': typeof AuthedTasksRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/register' | '/profile' | '/tasks'
+  fullPaths: '/' | '/login' | '/register' | '/exchange' | '/profile' | '/tasks'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/profile' | '/tasks'
+  to: '/' | '/login' | '/register' | '/exchange' | '/profile' | '/tasks'
   id:
     | '__root__'
     | '/'
     | '/_authed'
     | '/login'
     | '/register'
+    | '/_authed/exchange'
     | '/_authed/profile'
     | '/_authed/tasks'
   fileRoutesById: FileRoutesById
@@ -121,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/exchange': {
+      id: '/_authed/exchange'
+      path: '/exchange'
+      fullPath: '/exchange'
+      preLoaderRoute: typeof AuthedExchangeRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/profile': {
       id: '/_authed/profile'
       path: '/profile'
@@ -139,11 +156,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedRouteChildren {
+  AuthedExchangeRoute: typeof AuthedExchangeRoute
   AuthedProfileRoute: typeof AuthedProfileRoute
   AuthedTasksRoute: typeof AuthedTasksRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedExchangeRoute: AuthedExchangeRoute,
   AuthedProfileRoute: AuthedProfileRoute,
   AuthedTasksRoute: AuthedTasksRoute,
 }

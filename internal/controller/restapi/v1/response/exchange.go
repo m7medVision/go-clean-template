@@ -23,6 +23,7 @@ type Conversion struct {
 // ExchangeHistory -.
 type ExchangeHistory struct {
 	History []Conversion `json:"history"`
+	Total   int          `json:"total" example:"42"`
 }
 
 // NewConversion -.
@@ -44,5 +45,5 @@ func NewExchangeHistory(h entity.ExchangeHistory) ExchangeHistory {
 		history = append(history, NewConversion(&h.History[i]))
 	}
 
-	return ExchangeHistory{History: history}
+	return ExchangeHistory{History: history, Total: h.Total}
 }

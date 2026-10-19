@@ -21,7 +21,10 @@ type convertOutput struct {
 	Body response.Conversion
 }
 
-type exchangeHistoryInput struct{}
+type exchangeHistoryInput struct {
+	Limit  int `query:"limit" default:"10" minimum:"1" maximum:"100"`
+	Offset int `query:"offset" default:"0" minimum:"0"`
+}
 
 type exchangeHistoryOutput struct {
 	Body response.ExchangeHistory
@@ -31,7 +34,7 @@ func (r *V1) convert(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "convert-currency",
 		Summary:     "Convert currency",
-		Description: "Convert an amount at the latest European Central Bank reference rate and save it to the history",
+		Description: "Convert an amount at the latest daily rate and save it to the history",
 		Method:      http.MethodPost,
 		Path:        "/v1/exchange/convert",
 		Tags:        []string{_exchangeTag},
@@ -71,19 +74,19 @@ func (r *V1) exchangeHistory(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "exchange-history",
 		Summary:     "Show conversion history",
-		Description: "Show the current user's most recent currency conversions, newest first",
+		Description: "Show one page of the current user's currency conversions, newest first",
 		Method:      http.MethodGet,
 		Path:        "/v1/exchange/history",
 		Tags:        []string{_exchangeTag},
 		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
-	}, func(ctx context.Context, _ *exchangeHistoryInput) (*exchangeHistoryOutput, error) {
+	}, func(ctx context.Context, input *exchangeHistoryInput) (*exchangeHistoryOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		history, err := r.e.History(ctx, userID)
+		history, err := r.e.History(ctx, userID, input.Limit, input.Offset)
 		if err != nil {
 			r.l.Error(err, "restapi - v1 - exchangeHistory")
 

@@ -6,6 +6,22 @@ import (
 	"github.com/evrone/go-clean-template/internal/entity"
 )
 
+// A currency conversion. Amounts and rates are decimal strings, so no precision is lost to
+// floating point. rateDate is the day the rate was published (YYYY-MM-DD).
+type Conversion struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Amount   string `json:"amount"`
+	Rate     string `json:"rate"`
+	Result   string `json:"result"`
+	RateDate string `json:"rateDate"`
+}
+
+type ConversionList struct {
+	Conversions []Conversion `json:"conversions"`
+	Total       int          `json:"total"`
+}
+
 type CreateTaskInput struct {
 	Title       string  `json:"title"`
 	Description *string `json:"description,omitempty"`

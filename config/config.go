@@ -96,9 +96,9 @@ type (
 
 	// Exchange -.
 	exchange struct {
-		// ServiceURL is the base URL of the Frankfurter API that supplies exchange rates.
-		// The integration tests point it at a local stub.
-		ServiceURL string `env:"EXCHANGE_SERVICE_URL" envDefault:"https://api.frankfurter.dev"`
+		// ServiceURL is the base URL of the ExchangeRate-API open access endpoint that supplies
+		// exchange rates. The integration tests point it at a local stub.
+		ServiceURL string `env:"EXCHANGE_SERVICE_URL" envDefault:"https://open.er-api.com"`
 	}
 )
 

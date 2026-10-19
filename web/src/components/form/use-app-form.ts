@@ -2,16 +2,16 @@ import { createFormHook, revalidateLogic } from "@tanstack/react-form";
 import type { StandardSchemaV1 } from "@tanstack/react-form";
 
 import { fieldContext, formContext } from "./context";
-import { PasswordField, TextareaField, TextField } from "./fields";
+import { PasswordField, SelectField, TextareaField, TextField } from "./fields";
 import { Form, SubmitButton } from "./form-components";
 
 // useAppForm is the only way to build a form: TanStack Form state, shadcn Field components
-// (form.AppField → field.TextField / PasswordField / TextareaField), and form.Form /
+// (form.AppField → field.TextField / PasswordField / TextareaField / SelectField), and form.Form /
 // form.SubmitButton inside form.AppForm.
 export const { useAppForm, withForm } = createFormHook({
   fieldContext,
   formContext,
-  fieldComponents: { TextField, PasswordField, TextareaField },
+  fieldComponents: { TextField, PasswordField, TextareaField, SelectField },
   formComponents: { Form, SubmitButton },
 });
 

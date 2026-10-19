@@ -1,0 +1,19 @@
+"""
+A currency conversion. Amounts and rates are decimal strings, so no precision is lost to
+floating point. rateDate is the day the rate was published (YYYY-MM-DD).
+"""
+type Conversion {
+  from: String!
+  to: String!
+  amount: String!
+  rate: String!
+  result: String!
+  rateDate: String!
+}
+
+type ConversionList { conversions: [Conversion!]!  total: Int! }
+
+extend type Query {
+  "One page of the caller's conversions, newest first. limit is 1–100."
+  exchangeHistory(limit: Int! = 10, offset: Int! = 0): ConversionList!
+}

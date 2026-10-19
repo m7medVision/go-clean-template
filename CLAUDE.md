@@ -2,7 +2,7 @@
 
 Go clean-architecture reference service. Three domains (`user`, `task`, `exchange`) exposed
 over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
-`/graphql` on the REST port, tasks only, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
+`/graphql` on the REST port, tasks and the exchange history, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
 A second binary, `cmd/worker`, consumes a minimal Postgres queue (the `queue_messages` table);
 see **Queue and worker** below.
 Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
@@ -71,7 +71,7 @@ cmd/app → internal/app → internal/controller/*  ─┐
 - `internal/usecase/contracts.go` — the interfaces controllers call. `internal/usecase/<domain>/`
   implements them.
 - `internal/repo/contracts.go` — the interfaces use cases call. `internal/repo/persistent/<domain>/`
-  (Postgres) and `internal/repo/webapi/` (outbound HTTP: the Frankfurter rate client, plain `net/http`,
+  (Postgres) and `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
   unit-tested against the recorded response in `testdata/` that the integration stub also serves) implement them.
 - `internal/controller/<transport>/v1/` — one package per transport, each with its own
   `request/` and `response/` DTOs. Controllers never import each other.
@@ -238,7 +238,7 @@ TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest)
   the same PR.
 - **Tables read through GraphQL.** Every list shown in a table is a GraphQL query that selects only
   the columns the table shows, and the row actions on that screen use GraphQL mutations. A domain
-  without a GraphQL schema needs one before it gets a table (only tasks has one today). Forms and
+  without a GraphQL schema needs one before it gets a table (tasks and exchange have one today). Forms and
   single-record screens outside a table (auth, profile) stay on REST.
 - **Every table is a shadcn data table on TanStack Table (v9).** Build it with `useDataTable` and
   `dataTableColumns<T>()` from `web/src/components/data-table/`, render it with `DataTable`, and put
@@ -306,7 +306,7 @@ set to keep aligned. Update it whenever a change touches what it documents:
    - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
      (op registered in the same domain file), then `make web-api` (which runs `make openapi`), commit both
      generated diffs, and fix any `make web-check` errors in `web/`.
-   - GraphQL (task only today): schema change in `internal/controller/graphql/schema/` →
+   - GraphQL (task and exchange today): schema change in `internal/controller/graphql/schema/` →
      `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go` → `make web-graphql`
      and fix any `make web-check` errors in `web/`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in

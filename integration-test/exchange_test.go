@@ -14,7 +14,8 @@ import (
 )
 
 // The app's EXCHANGE_SERVICE_URL points at integration-test/exchange-stub, which answers every
-// rate request with the recorded EUR→USD response (1.1225 on 2026-10-19), and with a 404 for XXX.
+// rate request with the recorded OMR response (OMR→CNY 17.406483 on 2026-10-19), and with the
+// provider's unsupported-code error for XXX.
 
 type conversionBody struct {
 	From     string `json:"from"`
@@ -45,7 +46,7 @@ func TestHTTPConvertV1(t *testing.T) {
 	token := registerAndLogin(t)
 
 	t.Run("converts at the stub's rate", func(t *testing.T) {
-		resp := postConvert(t, token, `{"from":"eur","to":"usd","amount":"100.10"}`)
+		resp := postConvert(t, token, `{"from":"omr","to":"cny","amount":"100.10"}`)
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -54,7 +55,7 @@ func TestHTTPConvertV1(t *testing.T) {
 
 		got := parseJSON[conversionBody](t, resp)
 		want := conversionBody{
-			From: "EUR", To: "USD", Amount: "100.1", Rate: "1.1225", Result: "112.36", RateDate: "2026-10-19",
+			From: "OMR", To: "CNY", Amount: "100.1", Rate: "17.406483", Result: "1742.39", RateDate: "2026-10-19",
 		}
 
 		if got != want {
@@ -67,9 +68,9 @@ func TestHTTPConvertV1(t *testing.T) {
 		body        string
 		expected    int
 	}{
-		{"unsupported currency", `{"from":"EUR","to":"XXX","amount":"1"}`, http.StatusBadRequest},
-		{"same currency", `{"from":"EUR","to":"eur","amount":"1"}`, http.StatusBadRequest},
-		{"malformed amount", `{"from":"EUR","to":"USD","amount":"-1"}`, http.StatusUnprocessableEntity},
+		{"unsupported currency", `{"from":"XXX","to":"CNY","amount":"1"}`, http.StatusBadRequest},
+		{"same currency", `{"from":"OMR","to":"omr","amount":"1"}`, http.StatusBadRequest},
+		{"malformed amount", `{"from":"OMR","to":"CNY","amount":"-1"}`, http.StatusUnprocessableEntity},
 	} {
 		t.Run(tt.description, func(t *testing.T) {
 			resp := postConvert(t, token, tt.body)
@@ -86,7 +87,7 @@ func TestHTTPConvertV1(t *testing.T) {
 func TestHTTPExchangeHistoryV1(t *testing.T) {
 	token := registerAndLogin(t)
 
-	resp := postConvert(t, token, `{"from":"EUR","to":"USD","amount":"5"}`)
+	resp := postConvert(t, token, `{"from":"OMR","to":"CNY","amount":"5"}`)
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -109,10 +110,11 @@ func TestHTTPExchangeHistoryV1(t *testing.T) {
 
 	body := parseJSON[struct {
 		History []conversionBody `json:"history"`
+		Total   int              `json:"total"`
 	}](t, resp)
 
-	if len(body.History) != 1 || body.History[0].Result != "5.61" {
-		t.Errorf("Expected one conversion with result 5.61, got %+v", body.History)
+	if len(body.History) != 1 || body.Total != 1 || body.History[0].Result != "87.03" {
+		t.Errorf("Expected one conversion with result 87.03 and total 1, got %+v", body)
 	}
 }
 
@@ -134,16 +136,16 @@ func TestGRPCExchangeV1(t *testing.T) {
 	client := protov1.NewExchangeServiceClient(grpcConn)
 
 	conversion, err := client.Convert(grpcAuthCtx(t, token),
-		&protov1.ConvertRequest{From: "EUR", To: "USD", Amount: "100.10"})
+		&protov1.ConvertRequest{From: "OMR", To: "CNY", Amount: "100.10"})
 	if err != nil {
 		t.Fatal("gRPC Client - remote call error - client.Convert", err)
 	}
 
-	if conversion.GetResult() != "112.36" {
-		t.Errorf("Expected result 112.36, got %s", conversion.GetResult())
+	if conversion.GetResult() != "1742.39" {
+		t.Errorf("Expected result 1742.39, got %s", conversion.GetResult())
 	}
 
-	_, err = client.Convert(grpcAuthCtx(t, token), &protov1.ConvertRequest{From: "EUR", To: "XXX", Amount: "1"})
+	_, err = client.Convert(grpcAuthCtx(t, token), &protov1.ConvertRequest{From: "XXX", To: "CNY", Amount: "1"})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Errorf("Expected InvalidArgument for an unsupported currency, got %v", err)
 	}
@@ -153,7 +155,8 @@ func TestGRPCExchangeV1(t *testing.T) {
 		t.Fatal("gRPC Client - remote call error - client.GetHistory", err)
 	}
 
-	if len(history.GetHistory()) != 1 {
-		t.Errorf("Expected 1 conversion in history, got %d", len(history.GetHistory()))
+	if len(history.GetHistory()) != 1 || history.GetTotal() != 1 {
+		t.Errorf("Expected 1 conversion in history and total 1, got %d and %d",
+			len(history.GetHistory()), history.GetTotal())
 	}
 }

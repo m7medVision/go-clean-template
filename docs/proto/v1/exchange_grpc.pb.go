@@ -27,7 +27,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Converts amounts between currencies at the latest European Central Bank reference rate.
+// Converts amounts between currencies at the latest daily rate.
 // Amounts and rates are decimal strings, so no precision is lost to floating point.
 type ExchangeServiceClient interface {
 	Convert(ctx context.Context, in *ConvertRequest, opts ...grpc.CallOption) (*ConversionResponse, error)
@@ -66,7 +66,7 @@ func (c *exchangeServiceClient) GetHistory(ctx context.Context, in *GetExchangeH
 // All implementations must embed UnimplementedExchangeServiceServer
 // for forward compatibility.
 //
-// Converts amounts between currencies at the latest European Central Bank reference rate.
+// Converts amounts between currencies at the latest daily rate.
 // Amounts and rates are decimal strings, so no precision is lost to floating point.
 type ExchangeServiceServer interface {
 	Convert(context.Context, *ConvertRequest) (*ConversionResponse, error)

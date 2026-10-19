@@ -90,14 +90,19 @@ type fakeExchange struct {
 
 	converted entity.Conversion
 	err       error
+
+	// gotLimit and gotOffset record what History was called with.
+	gotLimit, gotOffset int
 }
 
 func (f *fakeExchange) Convert(context.Context, string, string, string, decimal.Decimal) (entity.Conversion, error) {
 	return f.converted, f.err
 }
 
-func (f *fakeExchange) History(context.Context, string) (entity.ExchangeHistory, error) {
-	return entity.ExchangeHistory{History: []entity.Conversion{f.converted}}, f.err
+func (f *fakeExchange) History(_ context.Context, _ string, limit, offset int) (entity.ExchangeHistory, error) {
+	f.gotLimit, f.gotOffset = limit, offset
+
+	return entity.ExchangeHistory{History: []entity.Conversion{f.converted}, Total: 11}, f.err
 }
 
 func TestMain(m *testing.M) {
@@ -383,17 +388,20 @@ func TestConvertExchange(t *testing.T) {
 func TestExchangeHistory(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeExchange{converted: entity.Conversion{
+	exchange := &fakeExchange{converted: entity.Conversion{
 		From: "EUR", To: "USD", Amount: decimal.RequireFromString("1"),
 		Rate: decimal.RequireFromString("1.1225"), Result: decimal.RequireFromString("1.12"),
 		RateDate: time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC),
-	}}, &fakeUser{}, &fakeTask{})
+	}}
+	handler := newRouter(newTestConfig(t), exchange, &fakeUser{}, &fakeTask{})
 
-	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/exchange/history", newToken(t), "")
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/exchange/history?limit=5&offset=10", newToken(t), "")
 	require.Equal(t, http.StatusOK, resp.Code)
 	assert.JSONEq(t,
-		`{"history":[{"from":"EUR","to":"USD","amount":"1","rate":"1.1225","result":"1.12","rate_date":"2026-10-19"}]}`,
+		`{"history":[{"from":"EUR","to":"USD","amount":"1","rate":"1.1225","result":"1.12","rate_date":"2026-10-19"}],"total":11}`,
 		resp.Body.String())
+	assert.Equal(t, 5, exchange.gotLimit)
+	assert.Equal(t, 10, exchange.gotOffset)
 }
 
 type panickingTask struct {
