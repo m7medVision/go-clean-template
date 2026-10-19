@@ -25,7 +25,6 @@ const _apiTitle = "Go Clean Template API"
 // NewRouter builds the HTTP handler for every REST surface of the app.
 func NewRouter(
 	cfg *config.Config,
-	t usecase.Translation,
 	u usecase.User,
 	tk usecase.Task,
 	jwtManager *jwt.Manager,
@@ -62,7 +61,7 @@ func NewRouter(
 
 	r.Get("/healthz", healthz)
 
-	v1.NewRoutes(humachi.New(r, apiConfig), t, u, tk, l)
+	v1.NewRoutes(humachi.New(r, apiConfig), u, tk, l)
 
 	return r
 }

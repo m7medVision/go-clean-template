@@ -11,15 +11,6 @@ import (
 	"github.com/evrone/go-clean-template/internal/entity"
 )
 
-type History struct {
-	ID          int32
-	UserID      string
-	Source      string
-	Destination string
-	Original    string
-	Translation string
-}
-
 type QueueMessage struct {
 	ID         int64
 	Queue      string
