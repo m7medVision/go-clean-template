@@ -18,13 +18,5 @@ sql:
             go_type: github.com/evrone/go-clean-template/internal/entity.TaskStatus
           - column: tasks.description
             go_type: string
-          - column: history.source
-            go_type: string
-          - column: history.destination
-            go_type: string
-          - column: history.original
-            go_type: string
-          - column: history.translation
-            go_type: string
           - column: queue_messages.body
             go_type: encoding/json.RawMessage

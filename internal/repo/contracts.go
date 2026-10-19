@@ -17,17 +17,6 @@ var _ Mailer = (*smtp.Client)(nil)
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 
 type (
-	// TranslationRepo -.
-	TranslationRepo interface {
-		Store(ctx context.Context, userID string, t entity.Translation) error
-		GetHistory(ctx context.Context, userID string) ([]entity.Translation, error)
-	}
-
-	// TranslationWebAPI -.
-	TranslationWebAPI interface {
-		Translate(ctx context.Context, t entity.Translation) (entity.Translation, error)
-	}
-
 	// UserRepo -.
 	UserRepo interface {
 		Store(ctx context.Context, user *entity.User) error

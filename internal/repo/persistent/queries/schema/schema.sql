@@ -30,19 +30,6 @@ CREATE TABLE "public"."users" (
 CREATE UNIQUE INDEX "users_email_key" ON "public"."users" ("email");
 -- Create index "users_username_key" to table: "users"
 CREATE UNIQUE INDEX "users_username_key" ON "public"."users" ("username");
--- Create "history" table
-CREATE TABLE "public"."history" (
-  "id" serial NOT NULL,
-  "user_id" uuid NOT NULL,
-  "source" character varying(255) NULL,
-  "destination" character varying(255) NULL,
-  "original" character varying(255) NULL,
-  "translation" character varying(255) NULL,
-  PRIMARY KEY ("id"),
-  CONSTRAINT "history_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_history_user_id" to table: "history"
-CREATE INDEX "idx_history_user_id" ON "public"."history" ("user_id");
 -- Create "tasks" table
 CREATE TABLE "public"."tasks" (
   "id" uuid NOT NULL,

@@ -17,60 +17,6 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockTranslation is a mock of Translation interface.
-type MockTranslation struct {
-	ctrl     *gomock.Controller
-	recorder *MockTranslationMockRecorder
-	isgomock struct{}
-}
-
-// MockTranslationMockRecorder is the mock recorder for MockTranslation.
-type MockTranslationMockRecorder struct {
-	mock *MockTranslation
-}
-
-// NewMockTranslation creates a new mock instance.
-func NewMockTranslation(ctrl *gomock.Controller) *MockTranslation {
-	mock := &MockTranslation{ctrl: ctrl}
-	mock.recorder = &MockTranslationMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockTranslation) EXPECT() *MockTranslationMockRecorder {
-	return m.recorder
-}
-
-// History mocks base method.
-func (m *MockTranslation) History(ctx context.Context, userID string) (entity.TranslationHistory, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "History", ctx, userID)
-	ret0, _ := ret[0].(entity.TranslationHistory)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// History indicates an expected call of History.
-func (mr *MockTranslationMockRecorder) History(ctx, userID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockTranslation)(nil).History), ctx, userID)
-}
-
-// Translate mocks base method.
-func (m *MockTranslation) Translate(ctx context.Context, userID string, t entity.Translation) (entity.Translation, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Translate", ctx, userID, t)
-	ret0, _ := ret[0].(entity.Translation)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Translate indicates an expected call of Translate.
-func (mr *MockTranslationMockRecorder) Translate(ctx, userID, t any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Translate", reflect.TypeOf((*MockTranslation)(nil).Translate), ctx, userID, t)
-}
-
 // MockUser is a mock of User interface.
 type MockUser struct {
 	ctrl     *gomock.Controller

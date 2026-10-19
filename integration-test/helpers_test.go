@@ -35,9 +35,6 @@ const (
 	// gRPC.
 	grpcURL = host + ":8081"
 
-	// Repeated calls in the gRPC history test.
-	requests = 10
-
 	// Test password used across helpers.
 	testPassword = "testpass123"
 )

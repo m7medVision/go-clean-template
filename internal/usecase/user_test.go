@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 )
 
 const _loginURL = "https://example.com/login"
+
+var errInternalServErr = errors.New("internal server error")
 
 func newUserUseCase(t *testing.T) (usecase.User, *MockUserRepo, *MockQueueRepo) {
 	t.Helper()
