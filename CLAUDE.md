@@ -1,6 +1,6 @@
 # go-clean-template
 
-Go clean-architecture reference service. Three domains (`user`, `task`, `translation`) exposed
+Go clean-architecture reference service. Three domains (`user`, `task`, `exchange`) exposed
 over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
 `/graphql` on the REST port, tasks only, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
 A second binary, `cmd/worker`, consumes a minimal Postgres queue (the `queue_messages` table);
@@ -71,7 +71,8 @@ cmd/app → internal/app → internal/controller/*  ─┐
 - `internal/usecase/contracts.go` — the interfaces controllers call. `internal/usecase/<domain>/`
   implements them.
 - `internal/repo/contracts.go` — the interfaces use cases call. `internal/repo/persistent/<domain>/`
-  (Postgres) and `internal/repo/webapi/` (outbound HTTP) implement them.
+  (Postgres) and `internal/repo/webapi/` (outbound HTTP: the Frankfurter rate client, plain `net/http`,
+  unit-tested against the recorded response in `testdata/` that the integration stub also serves) implement them.
 - `internal/controller/<transport>/v1/` — one package per transport, each with its own
   `request/` and `response/` DTOs. Controllers never import each other.
 - `pkg/` — transport-agnostic infrastructure (servers, logger, jwt, postgres, tracing). Must not
@@ -99,11 +100,11 @@ Decide by asking what the code knows about:
 
 Layout rules:
 
-- One file per domain per layer, named after the domain (`task.go`, `user.go`, `translation.go`),
+- One file per domain per layer, named after the domain (`task.go`, `user.go`, `exchange.go`),
   plus a `tracing.go` in every `usecase/<domain>/` and `repo/persistent/<domain>/` package.
-- Package name matches the directory name. `internal/repo/persistent/translation/` is the one
-  violation in the tree — it declares `package persistent`, which is why `internal/app/app.go`
-  imports the three repositories under aliases. Follow `task/` and `user/`, not `translation/`.
+- Package name matches the directory name. A repository package shares its name with the use-case
+  package of the same domain, so `internal/app/app.go` imports the repositories under aliases
+  (`persistTaskRepo`, …).
 - Constructors are always `New`, return the *interface* from `contracts.go`, and take their
   dependencies as arguments. No package-level state — `gochecknoglobals` and `gochecknoinits` are on.
 - Unexported package constants are prefixed with an underscore (`_defaultEntityCap`,
@@ -155,6 +156,11 @@ running tests.
 with the layer path: `fmt.Errorf("TaskUseCase - Create - uc.repo.Store: %w", err)`. The `err113`
 linter rejects `errors.New`/`fmt.Errorf` for new dynamic errors — add a sentinel to `entity`
 instead. Controllers are the only place that translates a sentinel into a transport status.
+
+**Money is `decimal.Decimal`, never `float64`.** `entity.Conversion` holds `shopspring/decimal`
+values; sqlc maps every `numeric` column to it (`sqlc.yaml` override) and pgx reads and writes it
+through `sql.Scanner`/`driver.Valuer`. Transports carry decimals as strings: Huma cannot build a
+schema for `decimal.Decimal`, so REST returns `response.Conversion`, not the entity.
 
 **Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env`. A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the

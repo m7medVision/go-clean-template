@@ -9,6 +9,7 @@ import (
 	"github.com/evrone/go-clean-template/internal/entity"
 	"github.com/evrone/go-clean-template/pkg/smtp"
 	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/shopspring/decimal"
 )
 
 // The SMTP client is the Mailer the app wires in.
@@ -17,6 +18,18 @@ var _ Mailer = (*smtp.Client)(nil)
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 
 type (
+	// ExchangeRepo stores each user's currency conversions.
+	ExchangeRepo interface {
+		Store(ctx context.Context, userID string, c *entity.Conversion) error
+		GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error)
+	}
+
+	// ExchangeWebAPI fetches the reference rate from one currency to another, and the date it
+	// was published. An unknown currency is entity.ErrUnsupportedCurrency.
+	ExchangeWebAPI interface {
+		Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error)
+	}
+
 	// UserRepo -.
 	UserRepo interface {
 		Store(ctx context.Context, user *entity.User) error

@@ -17,6 +17,7 @@ import (
 	"github.com/evrone/go-clean-template/internal/usecase"
 	"github.com/evrone/go-clean-template/pkg/jwt"
 	"github.com/evrone/go-clean-template/pkg/logger"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,6 +85,21 @@ func (f *fakeTask) Delete(context.Context, string, string) error {
 	return f.err
 }
 
+type fakeExchange struct {
+	usecase.Exchange
+
+	converted entity.Conversion
+	err       error
+}
+
+func (f *fakeExchange) Convert(context.Context, string, string, string, decimal.Decimal) (entity.Conversion, error) {
+	return f.converted, f.err
+}
+
+func (f *fakeExchange) History(context.Context, string) (entity.ExchangeHistory, error) {
+	return entity.ExchangeHistory{History: []entity.Conversion{f.converted}}, f.err
+}
+
 func TestMain(m *testing.M) {
 	for _, env := range []struct{ key, value string }{
 		{"APP_NAME", "test"},
@@ -113,10 +129,10 @@ func newTestConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
-func newRouter(cfg *config.Config, u usecase.User, tk usecase.Task) http.Handler {
+func newRouter(cfg *config.Config, e usecase.Exchange, u usecase.User, tk usecase.Task) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, u, tk, jwtManager, noopLogger{})
+	return restapi.NewRouter(cfg, e, u, tk, jwtManager, noopLogger{})
 }
 
 func newToken(t *testing.T) string {
@@ -147,7 +163,7 @@ func doRequest(
 func TestApplianceRoutesArePublic(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{}, &fakeTask{})
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 	for _, target := range []string{"/healthz", "/metrics", "/openapi.json", "/docs"} {
 		resp := doRequest(t.Context(), handler, http.MethodGet, target, "", "")
@@ -158,7 +174,7 @@ func TestApplianceRoutesArePublic(t *testing.T) {
 func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{}, &fakeTask{})
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/tasks", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -174,7 +190,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("empty title is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeUser{}, &fakeTask{})
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 		resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/tasks", token, `{"title":""}`)
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
@@ -183,7 +199,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("invalid json body is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeUser{}, &fakeTask{})
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 		resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/tasks", token, "{invalid json}")
 		assert.Equal(t, http.StatusBadRequest, resp.Code)
@@ -192,7 +208,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeUser{}, &fakeTask{
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{
 			stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
 		})
 
@@ -203,7 +219,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("trailing slash is stripped", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeUser{}, &fakeTask{
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{
 			stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
 		})
 
@@ -219,7 +235,7 @@ func TestRegisterAndLogin(t *testing.T) {
 		t.Parallel()
 
 		cfg := newTestConfig(t)
-		handler := newRouter(cfg, &fakeUser{
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{
 			registered: entity.User{ID: "user-1", Username: "johndoe"},
 			token:      "token-1",
 		}, &fakeTask{})
@@ -237,7 +253,7 @@ func TestRegisterAndLogin(t *testing.T) {
 		t.Parallel()
 
 		cfg := newTestConfig(t)
-		handler := newRouter(cfg, &fakeUser{
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{
 			registerErr: entity.ErrUserAlreadyExists,
 			loginErr:    entity.ErrInvalidCredentials,
 		}, &fakeTask{})
@@ -261,7 +277,7 @@ func TestDeleteTask(t *testing.T) {
 		t.Parallel()
 
 		cfg := newTestConfig(t)
-		handler := newRouter(cfg, &fakeUser{}, &fakeTask{err: entity.ErrTaskNotFound})
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{err: entity.ErrTaskNotFound})
 
 		resp := doRequest(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
 		assert.Equal(t, http.StatusNotFound, resp.Code)
@@ -271,7 +287,7 @@ func TestDeleteTask(t *testing.T) {
 		t.Parallel()
 
 		cfg := newTestConfig(t)
-		handler := newRouter(cfg, &fakeUser{}, &fakeTask{})
+		handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 		resp := doRequest(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
 		assert.Equal(t, http.StatusNoContent, resp.Code)
@@ -282,7 +298,7 @@ func TestTaskForbiddenMapsTo403(t *testing.T) {
 	t.Parallel()
 
 	cfg := newTestConfig(t)
-	handler := newRouter(cfg, &fakeUser{}, &fakeTask{err: entity.ErrTaskForbidden})
+	handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{err: entity.ErrTaskForbidden})
 
 	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", newToken(t), "")
 	assert.Equal(t, http.StatusForbidden, resp.Code)
@@ -292,7 +308,7 @@ func TestInvalidTransitionMapsTo400(t *testing.T) {
 	t.Parallel()
 
 	cfg := newTestConfig(t)
-	handler := newRouter(cfg, &fakeUser{}, &fakeTask{err: entity.ErrInvalidTransition})
+	handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{err: entity.ErrInvalidTransition})
 
 	resp := doRequest(t.Context(), handler, http.MethodPatch, "/v1/tasks/task-1/status",
 		newToken(t), `{"status":"done"}`)
@@ -303,10 +319,81 @@ func TestUsecaseFailureMapsTo500(t *testing.T) {
 	t.Parallel()
 
 	cfg := newTestConfig(t)
-	handler := newRouter(cfg, &fakeUser{}, &fakeTask{err: io.EOF})
+	handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{err: io.EOF})
 
 	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/tasks", newToken(t), "")
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)
+}
+
+func TestConvertExchange(t *testing.T) {
+	t.Parallel()
+
+	token := newToken(t)
+	body := `{"from":"eur","to":"USD","amount":"100.10"}`
+	converted := entity.Conversion{
+		From: "EUR", To: "USD",
+		Amount:   decimal.RequireFromString("100.10"),
+		Rate:     decimal.RequireFromString("1.1225"),
+		Result:   decimal.RequireFromString("112.36"),
+		RateDate: time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC),
+	}
+
+	t.Run("success returns amounts as strings and the rate date", func(t *testing.T) {
+		t.Parallel()
+
+		handler := newRouter(newTestConfig(t), &fakeExchange{converted: converted}, &fakeUser{}, &fakeTask{})
+
+		resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token, body)
+		require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+		assert.JSONEq(t,
+			`{"from":"EUR","to":"USD","amount":"100.1","rate":"1.1225","result":"112.36","rate_date":"2026-10-19"}`,
+			resp.Body.String())
+	})
+
+	t.Run("malformed amount is rejected by validation", func(t *testing.T) {
+		t.Parallel()
+
+		handler := newRouter(newTestConfig(t), &fakeExchange{converted: converted}, &fakeUser{}, &fakeTask{})
+
+		resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token,
+			`{"from":"EUR","to":"USD","amount":"1e3"}`)
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+	})
+
+	for _, tt := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{"invalid conversion maps to 400", entity.ErrInvalidConversion, http.StatusBadRequest},
+		{"unsupported currency maps to 400", entity.ErrUnsupportedCurrency, http.StatusBadRequest},
+		{"other failure maps to 500", io.EOF, http.StatusInternalServerError},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := newRouter(newTestConfig(t), &fakeExchange{err: tt.err}, &fakeUser{}, &fakeTask{})
+
+			resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token, body)
+			assert.Equal(t, tt.code, resp.Code)
+		})
+	}
+}
+
+func TestExchangeHistory(t *testing.T) {
+	t.Parallel()
+
+	handler := newRouter(newTestConfig(t), &fakeExchange{converted: entity.Conversion{
+		From: "EUR", To: "USD", Amount: decimal.RequireFromString("1"),
+		Rate: decimal.RequireFromString("1.1225"), Result: decimal.RequireFromString("1.12"),
+		RateDate: time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC),
+	}}, &fakeUser{}, &fakeTask{})
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/exchange/history", newToken(t), "")
+	require.Equal(t, http.StatusOK, resp.Code)
+	assert.JSONEq(t,
+		`{"history":[{"from":"EUR","to":"USD","amount":"1","rate":"1.1225","result":"1.12","rate_date":"2026-10-19"}]}`,
+		resp.Body.String())
 }
 
 type panickingTask struct {
@@ -320,7 +407,7 @@ func (panickingTask) Get(context.Context, string, string) (entity.Task, error) {
 func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{
 		registered: entity.User{ID: "user-1"},
 	}, &fakeTask{})
 
@@ -333,7 +420,7 @@ func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{}, &fakeTask{
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{}, &fakeTask{
 		stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
 	})
 
@@ -345,7 +432,7 @@ func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{}, &fakeTask{})
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 	resp := doRequest(t.Context(), handler, http.MethodPost, "/v1/auth/register", "",
 		`{"username":"johndoe","email":"john@example.com","password":"s3cr"}`)
@@ -357,7 +444,7 @@ func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{}, &fakeTask{})
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
 
 	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -366,7 +453,7 @@ func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 func TestPanicAnswers500AndIsCounted(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(newTestConfig(t), &fakeUser{}, panickingTask{})
+	handler := newRouter(newTestConfig(t), &fakeExchange{}, &fakeUser{}, panickingTask{})
 
 	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", newToken(t), "")
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)
@@ -395,6 +482,7 @@ func TestOpenAPIExportsEveryOperation(t *testing.T) {
 	for _, path := range []string{
 		"/v1/auth/register", "/v1/auth/login", "/v1/user/profile",
 		"/v1/tasks", "/v1/tasks/{id}", "/v1/tasks/{id}/status",
+		"/v1/exchange/convert", "/v1/exchange/history",
 	} {
 		assert.Contains(t, spec.Paths, path)
 	}

@@ -10,17 +10,18 @@ import (
 type (
 	// Config -.
 	Config struct {
-		App     app
-		HTTP    http
-		Log     log
-		PG      pg
-		GRPC    grpc
-		JWT     jwt
-		Metrics metrics
-		Docs    docs
-		Tracing tracing
-		Worker  worker
-		Mail    mail
+		App      app
+		HTTP     http
+		Log      log
+		PG       pg
+		GRPC     grpc
+		JWT      jwt
+		Metrics  metrics
+		Docs     docs
+		Tracing  tracing
+		Worker   worker
+		Mail     mail
+		Exchange exchange
 	}
 
 	// App -.
@@ -91,6 +92,13 @@ type (
 		SMTPUsername string `env:"SMTP_USERNAME"`
 		SMTPPassword string `env:"SMTP_PASSWORD"`
 		From         string `env:"MAIL_FROM" envDefault:"Go Clean Template <noreply@example.com>"`
+	}
+
+	// Exchange -.
+	exchange struct {
+		// ServiceURL is the base URL of the Frankfurter API that supplies exchange rates.
+		// The integration tests point it at a local stub.
+		ServiceURL string `env:"EXCHANGE_SERVICE_URL" envDefault:"https://api.frankfurter.dev"`
 	}
 )
 

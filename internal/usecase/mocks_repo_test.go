@@ -19,8 +19,102 @@ import (
 	repo "github.com/evrone/go-clean-template/internal/repo"
 	smtp "github.com/evrone/go-clean-template/pkg/smtp"
 	worker "github.com/evrone/go-clean-template/pkg/worker"
+	decimal "github.com/shopspring/decimal"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockExchangeRepo is a mock of ExchangeRepo interface.
+type MockExchangeRepo struct {
+	ctrl     *gomock.Controller
+	recorder *MockExchangeRepoMockRecorder
+	isgomock struct{}
+}
+
+// MockExchangeRepoMockRecorder is the mock recorder for MockExchangeRepo.
+type MockExchangeRepoMockRecorder struct {
+	mock *MockExchangeRepo
+}
+
+// NewMockExchangeRepo creates a new mock instance.
+func NewMockExchangeRepo(ctrl *gomock.Controller) *MockExchangeRepo {
+	mock := &MockExchangeRepo{ctrl: ctrl}
+	mock.recorder = &MockExchangeRepoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExchangeRepo) EXPECT() *MockExchangeRepoMockRecorder {
+	return m.recorder
+}
+
+// GetHistory mocks base method.
+func (m *MockExchangeRepo) GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHistory", ctx, userID)
+	ret0, _ := ret[0].([]entity.Conversion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHistory indicates an expected call of GetHistory.
+func (mr *MockExchangeRepoMockRecorder) GetHistory(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHistory", reflect.TypeOf((*MockExchangeRepo)(nil).GetHistory), ctx, userID)
+}
+
+// Store mocks base method.
+func (m *MockExchangeRepo) Store(ctx context.Context, userID string, c *entity.Conversion) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Store", ctx, userID, c)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Store indicates an expected call of Store.
+func (mr *MockExchangeRepoMockRecorder) Store(ctx, userID, c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockExchangeRepo)(nil).Store), ctx, userID, c)
+}
+
+// MockExchangeWebAPI is a mock of ExchangeWebAPI interface.
+type MockExchangeWebAPI struct {
+	ctrl     *gomock.Controller
+	recorder *MockExchangeWebAPIMockRecorder
+	isgomock struct{}
+}
+
+// MockExchangeWebAPIMockRecorder is the mock recorder for MockExchangeWebAPI.
+type MockExchangeWebAPIMockRecorder struct {
+	mock *MockExchangeWebAPI
+}
+
+// NewMockExchangeWebAPI creates a new mock instance.
+func NewMockExchangeWebAPI(ctrl *gomock.Controller) *MockExchangeWebAPI {
+	mock := &MockExchangeWebAPI{ctrl: ctrl}
+	mock.recorder = &MockExchangeWebAPIMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExchangeWebAPI) EXPECT() *MockExchangeWebAPIMockRecorder {
+	return m.recorder
+}
+
+// Rate mocks base method.
+func (m *MockExchangeWebAPI) Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rate", ctx, from, to)
+	ret0, _ := ret[0].(decimal.Decimal)
+	ret1, _ := ret[1].(time.Time)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Rate indicates an expected call of Rate.
+func (mr *MockExchangeWebAPIMockRecorder) Rate(ctx, from, to any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rate", reflect.TypeOf((*MockExchangeWebAPI)(nil).Rate), ctx, from, to)
+}
 
 // MockUserRepo is a mock of UserRepo interface.
 type MockUserRepo struct {

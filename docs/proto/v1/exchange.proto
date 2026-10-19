@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package grpc.v1;
+
+option go_package = "docs/proto/v1";
+
+// Converts amounts between currencies at the latest European Central Bank reference rate.
+// Amounts and rates are decimal strings, so no precision is lost to floating point.
+service ExchangeService {
+  rpc Convert (ConvertRequest) returns (ConversionResponse);
+  rpc GetHistory (GetExchangeHistoryRequest) returns (ExchangeHistoryResponse);
+}
+
+message ConvertRequest {
+  string from = 1;   // ISO 4217 code, e.g. "EUR"
+  string to = 2;     // ISO 4217 code, e.g. "USD"
+  string amount = 3; // decimal string, e.g. "100.10"
+}
+
+message ConversionResponse {
+  string from = 1;
+  string to = 2;
+  string amount = 3;
+  string rate = 4;
+  string result = 5;
+  string rate_date = 6; // YYYY-MM-DD
+}
+
+message GetExchangeHistoryRequest {}
+
+message ExchangeHistoryResponse {
+  repeated ConversionResponse history = 1;
+}

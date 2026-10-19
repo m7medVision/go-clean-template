@@ -7,6 +7,7 @@ import (
 
 // V1 -.
 type V1 struct {
+	e  usecase.Exchange
 	u  usecase.User
 	tk usecase.Task
 	l  logger.Interface

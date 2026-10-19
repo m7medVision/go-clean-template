@@ -92,12 +92,19 @@ jobs:
         run: createdb db
       - name: Install Atlas
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
+      - name: Start the exchange-rate stub
+        run: >-
+          docker run -d --name exchange -p 8090:8090
+          -v "$PWD/integration-test/exchange-stub/Caddyfile:/etc/caddy/Caddyfile:ro"
+          -v "$PWD/internal/repo/webapi/testdata/frankfurter_latest.json:/srv/frankfurter_latest.json:ro"
+          caddy:2.11.7-alpine
       - name: Build the app
         run: go build -tags migrate -o "$RUNNER_TEMP/app" ./cmd/app
       - name: Start the app
         run: |
           set -a && . ./.env.example && set +a
           export TRACING_ENABLED=false
+          export EXCHANGE_SERVICE_URL=http://localhost:8090
           nohup "$RUNNER_TEMP/app" > "$RUNNER_TEMP/app.log" 2>&1 &
       - name: Build and start the worker
         run: |
@@ -120,6 +127,9 @@ jobs:
       - name: Mailpit log
         if: failure()
         run: docker logs mailpit
+      - name: Exchange stub log
+        if: failure()
+        run: docker logs exchange
 
   sqlc-generated:
     name: runner / sqlc / generated code is current

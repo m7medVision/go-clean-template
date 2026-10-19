@@ -1,4 +1,22 @@
 services:
+  # Stands in for api.frankfurter.dev so the exchange tests never call a third party.
+  exchange:
+    container_name: exchange
+    image: caddy:2.11.7-alpine
+    volumes:
+      - ./integration-test/exchange-stub/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./internal/repo/webapi/testdata/frankfurter_latest.json:/srv/frankfurter_latest.json:ro
+    networks:
+      app_network:
+        aliases:
+          - exchange.lvh.me
+
+  app:
+    environment:
+      EXCHANGE_SERVICE_URL: "http://exchange:8090"
+    depends_on:
+      - exchange
+
   integration-test:
     container_name: integration-test
     platform: linux/amd64

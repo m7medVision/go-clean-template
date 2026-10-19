@@ -1,0 +1,23 @@
+# Stands in for api.frankfurter.dev in the integration tests, so they never call a third party.
+# /v1/latest serves the recorded response the webapi unit test also reads
+# (internal/repo/webapi/testdata/frankfurter_latest.json, mounted at /srv), so the stub and the
+# client cannot drift apart. Point EXCHANGE_SERVICE_URL at http://<host>:8090.
+{
+	admin off
+	auto_https off
+}
+
+:8090 {
+	# An unknown target currency gets Frankfurter's 404.
+	@unknown query symbols=XXX
+	handle @unknown {
+		header Content-Type application/json
+		respond `{"message":"not found"}` 404
+	}
+
+	handle /v1/latest {
+		root * /srv
+		rewrite * /frankfurter_latest.json
+		file_server
+	}
+}

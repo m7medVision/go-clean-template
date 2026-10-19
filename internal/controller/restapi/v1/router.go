@@ -11,11 +11,12 @@ const (
 	_authTag          = "auth"
 	_usersTag         = "users"
 	_tasksTag         = "tasks"
+	_exchangeTag      = "exchange"
 )
 
 // NewRoutes registers every v1 REST operation on the Huma API and sets up the
 // security scheme reproducing the BearerAuth header of the previous transport.
-func NewRoutes(api huma.API, u usecase.User, tk usecase.Task, l logger.Interface) {
+func NewRoutes(api huma.API, e usecase.Exchange, u usecase.User, tk usecase.Task, l logger.Interface) {
 	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		_bearerAuthScheme: {
 			Type: "apiKey",
@@ -24,7 +25,7 @@ func NewRoutes(api huma.API, u usecase.User, tk usecase.Task, l logger.Interface
 		},
 	}
 
-	r := &V1{u: u, tk: tk, l: l}
+	r := &V1{e: e, u: u, tk: tk, l: l}
 
 	r.register(api)
 	r.login(api)
@@ -36,4 +37,7 @@ func NewRoutes(api huma.API, u usecase.User, tk usecase.Task, l logger.Interface
 	r.updateTask(api)
 	r.transitionTask(api)
 	r.deleteTask(api)
+
+	r.convert(api)
+	r.exchangeHistory(api)
 }

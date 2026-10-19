@@ -5,11 +5,18 @@ import (
 	"context"
 
 	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/shopspring/decimal"
 )
 
 //go:generate mockgen -source=contracts.go -destination=./mocks_usecase_test.go -package=usecase_test
 
 type (
+	// Exchange converts amounts between currencies and keeps each user's history.
+	Exchange interface {
+		Convert(ctx context.Context, userID, from, to string, amount decimal.Decimal) (entity.Conversion, error)
+		History(ctx context.Context, userID string) (entity.ExchangeHistory, error)
+	}
+
 	// User -.
 	User interface {
 		Register(ctx context.Context, username, email, password string) (entity.User, error)
