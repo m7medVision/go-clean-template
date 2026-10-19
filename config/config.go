@@ -19,6 +19,7 @@ type (
 		Metrics metrics
 		Docs    docs
 		Tracing tracing
+		Worker  worker
 	}
 
 	// App -.
@@ -70,6 +71,14 @@ type (
 		OTLPEndpoint string  `env:"TRACING_OTLP_ENDPOINT" envDefault:"localhost:4317"`
 		OTLPInsecure bool    `env:"TRACING_OTLP_INSECURE" envDefault:"true"`
 		SampleRate   float64 `env:"TRACING_SAMPLE_RATE" envDefault:"0.1"`
+	}
+
+	// Worker -.
+	worker struct {
+		PollInterval      time.Duration `env:"WORKER_POLL_INTERVAL" envDefault:"1s"`
+		VisibilityTimeout time.Duration `env:"WORKER_VISIBILITY_TIMEOUT" envDefault:"30s"`
+		BatchSize         int           `env:"WORKER_BATCH_SIZE" envDefault:"10"`
+		ShutdownTimeout   time.Duration `env:"WORKER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	}
 )
 

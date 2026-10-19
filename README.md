@@ -39,6 +39,9 @@ This template implements three types of servers:
 - GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
 - Reverse proxy ([Caddy](https://caddyserver.com/) with the caddy-waf firewall and the Souin HTTP cache)
 
+Background work goes through a minimal queue in Postgres (one `queue_messages` table), consumed by
+a separate worker binary (`cmd/worker`). No domain uses it yet; it ships one example queue to build on.
+
 It also ships a React web client in `web/` ([TanStack Router](https://tanstack.com/router) +
 [TanStack Query](https://tanstack.com/query), built with [Vite+](https://viteplus.dev/)) that calls the REST
 API through types generated from the OpenAPI document.
@@ -113,6 +116,8 @@ Text translation via external API with history tracking.
 make compose-up
 # Run app with migrations
 make run
+# Run the queue worker (in another terminal)
+make run-worker
 ```
 
 ### Web client (needs the [Vite+](https://viteplus.dev/) `vp` CLI)
@@ -126,7 +131,7 @@ make web-dev
 ### Integration tests (can be run in CI)
 
 ```sh
-# DB, app + migrations, integration tests
+# DB, app + migrations, worker, integration tests
 make compose-up-integration-test
 ```
 
@@ -169,6 +174,8 @@ Check services:
   - [v1/translation.history.proto](docs/proto/v1/translation.history.proto)
 - PostgreSQL:
   - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db`
+- Worker (no port; `docker logs -f worker`). Send it a message:
+  - `psql ... -c "INSERT INTO queue_messages (queue, body) VALUES ('example', '{\"text\": \"hi\"}')"`
 - Jaeger (traces UI):
   - http://jaeger.lvh.me | http://127.0.0.1:16686
 
@@ -204,6 +211,11 @@ Configuration (see [.env.example](.env.example)):
 
 Configuration and logger initialization. Then the main function "continues" in
 `internal/app/app.go`.
+
+### `cmd/worker/main.go`
+
+Configuration, then `RunWorker` in `internal/app/worker.go`: the queue consumer. It runs from the same
+Docker image as the app (`/worker` instead of `/app`) and does not apply the schema.
 
 ### `cmd/openapi/main.go`
 
@@ -278,6 +290,13 @@ Server routers are written in the same style:
 - Handlers are grouped by area of application (by a common basis)
 - For each group, its own router structure is created, the methods of which process paths
 - The structure of the business logic is injected into the router structure, which will be called by the handlers
+
+#### `internal/controller/worker`
+
+Queue handlers for the worker binary. A queue message is an inbound request like an HTTP call, so a
+handler has the same shape as one: decode the body into a `v1/request` DTO, call a use case with the
+handler's `ctx`, and return its error. Registration is in `v1/router.go` (`w.Handle(queue, handler)`).
+`v1/example.go` only logs the message.
 
 #### `internal/controller/graphql`
 
@@ -371,11 +390,44 @@ SQL queries live in `queries/*.sql`; [sqlc](https://github.com/sqlc-dev/sqlc) co
 sqlc cannot read HCL, so `make sqlc` first renders `internal/app/schema/*.hcl` to `queries/schema/schema.sql` with Atlas
 (Docker is needed for the dev database). Run `make sqlc` after changing the schema or a query.
 
+`queue/` is the message queue the worker binary consumes (see [`pkg/worker`](#pkgworker)): `Send`,
+`Read` and `Delete` over the `queue_messages` table.
+
 #### `internal/repo/webapi`
 
 It is an abstract web API that business logic works with.
 For example, it could be another microservice that business logic accesses via the REST API.
 The package name changes depending on the purpose.
+
+### `pkg/worker`
+
+Polls the registered queues and calls one handler per message. The queue itself is the
+`queue_messages` table (`internal/app/schema/queue_messages.hcl`), read and written through
+`internal/repo/persistent/queue`. One table holds every queue, told apart by its `queue` column, so a
+queue exists as soon as something is sent to it.
+
+- **Claiming.** A read takes up to `WORKER_BATCH_SIZE` due messages with `FOR UPDATE SKIP LOCKED` and,
+  in the same statement, hides them until `now() + WORKER_VISIBILITY_TIMEOUT`. Several workers can
+  run side by side without getting the same message at the same time.
+- **At-least-once.** A message is deleted only after its handler returns `nil`. If the handler fails,
+  the message comes back once its visibility timeout expires, so handlers must be idempotent.
+  `worker.Message.ReadCount` tells a handler how many times it has been delivered.
+- **Shutdown.** On SIGTERM it stops reading, waits up to `WORKER_SHUTDOWN_TIMEOUT` for in-flight
+  handlers, then cancels their context.
+- **Startup.** The app applies the schema, not the worker. A worker that starts first logs
+  `relation "queue_messages" does not exist` until the app has run, then carries on.
+
+Adding a queue:
+
+1. Handler: `internal/controller/worker/v1/<name>.go`, registered in `v1/router.go`.
+2. Producer: inject `repo.QueueRepo` into the use case and call `Send(ctx, "<name>", body)`.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `WORKER_POLL_INTERVAL` | `1s` | sleep after an empty read |
+| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery |
+| `WORKER_BATCH_SIZE` | `10` | messages per read |
+| `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
 ### `pkg/tracing`
 

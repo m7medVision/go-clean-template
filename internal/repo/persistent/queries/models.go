@@ -5,6 +5,7 @@
 package queries
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/evrone/go-clean-template/internal/entity"
@@ -17,6 +18,15 @@ type History struct {
 	Destination string
 	Original    string
 	Translation string
+}
+
+type QueueMessage struct {
+	ID         int64
+	Queue      string
+	Body       json.RawMessage
+	ReadCount  int32
+	EnqueuedAt time.Time
+	VisibleAt  time.Time
 }
 
 type Task struct {

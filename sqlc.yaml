@@ -26,3 +26,5 @@ sql:
             go_type: string
           - column: history.translation
             go_type: string
+          - column: queue_messages.body
+            go_type: encoding/json.RawMessage

@@ -6,8 +6,12 @@ services:
     build:
       context: .
       dockerfile: integration-test/Dockerfile
+    environment:
+      # Read by queue_test.go to check what the worker consumed.
+      PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db?sslmode=disable"
     depends_on:
       - app
+      - worker
     networks:
       app_network:
         aliases:
