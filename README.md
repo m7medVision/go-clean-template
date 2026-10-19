@@ -51,7 +51,7 @@ The template includes three domains to demonstrate multi-service architecture:
 
 - **User Authentication** — registration, login, JWT-based authorization
 - **Task Management** — CRUD operations with status transitions (todo, in_progress, done)
-- **Translation** — text translation with history tracking
+- **Currency Exchange** — currency conversion at European Central Bank reference rates, with history
 
 All domains are available over REST and gRPC. GraphQL exposes tasks only.
 
@@ -101,14 +101,24 @@ CRUD operations with a status state machine.
 - Pagination with `limit`/`offset` and optional status filter
 - Tasks scoped to the authenticated user
 
-### Translation
+### Currency Exchange
 
-Text translation via external API with history tracking.
+Converts an amount between currencies at the latest European Central Bank reference rate, fetched from
+the [Frankfurter API](https://frankfurter.dev) (keyless, documented, self-hostable), and keeps each
+user's history. It is the template's example of an outbound HTTP API behind a repository
+interface ([`internal/repo/webapi`](#internalrepowebapi)).
 
-| Operation | REST                                | gRPC                                    |
-|-----------|-------------------------------------|-----------------------------------------|
-| Translate | `POST /v1/translation/do-translate` | `TranslationHistoryService/DoTranslate` |
-| History   | `GET /v1/translation/history`       | `TranslationHistoryService/ShowHistory` |
+| Operation | REST                         | gRPC                         |
+|-----------|------------------------------|------------------------------|
+| Convert   | `POST /v1/exchange/convert`  | `ExchangeService/Convert`    |
+| History   | `GET /v1/exchange/history`   | `ExchangeService/GetHistory` |
+
+- Request: `{"from": "EUR", "to": "USD", "amount": "100.10"}`; codes are case-insensitive
+- Amounts and rates are decimal strings, computed with exact decimals (no `float64`); the result is
+  rounded half-even to 2 places
+- Rates are ECB daily reference rates (about 30 currencies, published on working days), not live
+  market rates; the response carries the rate's `rate_date`
+- Unknown currency or `from` = `to` → 400 (`InvalidArgument` on gRPC); history returns the newest 100
 
 ## Quick start
 
@@ -198,7 +208,7 @@ Check services:
   - URL: `grpc.lvh.me:80` (h2c through Caddy) | `127.0.0.1:8081`
   - [v1/auth.proto](docs/proto/v1/auth.proto)
   - [v1/task.proto](docs/proto/v1/task.proto)
-  - [v1/translation.history.proto](docs/proto/v1/translation.history.proto)
+  - [v1/exchange.proto](docs/proto/v1/exchange.proto)
 - PostgreSQL:
   - `postgres://user:myAwEsOm3pa55@w0rd@127.0.0.1:5432/db` (the port is `PG_PORT`)
 - Worker (no port; `docker logs -f worker`). Send it a message:
@@ -277,11 +287,11 @@ Email is sent only by the worker, so none of these is required:
 | `SMTP_PASSWORD` | empty | |
 | `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; keep `.env` values free of spaces, since both `make` and the shell read that file |
 
-The translation domain calls Google Translate:
+The exchange domain reads rates from the Frankfurter API:
 
 | Env var | Default | |
 | --- | --- | --- |
-| `TRANSLATION_SERVICE_URL` | `translate.google.com` | host (and optional port) the client calls over HTTPS; the integration tests point it at a local stub |
+| `EXCHANGE_SERVICE_URL` | `https://api.frankfurter.dev` | base URL of the Frankfurter API; point it at a self-hosted instance, or at the stub as the integration tests do |
 
 #### `docs/openapi`
 
@@ -299,8 +309,9 @@ You don't need to correct anything by yourself.
 
 Integration tests.
 They are launched as a separate container, next to the application container.
-Translation calls go to a Caddy stub ([integration-test/translate-stub/Caddyfile](integration-test/translate-stub/Caddyfile))
-instead of Google, so the suite does not depend on Google's rate limits.
+Exchange-rate calls go to a Caddy stub ([integration-test/exchange-stub/Caddyfile](integration-test/exchange-stub/Caddyfile))
+instead of Frankfurter, so the suite never calls a third party. The stub serves the same recorded response
+(`internal/repo/webapi/testdata/frankfurter_latest.json`) the webapi unit test reads, so the two cannot drift apart.
 
 ### `internal/app`
 
@@ -371,13 +382,13 @@ And in the file `internal/controller/grpc/router.go` add the line:
 {
     v1.NewAuthRoutes(app, u, l)
     v1.NewTaskRoutes(app, tk, l)
-    v1.NewTranslationRoutes(app, t, l)
+    v1.NewExchangeRoutes(app, e, l)
 }
 
 {
     v2.NewAuthRoutes(app, u, l)
     v2.NewTaskRoutes(app, tk, l)
-    v2.NewTranslationRoutes(app, t, l)
+    v2.NewExchangeRoutes(app, e, l)
 }
 
 reflection.Register(app)
@@ -391,11 +402,11 @@ And in the file `internal/controller/restapi/router.go` add the line:
 
 ```go
 {
-	v1.NewRoutes(api, t, u, tk, l)
+	v1.NewRoutes(api, e, u, tk, l)
 }
 
 {
-	v2.NewRoutes(api, t, u, tk, l)
+	v2.NewRoutes(api, e, u, tk, l)
 }
 ```
 
@@ -480,6 +491,11 @@ Adding an email:
 It is an abstract web API that business logic works with.
 For example, it could be another microservice that business logic accesses via the REST API.
 The package name changes depending on the purpose.
+
+`exchange_frankfurter.go` implements `repo.ExchangeWebAPI` with plain `net/http` (an `otelhttp`
+transport, so the outbound call joins the trace). It decodes rates straight into `decimal.Decimal`
+and maps Frankfurter's 404 to `entity.ErrUnsupportedCurrency`. Its unit test serves the recorded
+response in `testdata/` from an `httptest` server.
 
 ### `pkg/worker`
 
