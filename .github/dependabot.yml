@@ -20,6 +20,11 @@ updates:
     directory: "/web"
     patterns: ["*"]
     multi-ecosystem-group: all
+    ignore:
+      # TypeScript 7 drops the compiler API openapi-typescript needs (`make web-api` crashes on
+      # ts.factory). Lift this once openapi-typescript supports it.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     # Auto-merge is on, so wait out a freshly published (possibly compromised) release.
     cooldown:
       default-days: 7
