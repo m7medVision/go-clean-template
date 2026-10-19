@@ -53,7 +53,8 @@ services:
     volumes:
       - db_data:/var/lib/postgresql
     ports:
-      - "5432:5432"
+      # Host port from PG_PORT (.env): change it when something else on the host already uses 5432
+      - "${PG_PORT:-5432}:5432"
     networks:
       app_network:
         aliases:
