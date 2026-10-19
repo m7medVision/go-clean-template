@@ -96,7 +96,7 @@ jobs:
         run: >-
           docker run -d --name exchange -p 8090:8090
           -v "$PWD/integration-test/exchange-stub/Caddyfile:/etc/caddy/Caddyfile:ro"
-          -v "$PWD/internal/repo/webapi/testdata/frankfurter_latest.json:/srv/frankfurter_latest.json:ro"
+          -v "$PWD/internal/repo/webapi/testdata/openerapi_latest_omr.json:/srv/openerapi_latest_omr.json:ro"
           caddy:2.11.7-alpine
       - name: Build the app
         run: go build -tags migrate -o "$RUNNER_TEMP/app" ./cmd/app

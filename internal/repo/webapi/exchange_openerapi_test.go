@@ -2,6 +2,7 @@ package webapi_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,15 +16,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The fixture is a recorded api.frankfurter.dev response. The integration-test stub serves the
+// The fixture is a recorded open.er-api.com response for OMR. The integration-test stub serves the
 // same file, so the client and the stub cannot drift apart.
-const _fixture = "testdata/frankfurter_latest.json"
+const _fixture = "testdata/openerapi_latest_omr.json"
 
 func newServer(t *testing.T, status int, body []byte) *httptest.Server {
 	t.Helper()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/latest" || r.URL.Query().Get("base") != "EUR" || r.URL.Query().Get("symbols") != "USD" {
+		if r.URL.Path != "/v6/latest/OMR" {
 			w.WriteHeader(http.StatusBadRequest)
 
 			return
@@ -52,31 +53,11 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 
 		srv := newServer(t, http.StatusOK, fixture)
 
-		rate, date, err := webapi.New(srv.URL).Rate(t.Context(), "EUR", "USD")
+		rate, date, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
 
 		require.NoError(t, err)
-		assert.True(t, rate.Equal(decimal.RequireFromString("1.1225")), rate.String())
+		assert.True(t, rate.Equal(decimal.RequireFromString("17.406483")), rate.String())
 		assert.Equal(t, time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC), date)
-	})
-
-	t.Run("404 means an unsupported currency", func(t *testing.T) {
-		t.Parallel()
-
-		srv := newServer(t, http.StatusNotFound, []byte(`{"message":"not found"}`))
-
-		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "EUR", "USD")
-
-		require.ErrorIs(t, err, entity.ErrUnsupportedCurrency)
-	})
-
-	t.Run("a missing target rate means an unsupported currency", func(t *testing.T) {
-		t.Parallel()
-
-		srv := newServer(t, http.StatusOK, []byte(`{"amount":1.0,"base":"EUR","date":"2026-10-19","rates":{}}`))
-
-		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "EUR", "USD")
-
-		require.ErrorIs(t, err, entity.ErrUnsupportedCurrency)
 	})
 
 	t.Run("a server error is an error, not an unsupported currency", func(t *testing.T) {
@@ -84,7 +65,7 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 
 		srv := newServer(t, http.StatusInternalServerError, nil)
 
-		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "EUR", "USD")
+		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
 
 		require.Error(t, err)
 		assert.NotErrorIs(t, err, entity.ErrUnsupportedCurrency)
@@ -98,8 +79,40 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
-		_, _, err := webapi.New(srv.URL).Rate(ctx, "EUR", "USD")
+		_, _, err := webapi.New(srv.URL).Rate(ctx, "OMR", "CNY")
 
 		require.ErrorIs(t, err, context.Canceled)
 	})
+}
+
+func TestExchangeWebAPI_RateErrorBodies(t *testing.T) {
+	t.Parallel()
+
+	// open.er-api.com reports errors with HTTP 200, so the client reads the body.
+	tests := []struct {
+		name            string
+		body            string
+		wantUnsupported bool
+	}{
+		{"unsupported-code means an unsupported currency", `{"result":"error","error-type":"unsupported-code"}`, true},
+		{
+			"a missing target rate means an unsupported currency",
+			`{"result":"success","base_code":"OMR","time_last_update_unix":1792368152,"rates":{}}`,
+			true,
+		},
+		{"any other error is an error, not an unsupported currency", `{"result":"error","error-type":"rate-limited"}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := newServer(t, http.StatusOK, []byte(tt.body))
+
+			_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
+
+			require.Error(t, err)
+			assert.Equal(t, tt.wantUnsupported, errors.Is(err, entity.ErrUnsupportedCurrency))
+		})
+	}
 }

@@ -4,7 +4,7 @@ package grpc.v1;
 
 option go_package = "docs/proto/v1";
 
-// Converts amounts between currencies at the latest European Central Bank reference rate.
+// Converts amounts between currencies at the latest daily rate.
 // Amounts and rates are decimal strings, so no precision is lost to floating point.
 service ExchangeService {
   rpc Convert (ConvertRequest) returns (ConversionResponse);

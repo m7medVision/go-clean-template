@@ -55,7 +55,7 @@ export interface paths {
         put?: never;
         /**
          * Convert currency
-         * @description Convert an amount at the latest European Central Bank reference rate and save it to the history
+         * @description Convert an amount at the latest daily rate and save it to the history
          */
         post: operations["convert-currency"];
         delete?: never;

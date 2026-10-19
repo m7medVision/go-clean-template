@@ -42,8 +42,8 @@ x-backend-app-environment: &x-backend-app-environment
   SMTP_HOST: "mailpit"
   SMTP_PORT: "1025"
   MAIL_FROM: "Go Clean Template <noreply@example.com>"
-  # Exchange rates (Frankfurter API)
-  EXCHANGE_SERVICE_URL: "https://api.frankfurter.dev"
+  # Exchange rates (ExchangeRate-API open access)
+  EXCHANGE_SERVICE_URL: "https://open.er-api.com"
 
 
 services:

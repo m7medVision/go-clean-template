@@ -71,7 +71,7 @@ cmd/app → internal/app → internal/controller/*  ─┐
 - `internal/usecase/contracts.go` — the interfaces controllers call. `internal/usecase/<domain>/`
   implements them.
 - `internal/repo/contracts.go` — the interfaces use cases call. `internal/repo/persistent/<domain>/`
-  (Postgres) and `internal/repo/webapi/` (outbound HTTP: the Frankfurter rate client, plain `net/http`,
+  (Postgres) and `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
   unit-tested against the recorded response in `testdata/` that the integration stub also serves) implement them.
 - `internal/controller/<transport>/v1/` — one package per transport, each with its own
   `request/` and `response/` DTOs. Controllers never import each other.

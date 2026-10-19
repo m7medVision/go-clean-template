@@ -31,7 +31,7 @@ func (r *V1) convert(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "convert-currency",
 		Summary:     "Convert currency",
-		Description: "Convert an amount at the latest European Central Bank reference rate and save it to the history",
+		Description: "Convert an amount at the latest daily rate and save it to the history",
 		Method:      http.MethodPost,
 		Path:        "/v1/exchange/convert",
 		Tags:        []string{_exchangeTag},

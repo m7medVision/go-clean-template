@@ -593,7 +593,7 @@
     },
     "/v1/exchange/convert": {
       "post": {
-        "description": "Convert an amount at the latest European Central Bank reference rate and save it to the history",
+        "description": "Convert an amount at the latest daily rate and save it to the history",
         "operationId": "convert-currency",
         "requestBody": {
           "content": {
