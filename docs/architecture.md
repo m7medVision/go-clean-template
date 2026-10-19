@@ -1,7 +1,8 @@
 # Architecture
 
-How the template is layered, why, and which package holds what. For the rules an agent or contributor
-follows when adding code, see [CLAUDE.md](../CLAUDE.md).
+How the template is layered, the rules that keep it that way, and which package holds what. Every
+change follows the [rules](#rules) below; a change that breaks one is not merged, however small.
+[request-flow.md](request-flow.md) shows the rules at work on one real request.
 
 ## The dependency rule
 
@@ -27,6 +28,70 @@ Controllers never import each other, and none of them knows about Postgres. A RE
 data goes through a use case, which goes through a repository interface. `pkg/` holds infrastructure
 with no domain knowledge (servers, logger, JWT, Postgres pool, tracing, worker, SMTP) and must not
 import `internal/`.
+
+## Rules
+
+Clean Architecture only pays off while it stays clean. One shortcut, such as a handler that runs a query
+"just this once", is copied by the next change, and in a few months the layers mean nothing. So these
+are rules, not guidelines. When a rule gets in the way, the design is what has to change, not the rule.
+
+### Dependencies
+
+1. **Imports point inward only:** controller → use case → repo interfaces → entity. An inner layer
+   never imports an outer one.
+2. **`internal/entity` imports nothing from this module.** Domain types and their rules are plain Go.
+3. **Use cases know only interfaces.** They depend on `internal/repo/contracts.go`, never on a
+   repository implementation, and import no HTTP client, SQL driver, gRPC or Huma package.
+4. **Controllers call use cases, never repositories.** No SQL, no `pkg/postgres`, no outbound HTTP in a
+   controller.
+5. **Transports are independent.** `restapi`, `grpc`, `graphql` and `worker` never import each other.
+   Logic two transports share belongs in a use case.
+6. **`pkg/` never imports `internal/` or `config/`.** It takes its settings as arguments.
+7. **Wiring happens once,** in `internal/app/app.go`. Nothing else constructs its own dependencies.
+
+### Each layer's job
+
+8. **A controller handler does six things, in order:** get the caller, decode into a transport-local
+   DTO, validate structure, call the use case with the request's `ctx`, map `entity.Err*` sentinels to
+   a transport status, and encode a response DTO. Nothing else. It never passes a request DTO into a use
+   case, and returns an entity directly only when its JSON shape already is the API shape.
+9. **A domain rule is written once, in the entity or the use case.** Never in a controller, and never
+   duplicated per transport. A rule that only needs the value itself goes on the entity
+   (`Task.Transition`, `entity.NewConversion`); a rule that needs a repository goes in the use case.
+10. **Only controllers know transport errors.** Lower layers return sentinels from
+    `internal/entity/errors.go` or errors wrapped with their layer path
+    (`fmt.Errorf("TaskUseCase - Create - uc.repo.Store: %w", err)`).
+11. **Every repository and use case is returned as its interface, wrapped in its tracing decorator**
+    (`tracing.go`). A new contract method goes in the interface, the struct and the decorator.
+
+### Where code goes
+
+Ask what the code knows about:
+
+| The code knows about… | It goes in |
+| --- | --- |
+| nothing but the domain | `internal/entity/<name>.go` |
+| a business rule that needs storage or an outside API | `internal/usecase/<domain>/<domain>.go` |
+| SQL | `internal/repo/persistent/queries/<domain>.sql`, then `make sqlc` |
+| a table or a driver error code | `internal/repo/persistent/<domain>/<domain>.go` |
+| an outbound HTTP API | `internal/repo/webapi/<name>.go` |
+| an HTTP status, a gRPC code, a GraphQL error | `internal/controller/<transport>/v1/<domain>.go` |
+| a queue message | `internal/controller/worker/v1/<name>.go` |
+| a server, client or middleware with no domain knowledge | `pkg/<name>/` |
+
+If the code knows about two of these, it is two pieces of code in two layers.
+
+### Reviewing a change
+
+A reviewer checks the imports first:
+
+- Does any `internal/entity` or `internal/usecase` file gain an import of a driver, a transport or a
+  repository implementation?
+- Does a controller import `internal/repo`, or another controller?
+- Is there an `if` about the domain (status, ownership, currency) in a handler?
+- Is a new contract method missing from its `tracing.go` decorator or from the mocks (`make mock`)?
+
+Any "yes" is a rule broken, and the change goes back.
 
 ## Packages
 
@@ -113,6 +178,8 @@ So, the application is divided into 2 layers, internal and external:
 1. **Business logic** (Go standard library).
 2. **Tools** (databases, servers, message brokers, any other packages and frameworks).
 
+![Clean Architecture](img/layers-1.png)
+
 **The inner layer** with business logic should be clean. It should:
 
 - Not have package imports from the outer layer.
@@ -141,6 +208,9 @@ The communication between them is carried out through `usecase` (business logic)
 ```
 
 The symbols > and < show the intersection of layer boundaries through Interfaces.
+The same is shown in the picture:
+
+![Example](img/example-http-db.png)
 
 Or more complex business logic:
 
@@ -156,6 +226,10 @@ Or more complex business logic:
            usecase < repository
     HTTP < usecase
 ```
+
+### Layers
+
+![Layers](img/layers-2.png)
 
 ### Clean Architecture terminology
 

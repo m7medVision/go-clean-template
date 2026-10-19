@@ -280,8 +280,8 @@ TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest)
 
 ## Keep the docs current
 
-`README.md` is a short front page for a visitor: what the template is, one request through the
-layers, a Quick start, and links. Reference detail lives in `docs/*.md`, never in the README; a
+`README.md` is a short front page for a visitor: what the template is, the Clean Architecture
+rules in brief, a Quick start, and links. Reference detail lives in `docs/*.md`, never in the README; a
 paragraph about one package, an env var table or an endpoint list in the README is a bug. Update
 the matching page whenever a change touches what it documents:
 
@@ -295,7 +295,8 @@ the matching page whenever a change touches what it documents:
 | Renamed or moved package under `internal/` or `pkg/` | the `Packages` table in `docs/architecture.md` |
 | Queue, worker or email behaviour | `docs/worker.md` |
 | Frontend stack or conventions | `docs/web.md` |
-| `Convert` in the exchange use case | the `How a request flows` diagram in `README.md` |
+| The exchange `Convert` path (handler, use case, entity, webapi, repo) | `docs/request-flow.md`, which quotes that code |
+| A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
 
 ## Adding a use case to an existing domain
 

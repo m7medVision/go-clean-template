@@ -27,35 +27,26 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 - **OpenTelemetry tracing** through every layer, Prometheus metrics, and a Caddy front end with a WAF.
 - **Generated code wherever it can be:** SQL, mocks, protobuf, GraphQL, OpenAPI, frontend types.
 
-## How a request flows
+## Clean Architecture
 
-`POST /v1/exchange/convert` with `{"from": "OMR", "to": "CNY", "amount": "100"}`:
+The code is split into layers, and **dependencies only point inward**:
 
-```mermaid
-sequenceDiagram
-  participant H as REST handler
-  participant U as Exchange use case
-  participant E as entity.Conversion
-  participant W as Rate API client
-  participant R as Postgres repo
-  H->>U: Convert(ctx, userID, "OMR", "CNY", 100)
-  U->>E: NewConversion: validate codes and amount
-  U->>W: Rate(ctx, "OMR", "CNY")
-  W-->>U: 17.406483, 2026-10-19
-  U->>E: ApplyRate: exact decimals, rounded half-even
-  U->>R: Store(ctx, userID, conversion)
-  U-->>H: entity.Conversion
-  Note over H,R: one trace in Jaeger across every step
+![Clean Architecture](docs/img/layers-1.png)
+
+```
+controller  →  usecase  →  repo (interfaces)  →  entity
 ```
 
-1. [`restapi/v1/exchange.go`](internal/controller/restapi/v1/exchange.go) decodes a Huma-validated
-   request DTO and maps domain errors to HTTP statuses. gRPC and GraphQL handlers call the same use case.
-2. [`usecase/exchange/exchange.go`](internal/usecase/exchange/exchange.go) holds the rule. It knows only
-   the interfaces in [`repo/contracts.go`](internal/repo/contracts.go).
-3. [`entity/exchange.go`](internal/entity/exchange.go) owns validation and the decimal arithmetic.
-4. [`webapi/exchange_openerapi.go`](internal/repo/webapi/exchange_openerapi.go) and
-   [`persistent/exchange/exchange.go`](internal/repo/persistent/exchange/exchange.go) are the only code
-   that knows about HTTP providers and SQL.
+- `internal/entity`: domain types and rules. Imports nothing from this module.
+- `internal/usecase`: business logic. Talks to storage and outside APIs only through interfaces.
+- `internal/repo`: Postgres, outbound HTTP and email, behind those interfaces.
+- `internal/controller`: REST, gRPC, GraphQL and the queue worker. Each one only decodes, calls a use
+  case, and encodes. Controllers never import each other.
+- `pkg/`: reusable infrastructure with no domain knowledge. Never imports `internal/`.
+
+These are rules, not suggestions: a change that breaks one is not merged.
+[docs/architecture.md](docs/architecture.md) lists them with where each kind of code goes, and
+[docs/request-flow.md](docs/request-flow.md) follows one request through every layer.
 
 ## Quick start
 
@@ -78,7 +69,8 @@ If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` f
 
 ## Docs
 
-- [Architecture](docs/architecture.md): the dependency rule, packages, Clean Architecture
+- [Architecture](docs/architecture.md): the rules, where code goes, packages, Clean Architecture
+- [A request, end to end](docs/request-flow.md): one request through every layer, file by file
 - [API](docs/api.md): every endpoint on every transport, errors, versioning
 - [Development](docs/development.md): dev mode, tests, the full stack behind Caddy
 - [Configuration](docs/configuration.md): every environment variable, tracing
