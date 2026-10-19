@@ -278,19 +278,24 @@ TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest)
   `/openapi.*`, `/schemas`, `/healthz`, `/metrics`.
 - Tests import from `vite-plus/test` and sit next to the code as `*.test.ts`.
 
-## Keep README.md current
+## Keep the docs current
 
-`README.md` is the only README. The Russian and Chinese translations were removed, so there is no
-set to keep aligned. Update it whenever a change touches what it documents:
+`README.md` is a short front page for a visitor: what the template is, one request through the
+layers, a Quick start, and links. Reference detail lives in `docs/*.md`, never in the README; a
+paragraph about one package, an env var table or an endpoint list in the README is a bug. Update
+the matching page whenever a change touches what it documents:
 
-| Change | What to update in `README.md` |
+| Change | What to update |
 | --- | --- |
-| New or changed REST / gRPC endpoint | the domain table under `Domains` |
-| New domain | the `Overview` bullet list, `Content` index, and a new `Domains` subsection |
-| New or renamed env var | the config table under `Observability` if tracing-related; otherwise the `config` section |
-| New transport, server, port or service URL | the `Quick start` service list |
-| New `make` target used in the getting-started flow | the `Quick start` code blocks |
-| Renamed or moved package under `internal/` or `pkg/` | the matching `Project structure` subsection |
+| New or changed REST / gRPC / GraphQL operation | the domain table in `docs/api.md` |
+| New domain | a section in `docs/api.md`, the `What you get` list in `README.md` |
+| New or renamed env var | the matching table in `docs/configuration.md` |
+| New transport, server, port or service URL | `docs/development.md` (service tables), `docs/api.md` if it is an API |
+| Change to `make dev` or its prerequisites | `Quick start` in `README.md`, `docs/development.md` |
+| Renamed or moved package under `internal/` or `pkg/` | the `Packages` table in `docs/architecture.md` |
+| Queue, worker or email behaviour | `docs/worker.md` |
+| Frontend stack or conventions | `docs/web.md` |
+| `Convert` in the exchange use case | the `How a request flows` diagram in `README.md` |
 
 ## Adding a use case to an existing domain
 
@@ -340,7 +345,7 @@ before writing.
    `<transport>/v1/<domain>.go`, registration in that transport's `v1/router.go`, and the use case
    added to the `V1` / controller struct in `<transport>/v1/controller.go`. gRPC also needs
    `docs/proto/v1/<domain>.proto` and `make proto-v1`.
-10. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the README updates listed
+10. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the docs updates listed
     above.
 11. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
     transports you exposed.
@@ -350,7 +355,7 @@ before writing.
 Routes are grouped under a version package (`<transport>/v1/`). A v2 means a new sibling package
 with the same layout, registered alongside v1 in the transport's top-level `router.go` — REST adds
 operations under the new `/v2/...` paths from a `v2.NewRoutes(api, ...)` in `restapi/router.go`,
-and gRPC registers a second set of `NewXRoutes`. v1 stays untouched. `README.md` documents this
+and gRPC registers a second set of `NewXRoutes`. v1 stays untouched. `docs/api.md` documents this
 with worked examples per transport; follow it rather than inventing a scheme.
 
 ## Database
