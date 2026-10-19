@@ -8,7 +8,7 @@ tmp_dir = "tmp"
 cmd = "CGO_ENABLED=0 go build -o ./tmp/worker ./cmd/worker"
 entrypoint = ["./tmp/worker"]
 include_ext = ["go", "tmpl"]
-exclude_dir = [".git", ".github", ".claude", "caddy", "integration-test", "tasks", "tmp", "vendor", "web"]
+exclude_dir = [".git", ".github", "caddy", "integration-test", "tasks", "tmp", "vendor", "web"]
 exclude_regex = ["_test\\.go$"]
 exclude_unchanged = true
 delay = 200
