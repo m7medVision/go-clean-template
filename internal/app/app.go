@@ -86,7 +86,7 @@ func initServers(cfg *config.Config, uc useCases, jwtManager *jwt.Manager, l log
 			pbgrpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	)
-	grpc.NewRouter(grpcServer.App, uc.user, uc.task, l)
+	grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l)
 
 	// HTTP Server
 	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l)

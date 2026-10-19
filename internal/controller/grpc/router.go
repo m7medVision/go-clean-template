@@ -9,10 +9,11 @@ import (
 )
 
 // NewRouter -.
-func NewRouter(app *pbgrpc.Server, u usecase.User, tk usecase.Task, l logger.Interface) {
+func NewRouter(app *pbgrpc.Server, e usecase.Exchange, u usecase.User, tk usecase.Task, l logger.Interface) {
 	{
 		v1.NewAuthRoutes(app, u, l)
 		v1.NewTaskRoutes(app, tk, l)
+		v1.NewExchangeRoutes(app, e, l)
 	}
 
 	reflection.Register(app)

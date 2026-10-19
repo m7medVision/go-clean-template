@@ -8,6 +8,11 @@ import (
 	pbgrpc "google.golang.org/grpc"
 )
 
+// NewExchangeRoutes -.
+func NewExchangeRoutes(app *pbgrpc.Server, e usecase.Exchange, l logger.Interface) {
+	v1.RegisterExchangeServiceServer(app, &ExchangeController{e: e, l: l})
+}
+
 // NewAuthRoutes -.
 func NewAuthRoutes(app *pbgrpc.Server, u usecase.User, l logger.Interface) {
 	r := &AuthController{u: u, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
