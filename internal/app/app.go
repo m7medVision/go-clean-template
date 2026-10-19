@@ -119,6 +119,22 @@ func (s *servers) shutdownServers(l logger.Interface) {
 	}
 }
 
+func initTracing(ctx context.Context, cfg *config.Config, serviceName string) (tracing.ShutdownFunc, error) {
+	shutdown, err := tracing.New(ctx, tracing.Config{
+		Enabled:     cfg.Tracing.Enabled,
+		ServiceName: serviceName,
+		Version:     cfg.App.Version,
+		Endpoint:    cfg.Tracing.OTLPEndpoint,
+		Insecure:    cfg.Tracing.OTLPInsecure,
+		SampleRate:  cfg.Tracing.SampleRate,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tracing.New: %w", err)
+	}
+
+	return shutdown, nil
+}
+
 // Run creates objects via constructors.
 func Run(cfg *config.Config) {
 	l := logger.New(cfg.Log.Level)
@@ -126,16 +142,9 @@ func Run(cfg *config.Config) {
 	ctx := context.Background()
 
 	// Tracing
-	shutdownTracing, err := tracing.New(ctx, tracing.Config{
-		Enabled:     cfg.Tracing.Enabled,
-		ServiceName: cfg.App.Name,
-		Version:     cfg.App.Version,
-		Endpoint:    cfg.Tracing.OTLPEndpoint,
-		Insecure:    cfg.Tracing.OTLPInsecure,
-		SampleRate:  cfg.Tracing.SampleRate,
-	})
+	shutdownTracing, err := initTracing(ctx, cfg, cfg.App.Name)
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - Run - tracing.New: %w", err))
+		l.Fatal(fmt.Errorf("app - Run - initTracing: %w", err))
 	}
 	defer func() {
 		if err := shutdownTracing(ctx); err != nil {

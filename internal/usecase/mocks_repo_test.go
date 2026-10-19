@@ -11,10 +11,13 @@ package usecase_test
 
 import (
 	context "context"
+	json "encoding/json"
 	reflect "reflect"
+	time "time"
 
 	entity "github.com/evrone/go-clean-template/internal/entity"
 	repo "github.com/evrone/go-clean-template/internal/repo"
+	worker "github.com/evrone/go-clean-template/pkg/worker"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -273,4 +276,72 @@ func (m *MockTaskRepo) Update(ctx context.Context, task *entity.Task) error {
 func (mr *MockTaskRepoMockRecorder) Update(ctx, task any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTaskRepo)(nil).Update), ctx, task)
+}
+
+// MockQueueRepo is a mock of QueueRepo interface.
+type MockQueueRepo struct {
+	ctrl     *gomock.Controller
+	recorder *MockQueueRepoMockRecorder
+	isgomock struct{}
+}
+
+// MockQueueRepoMockRecorder is the mock recorder for MockQueueRepo.
+type MockQueueRepoMockRecorder struct {
+	mock *MockQueueRepo
+}
+
+// NewMockQueueRepo creates a new mock instance.
+func NewMockQueueRepo(ctrl *gomock.Controller) *MockQueueRepo {
+	mock := &MockQueueRepo{ctrl: ctrl}
+	mock.recorder = &MockQueueRepoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockQueueRepo) EXPECT() *MockQueueRepoMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockQueueRepo) Delete(ctx context.Context, queue string, id int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, queue, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockQueueRepoMockRecorder) Delete(ctx, queue, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockQueueRepo)(nil).Delete), ctx, queue, id)
+}
+
+// Read mocks base method.
+func (m *MockQueueRepo) Read(ctx context.Context, queue string, vt time.Duration, qty int) ([]worker.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Read", ctx, queue, vt, qty)
+	ret0, _ := ret[0].([]worker.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Read indicates an expected call of Read.
+func (mr *MockQueueRepoMockRecorder) Read(ctx, queue, vt, qty any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockQueueRepo)(nil).Read), ctx, queue, vt, qty)
+}
+
+// Send mocks base method.
+func (m *MockQueueRepo) Send(ctx context.Context, queue string, body json.RawMessage) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Send", ctx, queue, body)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Send indicates an expected call of Send.
+func (mr *MockQueueRepoMockRecorder) Send(ctx, queue, body any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockQueueRepo)(nil).Send), ctx, queue, body)
 }

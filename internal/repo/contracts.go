@@ -3,8 +3,11 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
+	"time"
 
 	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/evrone/go-clean-template/pkg/worker"
 )
 
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
@@ -35,6 +38,14 @@ type (
 		List(ctx context.Context, userID string, filter TaskFilter) ([]entity.Task, int, error)
 		Update(ctx context.Context, task *entity.Task) error
 		Delete(ctx context.Context, userID, taskID string) error
+	}
+
+	// QueueRepo is a Postgres-backed message queue. Use cases enqueue with Send; the worker binary
+	// consumes with Read and Delete (it satisfies worker.Queue).
+	QueueRepo interface {
+		Send(ctx context.Context, queue string, body json.RawMessage) (int64, error)
+		Read(ctx context.Context, queue string, vt time.Duration, qty int) ([]worker.Message, error)
+		Delete(ctx context.Context, queue string, id int64) error
 	}
 
 	// TaskFilter -.

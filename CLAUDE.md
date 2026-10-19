@@ -3,6 +3,8 @@
 Go clean-architecture reference service. Three domains (`user`, `task`, `translation`) exposed
 over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
 `/graphql` on the REST port, tasks only, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
+A second binary, `cmd/worker`, consumes a minimal Postgres queue (the `queue_messages` table);
+see **Queue and worker** below.
 Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -35,6 +37,7 @@ different settings than CI. Use the target, not the tool.
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
+| Run the queue worker locally | `make run-worker` | `go run ./cmd/worker` |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
 
@@ -86,6 +89,7 @@ Decide by asking what the code knows about:
 | a table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | method on `Repo` calling the generated query |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | an HTTP status, a gRPC code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
+| a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
 
 Layout rules:
@@ -176,6 +180,26 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   server uses (`restapi.OpenAPI`). Huma still serves the live document at `/openapi.json` when
   `DOCS_ENABLED`; the checked-in copy exists so REST contract changes show up as a reviewable diff
   and so clients can generate types without a running server. CI fails when it is stale.
+
+## Queue and worker
+
+- The queue is one ordinary table, `queue_messages` (`internal/app/schema/queue_messages.hcl`), on the
+  stock `postgres:18.6-alpine` image: no extension, no custom image. Its queries are in
+  `internal/repo/persistent/queries/queue.sql` (sqlc), and `internal/repo/persistent/queue` implements
+  `repo.QueueRepo` with them.
+- `ReadQueueMessages` claims and hides in one statement (`FOR UPDATE SKIP LOCKED` in a CTE, then
+  `UPDATE … SET visible_at = now() + vt`). Keep it one statement; splitting it lets two workers take
+  the same message.
+- `worker.Message` lives in `pkg/worker`, and `repo.QueueRepo` returns it, so the repo satisfies
+  `worker.Queue` with no adapter (`var _ worker.Queue` in `queue.go`). The sqlc row converts with
+  `worker.Message(row)`; a column change that breaks the field order fails to compile.
+- `pkg/worker` is at-least-once: a handler returning `nil` deletes the message; an error leaves it
+  to reappear after `WORKER_VISIBILITY_TIMEOUT`. Handlers must be idempotent; a body that can never
+  decode should be logged and acknowledged (`return nil`), or it redelivers forever.
+- The worker is wired in `internal/app/worker.go` (`RunWorker`). Handlers that need use cases get
+  them from `initUseCases`, like the servers. The Dockerfile builds `/app` and `/worker` into one
+  image; the compose `worker` service runs `/worker`. Only the app applies the schema.
+- A use case enqueues by taking `repo.QueueRepo` and calling `Send`.
 
 ## Frontend
 

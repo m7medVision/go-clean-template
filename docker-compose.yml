@@ -34,6 +34,11 @@ x-backend-app-environment: &x-backend-app-environment
   # JWT
   JWT_SECRET: "your-secret-key-change-in-production"
   JWT_TOKEN_EXPIRY: "24h"
+  # Worker (cmd/worker)
+  WORKER_POLL_INTERVAL: "1s"
+  WORKER_VISIBILITY_TIMEOUT: "30s"
+  WORKER_BATCH_SIZE: "10"
+  WORKER_SHUTDOWN_TIMEOUT: "10s"
 
 
 services:
@@ -105,6 +110,25 @@ services:
       app_network:
         aliases:
           - app.lvh.me
+
+  # Queue consumer (queue_messages table): the app image, started on its /worker entry point
+  worker:
+    container_name: worker
+    platform: linux/amd64
+    build:
+      context: .
+    command: ["/worker"]
+    # The worker does not wait for Postgres the way the app's schema sync does; retry until it is up.
+    restart: on-failure
+    environment:
+      <<: *x-backend-app-environment
+    depends_on:
+      - db
+      - jaeger
+    networks:
+      app_network:
+        aliases:
+          - worker.lvh.me
 
   caddy:
     container_name: caddy

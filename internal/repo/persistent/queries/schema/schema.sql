@@ -4,6 +4,18 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 -- Set comment to schema: "public"
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+-- Create "queue_messages" table
+CREATE TABLE "public"."queue_messages" (
+  "id" bigserial NOT NULL,
+  "queue" character varying(255) NOT NULL,
+  "body" jsonb NOT NULL,
+  "read_count" integer NOT NULL DEFAULT 0,
+  "enqueued_at" timestamp NOT NULL DEFAULT now(),
+  "visible_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id")
+);
+-- Create index "idx_queue_messages_queue_visible_at" to table: "queue_messages"
+CREATE INDEX "idx_queue_messages_queue_visible_at" ON "public"."queue_messages" ("queue", "visible_at");
 -- Create "users" table
 CREATE TABLE "public"."users" (
   "id" uuid NOT NULL,

@@ -116,6 +116,10 @@ run: deps proto-v1 ### run the app for API v1
 	CGO_ENABLED=0 go run -tags migrate ./cmd/app
 .PHONY: run
 
+run-worker: ### run the queue worker (start the app first: it applies the schema)
+	CGO_ENABLED=0 go run ./cmd/worker
+.PHONY: run-worker
+
 docker-rm-volume: ### remove docker volume
 	docker volume rm go-clean-template_pg-data
 .PHONY: docker-rm-volume
