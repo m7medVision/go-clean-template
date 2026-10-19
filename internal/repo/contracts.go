@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/evrone/go-clean-template/pkg/smtp"
 	"github.com/evrone/go-clean-template/pkg/worker"
 )
+
+// The SMTP client is the Mailer the app wires in.
+var _ Mailer = (*smtp.Client)(nil)
 
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 
@@ -46,6 +50,18 @@ type (
 		Send(ctx context.Context, queue string, body json.RawMessage) (int64, error)
 		Read(ctx context.Context, queue string, vt time.Duration, qty int) ([]worker.Message, error)
 		Delete(ctx context.Context, queue string, id int64) error
+	}
+
+	// MailRenderer turns an email into the message the mailer sends, from the templates embedded in
+	// the binary.
+	MailRenderer interface {
+		Render(ctx context.Context, email entity.Email) (smtp.Message, error)
+	}
+
+	// Mailer delivers a rendered message. *smtp.Client implements it; another provider is another
+	// implementation.
+	Mailer interface {
+		Send(ctx context.Context, m smtp.Message) error
 	}
 
 	// TaskFilter -.

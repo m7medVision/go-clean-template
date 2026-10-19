@@ -20,12 +20,15 @@ type (
 		Docs    docs
 		Tracing tracing
 		Worker  worker
+		Mail    mail
 	}
 
 	// App -.
 	app struct {
 		Name    string `env:"APP_NAME,required"`
 		Version string `env:"APP_VERSION,required"`
+		// BaseURL is where the web client is served; links in emails point under it.
+		BaseURL string `env:"APP_BASE_URL" envDefault:"http://localhost"`
 	}
 
 	// HTTP -.
@@ -79,6 +82,15 @@ type (
 		VisibilityTimeout time.Duration `env:"WORKER_VISIBILITY_TIMEOUT" envDefault:"30s"`
 		BatchSize         int           `env:"WORKER_BATCH_SIZE" envDefault:"10"`
 		ShutdownTimeout   time.Duration `env:"WORKER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	}
+
+	// Mail -. Only the worker sends, so none of it is required.
+	mail struct {
+		SMTPHost     string `env:"SMTP_HOST" envDefault:"localhost"`
+		SMTPPort     int    `env:"SMTP_PORT" envDefault:"1025"`
+		SMTPUsername string `env:"SMTP_USERNAME"`
+		SMTPPassword string `env:"SMTP_PASSWORD"`
+		From         string `env:"MAIL_FROM" envDefault:"Go Clean Template <noreply@example.com>"`
 	}
 )
 
