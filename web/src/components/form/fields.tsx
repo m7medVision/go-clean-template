@@ -3,6 +3,13 @@ import type { ComponentProps, ReactNode } from "react";
 import { PasswordInput } from "#/components/password-input";
 import { Field, FieldDescription, FieldError, FieldLabel } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#/components/ui/select";
 import { Textarea } from "#/components/ui/textarea";
 import { useFieldContext } from "./context";
 
@@ -119,6 +126,48 @@ export function TextareaField({
           aria-describedby={hint}
           {...props}
         />
+      )}
+    </FieldFrame>
+  );
+}
+
+type SelectFieldProps = FieldProps & {
+  options: ReadonlyArray<{ value: string; label: string }>;
+  placeholder?: string;
+};
+
+// SelectField picks one value from a fixed list. Closing the list counts as leaving the field.
+export function SelectField({
+  label,
+  description,
+  required,
+  options,
+  placeholder,
+}: SelectFieldProps) {
+  const field = useFieldContext<string>();
+
+  return (
+    <FieldFrame label={label} description={description} required={required}>
+      {({ id, invalid, hint }) => (
+        <Select
+          name={field.name}
+          value={field.state.value}
+          onValueChange={field.handleChange}
+          onOpenChange={(open) => {
+            if (!open) field.handleBlur();
+          }}
+        >
+          <SelectTrigger id={id} className="w-full" aria-invalid={invalid} aria-describedby={hint}>
+            <SelectValue placeholder={placeholder} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </FieldFrame>
   );

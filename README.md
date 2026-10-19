@@ -552,8 +552,12 @@ is needed. `make web-check` formats, lints, type-checks and tests it.
 
 The UI is built from [shadcn/ui](https://ui.shadcn.com/) components (`web/components.json`; the
 generated components live in `web/src/components/ui/`). Add one with
-`vp dlx shadcn@latest add <component>` from `web/`. Signed-in screens (`/tasks`, `/profile`) share a
+`vp dlx shadcn@latest add <component>` from `web/`. Signed-in screens (`/tasks`, `/exchange`, `/profile`) share a
 sidebar layout; `/login` and `/register` use a centred card.
+
+`/exchange` converts an amount (Omani Rial to Chinese Yuan by default) with a REST form and lists
+the history in a GraphQL-backed data table; it links to the rate provider, as its terms require.
+A currency picker is `field.SelectField` from `web/src/components/form/fields.tsx`.
 
 Tables are shadcn data tables on [TanStack Table](https://tanstack.com/table) and read their rows
 over GraphQL (`/graphql`), so a list fetches only the columns it shows; forms and the profile use

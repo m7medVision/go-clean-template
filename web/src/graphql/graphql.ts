@@ -19,6 +19,14 @@ export type UpdateTaskInput = {
   title: string;
 };
 
+export type ExchangeHistoryQueryVariables = Exact<{
+  limit: number;
+  offset: number;
+}>;
+
+
+export type ExchangeHistoryQuery = { exchangeHistory: { total: number, conversions: Array<{ from: string, to: string, amount: string, rate: string, result: string, rateDate: string }> } };
+
 export type TasksQueryVariables = Exact<{
   status?: TaskStatus | null | undefined;
   limit: number;
@@ -77,6 +85,21 @@ export class TypedDocumentString<TResult, TVariables>
   }
 }
 
+export const ExchangeHistoryDocument = new TypedDocumentString(`
+    query ExchangeHistory($limit: Int!, $offset: Int!) {
+  exchangeHistory(limit: $limit, offset: $offset) {
+    total
+    conversions {
+      from
+      to
+      amount
+      rate
+      result
+      rateDate
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<ExchangeHistoryQuery, ExchangeHistoryQueryVariables>;
 export const TasksDocument = new TypedDocumentString(`
     query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {
   tasks(status: $status, limit: $limit, offset: $offset) {
