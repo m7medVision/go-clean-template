@@ -151,8 +151,7 @@ mock: ### run mockgen
 
 schema-apply: ### apply desired schema to the database (Atlas)
 	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
-		--to file://internal/app/schema \
-		--dev-url '$(ATLAS_DEV_URL)'
+		--to file://internal/app/schema
 .PHONY: schema-apply
 
 bin-deps: ### install tools

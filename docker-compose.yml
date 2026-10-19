@@ -19,8 +19,6 @@ x-backend-app-environment: &x-backend-app-environment
   # PG
   PG_POOL_MAX: "2"
   PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db"
-  # Atlas dev database, used to compute schema diffs; must stay empty
-  ATLAS_DEV_URL: "postgres://user:myAwEsOm3pa55%40w0rd@atlas-dev:5432/dev?sslmode=disable"
   # gRPC
   GRPC_PORT: "8081"
   # Metrics
@@ -61,20 +59,6 @@ services:
         aliases:
           - db.lvh.me
 
-  # Dev database used by Atlas to compute schema diffs; must stay empty and
-  # dedicated to Atlas (the app connects to it only for diff computation)
-  atlas-dev:
-    container_name: atlas-dev
-    image: postgres:18.6-alpine
-    environment:
-      POSTGRES_DB: "dev"
-      POSTGRES_USER: "user"
-      POSTGRES_PASSWORD: "myAwEsOm3pa55@w0rd"
-    networks:
-      app_network:
-        aliases:
-          - atlas-dev.lvh.me
-
   jaeger:
     container_name: jaeger
     image: jaegertracing/all-in-one:1.76.0
@@ -113,7 +97,6 @@ services:
       - "8081:8081"
     depends_on:
       - db
-      - atlas-dev
       - jaeger
     deploy:
       resources:
