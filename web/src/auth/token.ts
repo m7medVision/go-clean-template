@@ -1,5 +1,5 @@
 // The JWT lives in memory, mirrored to sessionStorage so it survives a reload but not the tab.
-// It is readable by scripts, so the Caddy CSP is what keeps it safe; see README "Web frontend".
+// It is readable by scripts, so the Caddy CSP is what keeps it safe; see docs/web.md "Token storage".
 
 const KEY = "gct.token";
 
