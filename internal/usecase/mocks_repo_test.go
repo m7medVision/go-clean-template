@@ -19,6 +19,7 @@ import (
 	repo "github.com/evrone/go-clean-template/internal/repo"
 	smtp "github.com/evrone/go-clean-template/pkg/smtp"
 	worker "github.com/evrone/go-clean-template/pkg/worker"
+	decimal "github.com/shopspring/decimal"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -73,6 +74,46 @@ func (m *MockExchangeRepo) Store(ctx context.Context, userID string, c *entity.C
 func (mr *MockExchangeRepoMockRecorder) Store(ctx, userID, c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockExchangeRepo)(nil).Store), ctx, userID, c)
+}
+
+// MockExchangeWebAPI is a mock of ExchangeWebAPI interface.
+type MockExchangeWebAPI struct {
+	ctrl     *gomock.Controller
+	recorder *MockExchangeWebAPIMockRecorder
+	isgomock struct{}
+}
+
+// MockExchangeWebAPIMockRecorder is the mock recorder for MockExchangeWebAPI.
+type MockExchangeWebAPIMockRecorder struct {
+	mock *MockExchangeWebAPI
+}
+
+// NewMockExchangeWebAPI creates a new mock instance.
+func NewMockExchangeWebAPI(ctrl *gomock.Controller) *MockExchangeWebAPI {
+	mock := &MockExchangeWebAPI{ctrl: ctrl}
+	mock.recorder = &MockExchangeWebAPIMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExchangeWebAPI) EXPECT() *MockExchangeWebAPIMockRecorder {
+	return m.recorder
+}
+
+// Rate mocks base method.
+func (m *MockExchangeWebAPI) Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rate", ctx, from, to)
+	ret0, _ := ret[0].(decimal.Decimal)
+	ret1, _ := ret[1].(time.Time)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Rate indicates an expected call of Rate.
+func (mr *MockExchangeWebAPIMockRecorder) Rate(ctx, from, to any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rate", reflect.TypeOf((*MockExchangeWebAPI)(nil).Rate), ctx, from, to)
 }
 
 // MockUserRepo is a mock of UserRepo interface.
