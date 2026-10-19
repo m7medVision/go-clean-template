@@ -1,0 +1,22 @@
+# Stands in for translate.google.com in the integration tests, so they do not depend on Google's
+# rate limits. The client always calls https://<host> but skips certificate verification, so
+# Caddy's internal CA is enough. Point TRANSLATION_SERVICE_URL at translate:8443.
+{
+	skip_install_trust
+	admin off
+}
+
+https://translate:8443, https://localhost:8443 {
+	tls internal
+
+	# The translation call: /translate_a/single, answered in the client's JSON shape.
+	handle /translate_a/single {
+		header Content-Type application/json
+		respond `{"sentences":[{"trans":"text for translation","orig":"текст для перевода","backend":1}],"src":"ru"}` 200
+	}
+
+	# The client first GETs / to look for a token seed; any 200 will do.
+	handle {
+		respond 200
+	}
+}

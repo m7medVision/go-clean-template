@@ -71,7 +71,7 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 	return useCases{
 		user:        user.New(userRepo, queueRepo, jwtManager, strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
 		task:        task.New(taskRepo),
-		translation: translation.New(translationRepo, webapi.New()),
+		translation: translation.New(translationRepo, webapi.New(cfg.Translation.ServiceURL)),
 		mail:        mail.New(mailRenderer, mailer),
 	}, nil
 }

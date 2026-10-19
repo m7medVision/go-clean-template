@@ -251,6 +251,12 @@ Email is sent only by the worker, so none of these is required:
 | `SMTP_PASSWORD` | empty | |
 | `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; keep `.env` values free of spaces, since both `make` and the shell read that file |
 
+The translation domain calls Google Translate:
+
+| Env var | Default | |
+| --- | --- | --- |
+| `TRANSLATION_SERVICE_URL` | `translate.google.com` | host (and optional port) the client calls over HTTPS; the integration tests point it at a local stub |
+
 #### `docs/openapi`
 
 The REST OpenAPI document, exported from the Huma registrations by `make openapi`. It is the same
@@ -267,6 +273,8 @@ You don't need to correct anything by yourself.
 
 Integration tests.
 They are launched as a separate container, next to the application container.
+Translation calls go to a Caddy stub ([integration-test/translate-stub/Caddyfile](integration-test/translate-stub/Caddyfile))
+instead of Google, so the suite does not depend on Google's rate limits.
 
 ### `internal/app`
 
