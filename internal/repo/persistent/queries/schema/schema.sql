@@ -30,6 +30,22 @@ CREATE TABLE "public"."users" (
 CREATE UNIQUE INDEX "users_email_key" ON "public"."users" ("email");
 -- Create index "users_username_key" to table: "users"
 CREATE UNIQUE INDEX "users_username_key" ON "public"."users" ("username");
+-- Create "exchange_history" table
+CREATE TABLE "public"."exchange_history" (
+  "id" bigserial NOT NULL,
+  "user_id" uuid NOT NULL,
+  "from_currency" character(3) NOT NULL,
+  "to_currency" character(3) NOT NULL,
+  "amount" numeric NOT NULL,
+  "rate" numeric NOT NULL,
+  "result" numeric NOT NULL,
+  "rate_date" date NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "exchange_history_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_exchange_history_user_id" to table: "exchange_history"
+CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
 -- Create "tasks" table
 CREATE TABLE "public"."tasks" (
   "id" uuid NOT NULL,

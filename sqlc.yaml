@@ -18,5 +18,9 @@ sql:
             go_type: github.com/evrone/go-clean-template/internal/entity.TaskStatus
           - column: tasks.description
             go_type: string
+          - db_type: pg_catalog.numeric
+            go_type: github.com/shopspring/decimal.Decimal
+          - column: exchange_history.rate_date
+            go_type: time.Time
           - column: queue_messages.body
             go_type: encoding/json.RawMessage

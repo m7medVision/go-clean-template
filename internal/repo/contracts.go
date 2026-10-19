@@ -17,6 +17,12 @@ var _ Mailer = (*smtp.Client)(nil)
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 
 type (
+	// ExchangeRepo stores each user's currency conversions.
+	ExchangeRepo interface {
+		Store(ctx context.Context, userID string, c *entity.Conversion) error
+		GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error)
+	}
+
 	// UserRepo -.
 	UserRepo interface {
 		Store(ctx context.Context, user *entity.User) error

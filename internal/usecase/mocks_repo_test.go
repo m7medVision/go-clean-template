@@ -22,6 +22,59 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// MockExchangeRepo is a mock of ExchangeRepo interface.
+type MockExchangeRepo struct {
+	ctrl     *gomock.Controller
+	recorder *MockExchangeRepoMockRecorder
+	isgomock struct{}
+}
+
+// MockExchangeRepoMockRecorder is the mock recorder for MockExchangeRepo.
+type MockExchangeRepoMockRecorder struct {
+	mock *MockExchangeRepo
+}
+
+// NewMockExchangeRepo creates a new mock instance.
+func NewMockExchangeRepo(ctrl *gomock.Controller) *MockExchangeRepo {
+	mock := &MockExchangeRepo{ctrl: ctrl}
+	mock.recorder = &MockExchangeRepoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockExchangeRepo) EXPECT() *MockExchangeRepoMockRecorder {
+	return m.recorder
+}
+
+// GetHistory mocks base method.
+func (m *MockExchangeRepo) GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHistory", ctx, userID)
+	ret0, _ := ret[0].([]entity.Conversion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHistory indicates an expected call of GetHistory.
+func (mr *MockExchangeRepoMockRecorder) GetHistory(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHistory", reflect.TypeOf((*MockExchangeRepo)(nil).GetHistory), ctx, userID)
+}
+
+// Store mocks base method.
+func (m *MockExchangeRepo) Store(ctx context.Context, userID string, c *entity.Conversion) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Store", ctx, userID, c)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Store indicates an expected call of Store.
+func (mr *MockExchangeRepoMockRecorder) Store(ctx, userID, c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockExchangeRepo)(nil).Store), ctx, userID, c)
+}
+
 // MockUserRepo is a mock of UserRepo interface.
 type MockUserRepo struct {
 	ctrl     *gomock.Controller

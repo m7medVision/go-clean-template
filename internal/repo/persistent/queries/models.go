@@ -9,7 +9,20 @@ import (
 	"time"
 
 	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/shopspring/decimal"
 )
+
+type ExchangeHistory struct {
+	ID           int64
+	UserID       string
+	FromCurrency string
+	ToCurrency   string
+	Amount       decimal.Decimal
+	Rate         decimal.Decimal
+	Result       decimal.Decimal
+	RateDate     time.Time
+	CreatedAt    time.Time
+}
 
 type QueueMessage struct {
 	ID         int64
