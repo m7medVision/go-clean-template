@@ -50,11 +50,18 @@ func (r *tracedRepo) Store(ctx context.Context, userID string, c *entity.Convers
 	return err
 }
 
-func (r *tracedRepo) GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error) {
-	ctx, span := startSpan(ctx, "ExchangeRepo.GetHistory", attribute.String("user.id", userID))
+func (r *tracedRepo) GetHistory(
+	ctx context.Context, userID string, limit, offset int64,
+) ([]entity.Conversion, int, error) {
+	ctx, span := startSpan(
+		ctx, "ExchangeRepo.GetHistory",
+		attribute.String("user.id", userID),
+		attribute.Int64("exchange.limit", limit),
+		attribute.Int64("exchange.offset", offset),
+	)
 
-	history, err := r.next.GetHistory(ctx, userID)
+	history, total, err := r.next.GetHistory(ctx, userID, limit, offset)
 	endSpan(span, err)
 
-	return history, err
+	return history, total, err
 }

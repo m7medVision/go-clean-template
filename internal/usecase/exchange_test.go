@@ -88,26 +88,37 @@ func TestExchangeConvert(t *testing.T) {
 func TestExchangeHistory(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns the stored conversions", func(t *testing.T) {
+	t.Run("returns a page of conversions and the total", func(t *testing.T) {
 		t.Parallel()
 
 		uc, repo, _ := newExchangeUseCase(t)
-		stored := []entity.Conversion{{From: "EUR", To: "USD"}}
-		repo.EXPECT().GetHistory(gomock.Any(), "user-1").Return(stored, nil)
+		stored := []entity.Conversion{{From: "OMR", To: "CNY"}}
+		repo.EXPECT().GetHistory(gomock.Any(), "user-1", int64(10), int64(20)).Return(stored, 21, nil)
 
-		h, err := uc.History(context.Background(), "user-1")
+		h, err := uc.History(context.Background(), "user-1", 10, 20)
 
 		require.NoError(t, err)
-		assert.Equal(t, entity.ExchangeHistory{History: stored}, h)
+		assert.Equal(t, entity.ExchangeHistory{History: stored, Total: 21}, h)
+	})
+
+	t.Run("defaults a missing limit and a negative offset", func(t *testing.T) {
+		t.Parallel()
+
+		uc, repo, _ := newExchangeUseCase(t)
+		repo.EXPECT().GetHistory(gomock.Any(), "user-1", int64(10), int64(0)).Return(nil, 0, nil)
+
+		_, err := uc.History(context.Background(), "user-1", 0, -5)
+
+		require.NoError(t, err)
 	})
 
 	t.Run("repo failure", func(t *testing.T) {
 		t.Parallel()
 
 		uc, repo, _ := newExchangeUseCase(t)
-		repo.EXPECT().GetHistory(gomock.Any(), "user-1").Return(nil, errInternalServErr)
+		repo.EXPECT().GetHistory(gomock.Any(), "user-1", int64(10), int64(0)).Return(nil, 0, errInternalServErr)
 
-		h, err := uc.History(context.Background(), "user-1")
+		h, err := uc.History(context.Background(), "user-1", 10, 0)
 
 		require.ErrorIs(t, err, errInternalServErr)
 		assert.Equal(t, entity.ExchangeHistory{}, h)

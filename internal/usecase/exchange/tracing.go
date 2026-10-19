@@ -54,10 +54,15 @@ func (t *tracedUseCase) Convert(
 	return result, err
 }
 
-func (t *tracedUseCase) History(ctx context.Context, userID string) (entity.ExchangeHistory, error) {
-	ctx, span := startSpan(ctx, "ExchangeUseCase.History", attribute.String("user.id", userID))
+func (t *tracedUseCase) History(ctx context.Context, userID string, limit, offset int) (entity.ExchangeHistory, error) {
+	ctx, span := startSpan(
+		ctx, "ExchangeUseCase.History",
+		attribute.String("user.id", userID),
+		attribute.Int("exchange.limit", limit),
+		attribute.Int("exchange.offset", offset),
+	)
 
-	result, err := t.next.History(ctx, userID)
+	result, err := t.next.History(ctx, userID, limit, offset)
 	endSpan(span, err)
 
 	return result, err

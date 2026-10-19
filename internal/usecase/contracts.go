@@ -14,7 +14,7 @@ type (
 	// Exchange converts amounts between currencies and keeps each user's history.
 	Exchange interface {
 		Convert(ctx context.Context, userID, from, to string, amount decimal.Decimal) (entity.Conversion, error)
-		History(ctx context.Context, userID string) (entity.ExchangeHistory, error)
+		History(ctx context.Context, userID string, limit, offset int) (entity.ExchangeHistory, error)
 	}
 
 	// User -.

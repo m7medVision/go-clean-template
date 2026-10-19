@@ -26,8 +26,12 @@ message ConversionResponse {
   string rate_date = 6; // YYYY-MM-DD
 }
 
-message GetExchangeHistoryRequest {}
+message GetExchangeHistoryRequest {
+  int32 limit = 1;  // page size; 0 means 10
+  int32 offset = 2;
+}
 
 message ExchangeHistoryResponse {
   repeated ConversionResponse history = 1;
+  int32 total = 2;
 }

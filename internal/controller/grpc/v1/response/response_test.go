@@ -181,7 +181,7 @@ func TestNewExchangeHistoryResponse(t *testing.T) {
 	history := entity.ExchangeHistory{History: []entity.Conversion{
 		{From: "EUR", To: "USD", Result: decimal.RequireFromString("1")},
 		{From: "GBP", To: "JPY", Result: decimal.RequireFromString("2.5")},
-	}}
+	}, Total: 7}
 
 	resp := response.NewExchangeHistoryResponse(history)
 
@@ -190,4 +190,5 @@ func TestNewExchangeHistoryResponse(t *testing.T) {
 	assert.Equal(t, "1.00", resp.GetHistory()[0].GetResult())
 	assert.Equal(t, "JPY", resp.GetHistory()[1].GetTo())
 	assert.Equal(t, "2.50", resp.GetHistory()[1].GetResult())
+	assert.Equal(t, int32(7), resp.GetTotal())
 }

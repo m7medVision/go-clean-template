@@ -119,7 +119,7 @@ interface ([`internal/repo/webapi`](#internalrepowebapi)).
   rounded half-even to 2 places
 - Rates update once a day and are not live market rates; the response carries the rate's `rate_date`.
   The provider's terms require a link back to it wherever the rates are shown (the web page has one)
-- Unknown currency or `from` = `to` → 400 (`InvalidArgument` on gRPC); history returns the newest 100
+- Unknown currency or `from` = `to` → 400 (`InvalidArgument` on gRPC); history is paged with `limit`/`offset` and returns a `total`
 
 ## Quick start
 

@@ -11,6 +11,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const _defaultLimit = 10
+
 // UseCase -.
 type UseCase struct {
 	repo   repo.ExchangeRepo
@@ -48,12 +50,19 @@ func (uc *UseCase) Convert(
 	return conversion, nil
 }
 
-// History returns the user's conversions, newest first.
-func (uc *UseCase) History(ctx context.Context, userID string) (entity.ExchangeHistory, error) {
-	conversions, err := uc.repo.GetHistory(ctx, userID)
+// History returns one page of the user's conversions, newest first. A missing limit means
+// _defaultLimit, and a negative offset means the first page.
+func (uc *UseCase) History(ctx context.Context, userID string, limit, offset int) (entity.ExchangeHistory, error) {
+	if limit <= 0 {
+		limit = _defaultLimit
+	}
+
+	offset = max(offset, 0)
+
+	conversions, total, err := uc.repo.GetHistory(ctx, userID, int64(limit), int64(offset))
 	if err != nil {
 		return entity.ExchangeHistory{}, fmt.Errorf("ExchangeUseCase - History - uc.repo.GetHistory: %w", err)
 	}
 
-	return entity.ExchangeHistory{History: conversions}, nil
+	return entity.ExchangeHistory{History: conversions, Total: total}, nil
 }

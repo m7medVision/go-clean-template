@@ -39,11 +39,16 @@ func (r *Repo) Store(ctx context.Context, userID string, c *entity.Conversion) e
 	return nil
 }
 
-// GetHistory returns the user's most recent conversions, newest first.
-func (r *Repo) GetHistory(ctx context.Context, userID string) ([]entity.Conversion, error) {
-	rows, err := r.q.ListExchanges(ctx, userID)
+// GetHistory returns one page of the user's conversions, newest first, and their total count.
+func (r *Repo) GetHistory(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
+	total, err := r.q.CountExchanges(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("ExchangeRepo - GetHistory - r.q.ListExchanges: %w", err)
+		return nil, 0, fmt.Errorf("ExchangeRepo - GetHistory - r.q.CountExchanges: %w", err)
+	}
+
+	rows, err := r.q.ListExchanges(ctx, queries.ListExchangesParams{UserID: userID, Limit: limit, Offset: offset})
+	if err != nil {
+		return nil, 0, fmt.Errorf("ExchangeRepo - GetHistory - r.q.ListExchanges: %w", err)
 	}
 
 	history := make([]entity.Conversion, 0, len(rows))
@@ -58,5 +63,5 @@ func (r *Repo) GetHistory(ctx context.Context, userID string) ([]entity.Conversi
 		})
 	}
 
-	return history, nil
+	return history, int(total), nil
 }

@@ -167,6 +167,8 @@ func (x *ConversionResponse) GetRateDate() string {
 
 type GetExchangeHistoryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // page size; 0 means 10
+	Offset        int32                  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -201,9 +203,24 @@ func (*GetExchangeHistoryRequest) Descriptor() ([]byte, []int) {
 	return file_docs_proto_v1_exchange_proto_rawDescGZIP(), []int{2}
 }
 
+func (x *GetExchangeHistoryRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *GetExchangeHistoryRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
 type ExchangeHistoryResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	History       []*ConversionResponse  `protobuf:"bytes,1,rep,name=history,proto3" json:"history,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -245,6 +262,13 @@ func (x *ExchangeHistoryResponse) GetHistory() []*ConversionResponse {
 	return nil
 }
 
+func (x *ExchangeHistoryResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
 var File_docs_proto_v1_exchange_proto protoreflect.FileDescriptor
 
 const file_docs_proto_v1_exchange_proto_rawDesc = "" +
@@ -260,10 +284,13 @@ const file_docs_proto_v1_exchange_proto_rawDesc = "" +
 	"\x06amount\x18\x03 \x01(\tR\x06amount\x12\x12\n" +
 	"\x04rate\x18\x04 \x01(\tR\x04rate\x12\x16\n" +
 	"\x06result\x18\x05 \x01(\tR\x06result\x12\x1b\n" +
-	"\trate_date\x18\x06 \x01(\tR\brateDate\"\x1b\n" +
-	"\x19GetExchangeHistoryRequest\"P\n" +
+	"\trate_date\x18\x06 \x01(\tR\brateDate\"I\n" +
+	"\x19GetExchangeHistoryRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x02 \x01(\x05R\x06offset\"f\n" +
 	"\x17ExchangeHistoryResponse\x125\n" +
-	"\ahistory\x18\x01 \x03(\v2\x1b.grpc.v1.ConversionResponseR\ahistory2\xa6\x01\n" +
+	"\ahistory\x18\x01 \x03(\v2\x1b.grpc.v1.ConversionResponseR\ahistory\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total2\xa6\x01\n" +
 	"\x0fExchangeService\x12?\n" +
 	"\aConvert\x12\x17.grpc.v1.ConvertRequest\x1a\x1b.grpc.v1.ConversionResponse\x12R\n" +
 	"\n" +

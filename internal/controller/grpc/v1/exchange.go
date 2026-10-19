@@ -45,14 +45,14 @@ func (c *ExchangeController) Convert(ctx context.Context, req *v1.ConvertRequest
 
 // GetHistory -.
 func (c *ExchangeController) GetHistory(
-	ctx context.Context, _ *v1.GetExchangeHistoryRequest,
+	ctx context.Context, req *v1.GetExchangeHistoryRequest,
 ) (*v1.ExchangeHistoryResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	history, err := c.e.History(ctx, userID)
+	history, err := c.e.History(ctx, userID, int(req.GetLimit()), int(req.GetOffset()))
 	if err != nil {
 		c.l.Error(err, "grpc - v1 - GetHistory")
 

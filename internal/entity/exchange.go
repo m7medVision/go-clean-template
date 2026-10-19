@@ -21,9 +21,10 @@ type Conversion struct {
 	RateDate time.Time
 }
 
-// ExchangeHistory -.
+// ExchangeHistory is one page of a user's conversions, newest first, and how many there are in all.
 type ExchangeHistory struct {
 	History []Conversion
+	Total   int
 }
 
 // NewConversion validates a conversion request. Currency codes are trimmed and uppercased and

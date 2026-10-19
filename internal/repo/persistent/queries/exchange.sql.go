@@ -12,6 +12,18 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const countExchanges = `-- name: CountExchanges :one
+SELECT count(*) FROM exchange_history
+WHERE user_id = $1
+`
+
+func (q *Queries) CountExchanges(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countExchanges, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createExchange = `-- name: CreateExchange :exec
 INSERT INTO exchange_history (user_id, from_currency, to_currency, amount, rate, result, rate_date)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -44,8 +56,14 @@ const listExchanges = `-- name: ListExchanges :many
 SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
 WHERE user_id = $1
 ORDER BY id DESC
-LIMIT 100
+LIMIT $3::bigint OFFSET $2::bigint
 `
+
+type ListExchangesParams struct {
+	UserID string
+	Offset int64
+	Limit  int64
+}
 
 type ListExchangesRow struct {
 	FromCurrency string
@@ -56,8 +74,8 @@ type ListExchangesRow struct {
 	RateDate     time.Time
 }
 
-func (q *Queries) ListExchanges(ctx context.Context, userID string) ([]ListExchangesRow, error) {
-	rows, err := q.db.Query(ctx, listExchanges, userID)
+func (q *Queries) ListExchanges(ctx context.Context, arg ListExchangesParams) ([]ListExchangesRow, error) {
+	rows, err := q.db.Query(ctx, listExchanges, arg.UserID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

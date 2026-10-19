@@ -110,10 +110,11 @@ func TestHTTPExchangeHistoryV1(t *testing.T) {
 
 	body := parseJSON[struct {
 		History []conversionBody `json:"history"`
+		Total   int              `json:"total"`
 	}](t, resp)
 
-	if len(body.History) != 1 || body.History[0].Result != "87.03" {
-		t.Errorf("Expected one conversion with result 87.03, got %+v", body.History)
+	if len(body.History) != 1 || body.Total != 1 || body.History[0].Result != "87.03" {
+		t.Errorf("Expected one conversion with result 87.03 and total 1, got %+v", body)
 	}
 }
 
@@ -154,7 +155,8 @@ func TestGRPCExchangeV1(t *testing.T) {
 		t.Fatal("gRPC Client - remote call error - client.GetHistory", err)
 	}
 
-	if len(history.GetHistory()) != 1 {
-		t.Errorf("Expected 1 conversion in history, got %d", len(history.GetHistory()))
+	if len(history.GetHistory()) != 1 || history.GetTotal() != 1 {
+		t.Errorf("Expected 1 conversion in history and total 1, got %d and %d",
+			len(history.GetHistory()), history.GetTotal())
 	}
 }

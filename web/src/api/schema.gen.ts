@@ -73,7 +73,7 @@ export interface paths {
         };
         /**
          * Show conversion history
-         * @description Show the current user's most recent currency conversions, newest first
+         * @description Show one page of the current user's currency conversions, newest first
          */
         get: operations["exchange-history"];
         put?: never;
@@ -258,6 +258,11 @@ export interface components {
         };
         ExchangeHistory: {
             history: components["schemas"]["Conversion"][] | null;
+            /**
+             * Format: int64
+             * @example 42
+             */
+            total: number;
         };
         Login: {
             /**
@@ -528,7 +533,10 @@ export interface operations {
     };
     "exchange-history": {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -546,6 +554,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
