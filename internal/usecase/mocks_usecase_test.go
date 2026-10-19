@@ -253,3 +253,41 @@ func (mr *MockTaskMockRecorder) Update(ctx, userID, taskID, title, description a
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTask)(nil).Update), ctx, userID, taskID, title, description)
 }
+
+// MockMail is a mock of Mail interface.
+type MockMail struct {
+	ctrl     *gomock.Controller
+	recorder *MockMailMockRecorder
+	isgomock struct{}
+}
+
+// MockMailMockRecorder is the mock recorder for MockMail.
+type MockMailMockRecorder struct {
+	mock *MockMail
+}
+
+// NewMockMail creates a new mock instance.
+func NewMockMail(ctrl *gomock.Controller) *MockMail {
+	mock := &MockMail{ctrl: ctrl}
+	mock.recorder = &MockMailMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockMail) EXPECT() *MockMailMockRecorder {
+	return m.recorder
+}
+
+// Deliver mocks base method.
+func (m *MockMail) Deliver(ctx context.Context, email entity.Email) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Deliver", ctx, email)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Deliver indicates an expected call of Deliver.
+func (mr *MockMailMockRecorder) Deliver(ctx, email any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deliver", reflect.TypeOf((*MockMail)(nil).Deliver), ctx, email)
+}
