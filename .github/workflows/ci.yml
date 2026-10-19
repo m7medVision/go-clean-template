@@ -106,8 +106,10 @@ jobs:
           set -a && . ./.env.example && set +a
           export TRACING_ENABLED=false
           nohup "$RUNNER_TEMP/worker" > "$RUNNER_TEMP/worker.log" 2>&1 &
-      - name: Resolve the app hostname to the runner
-        run: echo '127.0.0.1 app' | sudo tee -a /etc/hosts
+      - name: Start Mailpit
+        run: docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3
+      - name: Resolve the app and Mailpit hostnames to the runner
+        run: echo '127.0.0.1 app mailpit' | sudo tee -a /etc/hosts
       - name: Integration tests
         run: make integration-test
       - name: App log
@@ -116,6 +118,9 @@ jobs:
       - name: Worker log
         if: failure()
         run: cat "$RUNNER_TEMP/worker.log"
+      - name: Mailpit log
+        if: failure()
+        run: docker logs mailpit
 
   sqlc-generated:
     name: runner / sqlc / generated code is current

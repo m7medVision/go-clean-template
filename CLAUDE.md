@@ -90,6 +90,8 @@ Decide by asking what the code knows about:
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | an HTTP status, a gRPC code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
 | a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
+| the data an email shows | `internal/entity/email.go` | struct with `Template()`/`Recipient()`, plus a case in `DecodeEmail` |
+| an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
 
 Layout rules:
@@ -200,6 +202,15 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   them from `initUseCases`, like the servers. The Dockerfile builds `/app` and `/worker` into one
   image; the compose `worker` service runs `/worker`. Only the app applies the schema.
 - A use case enqueues by taking `repo.QueueRepo` and calling `Send`.
+- Email goes through the `mail` queue (`entity.EmailQueue`): the use case writes the body with
+  `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
+  handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
+  The `mail` use case (`Deliver`) renders with `internal/repo/mailtmpl` and sends through `pkg/smtp`;
+  only the worker calls it. `initUseCases` builds it for both binaries, and fails if a template is broken.
+- `.env.example` is read both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so
+  values there must not need quoting: no spaces. `MAIL_FROM` is a bare address for that reason.
+- Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
+  integration tests; `integration-test/mail_test.go` asserts on it.
 
 ## Frontend
 
@@ -316,3 +327,5 @@ plain conversion. A schema change that breaks that alignment fails to compile.
 - Integration: `integration-test/` runs *inside* the docker network — it resolves the service as
   host `app` by container name, so it fails on the host machine.
   Always run it through `make compose-up-integration-test`.
+- Mail templates: `internal/repo/mailtmpl/testdata/*.golden.*` are compared by the render test;
+  after an intended template change, `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/` and review the diff.

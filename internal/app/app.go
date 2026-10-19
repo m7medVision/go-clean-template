@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/evrone/go-clean-template/config"
@@ -14,6 +15,7 @@ import (
 	grpcmw "github.com/evrone/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/evrone/go-clean-template/internal/controller/restapi"
 	"github.com/evrone/go-clean-template/internal/repo/mailtmpl"
+	"github.com/evrone/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/evrone/go-clean-template/internal/repo/persistent/task"
 	persistTranslationRepo "github.com/evrone/go-clean-template/internal/repo/persistent/translation"
 	persistUserRepo "github.com/evrone/go-clean-template/internal/repo/persistent/user"
@@ -52,6 +54,7 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 	translationRepo := persistTranslationRepo.New(pg)
 	taskRepo := persistTaskRepo.New(pg)
 	userRepo := persistUserRepo.New(pg)
+	queueRepo := queue.New(pg)
 
 	mailRenderer, err := mailtmpl.New()
 	if err != nil {
@@ -66,7 +69,7 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 	)
 
 	return useCases{
-		user:        user.New(userRepo, jwtManager),
+		user:        user.New(userRepo, queueRepo, jwtManager, strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
 		task:        task.New(taskRepo),
 		translation: translation.New(translationRepo, webapi.New()),
 		mail:        mail.New(mailRenderer, mailer),

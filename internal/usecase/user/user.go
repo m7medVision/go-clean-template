@@ -15,15 +15,20 @@ import (
 
 // UseCase -.
 type UseCase struct {
-	repo repo.UserRepo
-	jwt  *jwt.Manager
+	repo     repo.UserRepo
+	queue    repo.QueueRepo
+	jwt      *jwt.Manager
+	loginURL string
 }
 
-// New returns a User usecase instrumented with OpenTelemetry tracing spans.
-func New(r repo.UserRepo, j *jwt.Manager) usecase.User {
+// New returns a User usecase instrumented with OpenTelemetry tracing spans. loginURL is the sign-in
+// page the welcome email links to.
+func New(r repo.UserRepo, q repo.QueueRepo, j *jwt.Manager, loginURL string) usecase.User {
 	return newTraced(&UseCase{
-		repo: r,
-		jwt:  j,
+		repo:     r,
+		queue:    q,
+		jwt:      j,
+		loginURL: loginURL,
 	})
 }
 
@@ -48,6 +53,22 @@ func (uc *UseCase) Register(ctx context.Context, username, email, password strin
 	err = uc.repo.Store(ctx, &user)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.repo.Store: %w", err)
+	}
+
+	// The worker sends it. Store and Send are not one transaction: if Send fails the user exists but
+	// the caller still gets the error, rather than the email being lost unseen.
+	welcome, err := entity.EncodeEmail(entity.WelcomeEmail{
+		To:       user.Email,
+		Username: user.Username,
+		LoginURL: uc.loginURL,
+	})
+	if err != nil {
+		return entity.User{}, fmt.Errorf("UserUseCase - Register - entity.EncodeEmail: %w", err)
+	}
+
+	_, err = uc.queue.Send(ctx, entity.EmailQueue, welcome)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.queue.Send: %w", err)
 	}
 
 	return user, nil

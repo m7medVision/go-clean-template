@@ -12,6 +12,7 @@ services:
     depends_on:
       - app
       - worker
+      - mailpit
     networks:
       app_network:
         aliases:
