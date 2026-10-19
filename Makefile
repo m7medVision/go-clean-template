@@ -120,6 +120,15 @@ run-worker: ### run the queue worker (start the app first: it applies the schema
 	CGO_ENABLED=0 go run ./cmd/worker
 .PHONY: run-worker
 
+dev: ### run everything in dev mode in tmux: db + Mailpit in docker, app + worker under air, web dev server
+	./scripts/dev.sh
+.PHONY: dev
+
+dev-down: ### stop make dev: close its tmux session, stop db and Mailpit
+	-tmux kill-session -t =go-clean-template 2>/dev/null
+	$(BASE_STACK) stop db mailpit
+.PHONY: dev-down
+
 docker-rm-volume: ### remove docker volume
 	docker volume rm go-clean-template_pg-data
 .PHONY: docker-rm-volume
