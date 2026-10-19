@@ -100,6 +100,12 @@ jobs:
           export ATLAS_DEV_URL='postgres://user@localhost:5432/dev?sslmode=disable'
           export TRACING_ENABLED=false
           nohup "$RUNNER_TEMP/app" > "$RUNNER_TEMP/app.log" 2>&1 &
+      - name: Build and start the worker
+        run: |
+          go build -o "$RUNNER_TEMP/worker" ./cmd/worker
+          set -a && . ./.env.example && set +a
+          export TRACING_ENABLED=false
+          nohup "$RUNNER_TEMP/worker" > "$RUNNER_TEMP/worker.log" 2>&1 &
       - name: Resolve the app hostname to the runner
         run: echo '127.0.0.1 app' | sudo tee -a /etc/hosts
       - name: Integration tests
@@ -107,6 +113,9 @@ jobs:
       - name: App log
         if: failure()
         run: cat "$RUNNER_TEMP/app.log"
+      - name: Worker log
+        if: failure()
+        run: cat "$RUNNER_TEMP/worker.log"
 
   sqlc-generated:
     name: runner / sqlc / generated code is current
