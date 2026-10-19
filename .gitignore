@@ -23,3 +23,6 @@ bin/
 vendor/
 
 coverage.txt
+
+# air build output (make dev)
+tmp/

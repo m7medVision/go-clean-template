@@ -1,0 +1,23 @@
+# air config for the queue worker (cmd/worker): `go tool air -c .air.worker.toml`, started by
+# `make dev` once the app has applied the schema. .tmpl is watched because the mail templates are
+# embedded in the binary.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "CGO_ENABLED=0 go build -o ./tmp/worker ./cmd/worker"
+entrypoint = ["./tmp/worker"]
+include_ext = ["go", "tmpl"]
+exclude_dir = [".git", ".github", ".claude", "caddy", "integration-test", "tasks", "tmp", "vendor", "web"]
+exclude_regex = ["_test\\.go$"]
+exclude_unchanged = true
+delay = 200
+stop_on_error = true
+send_interrupt = true
+kill_delay = "2s"
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = false
