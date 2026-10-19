@@ -532,6 +532,18 @@ TanStack Query. `web/src/api/schema.gen.ts` is generated from `docs/openapi/v1.j
 dev server proxies the API paths to the Go app, so the client and API share one origin and no CORS
 is needed. `make web-check` formats, lints, type-checks and tests it.
 
+The UI is built from [shadcn/ui](https://ui.shadcn.com/) components (`web/components.json`; the
+generated components live in `web/src/components/ui/`). Add one with
+`vp dlx shadcn@latest add <component>` from `web/`. Signed-in screens (`/tasks`, `/profile`) share a
+sidebar layout; `/login` and `/register` use a centred card.
+
+Tables are shadcn data tables on [TanStack Table](https://tanstack.com/table) and read their rows
+over GraphQL (`/graphql`), so a list fetches only the columns it shows; forms and the profile use
+REST. GraphQL operations are written with `graphql(...)` in `web/src/` and typed by
+`make web-graphql` (GraphQL Code Generator) from the gqlgen schema. Every request, REST or GraphQL,
+goes through TanStack Query. Forms use [TanStack Form](https://tanstack.com/form) with shadcn `Field`
+components and a [Zod](https://zod.dev/) schema per domain (`web/src/components/form/`).
+
 ## Dependency Injection
 
 In order to remove the dependence of business logic on external packages, dependency injection is used.

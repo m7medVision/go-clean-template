@@ -27,4 +27,9 @@ declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
   }
+
+  // title names a route in the breadcrumb trail of the signed-in layout.
+  interface StaticDataRouteOption {
+    title?: string;
+  }
 }

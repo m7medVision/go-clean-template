@@ -68,6 +68,10 @@ web-api: openapi ### generate the frontend REST types from docs/openapi/v1.json
 	$(WEB) exec openapi-typescript ../docs/openapi/v1.json -o src/api/schema.gen.ts
 .PHONY: web-api
 
+web-graphql: ### generate the frontend GraphQL types from the gqlgen schema
+	$(WEB) exec graphql-codegen --config codegen.ts
+.PHONY: web-graphql
+
 web-dev: ### run the Vite+ dev server on :3000, proxying the API to HTTP_PORT
 	$(WEB) dev
 .PHONY: web-dev
@@ -168,5 +172,5 @@ bin-deps: ### install tools
 	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh
 .PHONY: bin-deps
 
-pre-commit: deps proto-v1 mock format linter-golangci test web-api web-format web-check ### run pre-commit
+pre-commit: deps proto-v1 mock format linter-golangci test web-api web-graphql web-format web-check ### run pre-commit
 .PHONY: pre-commit

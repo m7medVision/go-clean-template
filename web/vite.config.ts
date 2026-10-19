@@ -20,7 +20,7 @@ const backendPaths = [
   "/healthz",
 ];
 
-const generated = ["src/routeTree.gen.ts", "src/api/schema.gen.ts"];
+const generated = ["src/routeTree.gen.ts", "src/api/schema.gen.ts", "src/graphql/**"];
 
 const config = defineConfig({
   fmt: {

@@ -179,6 +179,8 @@ jobs:
           cache: true
       - name: Regenerate OpenAPI document and REST types
         run: make web-api
+      - name: Regenerate GraphQL types
+        run: make web-graphql
       - name: Fail on drift
         run: |
           git status --porcelain

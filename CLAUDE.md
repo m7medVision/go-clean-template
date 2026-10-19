@@ -27,6 +27,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate the REST OpenAPI document | `make openapi` | `go run ./cmd/openapi` — the target writes through a temp file so a failed run never truncates `docs/openapi/v1.json` |
 | Install frontend dependencies | `make web-deps` | `bun install` / `vp install` — the target uses the frozen lockfile |
 | Regenerate frontend REST types | `make web-api` | `npx openapi-typescript ...` — the target refreshes `docs/openapi/v1.json` first |
+| Regenerate frontend GraphQL types | `make web-graphql` | `npx graphql-codegen` — reads the gqlgen schema and the operations in `web/src/` |
 | Run the frontend dev server | `make web-dev` | `vp dev` — the target exports `HTTP_PORT`, which the Vite proxy targets |
 | Format / lint / test the frontend | `make web-format`, `make web-check` | `vp check`, `vp test`, `tsc`, `eslint`, `prettier` |
 | Build the frontend | `make web-build` | `vp build` |
@@ -56,6 +57,7 @@ Three traps in these targets:
 
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
 For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too.
+For changes to a GraphQL schema file or to an operation in `web/src/`, `make web-graphql` too.
 
 ## Dependency rule
 
@@ -178,6 +180,8 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
   place on every run (signatures follow the schema, bodies are kept).
 - `web/src/api/schema.gen.ts` ← `make web-api` (openapi-typescript) from `docs/openapi/v1.json`.
+- `web/src/graphql/` ← `make web-graphql` (GraphQL Code Generator, `web/codegen.ts`) from
+  `internal/controller/graphql/schema/*.graphqls` and the `graphql(...)` operations in `web/src/`.
 - `web/src/routeTree.gen.ts` ← the TanStack Router Vite plugin, on every `vp dev` / `vp build`.
 - `docs/openapi/v1.json` ← `make openapi`, exported by `cmd/openapi` from the same Huma config the
   server uses (`restapi.OpenAPI`). Huma still serves the live document at `/openapi.json` when
@@ -218,12 +222,50 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 `web/` is a client-rendered React app: TanStack Router (file-based routes in `web/src/routes/`) and
 TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest) and bun.
 
-- It talks to the backend only over REST, on the same origin (the Vite proxy in dev), so there is no
-  CORS. It imports nothing from Go, and nothing in Go imports or embeds it; `go.mod` has
-  `ignore ./web` and `make format` skips it, because npm packages can ship `.go` files.
-- Types come from `docs/openapi/v1.json`, never hand-written: call the API through `$api`
-  (openapi-react-query) or `api` (openapi-fetch) from `web/src/api/client.ts`. A Huma change that
-  breaks the client fails the type check in the same PR.
+- It talks to the backend over REST and GraphQL, both on the same origin (the Vite proxy in dev),
+  so there is no CORS. It imports nothing from Go, and nothing in Go imports or embeds it; `go.mod`
+  has `ignore ./web` and `make format` skips it, because npm packages can ship `.go` files.
+- Types are generated, never hand-written. REST: `$api` (openapi-react-query) or `api`
+  (openapi-fetch) from `web/src/api/client.ts`, typed from `docs/openapi/v1.json`. GraphQL: write
+  the operation with `graphql(...)` from `#/graphql`, run `make web-graphql`, and call it through
+  `web/src/api/graphql.ts`. A Huma or schema change that breaks the client fails the type check in
+  the same PR.
+- **Tables read through GraphQL.** Every list shown in a table is a GraphQL query that selects only
+  the columns the table shows, and the row actions on that screen use GraphQL mutations. A domain
+  without a GraphQL schema needs one before it gets a table (only tasks has one today). Forms and
+  single-record screens outside a table (auth, profile) stay on REST.
+- **Every table is a shadcn data table on TanStack Table (v9).** Build it with `useDataTable` and
+  `dataTableColumns<T>()` from `web/src/components/data-table/`, render it with `DataTable`, and put
+  `DataTableSearch`, `DataTableViewOptions` and `DataTablePagination` around it. Columns live in
+  `web/src/<domain>/columns.tsx`, with a `meta.label` each and `DataTableColumnHeader` as the
+  header. Paging is server-side (`limit`/`offset`, page number in the URL); sorting and search
+  apply to the current page. Never hand-roll a `<Table>` with its own sort or visibility state.
+- **Every form is TanStack Form + shadcn Field + Zod**, built with `useAppForm` from
+  `web/src/components/form/use-app-form.ts`:
+  - The rules live in a Zod schema in `web/src/<domain>/schema.ts` that mirrors the server's
+    constraints (Huma tags for REST, the resolver's checks for GraphQL). Spread
+    `zodValidation(schema)` into `useAppForm`: it validates on submit, then on every change.
+  - Render inside `<form.AppForm><form.Form>…</form.Form></form.AppForm>`. Each input is a
+    `<form.AppField name>` rendering `field.TextField`, `field.PasswordField` or
+    `field.TextareaField` (shadcn `Field` with label, description, `aria-invalid` and
+    `FieldError`). A new kind of input gets a field component in `web/src/components/form/fields.tsx`
+    and an entry in `createFormHook`, not inline markup.
+  - `onSubmit` returns `mutation.mutateAsync(schema.parse(value))`, so the server gets the parsed
+    (trimmed) value and `form.SubmitButton` stays disabled until the request ends. Show the
+    server's rejection with `<FormError error={mutation.error} />`.
+  - No `useState` per input, no `required`/`minLength` attributes (`Form` sets `noValidate`; Zod
+    is the only client-side validator).
+- **All server state goes through TanStack Query**, in one shape:
+  - Each domain keeps its operations in `web/src/<domain>/api.ts`: query-option factories
+    (`graphqlQueryOptions` / `$api.queryOptions`), mutation options (`graphqlMutationOptions` /
+    `$api.useMutation`), and the key prefix its writes invalidate (`graphqlKey`).
+  - Route loaders call `queryClient.ensureQueryData(...)`; components read with `useSuspenseQuery`
+    on the same options, so the loader and the component share one cache entry.
+  - Writes use `useMutation` and, `onSuccess`, `invalidateQueries` on the domain's key prefix.
+    No `fetch` in components, no copying server data into `useState`.
+  - Errors reach the UI through `problemMessage` (`web/src/api/problem.ts`), which reads both Huma
+    problems and GraphQL errors. GraphQL reports an expired token as `UNAUTHENTICATED` in a 200
+    response; `web/src/api/graphql.ts` turns that into the same sign-out a REST 401 triggers.
 - The JWT lives in memory, mirrored to `sessionStorage` (`web/src/auth/token.ts`). Screens that need
   a user go under the `_authed` layout route.
 - Client routes must not use the prefixes the Go app owns: `/v1`, `/graphql`, `/docs`,
@@ -259,7 +301,8 @@ set to keep aligned. Update it whenever a change touches what it documents:
      (op registered in the same domain file), then `make web-api` (which runs `make openapi`), commit both
      generated diffs, and fix any `make web-check` errors in `web/`.
    - GraphQL (task only today): schema change in `internal/controller/graphql/schema/` →
-     `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
+     `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go` → `make web-graphql`
+     and fix any `make web-check` errors in `web/`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in
      `internal/controller/grpc/v1/`.
 
