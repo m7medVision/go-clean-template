@@ -10,8 +10,6 @@ one use-case layer, with a background worker and a React client.
 
 Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-template).
 
-![The /exchange page: a currency conversion form and the history table](docs/img/exchange.png)
-
 ## What you get
 
 - **Three transports, one use-case layer.** REST ([chi](https://github.com/go-chi/chi) +
@@ -33,17 +31,6 @@ The code is split into layers, and **dependencies only point inward**:
 
 ![Clean Architecture](docs/img/layers-1.png)
 
-```
-controller  →  usecase  →  repo (interfaces)  →  entity
-```
-
-- `internal/entity`: domain types and rules. Imports nothing from this module.
-- `internal/usecase`: business logic. Talks to storage and outside APIs only through interfaces.
-- `internal/repo`: Postgres, outbound HTTP and email, behind those interfaces.
-- `internal/controller`: REST, gRPC, GraphQL and the queue worker. Each one only decodes, calls a use
-  case, and encodes. Controllers never import each other.
-- `pkg/`: reusable infrastructure with no domain knowledge. Never imports `internal/`.
-
 These are rules, not suggestions: a change that breaks one is not merged.
 [docs/architecture.md](docs/architecture.md) lists them with where each kind of code goes, and
 [docs/request-flow.md](docs/request-flow.md) follows one request through every layer.
@@ -60,10 +47,10 @@ make dev        # Postgres + Mailpit in docker; app, worker and web client with 
 
 Then open:
 
-- http://localhost:3000: the web client (register a user to start)
-- http://127.0.0.1:8080/docs: the REST API reference
-- http://127.0.0.1:8080/graphql/playground: GraphQL
-- http://127.0.0.1:8025: Mailpit, which catches the welcome email
+- <http://localhost:3000>: the web client (register a user to start)
+- <http://127.0.0.1:8080/docs>: the REST API reference
+- <http://127.0.0.1:8080/graphql/playground>: GraphQL
+- <http://127.0.0.1:8025>: Mailpit, which catches the welcome email
 
 If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` first.
 
