@@ -36,7 +36,7 @@ This template implements three types of servers:
 
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
-- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port, tasks only)
+- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), served at `/graphql` on the REST port: tasks and the exchange history)
 - Reverse proxy ([Caddy](https://caddyserver.com/) with the caddy-waf firewall and the Souin HTTP cache)
 
 Background work goes through a minimal queue in Postgres (one `queue_messages` table), consumed by
@@ -53,7 +53,7 @@ The template includes three domains to demonstrate multi-service architecture:
 - **Task Management** — CRUD operations with status transitions (todo, in_progress, done)
 - **Currency Exchange** — currency conversion at daily rates (about 160 currencies), with history and a web page
 
-All domains are available over REST and gRPC. GraphQL exposes tasks only.
+All domains are available over REST and gRPC. GraphQL exposes tasks and the exchange history.
 
 ## Content
 
@@ -66,7 +66,7 @@ All domains are available over REST and gRPC. GraphQL exposes tasks only.
 
 ## Domains
 
-The template includes three fully implemented domains, each available over REST and gRPC. GraphQL covers tasks only.
+The template includes three fully implemented domains, each available over REST and gRPC. GraphQL covers tasks and the exchange history.
 
 ### User Authentication
 
@@ -109,12 +109,12 @@ currencies including the Gulf currencies, e.g. Omani Rial → Chinese Yuan), and
 user's history. It is the template's example of an outbound HTTP API behind a repository
 interface ([`internal/repo/webapi`](#internalrepowebapi)).
 
-| Operation | REST                         | gRPC                         |
-|-----------|------------------------------|------------------------------|
-| Convert   | `POST /v1/exchange/convert`  | `ExchangeService/Convert`    |
-| History   | `GET /v1/exchange/history`   | `ExchangeService/GetHistory` |
+| Operation | REST                         | gRPC                         | GraphQL (`POST /graphql`) |
+|-----------|------------------------------|------------------------------|---------------------------|
+| Convert   | `POST /v1/exchange/convert`  | `ExchangeService/Convert`    |                           |
+| History   | `GET /v1/exchange/history`   | `ExchangeService/GetHistory` | `query exchangeHistory`   |
 
-- Request: `{"from": "EUR", "to": "USD", "amount": "100.10"}`; codes are case-insensitive
+- Request: `{"from": "OMR", "to": "CNY", "amount": "100.10"}`; codes are case-insensitive
 - Amounts and rates are decimal strings, computed with exact decimals (no `float64`); the result is
   rounded half-even to 2 places
 - Rates update once a day and are not live market rates; the response carries the rate's `rate_date`.
@@ -202,7 +202,8 @@ Check services:
   - http://app.lvh.me/schemas/{schema} | http://127.0.0.1:8080/schemas/{schema}
 - GraphQL:
   - http://app.lvh.me/graphql | http://127.0.0.1:8080/graphql (POST only, `Authorization: Bearer <token>`)
-  - Schema: [task.graphqls](internal/controller/graphql/schema/task.graphqls)
+  - Schemas: [task.graphqls](internal/controller/graphql/schema/task.graphqls),
+    [exchange.graphqls](internal/controller/graphql/schema/exchange.graphqls)
   - Playground (when `DOCS_ENABLED=true`): http://app.lvh.me/graphql/playground | http://127.0.0.1:8080/graphql/playground.
     Set `{"Authorization": "Bearer <token>"}` in its headers pane.
 - gRPC:
@@ -346,7 +347,7 @@ Server handler layer (MVC controllers). The template shows 3 servers:
 
 - gRPC ([gRPC](https://grpc.io/) framework based on protobuf)
 - REST API ([chi](https://github.com/go-chi/chi) router wrapped with the [Huma](https://github.com/danielgtaylor/huma) framework)
-- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), tasks only)
+- GraphQL ([gqlgen](https://github.com/99designs/gqlgen), tasks and the exchange history)
 
 Server routers are written in the same style:
 
@@ -365,9 +366,9 @@ because the use case that enqueues it must write the same shape.
 
 #### `internal/controller/graphql`
 
-GraphQL endpoint for tasks, mounted at `/graphql` on the REST router. The schema lives in
-`schema/task.graphqls`; `make graphql` regenerates `generated/` and `model/` and updates the
-resolver signatures in `task.resolvers.go`. `Task` and `TaskStatus` bind to the `entity` types
+GraphQL endpoint for tasks and the exchange history, mounted at `/graphql` on the REST router. The
+schemas live in `schema/*.graphqls`, one per domain; `make graphql` regenerates `generated/` and
+`model/` and updates the resolver signatures in `<domain>.resolvers.go`. `Task` and `TaskStatus` bind to the `entity` types
 through `gqlgen.yml`. Resolvers authenticate the bearer token themselves, so introspection works
 without one, and errors carry `extensions.code` (`UNAUTHENTICATED`, `BAD_USER_INPUT`,
 `NOT_FOUND`, `FORBIDDEN`, `INTERNAL`).

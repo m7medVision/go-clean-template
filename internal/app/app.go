@@ -90,7 +90,7 @@ func initServers(cfg *config.Config, uc useCases, jwtManager *jwt.Manager, l log
 
 	// HTTP Server
 	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l)
-	router.Handle("/graphql", graphql.NewHandler(uc.task, jwtManager, l))
+	router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l))
 
 	if cfg.Docs.Enabled {
 		router.Handle("/graphql/playground", graphql.NewPlayground("/graphql"))

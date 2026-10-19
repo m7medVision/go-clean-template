@@ -19,9 +19,9 @@ import (
 const _playgroundTitle = "Go Clean Template GraphQL"
 
 // NewHandler builds the GraphQL endpoint.
-func NewHandler(tk usecase.Task, jwtManager *jwt.Manager, l logger.Interface) http.Handler {
+func NewHandler(tk usecase.Task, ex usecase.Exchange, jwtManager *jwt.Manager, l logger.Interface) http.Handler {
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
-		Resolvers: &Resolver{task: tk, l: l},
+		Resolvers: &Resolver{task: tk, exchange: ex, l: l},
 	}))
 
 	srv.AddTransport(transport.POST{})

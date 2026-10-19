@@ -25,12 +25,17 @@ const (
 	_maxTitleLen       = 255
 	_maxDescriptionLen = 1000
 	_minLimit          = 1
+	_maxLimit          = 100
+
+	// _resultPlaces matches the scale entity.Conversion rounds Result to.
+	_resultPlaces = 2
 )
 
 // Resolver -.
 type Resolver struct {
-	task usecase.Task
-	l    logger.Interface
+	task     usecase.Task
+	exchange usecase.Exchange
+	l        logger.Interface
 }
 
 type errorMapping struct {
