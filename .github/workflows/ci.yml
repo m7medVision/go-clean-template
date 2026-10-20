@@ -28,7 +28,7 @@ jobs:
       # backend and web list what is safe to SKIP, so a path nobody thought
       # of runs the job. With predicate-quantifier: every, a file matches a
       # filter only when it matches every pattern.
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           predicate-quantifier: every
@@ -55,7 +55,7 @@ jobs:
               - '!docker-compose*.yml'
               - '!.golangci.yml'
       # The drift check regenerates from exactly these inputs (any one).
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: codegen
         with:
           filters: |
@@ -126,7 +126,7 @@ jobs:
         run: >-
           echo "prefix=go-test-$RUNNER_OS-${{ hashFiles('go.sum') }}"
           >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: |
             ~/go/pkg/mod
@@ -137,7 +137,7 @@ jobs:
             go-test-${{ runner.os }}-
       - name: Unit Tests
         run: make test
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: github.event_name == 'push'
         with:
           path: |

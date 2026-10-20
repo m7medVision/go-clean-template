@@ -78,7 +78,7 @@ services:
   # SMTP sink for development: catches every email the worker sends; inbox UI and API on :8025
   mailpit:
     container_name: mailpit
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.6
     ports:
       - "1025:1025"   # SMTP
       - "8025:8025"   # Web UI and API
