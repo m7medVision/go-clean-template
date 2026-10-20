@@ -69,6 +69,20 @@ instead of open.er-api.com. The stub serves the same recorded response
 (`internal/repo/webapi/testdata/openerapi_latest_omr.json`) that the webapi unit test reads, so the two
 cannot drift apart.
 
+```sh
+make schema-roundtrip                   # schema up from origin/master, down to it, up again
+make schema-roundtrip BASE_REF=HEAD~1   # against any other branch or commit
+```
+
+The schema is declarative, so there are no down migrations: "down" means applying the older HCL,
+which Atlas reaches by dropping what that version lacks. `scripts/schema-roundtrip.sh` takes the base
+schema out of git with `git archive`, applies base → working tree → base → working tree to a
+throwaway Postgres container it starts and removes, and fails if any apply errors or leaves drift.
+It never touches `PG_URL`. It needs `docker` and `atlas` on `PATH`; with `ROUNDTRIP_PG_URL` set it
+uses that database instead of a container, and refuses one that is not empty. In CI it runs on pull requests
+that change the schema, against the PR's base branch (the parent branch, for a stacked PR), on the
+Postgres `bmizerany/setup-postgres` starts, like every other job that needs one.
+
 Before pushing, `make pre-commit` runs the generators, format, lint, and the Go and web tests.
 
 ## CI
@@ -77,9 +91,9 @@ Before pushing, `make pre-commit` runs the generators, format, lint, and the Go 
 
 | Stage | Jobs | Runs when |
 | --- | --- | --- |
-| 1 | `changes` | always; sorts the diff into `backend`, `web` and `sqlc` |
+| 1 | `changes` | always; sorts the diff into `backend`, `web`, `sqlc` and `schema` |
 | 2 | `lint`: yamllint, hadolint, dotenv-linter (PRs only, on added lines), golangci-lint and govulncheck (backend) | always |
-| 3 | `unit-tests` (backend), `sqlc-generated` (sqlc), `web` (web, also the OpenAPI drift check), side by side | after `lint` passes |
+| 3 | `unit-tests` (backend), `sqlc-generated` (sqlc), `schema-roundtrip` (schema, PRs only), `web` (web, also the OpenAPI drift check), side by side | after `lint` passes |
 | 4 | `integration-tests` | backend, after `unit-tests` passes |
 | 5 | `ci-ok` | always; fails if any job failed or was cancelled |
 

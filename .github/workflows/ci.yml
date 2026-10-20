@@ -10,7 +10,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Stages: changes → lint → (unit ∥ sqlc ∥ web) → integration → ci-ok.
+# Stages: changes → lint → (unit ∥ sqlc ∥ schema ∥ web) → integration → ci-ok.
 # Jobs inside one stage share nothing, so they run side by side; each stage
 # waits for the one before it, so a cheap failure stops the expensive jobs
 # from starting. `ci-ok` is the one check branch protection should require:
@@ -23,6 +23,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       web: ${{ steps.filter.outputs.web }}
       sqlc: ${{ steps.codegen.outputs.sqlc }}
+      schema: ${{ steps.codegen.outputs.schema }}
     steps:
       - uses: actions/checkout@v7
       # backend and web list what is safe to SKIP, so a path nobody thought
@@ -67,6 +68,9 @@ jobs:
               - 'go.sum'
               - 'Makefile'
               - '.github/workflows/ci.yml'
+            schema:
+              - 'internal/app/schema/**'
+              - 'scripts/schema-roundtrip.sh'
 
   lint:
     name: runner / lint
@@ -157,7 +161,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27'
-      - uses: bmizerany/setup-postgres@v4
+      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
       - name: Install Atlas
@@ -170,6 +174,37 @@ jobs:
         run: |
           git status --porcelain
           test -z "$(git status --porcelain)"
+
+  # Up from the base branch's schema, down to it, up again: catches an HCL
+  # change Atlas cannot apply over the previous one, or cannot roll back
+  # from. Pull requests only; the checkout is the PR merged into its base.
+  schema-roundtrip:
+    name: runner / schema / up and down
+    needs: [changes, lint]
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.changes.outputs.schema == 'true'
+    runs-on: ubuntu-latest
+    env:
+      BASE: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v7
+      # git archive needs only the base branch's tree, not its history.
+      - name: Fetch the base branch
+        run: >-
+          git fetch --depth=1 origin
+          "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
+        with:
+          version: 18.6.0
+      - name: Install Atlas
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
+      # The runner's fresh postgres database is the throwaway target.
+      - name: Round trip
+        env:
+          ROUNDTRIP_PG_URL: >-
+            postgres://postgres@localhost:5432/postgres?sslmode=disable
+        run: make schema-roundtrip BASE_REF="origin/$BASE"
 
   # Also the OpenAPI drift check: `make web-api` re-exports
   # docs/openapi/v1.json first.
@@ -217,7 +252,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27'
-      - uses: bmizerany/setup-postgres@v4
+      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
       - name: Create the app database
@@ -265,7 +300,14 @@ jobs:
 
   ci-ok:
     name: runner / ci-ok
-    needs: [changes, lint, unit-tests, sqlc-generated, web, integration-tests]
+    needs:
+      - changes
+      - lint
+      - unit-tests
+      - sqlc-generated
+      - schema-roundtrip
+      - web
+      - integration-tests
     if: always()
     runs-on: ubuntu-latest
     steps:
