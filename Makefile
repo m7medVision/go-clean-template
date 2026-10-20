@@ -167,6 +167,10 @@ schema-apply: ### apply desired schema to the database (Atlas)
 		--to file://internal/app/schema
 .PHONY: schema-apply
 
+schema-roundtrip: ### apply the schema up from master, down to it and up again, in a throwaway Postgres container
+	./scripts/schema-roundtrip.sh $(BASE_REF)
+.PHONY: schema-roundtrip
+
 bin-deps: ### install tools
 	go install tool
 	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh
