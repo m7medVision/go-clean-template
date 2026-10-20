@@ -78,8 +78,10 @@ The schema is declarative, so there are no down migrations: "down" means applyin
 which Atlas reaches by dropping what that version lacks. `scripts/schema-roundtrip.sh` takes the base
 schema out of git with `git archive`, applies base → working tree → base → working tree to a
 throwaway Postgres container it starts and removes, and fails if any apply errors or leaves drift.
-It never touches `PG_URL`. It needs `docker` and `atlas` on `PATH`. In CI it runs on pull requests
-that change the schema, against the PR's base branch (the parent branch, for a stacked PR).
+It never touches `PG_URL`. It needs `docker` and `atlas` on `PATH`; with `ROUNDTRIP_PG_URL` set it
+uses that database instead of a container, and refuses one that is not empty. In CI it runs on pull requests
+that change the schema, against the PR's base branch (the parent branch, for a stacked PR), on the
+Postgres `bmizerany/setup-postgres` starts, like every other job that needs one.
 
 Before pushing, `make pre-commit` runs the generators, format, lint, and the Go and web tests.
 

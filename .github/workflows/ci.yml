@@ -194,9 +194,16 @@ jobs:
         run: >-
           git fetch --depth=1 origin
           "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+      - uses: bmizerany/setup-postgres@v4
+        with:
+          version: 18.6.0
       - name: Install Atlas
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
+      # The runner's fresh postgres database is the throwaway target.
       - name: Round trip
+        env:
+          ROUNDTRIP_PG_URL: >-
+            postgres://postgres@localhost:5432/postgres?sslmode=disable
         run: make schema-roundtrip BASE_REF="origin/$BASE"
 
   # Also the OpenAPI drift check: `make web-api` re-exports
