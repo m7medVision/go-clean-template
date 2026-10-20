@@ -5,7 +5,7 @@ over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
 `/graphql` on the REST port, tasks and the exchange history, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
 A second binary, `cmd/worker`, consumes a minimal Postgres queue (the `queue_messages` table);
 see **Queue and worker** below.
-Module path: `github.com/evrone/go-clean-template`. The Go version is declared in `go.mod`.
+Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
 ## Commands — drive everything through the Makefile

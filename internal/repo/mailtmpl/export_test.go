@@ -3,7 +3,7 @@ package mailtmpl
 import (
 	"io/fs"
 
-	"github.com/evrone/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 )
 
 // Load builds a Renderer from fsys, laid out like the embedded templates/.

@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

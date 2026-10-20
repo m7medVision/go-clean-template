@@ -15,10 +15,10 @@ import (
 	reflect "reflect"
 	time "time"
 
-	entity "github.com/evrone/go-clean-template/internal/entity"
-	repo "github.com/evrone/go-clean-template/internal/repo"
-	smtp "github.com/evrone/go-clean-template/pkg/smtp"
-	worker "github.com/evrone/go-clean-template/pkg/worker"
+	entity "github.com/m7medvision/go-clean-template/internal/entity"
+	repo "github.com/m7medvision/go-clean-template/internal/repo"
+	smtp "github.com/m7medvision/go-clean-template/pkg/smtp"
+	worker "github.com/m7medvision/go-clean-template/pkg/worker"
 	decimal "github.com/shopspring/decimal"
 	gomock "go.uber.org/mock/gomock"
 )

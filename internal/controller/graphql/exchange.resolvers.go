@@ -9,7 +9,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/evrone/go-clean-template/internal/controller/graphql/model"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
 )
 
 func (r *queryResolver) ExchangeHistory(ctx context.Context, limit int, offset int) (*model.ConversionList, error) {

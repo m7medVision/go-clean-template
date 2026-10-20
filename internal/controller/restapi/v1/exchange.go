@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/evrone/go-clean-template/internal/controller/restapi/middleware"
-	"github.com/evrone/go-clean-template/internal/controller/restapi/v1/request"
-	"github.com/evrone/go-clean-template/internal/controller/restapi/v1/response"
-	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/shopspring/decimal"
 )
 

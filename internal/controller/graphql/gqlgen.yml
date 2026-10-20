@@ -22,13 +22,13 @@ omit_getters: true
 
 models:
   Task:
-    model: github.com/evrone/go-clean-template/internal/entity.Task
+    model: github.com/m7medvision/go-clean-template/internal/entity.Task
   TaskStatus:
-    model: github.com/evrone/go-clean-template/internal/entity.TaskStatus
+    model: github.com/m7medvision/go-clean-template/internal/entity.TaskStatus
     enum_values:
       TODO:
-        value: github.com/evrone/go-clean-template/internal/entity.TaskStatusTodo
+        value: github.com/m7medvision/go-clean-template/internal/entity.TaskStatusTodo
       IN_PROGRESS:
-        value: github.com/evrone/go-clean-template/internal/entity.TaskStatusInProgress
+        value: github.com/m7medvision/go-clean-template/internal/entity.TaskStatusInProgress
       DONE:
-        value: github.com/evrone/go-clean-template/internal/entity.TaskStatusDone
+        value: github.com/m7medvision/go-clean-template/internal/entity.TaskStatusDone

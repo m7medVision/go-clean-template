@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/evrone/go-clean-template/internal/controller/worker/v1/request"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/internal/controller/worker/v1/request"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // Handle logs the message. A real handler decodes the body the same way, calls a use case with ctx,

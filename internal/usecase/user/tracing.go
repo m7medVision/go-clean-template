@@ -3,15 +3,15 @@ package user
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/usecase/user"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/usecase/user"
 
 // tracedUseCase wraps a User usecase with OpenTelemetry spans, closing the
 // gap between transport spans (HTTP/gRPC/GraphQL) and repository spans.

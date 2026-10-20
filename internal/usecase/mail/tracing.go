@@ -3,15 +3,15 @@ package mail
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/usecase/mail"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/usecase/mail"
 
 // tracedUseCase wraps a Mail usecase with OpenTelemetry spans, closing the gap between the worker's
 // handler and the renderer span; the SMTP send itself is untraced and shows as this span's time.

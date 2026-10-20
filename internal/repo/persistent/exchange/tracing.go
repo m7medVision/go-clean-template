@@ -3,15 +3,15 @@ package exchange
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/repo/persistent/exchange"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
 
 // tracedRepo wraps an ExchangeRepo with OpenTelemetry spans on top of the
 // low-level pgx query spans, giving a semantic "ExchangeRepo.<Method>" view.

@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/evrone/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // Recovery returns a middleware that recovers from panics, logs the panic
