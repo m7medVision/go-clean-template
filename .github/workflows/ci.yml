@@ -161,7 +161,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27'
-      - uses: bmizerany/setup-postgres@v4
+      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
       - name: Install Atlas
@@ -194,7 +194,7 @@ jobs:
         run: >-
           git fetch --depth=1 origin
           "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
-      - uses: bmizerany/setup-postgres@v4
+      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
       - name: Install Atlas
@@ -252,7 +252,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27'
-      - uses: bmizerany/setup-postgres@v4
+      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
       - name: Create the app database
