@@ -7,13 +7,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/evrone/go-clean-template/config"
-	workerctl "github.com/evrone/go-clean-template/internal/controller/worker"
-	"github.com/evrone/go-clean-template/internal/repo/persistent/queue"
-	"github.com/evrone/go-clean-template/pkg/jwt"
-	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/evrone/go-clean-template/pkg/postgres"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/config"
+	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // RunWorker runs the queue worker: it consumes the queues registered in internal/controller/worker

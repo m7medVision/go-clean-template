@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	v1 "github.com/evrone/go-clean-template/internal/controller/restapi/v1"
 	"github.com/go-chi/chi/v5"
+	v1 "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1"
 )
 
 // OpenAPI returns the REST OpenAPI document without starting a server. Registering

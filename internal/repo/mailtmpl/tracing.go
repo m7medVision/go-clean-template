@@ -3,16 +3,16 @@ package mailtmpl
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/repo"
-	"github.com/evrone/go-clean-template/pkg/smtp"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/smtp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/repo/mailtmpl"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/mailtmpl"
 
 // tracedRenderer wraps a MailRenderer with OpenTelemetry spans.
 type tracedRenderer struct {

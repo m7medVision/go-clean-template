@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	v1 "github.com/evrone/go-clean-template/docs/proto/v1"
-	grpcmw "github.com/evrone/go-clean-template/internal/controller/grpc/middleware"
-	"github.com/evrone/go-clean-template/internal/controller/grpc/v1/response"
-	"github.com/evrone/go-clean-template/internal/entity"
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

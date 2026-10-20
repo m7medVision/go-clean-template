@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/evrone/go-clean-template/internal/controller/restapi/middleware"
-	"github.com/evrone/go-clean-template/pkg/jwt"
-	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/go-chi/chi/v5"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

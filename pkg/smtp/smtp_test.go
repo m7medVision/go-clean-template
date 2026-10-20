@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/evrone/go-clean-template/pkg/smtp"
+	"github.com/m7medvision/go-clean-template/pkg/smtp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

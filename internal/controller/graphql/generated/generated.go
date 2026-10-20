@@ -14,8 +14,8 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
-	"github.com/evrone/go-clean-template/internal/controller/graphql/model"
-	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -623,7 +623,7 @@ func (ec *executionContext) field_Mutation_createTask_args(ctx context.Context, 
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (model.CreateTaskInput, error) {
-			return ec.unmarshalNCreateTaskInput2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐCreateTaskInput(ctx, v)
+			return ec.unmarshalNCreateTaskInput2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐCreateTaskInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -659,7 +659,7 @@ func (ec *executionContext) field_Mutation_transitionTask_args(ctx context.Conte
 	args["id"] = arg0
 	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "status",
 		func(ctx context.Context, v any) (entity.TaskStatus, error) {
-			return ec.unmarshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, v)
+			return ec.unmarshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -681,7 +681,7 @@ func (ec *executionContext) field_Mutation_updateTask_args(ctx context.Context, 
 	args["id"] = arg0
 	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (model.UpdateTaskInput, error) {
-			return ec.unmarshalNUpdateTaskInput2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐUpdateTaskInput(ctx, v)
+			return ec.unmarshalNUpdateTaskInput2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐUpdateTaskInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -745,7 +745,7 @@ func (ec *executionContext) field_Query_tasks_args(ctx context.Context, rawArgs 
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "status",
 		func(ctx context.Context, v any) (*entity.TaskStatus, error) {
-			return ec.unmarshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, v)
+			return ec.unmarshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -981,7 +981,7 @@ func (ec *executionContext) _ConversionList_conversions(ctx context.Context, fie
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []model.Conversion) graphql.Marshaler {
-			return ec.marshalNConversion2ᚕgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionᚄ(ctx, selections, v)
+			return ec.marshalNConversion2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionᚄ(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1037,7 +1037,7 @@ func (ec *executionContext) _Mutation_createTask(ctx context.Context, field grap
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1081,7 +1081,7 @@ func (ec *executionContext) _Mutation_updateTask(ctx context.Context, field grap
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1125,7 +1125,7 @@ func (ec *executionContext) _Mutation_transitionTask(ctx context.Context, field 
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1213,7 +1213,7 @@ func (ec *executionContext) _Query_task(ctx context.Context, field graphql.Colle
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1257,7 +1257,7 @@ func (ec *executionContext) _Query_tasks(ctx context.Context, field graphql.Coll
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.TaskList) graphql.Marshaler {
-			return ec.marshalNTaskList2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskList(ctx, selections, v)
+			return ec.marshalNTaskList2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskList(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1301,7 +1301,7 @@ func (ec *executionContext) _Query_exchangeHistory(ctx context.Context, field gr
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *model.ConversionList) graphql.Marshaler {
-			return ec.marshalNConversionList2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionList(ctx, selections, v)
+			return ec.marshalNConversionList2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionList(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1512,7 +1512,7 @@ func (ec *executionContext) _Task_status(ctx context.Context, field graphql.Coll
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v entity.TaskStatus) graphql.Marshaler {
-			return ec.marshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, selections, v)
+			return ec.marshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, selections, v)
 		},
 		true,
 		true,
@@ -1581,7 +1581,7 @@ func (ec *executionContext) _TaskList_tasks(ctx context.Context, field graphql.C
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚕgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskᚄ(ctx, selections, v)
+			return ec.marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskᚄ(ctx, selections, v)
 		},
 		true,
 		true,
@@ -3579,15 +3579,15 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNConversion2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversion(ctx context.Context, sel ast.SelectionSet, v model.Conversion) graphql.Marshaler {
+func (ec *executionContext) marshalNConversion2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversion(ctx context.Context, sel ast.SelectionSet, v model.Conversion) graphql.Marshaler {
 	return ec._Conversion(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNConversion2ᚕgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionᚄ(ctx context.Context, sel ast.SelectionSet, v []model.Conversion) graphql.Marshaler {
+func (ec *executionContext) marshalNConversion2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionᚄ(ctx context.Context, sel ast.SelectionSet, v []model.Conversion) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
 		fc.Result = &v[i]
-		return ec.marshalNConversion2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversion(ctx, sel, v[i])
+		return ec.marshalNConversion2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversion(ctx, sel, v[i])
 	})
 
 	for _, e := range ret {
@@ -3599,7 +3599,7 @@ func (ec *executionContext) marshalNConversion2ᚕgithubᚗcomᚋevroneᚋgoᚑc
 	return ret
 }
 
-func (ec *executionContext) marshalNConversionList2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionList(ctx context.Context, sel ast.SelectionSet, v *model.ConversionList) graphql.Marshaler {
+func (ec *executionContext) marshalNConversionList2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐConversionList(ctx context.Context, sel ast.SelectionSet, v *model.ConversionList) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -3609,7 +3609,7 @@ func (ec *executionContext) marshalNConversionList2ᚖgithubᚗcomᚋevroneᚋgo
 	return ec._ConversionList(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNCreateTaskInput2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐCreateTaskInput(ctx context.Context, v any) (model.CreateTaskInput, error) {
+func (ec *executionContext) unmarshalNCreateTaskInput2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐCreateTaskInput(ctx context.Context, v any) (model.CreateTaskInput, error) {
 	res, err := ec.unmarshalInputCreateTaskInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -3662,15 +3662,15 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) marshalNTask2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx context.Context, sel ast.SelectionSet, v entity.Task) graphql.Marshaler {
+func (ec *executionContext) marshalNTask2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx context.Context, sel ast.SelectionSet, v entity.Task) graphql.Marshaler {
 	return ec._Task(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNTask2ᚕgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskᚄ(ctx context.Context, sel ast.SelectionSet, v []entity.Task) graphql.Marshaler {
+func (ec *executionContext) marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskᚄ(ctx context.Context, sel ast.SelectionSet, v []entity.Task) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
 		fc.Result = &v[i]
-		return ec.marshalNTask2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, sel, v[i])
+		return ec.marshalNTask2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, sel, v[i])
 	})
 
 	for _, e := range ret {
@@ -3682,7 +3682,7 @@ func (ec *executionContext) marshalNTask2ᚕgithubᚗcomᚋevroneᚋgoᚑclean�
 	return ret
 }
 
-func (ec *executionContext) marshalNTask2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx context.Context, sel ast.SelectionSet, v *entity.Task) graphql.Marshaler {
+func (ec *executionContext) marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx context.Context, sel ast.SelectionSet, v *entity.Task) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -3692,7 +3692,7 @@ func (ec *executionContext) marshalNTask2ᚖgithubᚗcomᚋevroneᚋgoᚑclean�
 	return ec._Task(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNTaskList2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskList(ctx context.Context, sel ast.SelectionSet, v *model.TaskList) graphql.Marshaler {
+func (ec *executionContext) marshalNTaskList2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskList(ctx context.Context, sel ast.SelectionSet, v *model.TaskList) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -3702,15 +3702,15 @@ func (ec *executionContext) marshalNTaskList2ᚖgithubᚗcomᚋevroneᚋgoᚑcle
 	return ec._TaskList(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, v any) (entity.TaskStatus, error) {
+func (ec *executionContext) unmarshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, v any) (entity.TaskStatus, error) {
 	tmp, err := graphql.UnmarshalString(v)
-	res := unmarshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[tmp]
+	res := unmarshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[tmp]
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, sel ast.SelectionSet, v entity.TaskStatus) graphql.Marshaler {
+func (ec *executionContext) marshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, sel ast.SelectionSet, v entity.TaskStatus) graphql.Marshaler {
 	_ = sel
-	res := graphql.MarshalString(marshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[v])
+	res := graphql.MarshalString(marshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[v])
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -3720,12 +3720,12 @@ func (ec *executionContext) marshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑclea
 }
 
 var (
-	unmarshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[string]entity.TaskStatus{
+	unmarshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[string]entity.TaskStatus{
 		"TODO":        entity.TaskStatusTodo,
 		"IN_PROGRESS": entity.TaskStatusInProgress,
 		"DONE":        entity.TaskStatusDone,
 	}
-	marshalNTaskStatus2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[entity.TaskStatus]string{
+	marshalNTaskStatus2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[entity.TaskStatus]string{
 		entity.TaskStatusTodo:       "TODO",
 		entity.TaskStatusInProgress: "IN_PROGRESS",
 		entity.TaskStatusDone:       "DONE",
@@ -3748,7 +3748,7 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 	return res
 }
 
-func (ec *executionContext) unmarshalNUpdateTaskInput2githubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐUpdateTaskInput(ctx context.Context, v any) (model.UpdateTaskInput, error) {
+func (ec *executionContext) unmarshalNUpdateTaskInput2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐUpdateTaskInput(ctx context.Context, v any) (model.UpdateTaskInput, error) {
 	res, err := ec.unmarshalInputUpdateTaskInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
@@ -3941,32 +3941,32 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	return res
 }
 
-func (ec *executionContext) unmarshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, v any) (*entity.TaskStatus, error) {
+func (ec *executionContext) unmarshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, v any) (*entity.TaskStatus, error) {
 	if v == nil {
 		return nil, nil
 	}
 	tmp, err := graphql.UnmarshalString(v)
-	res := unmarshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[tmp]
+	res := unmarshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[tmp]
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, sel ast.SelectionSet, v *entity.TaskStatus) graphql.Marshaler {
+func (ec *executionContext) marshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx context.Context, sel ast.SelectionSet, v *entity.TaskStatus) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	_ = sel
 	_ = ctx
-	res := graphql.MarshalString(marshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[*v])
+	res := graphql.MarshalString(marshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus[*v])
 	return res
 }
 
 var (
-	unmarshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[string]entity.TaskStatus{
+	unmarshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[string]entity.TaskStatus{
 		"TODO":        entity.TaskStatusTodo,
 		"IN_PROGRESS": entity.TaskStatusInProgress,
 		"DONE":        entity.TaskStatusDone,
 	}
-	marshalOTaskStatus2ᚖgithubᚗcomᚋevroneᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[entity.TaskStatus]string{
+	marshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus = map[entity.TaskStatus]string{
 		entity.TaskStatusTodo:       "TODO",
 		entity.TaskStatusInProgress: "IN_PROGRESS",
 		entity.TaskStatusDone:       "DONE",

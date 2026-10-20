@@ -3,8 +3,8 @@ package exchange
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/shopspring/decimal"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/usecase/exchange"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 
 // tracedUseCase wraps an Exchange usecase with OpenTelemetry spans, closing the
 // gap between transport spans (HTTP/gRPC) and repository spans.

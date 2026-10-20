@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/evrone/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/shopspring/decimal"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/repo/webapi"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/webapi"
 
 // tracedExchangeWebAPI wraps an ExchangeWebAPI with OpenTelemetry spans
 // for the outbound call to the rate provider.

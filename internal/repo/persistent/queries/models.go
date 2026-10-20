@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/shopspring/decimal"
 )
 

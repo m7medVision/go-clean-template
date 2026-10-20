@@ -1,10 +1,10 @@
 package v1
 
 import (
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/usecase"
-	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // ExampleQueue is the queue the example handler consumes.

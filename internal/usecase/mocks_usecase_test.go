@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	entity "github.com/evrone/go-clean-template/internal/entity"
+	entity "github.com/m7medvision/go-clean-template/internal/entity"
 	decimal "github.com/shopspring/decimal"
 	gomock "go.uber.org/mock/gomock"
 )

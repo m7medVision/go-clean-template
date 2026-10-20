@@ -4,8 +4,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/evrone/go-clean-template/config"
-	"github.com/evrone/go-clean-template/internal/controller/restapi"
+	"github.com/m7medvision/go-clean-template/config"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 )
 
 func main() {

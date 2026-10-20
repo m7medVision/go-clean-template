@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	v1 "github.com/evrone/go-clean-template/docs/proto/v1"
-	"github.com/evrone/go-clean-template/internal/entity"
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
 // _resultPlaces matches the scale entity.Conversion rounds Result to.

@@ -3,7 +3,7 @@
 package model
 
 import (
-	"github.com/evrone/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
 // A currency conversion. Amounts and rates are decimal strings, so no precision is lost to

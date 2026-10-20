@@ -2,8 +2,8 @@ package v1
 
 import (
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/evrone/go-clean-template/internal/usecase"
-	"github.com/evrone/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const (

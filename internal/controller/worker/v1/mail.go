@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // Handle delivers one email from entity.EmailQueue. The body is the envelope entity.EncodeEmail

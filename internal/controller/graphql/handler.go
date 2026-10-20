@@ -10,10 +10,10 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/evrone/go-clean-template/internal/controller/graphql/generated"
-	"github.com/evrone/go-clean-template/internal/usecase"
-	"github.com/evrone/go-clean-template/pkg/jwt"
-	"github.com/evrone/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const _playgroundTitle = "Go Clean Template GraphQL"

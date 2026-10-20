@@ -1,9 +1,9 @@
 package v1
 
 import (
-	v1 "github.com/evrone/go-clean-template/docs/proto/v1"
-	"github.com/evrone/go-clean-template/internal/usecase"
-	"github.com/evrone/go-clean-template/pkg/logger"
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // ExchangeController -.

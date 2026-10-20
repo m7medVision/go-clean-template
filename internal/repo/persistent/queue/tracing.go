@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/evrone/go-clean-template/internal/repo"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "github.com/evrone/go-clean-template/internal/repo/persistent/queue"
+const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 
 // tracedRepo wraps a QueueRepo with OpenTelemetry spans on top of the
 // low-level pgx query spans, giving a semantic "QueueRepo.<Method>" view.

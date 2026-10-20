@@ -5,7 +5,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/evrone/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 type statusRecorder struct {

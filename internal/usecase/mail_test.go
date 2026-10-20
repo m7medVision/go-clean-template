@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/evrone/go-clean-template/internal/entity"
-	"github.com/evrone/go-clean-template/internal/usecase"
-	"github.com/evrone/go-clean-template/internal/usecase/mail"
-	"github.com/evrone/go-clean-template/pkg/smtp"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
+	"github.com/m7medvision/go-clean-template/pkg/smtp"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )

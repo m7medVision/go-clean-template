@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/evrone/go-clean-template/pkg/postgres"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/stretchr/testify/require"
 )
 

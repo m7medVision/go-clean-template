@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/evrone/go-clean-template/pkg/logger"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

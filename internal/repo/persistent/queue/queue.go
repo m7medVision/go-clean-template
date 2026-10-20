@@ -9,10 +9,10 @@ import (
 	"math"
 	"time"
 
-	"github.com/evrone/go-clean-template/internal/repo"
-	"github.com/evrone/go-clean-template/internal/repo/persistent/queries"
-	"github.com/evrone/go-clean-template/pkg/postgres"
-	"github.com/evrone/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // The worker binary consumes this repository directly.

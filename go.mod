@@ -1,4 +1,4 @@
-module github.com/evrone/go-clean-template
+module github.com/m7medvision/go-clean-template
 
 go 1.27
 

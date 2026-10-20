@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	protov1 "github.com/evrone/go-clean-template/docs/proto/v1"
 	"github.com/goccy/go-json"
+	protov1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
