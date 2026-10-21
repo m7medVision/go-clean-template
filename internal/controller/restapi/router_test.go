@@ -135,9 +135,19 @@ func newTestConfig(t *testing.T) *config.Config {
 }
 
 func newRouter(cfg *config.Config, e usecase.Exchange, u usecase.User, tk usecase.Task) http.Handler {
+	return newRouterWithPasskey(cfg, e, u, tk, &fakePasskey{})
+}
+
+func newRouterWithPasskey(
+	cfg *config.Config,
+	e usecase.Exchange,
+	u usecase.User,
+	tk usecase.Task,
+	pk usecase.Passkey,
+) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, e, u, tk, jwtManager, noopLogger{})
+	return restapi.NewRouter(cfg, e, u, tk, pk, jwtManager, noopLogger{})
 }
 
 func newToken(t *testing.T) string {
@@ -491,6 +501,7 @@ func TestOpenAPIExportsEveryOperation(t *testing.T) {
 		"/v1/auth/register", "/v1/auth/login", "/v1/user/profile",
 		"/v1/tasks", "/v1/tasks/{id}", "/v1/tasks/{id}/status",
 		"/v1/exchange/convert", "/v1/exchange/history",
+		"/v1/passkeys", "/v1/passkeys/register/begin", "/v1/passkeys/register/finish",
 	} {
 		assert.Contains(t, spec.Paths, path)
 	}

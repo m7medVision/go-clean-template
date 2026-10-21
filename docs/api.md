@@ -9,8 +9,8 @@ the same use cases, so behaviour and errors match across transports.
 | GraphQL | `POST http://127.0.0.1:8080/graphql` | `POST http://app.lvh.me/graphql` |
 | gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) |
 
-Every operation except register and login needs `Authorization: Bearer <token>`, with the token from
-login.
+Every operation except register, login and passkey login needs `Authorization: Bearer <token>`, with
+the token from login.
 
 ## User authentication
 
@@ -24,6 +24,33 @@ Registration, login, and JWT-based authorization.
 
 - Passwords are hashed with bcrypt; JWTs expire after `JWT_TOKEN_EXPIRY`.
 - Registration queues a welcome email that the worker sends (see [worker.md](worker.md)).
+
+## Passkeys
+
+WebAuthn passkeys alongside passwords: add them while signed in, then sign in with one for the same
+JWT password login returns. REST only; the ceremonies, the replay protection and the relying-party
+setup are in [passkeys.md](passkeys.md).
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/v1/passkeys/register/begin` | Bearer, recent | Start adding a passkey: creation options and a `ceremony_token`; `401` `reauthentication required` if the sign-in is older than `WEBAUTHN_REAUTH_MAX_AGE` |
+| `POST` | `/v1/passkeys/register/finish` | Bearer | Verify the new credential and store it (`201`); header `X-Ceremony-Token`, optional query `name` |
+| `GET` | `/v1/passkeys` | Bearer | The caller's passkeys, oldest first |
+| `PATCH` | `/v1/passkeys/{id}` | Bearer | Rename a passkey; body `{"name": "…"}` |
+| `DELETE` | `/v1/passkeys/{id}` | Bearer | Delete a passkey (`204`); it can no longer sign in |
+| `POST` | `/v1/auth/passkey/begin` | none | Start a sign-in: request options and a `ceremony_token` |
+| `POST` | `/v1/auth/passkey/finish` | none | Verify the assertion and return `{token}`; header `X-Ceremony-Token` |
+
+- Both `finish` bodies are the browser's `PublicKeyCredential.toJSON()`, sent as it is. The
+  `ceremony_token` from `begin` goes in the `X-Ceremony-Token` request header, not the query
+  string, so it stays out of access logs.
+- Adding a passkey needs a recent sign-in: `register/begin` checks the auth token's `iat`. A token
+  older than `WEBAUTHN_REAUTH_MAX_AGE` (5 minutes by default) gets a `401` problem whose `detail` is
+  exactly `reauthentication required`. The token is still valid for everything else; sign in again
+  and retry. See [passkeys.md](passkeys.md#adding-a-passkey).
+- `{id}` is the credential ID as unpadded base64url. Another user's passkey answers `404`.
+- An invalid ceremony is `400` on registration and `401` on sign-in; finishing a sign-in twice is
+  `409`. The full mapping is in [passkeys.md](passkeys.md#errors).
 
 ## Task management
 

@@ -17,6 +17,8 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
   ([gqlgen](https://github.com/99designs/gqlgen)).
 - **Three domains.** User auth (JWT), tasks with a status state machine, and currency exchange
   against an outbound HTTP API.
+- **Passkeys alongside passwords.** Add one from the profile, sign in with it from a button or the
+  browser's autofill; each sign-in challenge works once.
 - **Postgres and nothing else.** Typed queries with [sqlc](https://sqlc.dev/), a declarative
   [Atlas](https://atlasgo.io/) schema applied at startup, and a job queue in one ordinary table.
 - **A worker binary.** It consumes that queue and sends email from templates embedded in the binary.
@@ -61,6 +63,7 @@ If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` f
 - [API](docs/api.md): every endpoint on every transport, errors, versioning
 - [Development](docs/development.md): dev mode, tests, the full stack behind Caddy
 - [Configuration](docs/configuration.md): every environment variable, tracing
+- [Passkeys](docs/passkeys.md): the WebAuthn ceremonies, replay protection, relying-party setup
 - [Queue, worker and email](docs/worker.md)
 - [Web client](docs/web.md)
 

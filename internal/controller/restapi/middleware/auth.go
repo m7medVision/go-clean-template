@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
@@ -19,6 +20,12 @@ const (
 
 type authContextKey struct{}
 
+// caller is what Auth stores in the request context.
+type caller struct {
+	userID   string
+	issuedAt time.Time
+}
+
 type problem struct {
 	Type   string `json:"type"`
 	Title  string `json:"title"`
@@ -28,9 +35,17 @@ type problem struct {
 
 // UserID returns the caller identifier stored in the request context by Auth.
 func UserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(authContextKey{}).(string)
+	c, ok := ctx.Value(authContextKey{}).(caller)
 
-	return userID, ok
+	return c.userID, ok
+}
+
+// AuthTime returns when the caller's token was issued, stored in the request context by Auth: the
+// last time they signed in. It is zero for a token issued without one.
+func AuthTime(ctx context.Context) (time.Time, bool) {
+	c, ok := ctx.Value(authContextKey{}).(caller)
+
+	return c.issuedAt, ok
 }
 
 // Auth authenticates the request and stores the caller identifier in the request
@@ -60,14 +75,15 @@ func Auth(jwtManager *jwt.Manager, l logger.Interface) func(http.Handler) http.H
 				return
 			}
 
-			userID, err := jwtManager.ParseToken(parts[1])
+			claims, err := jwtManager.Parse(parts[1])
 			if err != nil {
 				writeProblem(l, w, http.StatusUnauthorized, "invalid or expired token")
 
 				return
 			}
 
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authContextKey{}, userID)))
+			ctx := context.WithValue(r.Context(), authContextKey{}, caller{userID: claims.UserID, issuedAt: claims.IssuedAt})
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

@@ -27,9 +27,12 @@ func New(secret string, duration time.Duration) *Manager {
 
 // GenerateToken creates a new JWT token for the given user ID.
 func (m *Manager) GenerateToken(userID string) (string, error) {
+	now := time.Now()
+
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, jwtlib.RegisteredClaims{
 		Subject:   userID,
-		ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(m.duration)),
+		IssuedAt:  jwtlib.NewNumericDate(now),
+		ExpiresAt: jwtlib.NewNumericDate(now.Add(m.duration)),
 	})
 
 	tokenString, err := token.SignedString([]byte(m.secret))
@@ -40,8 +43,26 @@ func (m *Manager) GenerateToken(userID string) (string, error) {
 	return tokenString, nil
 }
 
+// Claims is what a valid auth token says about its caller.
+type Claims struct {
+	UserID string
+	// IssuedAt is when the token was issued: when the caller last proved who they are. It is zero
+	// for a token without an iat claim.
+	IssuedAt time.Time
+}
+
 // ParseToken validates a JWT token and returns the user ID.
 func (m *Manager) ParseToken(tokenString string) (string, error) {
+	claims, err := m.Parse(tokenString)
+	if err != nil {
+		return "", err
+	}
+
+	return claims.UserID, nil
+}
+
+// Parse validates a JWT token and returns its claims.
+func (m *Manager) Parse(tokenString string) (Claims, error) {
 	token, err := jwtlib.Parse(tokenString, func(token *jwtlib.Token) (any, error) {
 		if _, ok := token.Method.(*jwtlib.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("%w: %v", ErrUnexpectedSigningMethod, token.Header["alg"])
@@ -50,13 +71,24 @@ func (m *Manager) ParseToken(tokenString string) (string, error) {
 		return []byte(m.secret), nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("jwt - ParseToken - jwtlib.Parse: %w", err)
+		return Claims{}, fmt.Errorf("jwt - Parse - jwtlib.Parse: %w", err)
 	}
 
 	sub, err := token.Claims.GetSubject()
 	if err != nil {
-		return "", fmt.Errorf("jwt - ParseToken - GetSubject: %w", err)
+		return Claims{}, fmt.Errorf("jwt - Parse - GetSubject: %w", err)
 	}
 
-	return sub, nil
+	claims := Claims{UserID: sub}
+
+	issuedAt, err := token.Claims.GetIssuedAt()
+	if err != nil {
+		return Claims{}, fmt.Errorf("jwt - Parse - GetIssuedAt: %w", err)
+	}
+
+	if issuedAt != nil {
+		claims.IssuedAt = issuedAt.Time
+	}
+
+	return claims, nil
 }

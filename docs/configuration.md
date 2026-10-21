@@ -41,6 +41,21 @@ Two variables are read by tooling, not by the app:
 | --- | --- | --- |
 | `EXCHANGE_SERVICE_URL` | `https://open.er-api.com` | base URL of the rate provider; the integration tests point it at a stub |
 
+## WebAuthn
+
+Passkeys. See [passkeys.md](passkeys.md#relying-party-setup) for the values to use in development,
+compose and production.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `WEBAUTHN_RP_ID` | `localhost` | the relying party ID: the host passkeys are bound to. In production, the registrable domain (`example.com`); changing it orphans existing passkeys |
+| `WEBAUTHN_RP_NAME` | `Go Clean Template` | the name the browser's passkey prompt shows; `.env.example` uses `go-clean-template` because of the no-spaces rule |
+| `WEBAUTHN_RP_ORIGINS` | `http://localhost,http://localhost:3000,http://localhost:8080` | comma-separated origins a ceremony may come from, scheme and port included: Caddy, the Vite dev server and the app's own port |
+| `WEBAUTHN_CEREMONY_TIMEOUT` | `5m` | how long a ceremony can take: the browser prompt's timeout and the lifetime of the ceremony token |
+| `WEBAUTHN_REAUTH_MAX_AGE` | `5m` | how recently the caller must have signed in (the age of their auth token) to add a passkey; an older sign-in gets a `401` and must sign in again ([passkeys.md](passkeys.md#adding-a-passkey)) |
+
+The ceremony token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
+
 ## Worker and email
 
 Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.md) for how they behave.

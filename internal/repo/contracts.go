@@ -46,6 +46,22 @@ type (
 		Delete(ctx context.Context, userID, taskID string) error
 	}
 
+	// PasskeyRepo stores users' WebAuthn credentials and the login challenges already used. A
+	// credential ID already stored is entity.ErrPasskeyExists; an unknown one is
+	// entity.ErrPasskeyNotFound, as is another user's passkey on Rename and Delete, which match on
+	// the owner too. BurnChallenge records a challenge hash once: a second burn of the
+	// same hash is entity.ErrPasskeyChallengeUsed.
+	PasskeyRepo interface {
+		Store(ctx context.Context, passkey *entity.Passkey) error
+		ListByUser(ctx context.Context, userID string) ([]entity.Passkey, error)
+		GetByID(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error)
+		UpdateUsage(ctx context.Context, id entity.PasskeyID, credential json.RawMessage, usedAt time.Time) error
+		Rename(ctx context.Context, userID string, id entity.PasskeyID, name string) (entity.Passkey, error)
+		Delete(ctx context.Context, userID string, id entity.PasskeyID) error
+		BurnChallenge(ctx context.Context, hash []byte, expiresAt time.Time) error
+		DeleteExpiredChallenges(ctx context.Context) error
+	}
+
 	// QueueRepo is a Postgres-backed message queue. Use cases enqueue with Send; the worker binary
 	// consumes with Read and Delete (it satisfies worker.Queue).
 	QueueRepo interface {

@@ -44,6 +44,12 @@ x-backend-app-environment: &x-backend-app-environment
   MAIL_FROM: "Go Clean Template <noreply@example.com>"
   # Exchange rates (ExchangeRate-API open access)
   EXCHANGE_SERVICE_URL: "https://open.er-api.com"
+  # WebAuthn (passkeys): Caddy, the Vite dev server, and the app port the integration tests declare
+  WEBAUTHN_RP_ID: "localhost"
+  WEBAUTHN_RP_NAME: "Go Clean Template"
+  WEBAUTHN_RP_ORIGINS: "http://localhost,http://localhost:3000,http://localhost:8080"
+  WEBAUTHN_CEREMONY_TIMEOUT: "5m"
+  WEBAUTHN_REAUTH_MAX_AGE: "5m"
 
 
 services:

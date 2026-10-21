@@ -231,6 +231,83 @@
         ],
         "type": "object"
       },
+      "Passkey": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "examples": [
+              "2026-01-01T00:00:00Z"
+            ],
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "examples": [
+              "AQIDBA"
+            ],
+            "type": "string"
+          },
+          "last_used_at": {
+            "examples": [
+              "2026-01-01T00:00:00Z"
+            ],
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "examples": [
+              "MacBook Touch ID"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "last_used_at"
+        ],
+        "type": "object"
+      },
+      "PasskeyCeremony": {
+        "additionalProperties": false,
+        "properties": {
+          "ceremony_token": {
+            "examples": [
+              "eyJhbGciOiJIUzI1NiIs..."
+            ],
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": true,
+            "description": "WebAuthn options JSON for PublicKeyCredential.parseCreationOptionsFromJSON (or parseRequestOptionsFromJSON on sign-in).",
+            "type": "object"
+          }
+        },
+        "required": [
+          "options",
+          "ceremony_token"
+        ],
+        "type": "object"
+      },
+      "PasskeyList": {
+        "additionalProperties": false,
+        "properties": {
+          "passkeys": {
+            "items": {
+              "$ref": "#/components/schemas/Passkey"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "passkeys"
+        ],
+        "type": "object"
+      },
       "Register": {
         "additionalProperties": true,
         "properties": {
@@ -262,6 +339,23 @@
           "username",
           "email",
           "password"
+        ],
+        "type": "object"
+      },
+      "RenamePasskey": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "examples": [
+              "Work laptop"
+            ],
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -537,6 +631,135 @@
         ]
       }
     },
+    "/v1/auth/passkey/begin": {
+      "post": {
+        "description": "Start a WebAuthn login ceremony for any registered passkey. Pass `options` to navigator.credentials.get and send the result to finish with `ceremony_token` in the X-Ceremony-Token header.",
+        "operationId": "begin-passkey-login",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyCeremony"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Begin passkey login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/passkey/finish": {
+      "post": {
+        "description": "Verify the browser's assertion against the ceremony and get a JWT token. A ceremony completes once; finishing it again is a conflict.",
+        "operationId": "finish-passkey-login",
+        "parameters": [
+          {
+            "description": "The ceremony_token from begin",
+            "in": "header",
+            "name": "X-Ceremony-Token",
+            "required": true,
+            "schema": {
+              "description": "The ceremony_token from begin",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "description": "The browser's PublicKeyCredential.toJSON() from navigator.credentials.create (or navigator.credentials.get on sign-in).",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Finish passkey login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/v1/auth/register": {
       "post": {
         "description": "Register a new user",
@@ -755,6 +978,388 @@
         "summary": "Show conversion history",
         "tags": [
           "exchange"
+        ]
+      }
+    },
+    "/v1/passkeys": {
+      "get": {
+        "description": "List the current user's passkeys, oldest first",
+        "operationId": "list-passkeys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "List passkeys",
+        "tags": [
+          "passkeys"
+        ]
+      }
+    },
+    "/v1/passkeys/register/begin": {
+      "post": {
+        "description": "Start a WebAuthn registration ceremony for the current user. Pass `options` to navigator.credentials.create and send the result to finish with `ceremony_token` in the X-Ceremony-Token header. The caller must have signed in recently (WEBAUTHN_REAUTH_MAX_AGE); otherwise the answer is a 401 whose detail is \"reauthentication required\": sign in again and retry.",
+        "operationId": "begin-passkey-registration",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyCeremony"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Begin adding a passkey",
+        "tags": [
+          "passkeys"
+        ]
+      }
+    },
+    "/v1/passkeys/register/finish": {
+      "post": {
+        "description": "Verify the browser's new credential against the ceremony and store it as a passkey.",
+        "operationId": "finish-passkey-registration",
+        "parameters": [
+          {
+            "description": "The ceremony_token from begin",
+            "in": "header",
+            "name": "X-Ceremony-Token",
+            "required": true,
+            "schema": {
+              "description": "The ceremony_token from begin",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "A label for the passkey; defaults to \"Passkey\"",
+            "explode": false,
+            "in": "query",
+            "name": "name",
+            "schema": {
+              "description": "A label for the passkey; defaults to \"Passkey\"",
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "description": "The browser's PublicKeyCredential.toJSON() from navigator.credentials.create (or navigator.credentials.get on sign-in).",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Passkey"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Finish adding a passkey",
+        "tags": [
+          "passkeys"
+        ]
+      }
+    },
+    "/v1/passkeys/{id}": {
+      "delete": {
+        "description": "Delete one of the current user's passkeys; it can no longer sign in. Another user's passkey is not found.",
+        "operationId": "delete-passkey",
+        "parameters": [
+          {
+            "description": "The passkey's ID, unpadded base64url",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The passkey's ID, unpadded base64url",
+              "examples": [
+                "AQIDBA"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete a passkey",
+        "tags": [
+          "passkeys"
+        ]
+      },
+      "patch": {
+        "description": "Rename one of the current user's passkeys. Another user's passkey is not found.",
+        "operationId": "rename-passkey",
+        "parameters": [
+          {
+            "description": "The passkey's ID, unpadded base64url",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The passkey's ID, unpadded base64url",
+              "examples": [
+                "AQIDBA"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenamePasskey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Passkey"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Rename a passkey",
+        "tags": [
+          "passkeys"
         ]
       }
     },

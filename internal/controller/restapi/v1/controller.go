@@ -10,5 +10,6 @@ type V1 struct {
 	e  usecase.Exchange
 	u  usecase.User
 	tk usecase.Task
+	pk usecase.Passkey
 	l  logger.Interface
 }

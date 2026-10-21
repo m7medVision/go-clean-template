@@ -2,12 +2,18 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { profileQuery } from "#/user/api";
+import { passkeysQuery } from "#/passkey/api";
+import { PasskeysCard } from "#/passkey/passkeys-card";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 
 export const Route = createFileRoute("/_authed/profile")({
   staticData: { title: "Profile" },
-  loader: ({ context }) => context.queryClient.ensureQueryData(profileQuery),
+  loader: ({ context }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(profileQuery),
+      context.queryClient.ensureQueryData(passkeysQuery),
+    ]),
   component: Profile,
 });
 
@@ -45,6 +51,7 @@ function Profile() {
           </dl>
         </CardContent>
       </Card>
+      <PasskeysCard />
     </div>
   );
 }

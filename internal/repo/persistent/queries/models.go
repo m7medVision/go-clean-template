@@ -51,3 +51,17 @@ type User struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+type WebauthnCredential struct {
+	ID         entity.PasskeyID
+	UserID     string
+	Name       string
+	Credential json.RawMessage
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+}
+
+type WebauthnUsedChallenge struct {
+	ChallengeHash []byte
+	ExpiresAt     time.Time
+}

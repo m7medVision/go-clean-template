@@ -12,6 +12,7 @@ package usecase_test
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	entity "github.com/m7medvision/go-clean-template/internal/entity"
 	decimal "github.com/shopspring/decimal"
@@ -253,6 +254,136 @@ func (m *MockTask) Update(ctx context.Context, userID, taskID, title, descriptio
 func (mr *MockTaskMockRecorder) Update(ctx, userID, taskID, title, description any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTask)(nil).Update), ctx, userID, taskID, title, description)
+}
+
+// MockPasskey is a mock of Passkey interface.
+type MockPasskey struct {
+	ctrl     *gomock.Controller
+	recorder *MockPasskeyMockRecorder
+	isgomock struct{}
+}
+
+// MockPasskeyMockRecorder is the mock recorder for MockPasskey.
+type MockPasskeyMockRecorder struct {
+	mock *MockPasskey
+}
+
+// NewMockPasskey creates a new mock instance.
+func NewMockPasskey(ctrl *gomock.Controller) *MockPasskey {
+	mock := &MockPasskey{ctrl: ctrl}
+	mock.recorder = &MockPasskeyMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPasskey) EXPECT() *MockPasskeyMockRecorder {
+	return m.recorder
+}
+
+// BeginLogin mocks base method.
+func (m *MockPasskey) BeginLogin(ctx context.Context) ([]byte, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BeginLogin", ctx)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// BeginLogin indicates an expected call of BeginLogin.
+func (mr *MockPasskeyMockRecorder) BeginLogin(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginLogin", reflect.TypeOf((*MockPasskey)(nil).BeginLogin), ctx)
+}
+
+// BeginRegistration mocks base method.
+func (m *MockPasskey) BeginRegistration(ctx context.Context, userID string, authTime time.Time) ([]byte, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BeginRegistration", ctx, userID, authTime)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// BeginRegistration indicates an expected call of BeginRegistration.
+func (mr *MockPasskeyMockRecorder) BeginRegistration(ctx, userID, authTime any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginRegistration", reflect.TypeOf((*MockPasskey)(nil).BeginRegistration), ctx, userID, authTime)
+}
+
+// Delete mocks base method.
+func (m *MockPasskey) Delete(ctx context.Context, userID, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, userID, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockPasskeyMockRecorder) Delete(ctx, userID, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockPasskey)(nil).Delete), ctx, userID, id)
+}
+
+// FinishLogin mocks base method.
+func (m *MockPasskey) FinishLogin(ctx context.Context, token string, body []byte) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinishLogin", ctx, token, body)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinishLogin indicates an expected call of FinishLogin.
+func (mr *MockPasskeyMockRecorder) FinishLogin(ctx, token, body any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishLogin", reflect.TypeOf((*MockPasskey)(nil).FinishLogin), ctx, token, body)
+}
+
+// FinishRegistration mocks base method.
+func (m *MockPasskey) FinishRegistration(ctx context.Context, userID, token, name string, body []byte) (entity.Passkey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FinishRegistration", ctx, userID, token, name, body)
+	ret0, _ := ret[0].(entity.Passkey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FinishRegistration indicates an expected call of FinishRegistration.
+func (mr *MockPasskeyMockRecorder) FinishRegistration(ctx, userID, token, name, body any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRegistration", reflect.TypeOf((*MockPasskey)(nil).FinishRegistration), ctx, userID, token, name, body)
+}
+
+// List mocks base method.
+func (m *MockPasskey) List(ctx context.Context, userID string) ([]entity.Passkey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx, userID)
+	ret0, _ := ret[0].([]entity.Passkey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockPasskeyMockRecorder) List(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockPasskey)(nil).List), ctx, userID)
+}
+
+// Rename mocks base method.
+func (m *MockPasskey) Rename(ctx context.Context, userID, id, name string) (entity.Passkey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rename", ctx, userID, id, name)
+	ret0, _ := ret[0].(entity.Passkey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Rename indicates an expected call of Rename.
+func (mr *MockPasskeyMockRecorder) Rename(ctx, userID, id, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockPasskey)(nil).Rename), ctx, userID, id, name)
 }
 
 // MockMail is a mock of Mail interface.
