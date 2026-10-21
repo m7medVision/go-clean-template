@@ -231,6 +231,57 @@
         ],
         "type": "object"
       },
+      "OIDCCallback": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The code query parameter of the callback",
+            "minLength": 1,
+            "type": "string"
+          },
+          "state": {
+            "description": "The state query parameter of the callback",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "state"
+        ],
+        "type": "object"
+      },
+      "OIDCRedirect": {
+        "additionalProperties": false,
+        "properties": {
+          "ceremony_token": {
+            "description": "Send it back to finish in the X-Ceremony-Token header",
+            "type": "string"
+          },
+          "url": {
+            "description": "The provider's authorize URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "ceremony_token"
+        ],
+        "type": "object"
+      },
+      "OIDCStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "description": "Whether SSO sign-in is configured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
       "Passkey": {
         "additionalProperties": false,
         "properties": {
@@ -569,6 +620,113 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/admin/tasks": {
+      "get": {
+        "description": "List tasks across all users with optional filtering. Requires the admin role.",
+        "operationId": "list-all-tasks",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "todo",
+                "in_progress",
+                "done"
+              ],
+              "examples": [
+                "todo"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 10,
+              "format": "int64",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "List every user's tasks",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
     "/v1/auth/login": {
       "post": {
         "description": "Authenticate user and get JWT token",
@@ -626,6 +784,195 @@
           }
         },
         "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/oidc": {
+      "get": {
+        "description": "Whether SSO sign-in through an OpenID Connect provider is configured.",
+        "operationId": "oidc-status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "SSO status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/oidc/begin": {
+      "post": {
+        "description": "Start an SSO sign-in. Keep `ceremony_token` for this tab, send the browser to `url`, and finish with the code and state the provider sends back to /sso/callback.",
+        "operationId": "begin-oidc",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OIDCRedirect"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Begin SSO sign-in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/oidc/finish": {
+      "post": {
+        "description": "Exchange the provider's code for a JWT token. The first sign-in of an identity creates its user; an email or username that already belongs to an account is a conflict.",
+        "operationId": "finish-oidc",
+        "parameters": [
+          {
+            "description": "The ceremony_token from begin",
+            "in": "header",
+            "name": "X-Ceremony-Token",
+            "required": true,
+            "schema": {
+              "description": "The ceremony_token from begin",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OIDCCallback"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Finish SSO sign-in",
         "tags": [
           "auth"
         ]

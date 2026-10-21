@@ -549,12 +549,13 @@ const file_docs_proto_v1_task_proto_rawDesc = "" +
 	"\x11ListTasksResponse\x12+\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x15.grpc.v1.TaskResponseR\x05tasks\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"\x14\n" +
-	"\x12DeleteTaskResponse2\x9e\x03\n" +
+	"\x12DeleteTaskResponse2\xe5\x03\n" +
 	"\vTaskService\x12?\n" +
 	"\n" +
 	"CreateTask\x12\x1a.grpc.v1.CreateTaskRequest\x1a\x15.grpc.v1.TaskResponse\x129\n" +
 	"\aGetTask\x12\x17.grpc.v1.GetTaskRequest\x1a\x15.grpc.v1.TaskResponse\x12B\n" +
-	"\tListTasks\x12\x19.grpc.v1.ListTasksRequest\x1a\x1a.grpc.v1.ListTasksResponse\x12?\n" +
+	"\tListTasks\x12\x19.grpc.v1.ListTasksRequest\x1a\x1a.grpc.v1.ListTasksResponse\x12E\n" +
+	"\fListAllTasks\x12\x19.grpc.v1.ListTasksRequest\x1a\x1a.grpc.v1.ListTasksResponse\x12?\n" +
 	"\n" +
 	"UpdateTask\x12\x1a.grpc.v1.UpdateTaskRequest\x1a\x15.grpc.v1.TaskResponse\x12G\n" +
 	"\x0eTransitionTask\x12\x1e.grpc.v1.TransitionTaskRequest\x1a\x15.grpc.v1.TaskResponse\x12E\n" +
@@ -590,17 +591,19 @@ var file_docs_proto_v1_task_proto_depIdxs = []int32{
 	0, // 1: grpc.v1.TaskService.CreateTask:input_type -> grpc.v1.CreateTaskRequest
 	1, // 2: grpc.v1.TaskService.GetTask:input_type -> grpc.v1.GetTaskRequest
 	2, // 3: grpc.v1.TaskService.ListTasks:input_type -> grpc.v1.ListTasksRequest
-	3, // 4: grpc.v1.TaskService.UpdateTask:input_type -> grpc.v1.UpdateTaskRequest
-	4, // 5: grpc.v1.TaskService.TransitionTask:input_type -> grpc.v1.TransitionTaskRequest
-	5, // 6: grpc.v1.TaskService.DeleteTask:input_type -> grpc.v1.DeleteTaskRequest
-	6, // 7: grpc.v1.TaskService.CreateTask:output_type -> grpc.v1.TaskResponse
-	6, // 8: grpc.v1.TaskService.GetTask:output_type -> grpc.v1.TaskResponse
-	7, // 9: grpc.v1.TaskService.ListTasks:output_type -> grpc.v1.ListTasksResponse
-	6, // 10: grpc.v1.TaskService.UpdateTask:output_type -> grpc.v1.TaskResponse
-	6, // 11: grpc.v1.TaskService.TransitionTask:output_type -> grpc.v1.TaskResponse
-	8, // 12: grpc.v1.TaskService.DeleteTask:output_type -> grpc.v1.DeleteTaskResponse
-	7, // [7:13] is the sub-list for method output_type
-	1, // [1:7] is the sub-list for method input_type
+	2, // 4: grpc.v1.TaskService.ListAllTasks:input_type -> grpc.v1.ListTasksRequest
+	3, // 5: grpc.v1.TaskService.UpdateTask:input_type -> grpc.v1.UpdateTaskRequest
+	4, // 6: grpc.v1.TaskService.TransitionTask:input_type -> grpc.v1.TransitionTaskRequest
+	5, // 7: grpc.v1.TaskService.DeleteTask:input_type -> grpc.v1.DeleteTaskRequest
+	6, // 8: grpc.v1.TaskService.CreateTask:output_type -> grpc.v1.TaskResponse
+	6, // 9: grpc.v1.TaskService.GetTask:output_type -> grpc.v1.TaskResponse
+	7, // 10: grpc.v1.TaskService.ListTasks:output_type -> grpc.v1.ListTasksResponse
+	7, // 11: grpc.v1.TaskService.ListAllTasks:output_type -> grpc.v1.ListTasksResponse
+	6, // 12: grpc.v1.TaskService.UpdateTask:output_type -> grpc.v1.TaskResponse
+	6, // 13: grpc.v1.TaskService.TransitionTask:output_type -> grpc.v1.TaskResponse
+	8, // 14: grpc.v1.TaskService.DeleteTask:output_type -> grpc.v1.DeleteTaskResponse
+	8, // [8:15] is the sub-list for method output_type
+	1, // [1:8] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name

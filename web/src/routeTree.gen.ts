@@ -16,6 +16,8 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedExchangeRouteImport } from './routes/_authed/exchange'
 import { Route as AuthedProfileRouteImport } from './routes/_authed/profile'
 import { Route as AuthedTasksRouteImport } from './routes/_authed/tasks'
+import { Route as SsoCallbackRouteImport } from './routes/sso.callback'
+import { Route as AuthedAdminTasksRouteImport } from './routes/_authed/admin/tasks'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -51,6 +53,16 @@ const AuthedTasksRoute = AuthedTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => AuthedRoute,
 } as any)
+const SsoCallbackRoute = SsoCallbackRouteImport.update({
+  id: '/sso/callback',
+  path: '/sso/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedAdminTasksRoute = AuthedAdminTasksRouteImport.update({
+  id: '/admin/tasks',
+  path: '/admin/tasks',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +71,8 @@ export interface FileRoutesByFullPath {
   '/exchange': typeof AuthedExchangeRoute
   '/profile': typeof AuthedProfileRoute
   '/tasks': typeof AuthedTasksRoute
+  '/sso/callback': typeof SsoCallbackRoute
+  '/admin/tasks': typeof AuthedAdminTasksRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -67,6 +81,8 @@ export interface FileRoutesByTo {
   '/exchange': typeof AuthedExchangeRoute
   '/profile': typeof AuthedProfileRoute
   '/tasks': typeof AuthedTasksRoute
+  '/sso/callback': typeof SsoCallbackRoute
+  '/admin/tasks': typeof AuthedAdminTasksRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,12 +93,30 @@ export interface FileRoutesById {
   '/_authed/exchange': typeof AuthedExchangeRoute
   '/_authed/profile': typeof AuthedProfileRoute
   '/_authed/tasks': typeof AuthedTasksRoute
+  '/sso/callback': typeof SsoCallbackRoute
+  '/_authed/admin/tasks': typeof AuthedAdminTasksRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/register' | '/exchange' | '/profile' | '/tasks'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/exchange'
+    | '/profile'
+    | '/tasks'
+    | '/sso/callback'
+    | '/admin/tasks'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/exchange' | '/profile' | '/tasks'
+  to:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/exchange'
+    | '/profile'
+    | '/tasks'
+    | '/sso/callback'
+    | '/admin/tasks'
   id:
     | '__root__'
     | '/'
@@ -92,6 +126,8 @@ export interface FileRouteTypes {
     | '/_authed/exchange'
     | '/_authed/profile'
     | '/_authed/tasks'
+    | '/sso/callback'
+    | '/_authed/admin/tasks'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -99,6 +135,7 @@ export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  SsoCallbackRoute: typeof SsoCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -152,6 +189,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedTasksRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/sso/callback': {
+      id: '/sso/callback'
+      path: '/sso/callback'
+      fullPath: '/sso/callback'
+      preLoaderRoute: typeof SsoCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed/admin/tasks': {
+      id: '/_authed/admin/tasks'
+      path: '/admin/tasks'
+      fullPath: '/admin/tasks'
+      preLoaderRoute: typeof AuthedAdminTasksRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
@@ -159,12 +210,14 @@ interface AuthedRouteChildren {
   AuthedExchangeRoute: typeof AuthedExchangeRoute
   AuthedProfileRoute: typeof AuthedProfileRoute
   AuthedTasksRoute: typeof AuthedTasksRoute
+  AuthedAdminTasksRoute: typeof AuthedAdminTasksRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedExchangeRoute: AuthedExchangeRoute,
   AuthedProfileRoute: AuthedProfileRoute,
   AuthedTasksRoute: AuthedTasksRoute,
+  AuthedAdminTasksRoute: AuthedAdminTasksRoute,
 }
 
 const AuthedRouteWithChildren =
@@ -175,6 +228,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  SsoCallbackRoute: SsoCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

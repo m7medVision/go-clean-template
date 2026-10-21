@@ -1,6 +1,6 @@
 import { graphqlKey, graphqlMutationOptions, graphqlQueryOptions } from "#/api/graphql";
 import { graphql } from "#/graphql";
-import type { TasksQueryVariables } from "#/graphql/graphql";
+import type { AllTasksQueryVariables, TasksQueryVariables } from "#/graphql/graphql";
 
 // Every task read and write goes through GraphQL: the list asks only for the columns it shows.
 
@@ -15,6 +15,22 @@ const TasksQuery = graphql(`
         status
         createdAt
         updatedAt
+      }
+    }
+  }
+`);
+
+// Every user's tasks, for admins: the columns the "All tasks" table shows, and the owner.
+const AllTasksQuery = graphql(`
+  query AllTasks($status: TaskStatus, $limit: Int!, $offset: Int!) {
+    allTasks(status: $status, limit: $limit, offset: $offset) {
+      total
+      tasks {
+        id
+        userId
+        title
+        status
+        createdAt
       }
     }
   }
@@ -55,6 +71,9 @@ export const tasksQuery = (variables: TasksQueryVariables) =>
 
 // Prefix of every task list query, whatever its filter and page. Writes invalidate it.
 export const tasksKey = graphqlKey(TasksQuery);
+
+export const allTasksQuery = (variables: AllTasksQueryVariables) =>
+  graphqlQueryOptions(AllTasksQuery, variables);
 
 export const createTask = graphqlMutationOptions(CreateTaskMutation);
 export const updateTask = graphqlMutationOptions(UpdateTaskMutation);

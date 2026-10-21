@@ -19,6 +19,8 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
   against an outbound HTTP API.
 - **Passkeys alongside passwords.** Add one from the profile, sign in with it from a button or the
   browser's autofill; each sign-in challenge works once.
+- **SSO and roles.** Sign in through any OpenID Connect provider (Keycloak ships ready in dev, with an
+  admin and a user), with the provider's roles mapped to the app's and checked in the use cases.
 - **Postgres and nothing else.** Typed queries with [sqlc](https://sqlc.dev/), a declarative
   [Atlas](https://atlasgo.io/) schema applied at startup, and a job queue in one ordinary table.
 - **A worker binary.** It consumes that queue and sends email from templates embedded in the binary.
@@ -44,12 +46,12 @@ Needs Docker, Go, `tmux`, `curl` and the [Vite+](https://viteplus.dev/) `vp` CLI
 ```sh
 cp .env.example .env
 make web-deps   # frontend dependencies, once
-make dev        # Postgres + Mailpit in docker; app, worker and web client with hot reload
+make dev        # Postgres, Mailpit, Keycloak in docker; app, worker and web client with hot reload
 ```
 
 Then open:
 
-- <http://localhost:3000>: the web client (register a user to start)
+- <http://localhost:3000>: the web client (register a user, or **Sign in with SSO** as `alice` / `alice`)
 - <http://127.0.0.1:8080/docs>: the REST API reference
 - <http://127.0.0.1:8080/graphql/playground>: GraphQL
 - <http://127.0.0.1:8025>: Mailpit, which catches the welcome email
@@ -64,6 +66,7 @@ If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` f
 - [Development](docs/development.md): dev mode, tests, the full stack behind Caddy
 - [Configuration](docs/configuration.md): every environment variable, tracing
 - [Passkeys](docs/passkeys.md): the WebAuthn ceremonies, replay protection, relying-party setup
+- [SSO and roles](docs/sso.md): OpenID Connect sign-in, the dev Keycloak, role mapping, other providers
 - [Queue, worker and email](docs/worker.md)
 - [Web client](docs/web.md)
 

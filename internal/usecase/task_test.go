@@ -116,6 +116,84 @@ func TestTaskList(t *testing.T) {
 	})
 }
 
+func TestTaskListAll(t *testing.T) {
+	t.Parallel()
+
+	admin := entity.Principal{UserID: "admin-1", Roles: []entity.Role{entity.RoleAdmin}}
+	done := entity.TaskStatusDone
+	aliceTask := entity.Task{ID: "task-1", UserID: "alice", Title: "Alice's", Status: entity.TaskStatusTodo}
+	bobTask := entity.Task{ID: "task-2", UserID: "bob", Title: "Bob's", Status: entity.TaskStatusDone}
+
+	tests := []struct {
+		name       string
+		caller     entity.Principal
+		status     *entity.TaskStatus
+		limit      int
+		offset     int
+		wantFilter *repo.TaskFilter
+		wantErr    error
+	}{
+		{
+			name: "admin lists every user's tasks", caller: admin, status: &done, limit: 20, offset: 40,
+			wantFilter: &repo.TaskFilter{Status: &done, Limit: 20, Offset: 40},
+		},
+		{
+			name: "admin gets List's paging defaults", caller: admin, limit: 0, offset: -1,
+			wantFilter: &repo.TaskFilter{Limit: 10, Offset: 0},
+		},
+		{
+			name:    "user is refused",
+			caller:  entity.Principal{UserID: "bob", Roles: []entity.Role{entity.RoleUser}},
+			limit:   10,
+			wantErr: entity.ErrAdminRequired,
+		},
+		{
+			name:    "no roles is refused",
+			caller:  entity.Principal{UserID: "bob"},
+			limit:   10,
+			wantErr: entity.ErrAdminRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			uc, mockRepo := newTaskUseCase(t)
+
+			// A refused caller never reaches the repo: gomock fails on any unexpected call.
+			if tt.wantFilter != nil {
+				mockRepo.EXPECT().ListAll(gomock.Any(), *tt.wantFilter).Return([]entity.Task{aliceTask, bobTask}, 2, nil)
+			}
+
+			tasks, total, err := uc.ListAll(context.Background(), tt.caller, tt.status, tt.limit, tt.offset)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.Empty(t, tasks)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, 2, total)
+			assert.Equal(t, []entity.Task{aliceTask, bobTask}, tasks)
+		})
+	}
+}
+
+func TestTaskListAll_RepoError(t *testing.T) {
+	t.Parallel()
+
+	uc, mockRepo := newTaskUseCase(t)
+	mockRepo.EXPECT().ListAll(gomock.Any(), gomock.Any()).Return(nil, 0, errInternalServErr)
+
+	admin := entity.Principal{UserID: "admin-1", Roles: []entity.Role{entity.RoleAdmin}}
+	_, _, err := uc.ListAll(context.Background(), admin, nil, 10, 0)
+
+	require.ErrorIs(t, err, errInternalServErr)
+}
+
 func TestTaskUpdate(t *testing.T) {
 	t.Parallel()
 

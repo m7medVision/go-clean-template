@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -128,7 +129,11 @@ func TestLogin(t *testing.T) {
 		token, err := uc.Login(context.Background(), "test@example.com", "password123")
 
 		require.NoError(t, err)
-		assert.NotEmpty(t, token)
+
+		claims, err := jwt.New("test-secret", time.Hour).Parse(token)
+		require.NoError(t, err)
+		assert.Equal(t, "user-id-123", claims.UserID)
+		assert.Equal(t, []string{"user"}, claims.Roles, "a password sign-in grants only the user role")
 	})
 
 	t.Run("login wrong password", func(t *testing.T) {
@@ -161,6 +166,28 @@ func TestLogin(t *testing.T) {
 		require.ErrorIs(t, err, entity.ErrInvalidCredentials)
 		assert.Empty(t, token)
 	})
+}
+
+func TestLogin_SSOUserHasNoPassword(t *testing.T) {
+	t.Parallel()
+
+	// A user created by an SSO sign-in is stored with an empty password hash; no password,
+	// not even an empty one, may sign in as them.
+	for _, password := range []string{"", "anything"} {
+		t.Run("password "+strconv.Quote(password), func(t *testing.T) {
+			t.Parallel()
+
+			uc, repo, _ := newUserUseCase(t)
+			repo.EXPECT().GetByEmail(gomock.Any(), "sso@example.com").Return(entity.User{
+				ID: "user-sso", Username: "sso", Email: "sso@example.com", PasswordHash: "",
+			}, nil)
+
+			token, err := uc.Login(context.Background(), "sso@example.com", password)
+
+			require.ErrorIs(t, err, entity.ErrInvalidCredentials)
+			assert.Empty(t, token)
+		})
+	}
 }
 
 func TestGetUser(t *testing.T) {

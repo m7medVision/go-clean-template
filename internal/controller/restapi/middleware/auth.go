@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
@@ -22,8 +23,8 @@ type authContextKey struct{}
 
 // caller is what Auth stores in the request context.
 type caller struct {
-	userID   string
-	issuedAt time.Time
+	principal entity.Principal
+	issuedAt  time.Time
 }
 
 type problem struct {
@@ -37,7 +38,15 @@ type problem struct {
 func UserID(ctx context.Context) (string, bool) {
 	c, ok := ctx.Value(authContextKey{}).(caller)
 
-	return c.userID, ok
+	return c.principal.UserID, ok
+}
+
+// Principal returns the caller and the roles their token grants, stored in the request context by
+// Auth.
+func Principal(ctx context.Context) (entity.Principal, bool) {
+	c, ok := ctx.Value(authContextKey{}).(caller)
+
+	return c.principal, ok
 }
 
 // AuthTime returns when the caller's token was issued, stored in the request context by Auth: the
@@ -82,7 +91,8 @@ func Auth(jwtManager *jwt.Manager, l logger.Interface) func(http.Handler) http.H
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), authContextKey{}, caller{userID: claims.UserID, issuedAt: claims.IssuedAt})
+			principal := entity.Principal{UserID: claims.UserID, Roles: entity.ParseRoles(claims.Roles)}
+			ctx := context.WithValue(r.Context(), authContextKey{}, caller{principal: principal, issuedAt: claims.IssuedAt})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

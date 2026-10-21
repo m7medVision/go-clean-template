@@ -13,8 +13,13 @@ make web-check  # format, lint, type-check and test
 
 ## Screens
 
-Signed-in screens (`/tasks`, `/exchange`, `/profile`) share a sidebar layout under the `_authed` route;
-`/login` and `/register` use a centred card.
+Signed-in screens (`/tasks`, `/exchange`, `/profile`, and `/admin/tasks` for admins) share a sidebar
+layout under the `_authed` route; `/login`, `/register` and `/sso/callback` use a centred card.
+
+`/admin/tasks` ("All tasks") is a read-only data table of every user's tasks over GraphQL `allTasks`.
+The sidebar shows its link when the token's `roles` claim includes `admin` (`web/src/auth/roles.ts`
+reads the claim without verifying it: a UI hint only, since the server checks the role). A user who
+opens the URL anyway gets the server's `admin role required` in the route's error view.
 
 `/exchange` converts an amount (Omani Rial to Chinese Yuan by default) with a REST form and lists the
 history in a data table. It links to the rate provider, as the provider's terms require.
@@ -69,6 +74,17 @@ resolve to `null` and show nothing; only the server's rejections reach `FormErro
 
 Run it under `make dev` and open the client as `localhost`; see
 [passkeys.md](passkeys.md#relying-party-setup).
+
+## SSO
+
+When `GET /v1/auth/oidc` reports SSO as enabled, `/login` shows "Sign in with SSO". It calls `begin`
+(`web/src/sso/api.ts`), keeps the `ceremony_token` and the post-login redirect in `sessionStorage`
+(`web/src/sso/ceremony.ts`, taken once), and sends the browser to the provider. The provider comes back
+to `/sso/callback?code=…&state=…` on a full page load. The route posts both to `finish` exactly once
+(a code works once, StrictMode or not), stores the JWT as `/login` does, and replaces the history
+entry with the redirect. A refusal from the provider (`?error=…`), a link without a code, or a missing
+ceremony (another tab, a reload) shows a message and a way back to `/login` (`callbackProblem`,
+`web/src/sso/callback.ts`). See [sso.md](sso.md).
 
 ## Token storage
 

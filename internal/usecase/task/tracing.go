@@ -79,6 +79,26 @@ func (t *tracedUseCase) List(
 	return tasks, total, err
 }
 
+func (t *tracedUseCase) ListAll(
+	ctx context.Context, caller entity.Principal, status *entity.TaskStatus, limit, offset int,
+) ([]entity.Task, int, error) {
+	attrs := []attribute.KeyValue{
+		attribute.String("user.id", caller.UserID),
+		attribute.Int("task.limit", limit),
+		attribute.Int("task.offset", offset),
+	}
+	if status != nil {
+		attrs = append(attrs, attribute.String("task.status", string(*status)))
+	}
+
+	ctx, span := startSpan(ctx, "TaskUseCase.ListAll", attrs...)
+
+	tasks, total, err := t.next.ListAll(ctx, caller, status, limit, offset)
+	endSpan(span, err)
+
+	return tasks, total, err
+}
+
 func (t *tracedUseCase) Update(ctx context.Context, userID, taskID, title, description string) (entity.Task, error) {
 	ctx, span := startSpan(
 		ctx, "TaskUseCase.Update",

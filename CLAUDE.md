@@ -17,7 +17,7 @@ different settings than CI. Use the target, not the tool.
 | Task | Use this | Not this |
 | --- | --- | --- |
 | Install tool binaries (`mockgen`, linters, `atlas`) | `make bin-deps` | `go install ...` |
-| Unit tests | `make test` | `go test ./...` — the target adds `-race -covermode atomic` and scopes to `./internal/... ./pkg/...` |
+| Unit tests | `make test` | `go test ./...` — the target adds `-race -covermode atomic` and scopes to `./config/... ./internal/... ./pkg/...` |
 | Integration tests | `make compose-up-integration-test` | `make integration-test` — see below |
 | Lint | `make linter-golangci` | `golangci-lint run` |
 | Format | `make format` | `gofmt` — the target runs `go fix`, `gofumpt`, and `gci` with the repo's import grouping |

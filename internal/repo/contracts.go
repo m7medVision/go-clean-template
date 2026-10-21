@@ -37,11 +37,22 @@ type (
 		GetByEmail(ctx context.Context, email string) (entity.User, error)
 	}
 
+	// IdentityRepo links identities at an OpenID Connect provider, keyed by (issuer, subject), to
+	// users. UserByIdentity of an unlinked identity is entity.ErrUserNotFound. CreateWithIdentity
+	// stores a user with no password together with its identity; an email or username already taken
+	// is entity.ErrAccountConflict, and an identity already linked is entity.ErrUserAlreadyExists.
+	IdentityRepo interface {
+		UserByIdentity(ctx context.Context, issuer, subject string) (entity.User, error)
+		CreateWithIdentity(ctx context.Context, user *entity.User, issuer, subject string) error
+	}
+
 	// TaskRepo -.
 	TaskRepo interface {
 		Store(ctx context.Context, task *entity.Task) error
 		GetByID(ctx context.Context, userID, taskID string) (entity.Task, error)
 		List(ctx context.Context, userID string, filter TaskFilter) ([]entity.Task, int, error)
+		// ListAll is List across every user.
+		ListAll(ctx context.Context, filter TaskFilter) ([]entity.Task, int, error)
 		Update(ctx context.Context, task *entity.Task) error
 		Delete(ctx context.Context, userID, taskID string) error
 	}

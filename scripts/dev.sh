@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dev mode in one tmux window: Postgres and Mailpit in docker; the app and the worker on the host under
+# Dev mode in one tmux window: Postgres, Mailpit and Keycloak in docker; the app and the worker on the host under
 # air; the Vite+ web dev server. Run it through `make dev`, which exports .env (or .env.example); stop
 # with `make dev-down`.
 set -euo pipefail
@@ -33,6 +33,8 @@ if tmux has-session -t "=$SESSION" 2>/dev/null; then
 fi
 
 export TRACING_ENABLED=false
+# The web client is the Vite dev server here, not Caddy: email links and the SSO callback point at it.
+export APP_BASE_URL=http://localhost:3000
 
 # A pane gets the tmux server's environment, not this shell's, when a server is already running, so
 # hand every setting over explicitly: each name in the env file make loaded, with the value make
@@ -45,7 +47,7 @@ while IFS= read -r name; do
 	env_args+=(-e "$name=${!name-}")
 done < <(sed -nE 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' "$env_file")
 
-docker compose up -d db mailpit
+docker compose up -d db mailpit keycloak
 
 pane() {
 	local title=$1 cmd=$2 id
@@ -72,7 +74,7 @@ pane worker 'until curl -sf -o /dev/null "http://localhost:$HTTP_PORT/healthz"; 
 done
 exec go tool air -c .air.worker.toml'
 pane web 'vp -C web dev'
-pane 'db + mailpit' 'docker compose logs -f db mailpit'
+pane 'db + mailpit + keycloak' 'docker compose logs -f db mailpit keycloak'
 
 tmux select-pane -t "=$SESSION:dev.0"
 

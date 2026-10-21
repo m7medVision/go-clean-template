@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -12,13 +13,20 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const principalKey contextKey = "principal"
 
 // UserIDFromContext extracts the user ID from the context.
 func UserIDFromContext(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
+	principal, ok := PrincipalFromContext(ctx)
 
-	return userID, ok
+	return principal.UserID, ok
+}
+
+// PrincipalFromContext extracts the caller and the roles their token grants from the context.
+func PrincipalFromContext(ctx context.Context) (entity.Principal, bool) {
+	principal, ok := ctx.Value(principalKey).(entity.Principal)
+
+	return principal, ok
 }
 
 // AuthInterceptor returns a gRPC unary interceptor for JWT authentication.
@@ -43,12 +51,15 @@ func AuthInterceptor(jwtManager *jwt.Manager) grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.Unauthenticated, "missing authorization token")
 		}
 
-		userID, err := jwtManager.ParseToken(values[0])
+		claims, err := jwtManager.Parse(values[0])
 		if err != nil {
 			return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
 		}
 
-		ctx = context.WithValue(ctx, userIDKey, userID)
+		ctx = context.WithValue(ctx, principalKey, entity.Principal{
+			UserID: claims.UserID,
+			Roles:  entity.ParseRoles(claims.Roles),
+		})
 
 		return handler(ctx, req)
 	}

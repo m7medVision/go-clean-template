@@ -29,6 +29,7 @@ func NewRouter(
 	u usecase.User,
 	tk usecase.Task,
 	pk usecase.Passkey,
+	oc usecase.OIDC,
 	jwtManager *jwt.Manager,
 	l logger.Interface,
 ) *chi.Mux {
@@ -63,7 +64,7 @@ func NewRouter(
 
 	r.Get("/healthz", healthz)
 
-	v1.NewRoutes(humachi.New(r, apiConfig), e, u, tk, pk, l)
+	v1.NewRoutes(humachi.New(r, apiConfig), e, u, tk, pk, oc, l)
 
 	return r
 }

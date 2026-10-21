@@ -23,6 +23,7 @@ func NewRoutes(
 	u usecase.User,
 	tk usecase.Task,
 	pk usecase.Passkey,
+	oc usecase.OIDC,
 	l logger.Interface,
 ) {
 	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
@@ -33,13 +34,16 @@ func NewRoutes(
 		},
 	}
 
-	r := &V1{e: e, u: u, tk: tk, pk: pk, l: l}
+	r := &V1{e: e, u: u, tk: tk, pk: pk, oc: oc, l: l}
 
 	r.register(api)
 	r.login(api)
 	r.profile(api)
 	r.beginPasskeyLogin(api)
 	r.finishPasskeyLogin(api)
+	r.oidcStatus(api)
+	r.beginOIDC(api)
+	r.finishOIDC(api)
 
 	r.beginPasskeyRegistration(api)
 	r.finishPasskeyRegistration(api)
@@ -49,6 +53,7 @@ func NewRoutes(
 
 	r.createTask(api)
 	r.listTasks(api)
+	r.listAllTasks(api)
 	r.getTask(api)
 	r.updateTask(api)
 	r.transitionTask(api)

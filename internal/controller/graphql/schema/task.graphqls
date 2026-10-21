@@ -20,6 +20,8 @@ input UpdateTaskInput { title: String!  description: String }
 type Query {
   task(id: ID!): Task!
   tasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
+  "Every user's tasks. Requires the admin role; anyone else gets FORBIDDEN."
+  allTasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
 }
 
 type Mutation {

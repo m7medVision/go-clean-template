@@ -1,5 +1,6 @@
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { KeyRoundIcon } from "lucide-react";
+import { Building2Icon, KeyRoundIcon } from "lucide-react";
 
 import { $api } from "#/api/client";
 import { safeRedirect } from "#/auth/redirect";
@@ -11,12 +12,14 @@ import { Button } from "#/components/ui/button";
 import { FieldSeparator } from "#/components/ui/field";
 import { usePasskeyLogin } from "#/passkey/use-passkey-login";
 import { passkeysSupported } from "#/passkey/webauthn";
+import { beginSso, ssoStatusQuery } from "#/sso/api";
 
 type LoginSearch = { redirect?: string };
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch =>
     typeof search.redirect === "string" ? { redirect: search.redirect } : {},
+  loader: ({ context }) => context.queryClient.ensureQueryData(ssoStatusQuery),
   component: Login,
 });
 
@@ -32,6 +35,13 @@ function Login() {
   };
 
   const passkey = usePasskeyLogin(signIn);
+
+  const { data: ssoStatus } = useSuspenseQuery(ssoStatusQuery);
+  const sso = useMutation({
+    ...beginSso,
+    // A full page load: the provider's sign-in page, which comes back to /sso/callback.
+    onSuccess: (url) => window.location.assign(url),
+  });
 
   const login = $api.useMutation("post", "/v1/auth/login", {
     onMutate: () => passkey.reset(),
@@ -69,15 +79,34 @@ function Login() {
               />
             )}
           </form.AppField>
-          <FormError error={passkey.error ?? login.error} />
+          <FormError error={passkey.error ?? sso.error ?? login.error} />
           <form.SubmitButton size="lg" className="w-full" pending="Signing in…">
             Sign in
           </form.SubmitButton>
         </form.Form>
       </form.AppForm>
+      {(passkeysSupported() || ssoStatus.enabled) && (
+        <FieldSeparator className="my-4">Or</FieldSeparator>
+      )}
+      {ssoStatus.enabled && (
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          className="mb-3 w-full"
+          disabled={sso.isPending || sso.isSuccess}
+          onClick={() => {
+            login.reset();
+            passkey.reset();
+            sso.mutate({ redirect: safeRedirect(redirect) });
+          }}
+        >
+          <Building2Icon />
+          {sso.isPending || sso.isSuccess ? "Redirecting…" : "Sign in with SSO"}
+        </Button>
+      )}
       {passkeysSupported() && (
         <>
-          <FieldSeparator className="my-4">Or</FieldSeparator>
           <Button
             type="button"
             variant="outline"
@@ -86,6 +115,7 @@ function Login() {
             disabled={passkey.pending}
             onClick={() => {
               login.reset();
+              sso.reset();
               passkey.start();
             }}
           >

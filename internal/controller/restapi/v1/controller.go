@@ -11,5 +11,6 @@ type V1 struct {
 	u  usecase.User
 	tk usecase.Task
 	pk usecase.Passkey
+	oc usecase.OIDC
 	l  logger.Interface
 }

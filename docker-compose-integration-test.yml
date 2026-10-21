@@ -28,9 +28,15 @@ services:
       # Read by queue_test.go to check what the worker consumed.
       PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db?sslmode=disable"
     depends_on:
-      - app
-      - worker
-      - mailpit
+      app:
+        condition: service_started
+      worker:
+        condition: service_started
+      mailpit:
+        condition: service_started
+      # oidc_test.go signs in through Keycloak; its realm import takes a while on a cold start.
+      keycloak:
+        condition: service_healthy
     networks:
       app_network:
         aliases:

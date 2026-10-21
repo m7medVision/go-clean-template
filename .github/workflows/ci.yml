@@ -255,6 +255,15 @@ jobs:
       - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
+      # .env.example turns SSO on against this Keycloak; it boots while the rest of the job runs.
+      # It listens on 8180 inside and out, so the issuer is keycloak.lvh.me:8180 everywhere.
+      - name: Start Keycloak
+        run: >-
+          docker run -d --name keycloak -p 8180:8180 -p 9000:9000
+          -e KC_HTTP_PORT=8180 -e KC_HOSTNAME=http://keycloak.lvh.me:8180 -e KC_HEALTH_ENABLED=true
+          -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+          -v "$PWD/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro"
+          quay.io/keycloak/keycloak:26.8.1 start-dev --import-realm
       - name: Create the app database
         run: createdb db
       - name: Install Atlas
@@ -281,8 +290,16 @@ jobs:
           nohup "$RUNNER_TEMP/worker" > "$RUNNER_TEMP/worker.log" 2>&1 &
       - name: Start Mailpit
         run: docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3
-      - name: Resolve the app and Mailpit hostnames to the runner
-        run: echo '127.0.0.1 app mailpit' | sudo tee -a /etc/hosts
+      - name: Resolve the app, Mailpit and Keycloak hostnames to the runner
+        run: echo '127.0.0.1 app mailpit keycloak.lvh.me' | sudo tee -a /etc/hosts
+      - name: Wait for Keycloak
+        run: |
+          for _ in $(seq 60); do
+            curl -sf -o /dev/null http://localhost:9000/health/ready && exit 0
+            sleep 2
+          done
+          echo "Keycloak did not become ready" >&2
+          exit 1
       - name: Integration tests
         run: make integration-test
       - name: App log
@@ -297,6 +314,9 @@ jobs:
       - name: Exchange stub log
         if: failure()
         run: docker logs exchange
+      - name: Keycloak log
+        if: failure()
+        run: docker logs keycloak
 
   ci-ok:
     name: runner / ci-ok

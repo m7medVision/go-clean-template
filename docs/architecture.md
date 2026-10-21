@@ -58,6 +58,8 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
 9. **A domain rule is written once, in the entity or the use case.** Never in a controller, and never
    duplicated per transport. A rule that only needs the value itself goes on the entity
    (`Task.Transition`, `entity.NewConversion`); a rule that needs a repository goes in the use case.
+   Authorization is a domain rule too: "only an admin lists every user's tasks" is checked in
+   `Task.ListAll`, not in middleware, so every transport enforces it the same way.
 10. **Only controllers know transport errors.** Lower layers return sentinels from
     `internal/entity/errors.go` or errors wrapped with their layer path
     (`fmt.Errorf("TaskUseCase - Create - uc.repo.Store: %w", err)`).
@@ -93,6 +95,17 @@ A reviewer checks the imports first:
 
 Any "yes" is a rule broken, and the change goes back.
 
+## Roles
+
+The app knows two roles, `entity.RoleAdmin` and `entity.RoleUser`. A sign-in writes the caller's
+roles into the app JWT (`roles` claim); password and passkey sign-ins always grant `user`
+(`entity.LocalRoles`). Each transport's auth turns the token into an `entity.Principal`
+(`middleware.Principal`, `grpcmw.PrincipalFromContext`, `graphql.Principal`), dropping role names it
+does not know. A handler passes the principal to the use cases that check roles, such as
+`Task.ListAll`, which returns `entity.ErrAdminRequired` to anyone without `admin`. Every other use
+case still takes the plain user ID. Roles are fixed when the token is issued, so a change takes
+effect at the next sign-in.
+
 ## Packages
 
 | Package | What it holds |
@@ -105,11 +118,13 @@ Any "yes" is a rule broken, and the change goes back.
 | [`internal/entity`](../internal/entity) | Domain types, their invariants (`Task.Transition`, `entity.NewConversion`) and sentinel errors. |
 | [`internal/usecase`](../internal/usecase) | Business logic, one package per domain. Every constructor returns its interface wrapped in a tracing decorator (`tracing.go`). |
 | [`internal/usecase/passkey`](../internal/usecase/passkey) | WebAuthn registration and sign-in. The only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn); controllers pass it the browser's JSON as bytes. Ceremony state travels in a signed token and a login challenge is burned on finish. See [passkeys.md](passkeys.md). |
+| [`internal/usecase/oidc`](../internal/usecase/oidc) | SSO sign-in through an OpenID Connect provider. The only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `x/oauth2`; it maps the provider's role claim to app roles. See [sso.md](sso.md). |
 | [`internal/repo/persistent`](../internal/repo/persistent) | Postgres repositories. SQL lives in `queries/*.sql` and [sqlc](https://sqlc.dev/) compiles it to typed Go; there is no ORM. `make sqlc` first renders the HCL schema to `queries/schema/schema.sql` with Atlas in a throwaway container, so it needs Docker. |
 | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey) | Passkeys (`webauthn_credentials`, the library's credential record in a `jsonb` column) and burned login challenges (`webauthn_used_challenges`). A unique violation is `entity.ErrPasskeyExists`; a burn that inserts no row is `entity.ErrPasskeyChallengeUsed`. |
+| [`internal/repo/persistent/identity`](../internal/repo/persistent/identity) | Provider identities (`user_identities`, keyed by issuer and subject) and the password-less users they create, in one statement. A taken email or username is `entity.ErrAccountConflict`. |
 | [`internal/repo/webapi`](../internal/repo/webapi) | Outbound HTTP. `exchange_openerapi.go` reads daily rates from open.er-api.com with plain `net/http`, decodes them straight into `decimal.Decimal`, and maps the provider's `unsupported-code` error (sent with HTTP 200) to `entity.ErrUnsupportedCurrency`. Its unit test serves the recorded response in `testdata/`. |
 | [`internal/repo/mailtmpl`](../internal/repo/mailtmpl) | Email rendering. See [worker.md](worker.md). |
-| [`pkg/jwt`](../pkg/jwt) | `Manager` signs and parses the auth JWT. `Scoped` signs short-lived payloads for one purpose, with a key derived from the same secret by HKDF and the purpose as audience, so neither token passes for the other; passkey ceremonies use it. |
+| [`pkg/jwt`](../pkg/jwt) | `Manager` signs and parses the auth JWT. `Scoped` signs short-lived payloads for one purpose, with a key derived from the same secret by HKDF and the purpose as audience, so neither token passes for the other; passkey ceremonies and the SSO state use it. The auth JWT carries a `roles` claim ([Roles](#roles)). |
 | [`pkg/tracing`](../pkg/tracing) | OpenTelemetry setup; a no-op provider when tracing is off. See [configuration.md](configuration.md#tracing). |
 | [`pkg/worker`](../pkg/worker), [`pkg/smtp`](../pkg/smtp) | The queue consumer and the SMTP client. See [worker.md](worker.md). |
 

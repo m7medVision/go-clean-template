@@ -26,3 +26,13 @@ WHERE id = $1 AND user_id = $2;
 -- name: DeleteTask :execrows
 DELETE FROM tasks
 WHERE id = $1 AND user_id = $2;
+
+-- name: CountAllTasks :one
+SELECT count(*) FROM tasks
+WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text);
+
+-- name: ListAllTasks :many
+SELECT * FROM tasks
+WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+ORDER BY created_at DESC
+LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;

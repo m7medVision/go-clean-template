@@ -40,6 +40,7 @@ type fakeTask struct {
 	panicMsg   string
 	called     bool
 	listStatus *entity.TaskStatus
+	listCaller entity.Principal
 }
 
 func (f *fakeTask) call() {
@@ -67,6 +68,15 @@ func (f *fakeTask) Get(context.Context, string, string) (entity.Task, error) {
 func (f *fakeTask) List(_ context.Context, _ string, status *entity.TaskStatus, _, _ int) ([]entity.Task, int, error) {
 	f.call()
 	f.listStatus = status
+
+	return []entity.Task{f.stored}, 1, f.err
+}
+
+func (f *fakeTask) ListAll(
+	_ context.Context, caller entity.Principal, status *entity.TaskStatus, _, _ int,
+) ([]entity.Task, int, error) {
+	f.call()
+	f.listCaller, f.listStatus = caller, status
 
 	return []entity.Task{f.stored}, 1, f.err
 }
@@ -138,6 +148,36 @@ func serve(
 ) (resp gqlResponse, body string) {
 	t.Helper()
 
+	if !authenticated {
+		return post(t, tk, ex, "", query, vars)
+	}
+
+	return post(t, tk, ex, token(t, nil), query, vars)
+}
+
+// doAs sends query as _userID signed in with roles.
+func doAs(t *testing.T, tk usecase.Task, roles []string, query string) gqlResponse {
+	t.Helper()
+
+	resp, _ := post(t, tk, &fakeExchange{}, token(t, roles), query, nil)
+
+	return resp
+}
+
+func token(t *testing.T, roles []string) string {
+	t.Helper()
+
+	signed, err := jwt.New("secret", time.Hour).GenerateToken(_userID, roles)
+	require.NoError(t, err)
+
+	return signed
+}
+
+func post(
+	t *testing.T, tk usecase.Task, ex usecase.Exchange, bearer, query string, vars map[string]any,
+) (resp gqlResponse, body string) {
+	t.Helper()
+
 	manager := jwt.New("secret", time.Hour)
 
 	payload, err := json.Marshal(map[string]any{"query": query, "variables": vars})
@@ -146,10 +186,8 @@ func serve(
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 
-	if authenticated {
-		token, err := manager.GenerateToken(_userID)
-		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer "+token)
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
 
 	rec := httptest.NewRecorder()
@@ -241,6 +279,47 @@ func TestListTasks(t *testing.T) {
 	assert.JSONEq(t, `{"total":1,"tasks":[{"id":"task-1","status":"TODO"}]}`, string(resp.Data["tasks"]))
 	require.NotNil(t, tk.listStatus)
 	assert.Equal(t, entity.TaskStatusTodo, *tk.listStatus)
+}
+
+func TestAllTasks(t *testing.T) {
+	t.Parallel()
+
+	tk := &fakeTask{stored: entity.Task{ID: "task-1", UserID: "bob", Status: entity.TaskStatusDone}}
+
+	resp := doAs(t, tk, []string{"admin"}, `query { allTasks(status: DONE, limit: 5) { total tasks { id userId } } }`)
+
+	require.Empty(t, resp.Errors)
+	assert.JSONEq(t, `{"total":1,"tasks":[{"id":"task-1","userId":"bob"}]}`, string(resp.Data["allTasks"]))
+	assert.Equal(t, entity.Principal{UserID: _userID, Roles: []entity.Role{entity.RoleAdmin}}, tk.listCaller)
+	require.NotNil(t, tk.listStatus)
+	assert.Equal(t, entity.TaskStatusDone, *tk.listStatus)
+}
+
+func TestAllTasksAdminRequired(t *testing.T) {
+	t.Parallel()
+
+	resp := doAs(t, &fakeTask{err: entity.ErrAdminRequired}, []string{"user"}, `query { allTasks { total } }`)
+
+	assert.Equal(t, "FORBIDDEN", resp.code(t))
+}
+
+func TestAllTasksInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	tk := &fakeTask{}
+
+	resp := doAs(t, tk, []string{"admin"}, `query { allTasks(limit: 0) { total } }`)
+
+	assert.Equal(t, "BAD_USER_INPUT", resp.code(t))
+	assert.False(t, tk.called)
+}
+
+func TestAllTasksUnauthenticated(t *testing.T) {
+	t.Parallel()
+
+	resp, _ := do(t, &fakeTask{}, false, `query { allTasks { total } }`, nil)
+
+	assert.Equal(t, "UNAUTHENTICATED", resp.code(t))
 }
 
 func TestListTasksInvalidLimit(t *testing.T) {

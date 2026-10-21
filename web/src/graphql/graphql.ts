@@ -36,6 +36,15 @@ export type TasksQueryVariables = Exact<{
 
 export type TasksQuery = { tasks: { total: number, tasks: Array<{ id: string, title: string, description: string, status: TaskStatus, createdAt: string, updatedAt: string }> } };
 
+export type AllTasksQueryVariables = Exact<{
+  status?: TaskStatus | null | undefined;
+  limit: number;
+  offset: number;
+}>;
+
+
+export type AllTasksQuery = { allTasks: { total: number, tasks: Array<{ id: string, userId: string, title: string, status: TaskStatus, createdAt: string }> } };
+
 export type CreateTaskMutationVariables = Exact<{
   input: CreateTaskInput;
 }>;
@@ -115,6 +124,20 @@ export const TasksDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<TasksQuery, TasksQueryVariables>;
+export const AllTasksDocument = new TypedDocumentString(`
+    query AllTasks($status: TaskStatus, $limit: Int!, $offset: Int!) {
+  allTasks(status: $status, limit: $limit, offset: $offset) {
+    total
+    tasks {
+      id
+      userId
+      title
+      status
+      createdAt
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<AllTasksQuery, AllTasksQueryVariables>;
 export const CreateTaskDocument = new TypedDocumentString(`
     mutation CreateTask($input: CreateTaskInput!) {
   createTask(input: $input) {

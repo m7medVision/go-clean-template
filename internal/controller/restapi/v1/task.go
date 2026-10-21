@@ -30,6 +30,17 @@ type listTasksOutput struct {
 	Body response.TaskList
 }
 
+// status is the filter the query asks for, or nil for every status.
+func (in *listTasksInput) status() *entity.TaskStatus {
+	if in.Status == "" {
+		return nil
+	}
+
+	status := in.Status
+
+	return &status
+}
+
 type taskPathInput struct {
 	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
@@ -100,16 +111,40 @@ func (r *V1) listTasks(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		var status *entity.TaskStatus
-
-		if input.Status != "" {
-			local := input.Status
-			status = &local
-		}
-
-		tasks, total, err := r.tk.List(ctx, userID, status, input.Limit, input.Offset)
+		tasks, total, err := r.tk.List(ctx, userID, input.status(), input.Limit, input.Offset)
 		if err != nil {
 			r.l.Error(err, "restapi - v1 - listTasks")
+
+			return nil, huma.Error500InternalServerError("internal server error")
+		}
+
+		return &listTasksOutput{Body: response.TaskList{Tasks: tasks, Total: total}}, nil
+	})
+}
+
+func (r *V1) listAllTasks(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-all-tasks",
+		Summary:     "List every user's tasks",
+		Description: "List tasks across all users with optional filtering. Requires the admin role.",
+		Method:      http.MethodGet,
+		Path:        "/v1/admin/tasks",
+		Tags:        []string{_tasksTag},
+		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError},
+	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
+		caller, ok := middleware.Principal(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		tasks, total, err := r.tk.ListAll(ctx, caller, input.status(), input.Limit, input.Offset)
+		if err != nil {
+			if errors.Is(err, entity.ErrAdminRequired) {
+				return nil, huma.Error403Forbidden("admin role required")
+			}
+
+			r.l.Error(err, "restapi - v1 - listAllTasks")
 
 			return nil, huma.Error500InternalServerError("internal server error")
 		}

@@ -24,7 +24,7 @@ it.
 | `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
 | `PG_POOL_MAX` | required | |
 | `JWT_SECRET` | required | change it outside development |
-| `JWT_TOKEN_EXPIRY` | `24h` | |
+| `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([sso.md](sso.md#roles)) |
 | `METRICS_ENABLED` | `true` | Prometheus at `/metrics` |
 | `DOCS_ENABLED` | `false` | `/docs`, `/openapi.*`, `/schemas/*` and the GraphQL playground |
 
@@ -55,6 +55,22 @@ compose and production.
 | `WEBAUTHN_REAUTH_MAX_AGE` | `5m` | how recently the caller must have signed in (the age of their auth token) to add a passkey; an older sign-in gets a `401` and must sign in again ([passkeys.md](passkeys.md#adding-a-passkey)) |
 
 The ceremony token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
+
+## OIDC
+
+SSO sign-in ([sso.md](sso.md)). It is on when `OIDC_ISSUER` is set; `.env.example` and the compose
+files point it at the dev Keycloak. The provider redirects to `APP_BASE_URL/sso/callback`, which must
+be a redirect URI of the client.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `OIDC_ISSUER` | empty (SSO off) | the provider's issuer URL, as its discovery document states it |
+| `OIDC_CLIENT_ID` | | the confidential client registered at the provider |
+| `OIDC_CLIENT_SECRET` | | that client's secret |
+| `OIDC_ROLES_CLAIM` | `realm_access.roles` | dotted path to the ID-token claim with the provider's role names: `roles` on Entra ID, `groups` on Okta |
+| `OIDC_ROLE_MAP` | empty | `provider-name:app-role` pairs, comma-separated, no spaces (`app-admin:admin,app-user:user`). Unmapped names grant nothing; a sign-in that maps to no role gets `user` |
+
+The state token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
 
 ## Worker and email
 

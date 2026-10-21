@@ -12,6 +12,18 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
+const countAllTasks = `-- name: CountAllTasks :one
+SELECT count(*) FROM tasks
+WHERE ($1::text IS NULL OR status = $1::text)
+`
+
+func (q *Queries) CountAllTasks(ctx context.Context, status *string) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllTasks, status)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTasks = `-- name: CountTasks :one
 SELECT count(*) FROM tasks
 WHERE user_id = $1
@@ -94,6 +106,47 @@ func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAllTasks = `-- name: ListAllTasks :many
+SELECT id, user_id, title, description, status, created_at, updated_at FROM tasks
+WHERE ($1::text IS NULL OR status = $1::text)
+ORDER BY created_at DESC
+LIMIT $3::bigint OFFSET $2::bigint
+`
+
+type ListAllTasksParams struct {
+	Status *string
+	Offset int64
+	Limit  int64
+}
+
+func (q *Queries) ListAllTasks(ctx context.Context, arg ListAllTasksParams) ([]Task, error) {
+	rows, err := q.db.Query(ctx, listAllTasks, arg.Status, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listTasks = `-- name: ListTasks :many
