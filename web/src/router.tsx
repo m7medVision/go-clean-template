@@ -20,7 +20,10 @@ export const router = createRouter({
 
 onUnauthorized(() => {
   queryClient.clear();
-  void router.navigate({ to: "/login", search: { redirect: router.state.location.href } });
+  // A query still settling after logout can 401 on /login; leave the redirect it already has.
+  const { pathname, href } = router.state.location;
+  if (pathname === "/login") return;
+  void router.navigate({ to: "/login", search: { redirect: href } });
 });
 
 declare module "@tanstack/react-router" {

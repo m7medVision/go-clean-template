@@ -28,10 +28,12 @@ function AuthedLayout() {
   const { auth, queryClient } = Route.useRouteContext();
   const navigate = Route.useNavigate();
 
-  const logout = () => {
+  // Leave the signed-in layout before clearing the cache: clearing it first lets the sidebar's
+  // mounted profile query refetch without a token, and its 401 bounces the user to /login again.
+  const logout = async () => {
     auth.clear();
+    await navigate({ to: "/login" });
     queryClient.clear();
-    void navigate({ to: "/login" });
   };
 
   return (

@@ -10,6 +10,10 @@ describe("safeRedirect", () => {
     ["//evil.example", "/tasks"],
     ["/\\evil.example", "/tasks"],
     ["profile", "/tasks"],
+    ["/login", "/tasks"],
+    ["/login?redirect=/profile", "/tasks"],
+    ["/login/", "/tasks"],
+    ["/loginx", "/loginx"],
     [undefined, "/tasks"],
   ])("%s -> %s", (target, want) => {
     expect(safeRedirect(target)).toBe(want);

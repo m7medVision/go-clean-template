@@ -4,6 +4,8 @@ export function safeRedirect(target: unknown, fallback = "/tasks"): string {
   if (typeof target !== "string") return fallback;
   if (!target.startsWith("/") || target.startsWith("//") || target.startsWith("/\\"))
     return fallback;
+  // Back to /login would leave a signed-in user on the login form, nesting redirects.
+  if (/^\/login(?:[/?#]|$)/.test(target)) return fallback;
 
   return target;
 }
