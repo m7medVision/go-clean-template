@@ -13,7 +13,7 @@ import (
 // operations never calls the use cases, so nil dependencies are safe here.
 func OpenAPI(version string) ([]byte, error) {
 	api := humachi.New(chi.NewRouter(), newAPIConfig(version))
-	v1.NewRoutes(api, nil, nil, nil, nil)
+	v1.NewRoutes(api, nil, nil, nil, nil, nil)
 
 	b, err := json.MarshalIndent(api.OpenAPI(), "", "  ")
 	if err != nil {

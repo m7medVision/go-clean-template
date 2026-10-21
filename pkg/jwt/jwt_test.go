@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,5 +55,45 @@ func TestJWT_ParseToken_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = j.ParseToken(token)
+	require.Error(t, err)
+}
+
+func TestJWT_Parse_IssuedAt(t *testing.T) {
+	t.Parallel()
+
+	j := jwt.New("test-secret", time.Hour)
+
+	before := time.Now().Truncate(time.Second)
+
+	token, err := j.GenerateToken("user-123")
+	require.NoError(t, err)
+
+	claims, err := j.Parse(token)
+	require.NoError(t, err)
+	assert.Equal(t, "user-123", claims.UserID)
+	assert.False(t, claims.IssuedAt.Before(before), "issued at %s, before %s", claims.IssuedAt, before)
+	assert.False(t, claims.IssuedAt.After(time.Now()), "issued in the future: %s", claims.IssuedAt)
+}
+
+func TestJWT_Parse_NoIssuedAt(t *testing.T) {
+	t.Parallel()
+
+	// A token minted before tokens carried iat parses, with a zero issue time.
+	token, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, jwtlib.RegisteredClaims{
+		Subject:   "user-123",
+		ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour)),
+	}).SignedString([]byte("test-secret"))
+	require.NoError(t, err)
+
+	claims, err := jwt.New("test-secret", time.Hour).Parse(token)
+	require.NoError(t, err)
+	assert.Equal(t, "user-123", claims.UserID)
+	assert.True(t, claims.IssuedAt.IsZero())
+}
+
+func TestJWT_Parse_Invalid(t *testing.T) {
+	t.Parallel()
+
+	_, err := jwt.New("test-secret", time.Hour).Parse("invalid-token")
 	require.Error(t, err)
 }

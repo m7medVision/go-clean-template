@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { KeyRoundIcon } from "lucide-react";
 
 import { $api } from "#/api/client";
 import { safeRedirect } from "#/auth/redirect";
@@ -6,6 +7,10 @@ import { loginSchema } from "#/auth/schema";
 import { AuthCard } from "#/components/auth-card";
 import { FormError } from "#/components/form/form-components";
 import { useAppForm, zodValidation } from "#/components/form/use-app-form";
+import { Button } from "#/components/ui/button";
+import { FieldSeparator } from "#/components/ui/field";
+import { usePasskeyLogin } from "#/passkey/use-passkey-login";
+import { passkeysSupported } from "#/passkey/webauthn";
 
 type LoginSearch = { redirect?: string };
 
@@ -20,11 +25,17 @@ function Login() {
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
 
+  // Every way of signing in ends here: password and both passkey paths.
+  const signIn = (token: string) => {
+    auth.set(token);
+    void navigate({ to: safeRedirect(redirect) });
+  };
+
+  const passkey = usePasskeyLogin(signIn);
+
   const login = $api.useMutation("post", "/v1/auth/login", {
-    onSuccess: ({ token }) => {
-      auth.set(token);
-      void navigate({ to: safeRedirect(redirect) });
-    },
+    onMutate: () => passkey.reset(),
+    onSuccess: ({ token }) => signIn(token),
   });
 
   const form = useAppForm({
@@ -43,7 +54,7 @@ function Login() {
                 label="Email address"
                 required
                 type="email"
-                autoComplete="email"
+                autoComplete="username webauthn"
                 placeholder="Enter your email address"
               />
             )}
@@ -58,12 +69,31 @@ function Login() {
               />
             )}
           </form.AppField>
-          <FormError error={login.error} />
+          <FormError error={passkey.error ?? login.error} />
           <form.SubmitButton size="lg" className="w-full" pending="Signing in…">
             Sign in
           </form.SubmitButton>
         </form.Form>
       </form.AppForm>
+      {passkeysSupported() && (
+        <>
+          <FieldSeparator className="my-4">Or</FieldSeparator>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            disabled={passkey.pending}
+            onClick={() => {
+              login.reset();
+              passkey.start();
+            }}
+          >
+            <KeyRoundIcon />
+            {passkey.pending ? "Waiting for your device…" : "Sign in with a passkey"}
+          </Button>
+        </>
+      )}
       <p className="mt-4 text-center text-muted-foreground">
         New here?{" "}
         <Link to="/register" className="text-foreground hover:underline">

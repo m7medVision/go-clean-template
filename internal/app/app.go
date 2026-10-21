@@ -14,8 +14,10 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/mailtmpl"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
+	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
@@ -23,6 +25,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
+	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
 	"github.com/m7medvision/go-clean-template/pkg/grpcserver"
@@ -36,11 +39,15 @@ import (
 	pbgrpc "google.golang.org/grpc"
 )
 
+// _webauthnCeremonyScope scopes the WebAuthn ceremony token's key and audience.
+const _webauthnCeremonyScope = "webauthn-ceremony"
+
 type useCases struct {
 	exchange usecase.Exchange
 	user     usecase.User
 	task     usecase.Task
 	mail     usecase.Mail
+	passkey  usecase.Passkey
 }
 
 type servers struct {
@@ -49,7 +56,7 @@ type servers struct {
 }
 
 // initUseCases builds every use case for both binaries. It fails only when an embedded mail
-// template is broken.
+// template is broken or the WebAuthn settings are invalid.
 func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager) (useCases, error) {
 	exchangeRepo := persistExchangeRepo.New(pg)
 	taskRepo := persistTaskRepo.New(pg)
@@ -59,6 +66,11 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 	mailRenderer, err := mailtmpl.New()
 	if err != nil {
 		return useCases{}, fmt.Errorf("mailtmpl.New: %w", err)
+	}
+
+	passkeyUseCase, err := newPasskeyUseCase(cfg, userRepo, persistPasskeyRepo.New(pg), jwtManager)
+	if err != nil {
+		return useCases{}, err
 	}
 
 	mailer := smtp.New(
@@ -73,10 +85,33 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 		task:     task.New(taskRepo),
 		exchange: exchange.New(exchangeRepo, webapi.New(cfg.Exchange.ServiceURL)),
 		mail:     mail.New(mailRenderer, mailer),
+		passkey:  passkeyUseCase,
 	}, nil
 }
 
-func initServers(cfg *config.Config, uc useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
+func newPasskeyUseCase(
+	cfg *config.Config, users repo.UserRepo, passkeys repo.PasskeyRepo, tokens *jwt.Manager,
+) (usecase.Passkey, error) {
+	ceremony, err := jwt.NewScoped(cfg.JWT.Secret, _webauthnCeremonyScope, cfg.WebAuthn.CeremonyTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
+	}
+
+	uc, err := passkey.New(users, passkeys, ceremony, tokens, &passkey.Config{
+		RPID:         cfg.WebAuthn.RPID,
+		RPName:       cfg.WebAuthn.RPName,
+		RPOrigins:    cfg.WebAuthn.RPOrigins,
+		Timeout:      cfg.WebAuthn.CeremonyTimeout,
+		ReauthMaxAge: cfg.WebAuthn.ReauthMaxAge,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("passkey.New: %w", err)
+	}
+
+	return uc, nil
+}
+
+func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
 	// gRPC Server
 	grpcServer := grpcserver.New(
 		l,
@@ -89,7 +124,7 @@ func initServers(cfg *config.Config, uc useCases, jwtManager *jwt.Manager, l log
 	grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l)
 
 	// HTTP Server
-	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l)
+	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, uc.passkey, jwtManager, l)
 	router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l))
 
 	if cfg.Docs.Enabled {
@@ -191,7 +226,7 @@ func Run(cfg *config.Config) {
 		l.Fatal(fmt.Errorf("app - Run - initUseCases: %w", err))
 	}
 
-	s := initServers(cfg, uc, jwtManager, l)
+	s := initServers(cfg, &uc, jwtManager, l)
 	s.startServers()
 	s.waitForShutdown(l)
 }

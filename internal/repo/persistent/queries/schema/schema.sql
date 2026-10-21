@@ -30,6 +30,14 @@ CREATE TABLE "public"."users" (
 CREATE UNIQUE INDEX "users_email_key" ON "public"."users" ("email");
 -- Create index "users_username_key" to table: "users"
 CREATE UNIQUE INDEX "users_username_key" ON "public"."users" ("username");
+-- Create "webauthn_used_challenges" table
+CREATE TABLE "public"."webauthn_used_challenges" (
+  "challenge_hash" bytea NOT NULL,
+  "expires_at" timestamptz NOT NULL,
+  PRIMARY KEY ("challenge_hash")
+);
+-- Create index "idx_webauthn_used_challenges_expires_at" to table: "webauthn_used_challenges"
+CREATE INDEX "idx_webauthn_used_challenges_expires_at" ON "public"."webauthn_used_challenges" ("expires_at");
 -- Create "exchange_history" table
 CREATE TABLE "public"."exchange_history" (
   "id" bigserial NOT NULL,
@@ -62,3 +70,16 @@ CREATE TABLE "public"."tasks" (
 CREATE INDEX "idx_tasks_user_id" ON "public"."tasks" ("user_id");
 -- Create index "idx_tasks_user_status" to table: "tasks"
 CREATE INDEX "idx_tasks_user_status" ON "public"."tasks" ("user_id", "status");
+-- Create "webauthn_credentials" table
+CREATE TABLE "public"."webauthn_credentials" (
+  "id" bytea NOT NULL,
+  "user_id" uuid NOT NULL,
+  "name" text NOT NULL,
+  "credential" jsonb NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "last_used_at" timestamptz NULL,
+  PRIMARY KEY ("id"),
+  CONSTRAINT "webauthn_credentials_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_webauthn_credentials_user_id" to table: "webauthn_credentials"
+CREATE INDEX "idx_webauthn_credentials_user_id" ON "public"."webauthn_credentials" ("user_id");

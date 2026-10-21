@@ -282,6 +282,145 @@ func (mr *MockTaskRepoMockRecorder) Update(ctx, task any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockTaskRepo)(nil).Update), ctx, task)
 }
 
+// MockPasskeyRepo is a mock of PasskeyRepo interface.
+type MockPasskeyRepo struct {
+	ctrl     *gomock.Controller
+	recorder *MockPasskeyRepoMockRecorder
+	isgomock struct{}
+}
+
+// MockPasskeyRepoMockRecorder is the mock recorder for MockPasskeyRepo.
+type MockPasskeyRepoMockRecorder struct {
+	mock *MockPasskeyRepo
+}
+
+// NewMockPasskeyRepo creates a new mock instance.
+func NewMockPasskeyRepo(ctrl *gomock.Controller) *MockPasskeyRepo {
+	mock := &MockPasskeyRepo{ctrl: ctrl}
+	mock.recorder = &MockPasskeyRepoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPasskeyRepo) EXPECT() *MockPasskeyRepoMockRecorder {
+	return m.recorder
+}
+
+// BurnChallenge mocks base method.
+func (m *MockPasskeyRepo) BurnChallenge(ctx context.Context, hash []byte, expiresAt time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BurnChallenge", ctx, hash, expiresAt)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BurnChallenge indicates an expected call of BurnChallenge.
+func (mr *MockPasskeyRepoMockRecorder) BurnChallenge(ctx, hash, expiresAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BurnChallenge", reflect.TypeOf((*MockPasskeyRepo)(nil).BurnChallenge), ctx, hash, expiresAt)
+}
+
+// Delete mocks base method.
+func (m *MockPasskeyRepo) Delete(ctx context.Context, userID string, id entity.PasskeyID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, userID, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockPasskeyRepoMockRecorder) Delete(ctx, userID, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockPasskeyRepo)(nil).Delete), ctx, userID, id)
+}
+
+// DeleteExpiredChallenges mocks base method.
+func (m *MockPasskeyRepo) DeleteExpiredChallenges(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteExpiredChallenges", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteExpiredChallenges indicates an expected call of DeleteExpiredChallenges.
+func (mr *MockPasskeyRepoMockRecorder) DeleteExpiredChallenges(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExpiredChallenges", reflect.TypeOf((*MockPasskeyRepo)(nil).DeleteExpiredChallenges), ctx)
+}
+
+// GetByID mocks base method.
+func (m *MockPasskeyRepo) GetByID(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByID", ctx, id)
+	ret0, _ := ret[0].(entity.Passkey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByID indicates an expected call of GetByID.
+func (mr *MockPasskeyRepoMockRecorder) GetByID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockPasskeyRepo)(nil).GetByID), ctx, id)
+}
+
+// ListByUser mocks base method.
+func (m *MockPasskeyRepo) ListByUser(ctx context.Context, userID string) ([]entity.Passkey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListByUser", ctx, userID)
+	ret0, _ := ret[0].([]entity.Passkey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListByUser indicates an expected call of ListByUser.
+func (mr *MockPasskeyRepoMockRecorder) ListByUser(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByUser", reflect.TypeOf((*MockPasskeyRepo)(nil).ListByUser), ctx, userID)
+}
+
+// Rename mocks base method.
+func (m *MockPasskeyRepo) Rename(ctx context.Context, userID string, id entity.PasskeyID, name string) (entity.Passkey, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rename", ctx, userID, id, name)
+	ret0, _ := ret[0].(entity.Passkey)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Rename indicates an expected call of Rename.
+func (mr *MockPasskeyRepoMockRecorder) Rename(ctx, userID, id, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockPasskeyRepo)(nil).Rename), ctx, userID, id, name)
+}
+
+// Store mocks base method.
+func (m *MockPasskeyRepo) Store(ctx context.Context, passkey *entity.Passkey) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Store", ctx, passkey)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Store indicates an expected call of Store.
+func (mr *MockPasskeyRepoMockRecorder) Store(ctx, passkey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockPasskeyRepo)(nil).Store), ctx, passkey)
+}
+
+// UpdateUsage mocks base method.
+func (m *MockPasskeyRepo) UpdateUsage(ctx context.Context, id entity.PasskeyID, credential json.RawMessage, usedAt time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUsage", ctx, id, credential, usedAt)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateUsage indicates an expected call of UpdateUsage.
+func (mr *MockPasskeyRepoMockRecorder) UpdateUsage(ctx, id, credential, usedAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUsage", reflect.TypeOf((*MockPasskeyRepo)(nil).UpdateUsage), ctx, id, credential, usedAt)
+}
+
 // MockQueueRepo is a mock of QueueRepo interface.
 type MockQueueRepo struct {
 	ctrl     *gomock.Controller

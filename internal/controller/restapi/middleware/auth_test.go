@@ -102,3 +102,43 @@ func TestAuthMiddleware(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthMiddlewareAuthTime(t *testing.T) {
+	t.Parallel()
+
+	jwtManager := jwt.New("test-secret", time.Hour)
+
+	var (
+		authTime time.Time
+		ok       bool
+	)
+
+	r := chi.NewRouter()
+	r.Use(middleware.Auth(jwtManager, noopLogger{}))
+	r.Get("/v1/test", func(_ http.ResponseWriter, r *http.Request) {
+		authTime, ok = middleware.AuthTime(r.Context())
+	})
+
+	before := time.Now().Truncate(time.Second)
+
+	token, err := jwtManager.GenerateToken("user-id-123")
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	require.True(t, ok)
+	assert.False(t, authTime.Before(before), "auth time %s, before %s", authTime, before)
+	assert.False(t, authTime.After(time.Now()), "auth time in the future: %s", authTime)
+}
+
+func TestAuthTimeWithoutAuth(t *testing.T) {
+	t.Parallel()
+
+	_, ok := middleware.AuthTime(t.Context())
+	assert.False(t, ok)
+}

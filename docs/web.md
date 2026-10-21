@@ -45,6 +45,31 @@ options in `web/src/<domain>/api.ts`.
   [Zod](https://zod.dev/) schema per domain (`web/src/components/form/`). A currency picker is
   `field.SelectField`.
 
+## Passkeys
+
+The browser half of a WebAuthn ceremony is in `web/src/passkey/webauthn.ts`, on the browser's own
+JSON helpers and no client library: `PublicKeyCredential.parseCreationOptionsFromJSON` and
+`parseRequestOptionsFromJSON` read the server's `options`, and the credential's `toJSON()` is the
+finish body, sent as it is. A browser without those helpers gets no passkey buttons
+(`passkeysSupported`). A dismissed or timed-out prompt (`NotAllowedError`) and an aborted request
+resolve to `null` and show nothing; only the server's rejections reach `FormError`.
+
+- **`/profile`** has a Passkeys card: a plain list (name, created, last used) over REST, not a data
+  table, with add, rename and delete. The name fields are TanStack Form + Zod
+  (`web/src/passkey/schema.ts`). Adding a passkey needs a recent sign-in: when `register/begin`
+  answers the `reauthentication required` problem (`isReauthRequired`, `web/src/auth/reauth.ts`),
+  the Add dialog asks for the password, signs in again through `POST /v1/auth/login` with the
+  profile's email, stores the new token the way `/login` does, and continues the ceremony. The API
+  client does not treat that `401` as a lost session, so it does not sign the user out.
+- **`/login`** has a "Sign in with a passkey" button, and offers passkeys in the email field's
+  autofill (`autocomplete="username webauthn"`) through a conditional request started on mount.
+  `usePasskeyLogin` keeps one ceremony in flight: the button aborts the autofill request and starts
+  it again if the button flow ends without signing in, and leaving the page aborts it. Both paths
+  sign in exactly as password login does.
+
+Run it under `make dev` and open the client as `localhost`; see
+[passkeys.md](passkeys.md#relying-party-setup).
+
 ## Token storage
 
 The JWT lives in memory, mirrored to `sessionStorage` (`web/src/auth/token.ts`) so it survives a reload
