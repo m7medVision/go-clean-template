@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql"
@@ -17,6 +18,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/mailtmpl"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
+	persistIdentityRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/identity"
 	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
@@ -25,6 +27,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
@@ -39,8 +42,16 @@ import (
 	pbgrpc "google.golang.org/grpc"
 )
 
-// _webauthnCeremonyScope scopes the WebAuthn ceremony token's key and audience.
-const _webauthnCeremonyScope = "webauthn-ceremony"
+const (
+	// _webauthnCeremonyScope scopes the WebAuthn ceremony token's key and audience.
+	_webauthnCeremonyScope = "webauthn-ceremony"
+	// _oidcStateScope scopes the SSO sign-in state token's key and audience.
+	_oidcStateScope = "oidc-state"
+	// _oidcStateTimeout is how long a user has to sign in at the provider.
+	_oidcStateTimeout = 10 * time.Minute
+	// _oidcCallbackPath is the web client's route the provider redirects back to.
+	_oidcCallbackPath = "/sso/callback"
+)
 
 type useCases struct {
 	exchange usecase.Exchange
@@ -48,6 +59,7 @@ type useCases struct {
 	task     usecase.Task
 	mail     usecase.Mail
 	passkey  usecase.Passkey
+	oidc     usecase.OIDC
 }
 
 type servers struct {
@@ -56,7 +68,8 @@ type servers struct {
 }
 
 // initUseCases builds every use case for both binaries. It fails only when an embedded mail
-// template is broken or the WebAuthn settings are invalid.
+// template is broken or the WebAuthn settings are invalid. SSO never fails here: the provider is
+// discovered on the first sign-in, so the app starts while it is down.
 func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager) (useCases, error) {
 	exchangeRepo := persistExchangeRepo.New(pg)
 	taskRepo := persistTaskRepo.New(pg)
@@ -69,6 +82,11 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 	}
 
 	passkeyUseCase, err := newPasskeyUseCase(cfg, userRepo, persistPasskeyRepo.New(pg), jwtManager)
+	if err != nil {
+		return useCases{}, err
+	}
+
+	oidcUseCase, err := newOIDCUseCase(cfg, persistIdentityRepo.New(pg), jwtManager)
 	if err != nil {
 		return useCases{}, err
 	}
@@ -86,7 +104,24 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 		exchange: exchange.New(exchangeRepo, webapi.New(cfg.Exchange.ServiceURL)),
 		mail:     mail.New(mailRenderer, mailer),
 		passkey:  passkeyUseCase,
+		oidc:     oidcUseCase,
 	}, nil
+}
+
+func newOIDCUseCase(cfg *config.Config, identities repo.IdentityRepo, tokens *jwt.Manager) (usecase.OIDC, error) {
+	state, err := jwt.NewScoped(cfg.JWT.Secret, _oidcStateScope, _oidcStateTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
+	}
+
+	return oidc.New(identities, state, tokens, &oidc.Config{
+		Issuer:       cfg.OIDC.Issuer,
+		ClientID:     cfg.OIDC.ClientID,
+		ClientSecret: cfg.OIDC.ClientSecret,
+		RedirectURL:  strings.TrimSuffix(cfg.App.BaseURL, "/") + _oidcCallbackPath,
+		RolesClaim:   cfg.OIDC.RolesClaim,
+		RoleMap:      cfg.OIDC.RoleMap,
+	}), nil
 }
 
 func newPasskeyUseCase(
@@ -124,7 +159,7 @@ func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l lo
 	grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l)
 
 	// HTTP Server
-	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, uc.passkey, jwtManager, l)
+	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, uc.passkey, uc.oidc, jwtManager, l)
 	router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l))
 
 	if cfg.Docs.Enabled {

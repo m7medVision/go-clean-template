@@ -300,7 +300,7 @@ func (uc *UseCase) FinishLogin(ctx context.Context, token string, body []byte) (
 		return "", fmt.Errorf("PasskeyUseCase - FinishLogin - uc.recordUsage: %w", err)
 	}
 
-	authToken, err := uc.tokens.GenerateToken(owner.id)
+	authToken, err := uc.tokens.GenerateToken(owner.id, entity.RoleNames(entity.LocalRoles()))
 	if err != nil {
 		return "", fmt.Errorf("PasskeyUseCase - FinishLogin - uc.tokens.GenerateToken: %w", err)
 	}

@@ -80,6 +80,23 @@ func (r *tracedRepo) List(ctx context.Context, userID string, filter repo.TaskFi
 	return tasks, total, err
 }
 
+func (r *tracedRepo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Task, int, error) {
+	attrs := []attribute.KeyValue{
+		attribute.Int64("task.limit", filter.Limit),
+		attribute.Int64("task.offset", filter.Offset),
+	}
+	if filter.Status != nil {
+		attrs = append(attrs, attribute.String("task.status", string(*filter.Status)))
+	}
+
+	ctx, span := startSpan(ctx, "TaskRepo.ListAll", attrs...)
+
+	tasks, total, err := r.next.ListAll(ctx, filter)
+	endSpan(span, err)
+
+	return tasks, total, err
+}
+
 func (r *tracedRepo) Update(ctx context.Context, task *entity.Task) error {
 	ctx, span := startSpan(
 		ctx, "TaskRepo.Update",

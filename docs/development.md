@@ -6,14 +6,14 @@ that CI uses too.
 
 ## Dev mode
 
-`make dev` runs everything in one [tmux](https://github.com/tmux/tmux) window. Postgres and Mailpit run
-in docker. The app and the worker run on the host under [air](https://github.com/air-verse/air) and
+`make dev` runs everything in one [tmux](https://github.com/tmux/tmux) window. Postgres, Mailpit and
+Keycloak run in docker. The app and the worker run on the host under [air](https://github.com/air-verse/air) and
 rebuild when you save a file. Tracing is off and Jaeger is not started. It needs `tmux`, `curl` and the
 Vite+ `vp` CLI; run `make web-deps` once first.
 
 ```sh
 make dev       # attach; run it again to re-attach after detaching (prefix + d)
-make dev-down  # close the tmux session and stop Postgres and Mailpit
+make dev-down  # close the tmux session and stop the containers
 ```
 
 The four panes are:
@@ -23,7 +23,11 @@ The four panes are:
 - **worker**: `.air.worker.toml`. It starts once the app answers `/healthz`, because only the app
   applies the schema.
 - **web**: the Vite+ dev server on http://localhost:3000.
-- **db + mailpit**: the container logs.
+- **db + mailpit + keycloak**: the container logs.
+
+`make dev` sets `APP_BASE_URL` to the Vite origin, so email links and the SSO callback come back to
+the dev server. Sign in with SSO as `alice` / `alice` (admin) or `bob` / `bob`; see
+[sso.md](sso.md#keycloak-in-development).
 
 If something else on the host already listens on 5432, set `PG_PORT` in `.env` (for example
 `PG_PORT=5433`). It moves the published port of the compose `db` service and the port in `PG_URL`
@@ -33,7 +37,7 @@ will try to make that database match this schema.
 The same pieces without tmux, one terminal each:
 
 ```sh
-make compose-up   # Postgres, and Mailpit to catch email (inbox on http://127.0.0.1:8025)
+make compose-up   # Postgres, Mailpit to catch email (inbox on http://127.0.0.1:8025), Keycloak
 make run          # the app, applying the schema at startup
 make run-worker   # the queue worker
 make web-dev      # the web client on http://localhost:3000
@@ -51,6 +55,7 @@ installs the other tools (`mockgen`, linters, `atlas`).
 | gRPC | `127.0.0.1:8081` |
 | Postgres | `127.0.0.1:${PG_PORT}`; credentials in `PG_URL` in [`.env.example`](../.env.example) |
 | Mailpit | http://127.0.0.1:8025 (inbox and API), SMTP on `127.0.0.1:1025` |
+| Keycloak | http://keycloak.lvh.me:8180 (realm `app`; admin console `admin` / `admin`); see [sso.md](sso.md#keycloak-in-development) |
 | Jaeger | http://127.0.0.1:16686 (full stack only) |
 
 The worker has no port; with the full stack, `docker logs -f worker` follows it.

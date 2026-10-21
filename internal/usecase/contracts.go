@@ -30,6 +30,11 @@ type (
 		Create(ctx context.Context, userID, title, description string) (entity.Task, error)
 		Get(ctx context.Context, userID, taskID string) (entity.Task, error)
 		List(ctx context.Context, userID string, status *entity.TaskStatus, limit, offset int) ([]entity.Task, int, error)
+		// ListAll is List across every user, for a caller holding entity.RoleAdmin; anyone else gets
+		// entity.ErrAdminRequired.
+		ListAll(
+			ctx context.Context, caller entity.Principal, status *entity.TaskStatus, limit, offset int,
+		) ([]entity.Task, int, error)
 		Update(ctx context.Context, userID, taskID, title, description string) (entity.Task, error)
 		Transition(ctx context.Context, userID, taskID string, newStatus entity.TaskStatus) (entity.Task, error)
 		Delete(ctx context.Context, userID, taskID string) error
@@ -54,6 +59,18 @@ type (
 		BeginLogin(ctx context.Context) (options []byte, token string, err error)
 		// FinishLogin returns the same auth token password login issues.
 		FinishLogin(ctx context.Context, token string, body []byte) (string, error)
+	}
+
+	// OIDC signs users in through an OpenID Connect provider (authorization code with PKCE). Begin
+	// returns the provider URL to send the browser to and a token carrying the ceremony state; the
+	// provider redirects back with a code and the state, which Finish checks against the token
+	// before it exchanges the code. Finish returns the same auth token password login issues, with
+	// the roles the provider's claims map to. The first sign-in of an identity creates a user with
+	// no password. With no provider configured, Begin and Finish are entity.ErrOIDCDisabled.
+	OIDC interface {
+		Enabled() bool
+		Begin(ctx context.Context) (authURL, token string, err error)
+		Finish(ctx context.Context, code, state, token string) (string, error)
 	}
 
 	// Mail delivers email. Use cases do not call it: they enqueue with repo.QueueRepo, and the

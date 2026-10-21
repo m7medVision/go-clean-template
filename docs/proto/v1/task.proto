@@ -8,6 +8,8 @@ service TaskService {
   rpc CreateTask (CreateTaskRequest) returns (TaskResponse);
   rpc GetTask (GetTaskRequest) returns (TaskResponse);
   rpc ListTasks (ListTasksRequest) returns (ListTasksResponse);
+  // Every user's tasks. Requires the admin role; anyone else gets PERMISSION_DENIED.
+  rpc ListAllTasks (ListTasksRequest) returns (ListTasksResponse);
   rpc UpdateTask (UpdateTaskRequest) returns (TaskResponse);
   rpc TransitionTask (TransitionTaskRequest) returns (TaskResponse);
   rpc DeleteTask (DeleteTaskRequest) returns (DeleteTaskResponse);

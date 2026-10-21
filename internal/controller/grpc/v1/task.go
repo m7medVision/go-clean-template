@@ -61,15 +61,9 @@ func (c *TaskController) ListTasks(ctx context.Context, req *v1.ListTasksRequest
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	var statusFilter *entity.TaskStatus
-
-	if req.GetStatus() != "" {
-		s := entity.TaskStatus(req.GetStatus())
-		if !s.Valid() {
-			return nil, status.Error(codes.InvalidArgument, "invalid task status")
-		}
-
-		statusFilter = &s
+	statusFilter, err := listStatus(req)
+	if err != nil {
+		return nil, err
 	}
 
 	tasks, total, err := c.tk.List(ctx, userID, statusFilter, int(req.GetLimit()), int(req.GetOffset()))
@@ -80,6 +74,46 @@ func (c *TaskController) ListTasks(ctx context.Context, req *v1.ListTasksRequest
 	}
 
 	return response.NewListTasksResponse(tasks, total), nil
+}
+
+// ListAllTasks -.
+func (c *TaskController) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
+	caller, ok := grpcmw.PrincipalFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+
+	statusFilter, err := listStatus(req)
+	if err != nil {
+		return nil, err
+	}
+
+	tasks, total, err := c.tk.ListAll(ctx, caller, statusFilter, int(req.GetLimit()), int(req.GetOffset()))
+	if err != nil {
+		if errors.Is(err, entity.ErrAdminRequired) {
+			return nil, status.Error(codes.PermissionDenied, "admin role required")
+		}
+
+		c.l.Error(err, "grpc - v1 - ListAllTasks")
+
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+
+	return response.NewListTasksResponse(tasks, total), nil
+}
+
+// listStatus is the status filter req asks for, or nil for every status.
+func listStatus(req *v1.ListTasksRequest) (*entity.TaskStatus, error) {
+	if req.GetStatus() == "" {
+		return nil, nil //nolint:nilnil // no filter is not an error
+	}
+
+	s := entity.TaskStatus(req.GetStatus())
+	if !s.Valid() {
+		return nil, status.Error(codes.InvalidArgument, "invalid task status")
+	}
+
+	return &s, nil
 }
 
 // UpdateTask -.

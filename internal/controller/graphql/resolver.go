@@ -68,6 +68,7 @@ func (r *Resolver) mapError(err error, op string) error {
 	for _, m := range []errorMapping{
 		{entity.ErrTaskNotFound, _codeNotFound, "task not found"},
 		{entity.ErrTaskForbidden, _codeForbidden, "forbidden"},
+		{entity.ErrAdminRequired, _codeForbidden, "admin role required"},
 		{entity.ErrInvalidTransition, _codeBadUserInput, "invalid status transition"},
 	} {
 		if errors.Is(err, m.sentinel) {

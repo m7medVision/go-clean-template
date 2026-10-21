@@ -25,14 +25,22 @@ func New(secret string, duration time.Duration) *Manager {
 	}
 }
 
-// GenerateToken creates a new JWT token for the given user ID.
-func (m *Manager) GenerateToken(userID string) (string, error) {
+// tokenClaims is the payload of an auth token.
+type tokenClaims struct {
+	jwtlib.RegisteredClaims
+
+	Roles []string `json:"roles,omitempty"`
+}
+
+// GenerateToken creates a new JWT token for the given user ID, carrying roles in a roles claim.
+func (m *Manager) GenerateToken(userID string, roles []string) (string, error) {
 	now := time.Now()
 
-	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, jwtlib.RegisteredClaims{
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, tokenClaims{
 		Subject:   userID,
 		IssuedAt:  jwtlib.NewNumericDate(now),
 		ExpiresAt: jwtlib.NewNumericDate(now.Add(m.duration)),
+		Roles:     roles,
 	})
 
 	tokenString, err := token.SignedString([]byte(m.secret))
@@ -49,6 +57,8 @@ type Claims struct {
 	// IssuedAt is when the token was issued: when the caller last proved who they are. It is zero
 	// for a token without an iat claim.
 	IssuedAt time.Time
+	// Roles are the role names the token was issued with, unchecked: callers keep the ones they know.
+	Roles []string
 }
 
 // ParseToken validates a JWT token and returns the user ID.
@@ -63,7 +73,9 @@ func (m *Manager) ParseToken(tokenString string) (string, error) {
 
 // Parse validates a JWT token and returns its claims.
 func (m *Manager) Parse(tokenString string) (Claims, error) {
-	token, err := jwtlib.Parse(tokenString, func(token *jwtlib.Token) (any, error) {
+	var parsed tokenClaims
+
+	token, err := jwtlib.ParseWithClaims(tokenString, &parsed, func(token *jwtlib.Token) (any, error) {
 		if _, ok := token.Method.(*jwtlib.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("%w: %v", ErrUnexpectedSigningMethod, token.Header["alg"])
 		}
@@ -79,7 +91,7 @@ func (m *Manager) Parse(tokenString string) (Claims, error) {
 		return Claims{}, fmt.Errorf("jwt - Parse - GetSubject: %w", err)
 	}
 
-	claims := Claims{UserID: sub}
+	claims := Claims{UserID: sub, Roles: parsed.Roles}
 
 	issuedAt, err := token.Claims.GetIssuedAt()
 	if err != nil {

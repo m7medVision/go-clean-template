@@ -185,6 +185,59 @@ func (mr *MockUserRepoMockRecorder) Store(ctx, user any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockUserRepo)(nil).Store), ctx, user)
 }
 
+// MockIdentityRepo is a mock of IdentityRepo interface.
+type MockIdentityRepo struct {
+	ctrl     *gomock.Controller
+	recorder *MockIdentityRepoMockRecorder
+	isgomock struct{}
+}
+
+// MockIdentityRepoMockRecorder is the mock recorder for MockIdentityRepo.
+type MockIdentityRepoMockRecorder struct {
+	mock *MockIdentityRepo
+}
+
+// NewMockIdentityRepo creates a new mock instance.
+func NewMockIdentityRepo(ctrl *gomock.Controller) *MockIdentityRepo {
+	mock := &MockIdentityRepo{ctrl: ctrl}
+	mock.recorder = &MockIdentityRepoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIdentityRepo) EXPECT() *MockIdentityRepoMockRecorder {
+	return m.recorder
+}
+
+// CreateWithIdentity mocks base method.
+func (m *MockIdentityRepo) CreateWithIdentity(ctx context.Context, user *entity.User, issuer, subject string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateWithIdentity", ctx, user, issuer, subject)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateWithIdentity indicates an expected call of CreateWithIdentity.
+func (mr *MockIdentityRepoMockRecorder) CreateWithIdentity(ctx, user, issuer, subject any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWithIdentity", reflect.TypeOf((*MockIdentityRepo)(nil).CreateWithIdentity), ctx, user, issuer, subject)
+}
+
+// UserByIdentity mocks base method.
+func (m *MockIdentityRepo) UserByIdentity(ctx context.Context, issuer, subject string) (entity.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UserByIdentity", ctx, issuer, subject)
+	ret0, _ := ret[0].(entity.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UserByIdentity indicates an expected call of UserByIdentity.
+func (mr *MockIdentityRepoMockRecorder) UserByIdentity(ctx, issuer, subject any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UserByIdentity", reflect.TypeOf((*MockIdentityRepo)(nil).UserByIdentity), ctx, issuer, subject)
+}
+
 // MockTaskRepo is a mock of TaskRepo interface.
 type MockTaskRepo struct {
 	ctrl     *gomock.Controller
@@ -252,6 +305,22 @@ func (m *MockTaskRepo) List(ctx context.Context, userID string, filter repo.Task
 func (mr *MockTaskRepoMockRecorder) List(ctx, userID, filter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskRepo)(nil).List), ctx, userID, filter)
+}
+
+// ListAll mocks base method.
+func (m *MockTaskRepo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Task, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAll", ctx, filter)
+	ret0, _ := ret[0].([]entity.Task)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListAll indicates an expected call of ListAll.
+func (mr *MockTaskRepoMockRecorder) ListAll(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockTaskRepo)(nil).ListAll), ctx, filter)
 }
 
 // Store mocks base method.

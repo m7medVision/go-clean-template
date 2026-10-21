@@ -73,7 +73,7 @@ func TestScoped_Verify_RejectsAuthToken(t *testing.T) {
 	s, err := jwt.NewScoped("test-secret", "webauthn-ceremony", time.Minute)
 	require.NoError(t, err)
 
-	token, err := auth.GenerateToken("user-123")
+	token, err := auth.GenerateToken("user-123", nil)
 	require.NoError(t, err)
 
 	_, err = s.Verify(token)

@@ -60,6 +60,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		AllTasks        func(childComplexity int, status *entity.TaskStatus, limit int, offset int) int
 		ExchangeHistory func(childComplexity int, limit int, offset int) int
 		Task            func(childComplexity int, id string) int
 		Tasks           func(childComplexity int, status *entity.TaskStatus, limit int, offset int) int
@@ -94,6 +95,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	Task(ctx context.Context, id string) (*entity.Task, error)
 	Tasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
+	AllTasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
 	ExchangeHistory(ctx context.Context, limit int, offset int) (*model.ConversionList, error)
 }
 
@@ -210,6 +212,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.UpdateTask(childComplexity, args["id"].(string), args["input"].(model.UpdateTaskInput)), true
 
+	case "Query.allTasks":
+		if e.ComplexityRoot.Query.AllTasks == nil {
+			break
+		}
+
+		args, err := ec.field_Query_allTasks_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AllTasks(childComplexity, args["status"].(*entity.TaskStatus), args["limit"].(int), args["offset"].(int)), true
 	case "Query.exchangeHistory":
 		if e.ComplexityRoot.Query.ExchangeHistory == nil {
 			break
@@ -428,6 +441,8 @@ input UpdateTaskInput { title: String!  description: String }
 type Query {
   task(id: ID!): Task!
   tasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
+  "Every user's tasks. Requires the admin role; anyone else gets FORBIDDEN."
+  allTasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
 }
 
 type Mutation {
@@ -701,6 +716,36 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_allTasks_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "status",
+		func(ctx context.Context, v any) (*entity.TaskStatus, error) {
+			return ec.unmarshalOTaskStatus2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskStatus(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "offset",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["offset"] = arg2
 	return args, nil
 }
 
@@ -1281,6 +1326,50 @@ func (ec *executionContext) fieldContext_Query_tasks(ctx context.Context, field 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_tasks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_allTasks(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_allTasks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AllTasks(ctx, fc.Args["status"].(*entity.TaskStatus), fc.Args["limit"].(int), fc.Args["offset"].(int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.TaskList) graphql.Marshaler {
+			return ec.marshalNTaskList2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskList(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_allTasks(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TaskList(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_allTasks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2991,6 +3080,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_tasks(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "allTasks":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_allTasks(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

@@ -52,6 +52,13 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
+type UserIdentity struct {
+	Issuer    string
+	Subject   string
+	UserID    string
+	CreatedAt time.Time
+}
+
 type WebauthnCredential struct {
 	ID         entity.PasskeyID
 	UserID     string

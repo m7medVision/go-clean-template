@@ -226,6 +226,22 @@ func (mr *MockTaskMockRecorder) List(ctx, userID, status, limit, offset any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTask)(nil).List), ctx, userID, status, limit, offset)
 }
 
+// ListAll mocks base method.
+func (m *MockTask) ListAll(ctx context.Context, caller entity.Principal, status *entity.TaskStatus, limit, offset int) ([]entity.Task, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAll", ctx, caller, status, limit, offset)
+	ret0, _ := ret[0].([]entity.Task)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListAll indicates an expected call of ListAll.
+func (mr *MockTaskMockRecorder) ListAll(ctx, caller, status, limit, offset any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockTask)(nil).ListAll), ctx, caller, status, limit, offset)
+}
+
 // Transition mocks base method.
 func (m *MockTask) Transition(ctx context.Context, userID, taskID string, newStatus entity.TaskStatus) (entity.Task, error) {
 	m.ctrl.T.Helper()
@@ -384,6 +400,75 @@ func (m *MockPasskey) Rename(ctx context.Context, userID, id, name string) (enti
 func (mr *MockPasskeyMockRecorder) Rename(ctx, userID, id, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockPasskey)(nil).Rename), ctx, userID, id, name)
+}
+
+// MockOIDC is a mock of OIDC interface.
+type MockOIDC struct {
+	ctrl     *gomock.Controller
+	recorder *MockOIDCMockRecorder
+	isgomock struct{}
+}
+
+// MockOIDCMockRecorder is the mock recorder for MockOIDC.
+type MockOIDCMockRecorder struct {
+	mock *MockOIDC
+}
+
+// NewMockOIDC creates a new mock instance.
+func NewMockOIDC(ctrl *gomock.Controller) *MockOIDC {
+	mock := &MockOIDC{ctrl: ctrl}
+	mock.recorder = &MockOIDCMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOIDC) EXPECT() *MockOIDCMockRecorder {
+	return m.recorder
+}
+
+// Begin mocks base method.
+func (m *MockOIDC) Begin(ctx context.Context) (string, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Begin", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Begin indicates an expected call of Begin.
+func (mr *MockOIDCMockRecorder) Begin(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockOIDC)(nil).Begin), ctx)
+}
+
+// Enabled mocks base method.
+func (m *MockOIDC) Enabled() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Enabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Enabled indicates an expected call of Enabled.
+func (mr *MockOIDCMockRecorder) Enabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Enabled", reflect.TypeOf((*MockOIDC)(nil).Enabled))
+}
+
+// Finish mocks base method.
+func (m *MockOIDC) Finish(ctx context.Context, code, state, token string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Finish", ctx, code, state, token)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Finish indicates an expected call of Finish.
+func (mr *MockOIDCMockRecorder) Finish(ctx, code, state, token any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Finish", reflect.TypeOf((*MockOIDC)(nil).Finish), ctx, code, state, token)
 }
 
 // MockMail is a mock of Mail interface.

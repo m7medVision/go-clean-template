@@ -81,12 +81,17 @@ func (uc *UseCase) Login(ctx context.Context, email, password string) (string, e
 		return "", entity.ErrInvalidCredentials
 	}
 
+	// A user created by an SSO sign-in has no password.
+	if user.PasswordHash == "" {
+		return "", entity.ErrInvalidCredentials
+	}
+
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
 		return "", entity.ErrInvalidCredentials
 	}
 
-	token, err := uc.jwt.GenerateToken(user.ID)
+	token, err := uc.jwt.GenerateToken(user.ID, entity.RoleNames(entity.LocalRoles()))
 	if err != nil {
 		return "", fmt.Errorf("UserUseCase - Login - uc.jwt.GenerateToken: %w", err)
 	}

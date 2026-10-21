@@ -6,6 +6,7 @@ import (
 	"time"
 
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -141,7 +142,7 @@ func TestAuthInterceptor_ValidToken(t *testing.T) {
 	interceptor := grpcmw.AuthInterceptor(jwtMgr)
 	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
 
-	token, err := jwtMgr.GenerateToken("user-id-123")
+	token, err := jwtMgr.GenerateToken("user-id-123", nil)
 	require.NoError(t, err)
 
 	md := metadata.Pairs("authorization", token)
@@ -166,7 +167,7 @@ func TestUserIDFromContext_WithValue(t *testing.T) {
 	interceptor := grpcmw.AuthInterceptor(jwtMgr)
 	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
 
-	token, err := jwtMgr.GenerateToken("user-42")
+	token, err := jwtMgr.GenerateToken("user-42", nil)
 	require.NoError(t, err)
 
 	md := metadata.Pairs("authorization", token)
@@ -188,4 +189,32 @@ func TestUserIDFromContext_WithoutValue(t *testing.T) {
 	userID, ok := grpcmw.UserIDFromContext(t.Context())
 	assert.False(t, ok)
 	assert.Empty(t, userID)
+}
+
+func TestPrincipalFromContext(t *testing.T) {
+	t.Parallel()
+
+	jwtMgr := newJWTManager(t)
+	interceptor := grpcmw.AuthInterceptor(jwtMgr)
+	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/ListAllTasks"}
+
+	token, err := jwtMgr.GenerateToken("user-42", []string{"admin", "superuser"})
+	require.NoError(t, err)
+
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", token))
+	capture := &ctxCapture{}
+
+	_, err = interceptor(ctx, nil, info, capture.capturingHandler)
+	require.NoError(t, err)
+
+	principal, ok := grpcmw.PrincipalFromContext(capture.ctx)
+	require.True(t, ok)
+	assert.Equal(t, entity.Principal{UserID: "user-42", Roles: []entity.Role{entity.RoleAdmin}}, principal)
+}
+
+func TestPrincipalFromContext_WithoutValue(t *testing.T) {
+	t.Parallel()
+
+	_, ok := grpcmw.PrincipalFromContext(t.Context())
+	assert.False(t, ok)
 }

@@ -59,6 +59,20 @@ type fakeTask struct {
 
 	stored entity.Task
 	err    error
+
+	listed    []entity.Task
+	gotCaller entity.Principal
+	gotStatus *entity.TaskStatus
+	gotLimit  int
+	gotOffset int
+}
+
+func (f *fakeTask) ListAll(
+	_ context.Context, caller entity.Principal, status *entity.TaskStatus, limit, offset int,
+) ([]entity.Task, int, error) {
+	f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = caller, status, limit, offset
+
+	return f.listed, len(f.listed), f.err
 }
 
 func (f *fakeTask) Create(context.Context, string, string, string) (entity.Task, error) {
@@ -138,6 +152,12 @@ func newRouter(cfg *config.Config, e usecase.Exchange, u usecase.User, tk usecas
 	return newRouterWithPasskey(cfg, e, u, tk, &fakePasskey{})
 }
 
+func newRouterWithOIDC(cfg *config.Config, oc usecase.OIDC) http.Handler {
+	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
+
+	return restapi.NewRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, &fakePasskey{}, oc, jwtManager, noopLogger{})
+}
+
 func newRouterWithPasskey(
 	cfg *config.Config,
 	e usecase.Exchange,
@@ -147,13 +167,13 @@ func newRouterWithPasskey(
 ) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, e, u, tk, pk, jwtManager, noopLogger{})
+	return restapi.NewRouter(cfg, e, u, tk, pk, &fakeOIDC{}, jwtManager, noopLogger{})
 }
 
 func newToken(t *testing.T) string {
 	t.Helper()
 
-	token, err := jwt.New("test-secret", time.Hour).GenerateToken("user-1")
+	token, err := jwt.New("test-secret", time.Hour).GenerateToken("user-1", nil)
 	require.NoError(t, err)
 
 	return token
@@ -307,6 +327,68 @@ func TestDeleteTask(t *testing.T) {
 		resp := doRequest(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
 		assert.Equal(t, http.StatusNoContent, resp.Code)
 	})
+}
+
+func newAdminToken(t *testing.T) string {
+	t.Helper()
+
+	token, err := jwt.New("test-secret", time.Hour).GenerateToken("admin-1", []string{"admin", "user"})
+	require.NoError(t, err)
+
+	return token
+}
+
+func TestListAllTasks(t *testing.T) {
+	t.Parallel()
+
+	cfg := newTestConfig(t)
+	tk := &fakeTask{listed: []entity.Task{
+		{ID: "task-1", UserID: "alice", Title: "Alice's", Status: entity.TaskStatusDone},
+		{ID: "task-2", UserID: "bob", Title: "Bob's", Status: entity.TaskStatusDone},
+	}}
+	handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, tk)
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/admin/tasks?status=done&limit=5&offset=10", newAdminToken(t), "")
+
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+
+	var body struct {
+		Tasks []entity.Task `json:"tasks"`
+		Total int           `json:"total"`
+	}
+
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	assert.Equal(t, 2, body.Total)
+	assert.Equal(t, []string{"alice", "bob"}, []string{body.Tasks[0].UserID, body.Tasks[1].UserID})
+
+	assert.Equal(t, entity.Principal{UserID: "admin-1", Roles: []entity.Role{entity.RoleAdmin, entity.RoleUser}}, tk.gotCaller)
+	require.NotNil(t, tk.gotStatus)
+	assert.Equal(t, entity.TaskStatusDone, *tk.gotStatus)
+	assert.Equal(t, 5, tk.gotLimit)
+	assert.Equal(t, 10, tk.gotOffset)
+}
+
+func TestListAllTasksAdminRequiredMapsTo403(t *testing.T) {
+	t.Parallel()
+
+	cfg := newTestConfig(t)
+	handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{err: entity.ErrAdminRequired})
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/admin/tasks", newToken(t), "")
+
+	assert.Equal(t, http.StatusForbidden, resp.Code)
+	assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+}
+
+func TestListAllTasksRequiresAuth(t *testing.T) {
+	t.Parallel()
+
+	cfg := newTestConfig(t)
+	handler := newRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{})
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/admin/tasks", "", "")
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code)
 }
 
 func TestTaskForbiddenMapsTo403(t *testing.T) {

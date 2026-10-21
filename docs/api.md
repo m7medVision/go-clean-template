@@ -9,8 +9,8 @@ the same use cases, so behaviour and errors match across transports.
 | GraphQL | `POST http://127.0.0.1:8080/graphql` | `POST http://app.lvh.me/graphql` |
 | gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) |
 
-Every operation except register, login and passkey login needs `Authorization: Bearer <token>`, with
-the token from login.
+Every operation except register, login, passkey login and SSO sign-in needs
+`Authorization: Bearer <token>`, with the token from a sign-in.
 
 ## User authentication
 
@@ -24,6 +24,18 @@ Registration, login, and JWT-based authorization.
 
 - Passwords are hashed with bcrypt; JWTs expire after `JWT_TOKEN_EXPIRY`.
 - Registration queues a welcome email that the worker sends (see [worker.md](worker.md)).
+
+## SSO
+
+Sign-in through an OpenID Connect provider (Keycloak in development), for the same JWT password login
+returns, carrying the roles the provider grants. REST only. The flow, the role mapping and provider
+setup are in [sso.md](sso.md).
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/v1/auth/oidc` | none | `{enabled}`: whether `OIDC_ISSUER` is set |
+| `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down |
+| `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in, `409` when the email or username belongs to another account |
 
 ## Passkeys
 
@@ -60,6 +72,7 @@ CRUD with a status state machine. Tasks are scoped to the authenticated user.
 | --- | --- | --- | --- |
 | Create | `POST /v1/tasks` | `TaskService/CreateTask` | `mutation createTask` |
 | List | `GET /v1/tasks` | `TaskService/ListTasks` | `query tasks` |
+| List every user's (admin) | `GET /v1/admin/tasks` | `TaskService/ListAllTasks` | `query allTasks` |
 | Get | `GET /v1/tasks/{id}` | `TaskService/GetTask` | `query task` |
 | Update | `PUT /v1/tasks/{id}` | `TaskService/UpdateTask` | `mutation updateTask` |
 | Transition | `PATCH /v1/tasks/{id}/status` | `TaskService/TransitionTask` | `mutation transitionTask` |
@@ -67,6 +80,9 @@ CRUD with a status state machine. Tasks are scoped to the authenticated user.
 
 - Status transitions: `todo` → `in_progress` → `done`, and `in_progress` → `todo`.
 - Lists page with `limit`/`offset` and take an optional `status` filter.
+- The admin list needs the `admin` role in the caller's token, or it answers `403`, `FORBIDDEN` or
+  `PERMISSION_DENIED`. Password and passkey sign-ins grant only `user`; see
+  [architecture.md](architecture.md#roles).
 
 ## Currency exchange
 

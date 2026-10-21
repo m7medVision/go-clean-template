@@ -11,6 +11,9 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 )
 
+// _defaultLimit is the page size List and ListAll use when the caller asks for none.
+const _defaultLimit = 10
+
 // UseCase -.
 type UseCase struct {
 	repo repo.TaskRepo
@@ -55,24 +58,37 @@ func (uc *UseCase) Get(ctx context.Context, userID, taskID string) (entity.Task,
 
 // List -.
 func (uc *UseCase) List(ctx context.Context, userID string, status *entity.TaskStatus, limit, offset int) ([]entity.Task, int, error) {
-	if limit <= 0 {
-		limit = 10
-	}
-
-	if offset < 0 {
-		offset = 0
-	}
-
-	tasks, total, err := uc.repo.List(ctx, userID, repo.TaskFilter{
-		Status: status,
-		Limit:  int64(limit),
-		Offset: int64(offset),
-	})
+	tasks, total, err := uc.repo.List(ctx, userID, taskFilter(status, limit, offset))
 	if err != nil {
 		return nil, 0, fmt.Errorf("TaskUseCase - List - uc.repo.List: %w", err)
 	}
 
 	return tasks, total, nil
+}
+
+// ListAll -.
+func (uc *UseCase) ListAll(
+	ctx context.Context, caller entity.Principal, status *entity.TaskStatus, limit, offset int,
+) ([]entity.Task, int, error) {
+	if !caller.Has(entity.RoleAdmin) {
+		return nil, 0, entity.ErrAdminRequired
+	}
+
+	tasks, total, err := uc.repo.ListAll(ctx, taskFilter(status, limit, offset))
+	if err != nil {
+		return nil, 0, fmt.Errorf("TaskUseCase - ListAll - uc.repo.ListAll: %w", err)
+	}
+
+	return tasks, total, nil
+}
+
+// taskFilter applies the paging defaults: a page of _defaultLimit, and no negative offset.
+func taskFilter(status *entity.TaskStatus, limit, offset int) repo.TaskFilter {
+	if limit <= 0 {
+		limit = _defaultLimit
+	}
+
+	return repo.TaskFilter{Status: status, Limit: int64(limit), Offset: int64(max(offset, 0))}
 }
 
 // Update -.

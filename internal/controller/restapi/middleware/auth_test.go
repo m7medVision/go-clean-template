@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/stretchr/testify/assert"
@@ -48,7 +49,7 @@ func TestAuthMiddleware(t *testing.T) {
 	jwtManager := jwt.New("test-secret", time.Hour)
 	handler := newTestHandler(jwtManager)
 
-	validToken, err := jwtManager.GenerateToken("user-id-123")
+	validToken, err := jwtManager.GenerateToken("user-id-123", nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -121,7 +122,7 @@ func TestAuthMiddlewareAuthTime(t *testing.T) {
 
 	before := time.Now().Truncate(time.Second)
 
-	token, err := jwtManager.GenerateToken("user-id-123")
+	token, err := jwtManager.GenerateToken("user-id-123", nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
@@ -140,5 +141,58 @@ func TestAuthTimeWithoutAuth(t *testing.T) {
 	t.Parallel()
 
 	_, ok := middleware.AuthTime(t.Context())
+	assert.False(t, ok)
+}
+
+func TestAuthMiddlewarePrincipal(t *testing.T) {
+	t.Parallel()
+
+	jwtManager := jwt.New("test-secret", time.Hour)
+
+	tests := []struct {
+		name      string
+		roles     []string
+		wantRoles []entity.Role
+	}{
+		{"admin token", []string{"admin", "user"}, []entity.Role{entity.RoleAdmin, entity.RoleUser}},
+		{"unknown roles are dropped", []string{"superuser", "user"}, []entity.Role{entity.RoleUser}},
+		{"no roles claim", nil, []entity.Role{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				got entity.Principal
+				ok  bool
+			)
+
+			r := chi.NewRouter()
+			r.Use(middleware.Auth(jwtManager, noopLogger{}))
+			r.Get("/v1/test", func(_ http.ResponseWriter, r *http.Request) {
+				got, ok = middleware.Principal(r.Context())
+			})
+
+			token, err := jwtManager.GenerateToken("user-id-123", tt.roles)
+			require.NoError(t, err)
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
+			req.Header.Set("Authorization", "Bearer "+token)
+
+			resp := httptest.NewRecorder()
+			r.ServeHTTP(resp, req)
+
+			require.Equal(t, http.StatusOK, resp.Code, "a token without a known role still authenticates")
+			require.True(t, ok)
+			assert.Equal(t, entity.Principal{UserID: "user-id-123", Roles: tt.wantRoles}, got)
+		})
+	}
+}
+
+func TestPrincipalWithoutAuth(t *testing.T) {
+	t.Parallel()
+
+	_, ok := middleware.Principal(t.Context())
 	assert.False(t, ok)
 }

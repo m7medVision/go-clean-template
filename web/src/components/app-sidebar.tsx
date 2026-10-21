@@ -6,9 +6,12 @@ import {
   ListTodoIcon,
   ListChecksIcon,
   LogOutIcon,
+  ShieldIcon,
   UserIcon,
 } from "lucide-react";
 
+import { isAdmin } from "#/auth/roles";
+import { auth } from "#/auth/token";
 import { profileQuery } from "#/user/api";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import {
@@ -39,8 +42,12 @@ const navigation = [
   { to: "/profile", label: "Profile", icon: UserIcon },
 ] as const;
 
+// Shown when the token carries the admin role. The server enforces the role; this only hides links.
+const adminNavigation = [{ to: "/admin/tasks", label: "All tasks", icon: ShieldIcon }] as const;
+
 export function AppSidebar({ onLogout }: { onLogout: () => void }) {
   const matchRoute = useMatchRoute();
+  const links = isAdmin(auth.token()) ? [...navigation, ...adminNavigation] : navigation;
 
   return (
     <Sidebar collapsible="icon">
@@ -65,7 +72,7 @@ export function AppSidebar({ onLogout }: { onLogout: () => void }) {
         <SidebarGroup>
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarMenu>
-            {navigation.map(({ to, label, icon: Icon }) => (
+            {links.map(({ to, label, icon: Icon }) => (
               <SidebarMenuItem key={to}>
                 <SidebarMenuButton
                   asChild

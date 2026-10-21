@@ -108,6 +108,24 @@ func (r *queryResolver) Tasks(ctx context.Context, status *entity.TaskStatus, li
 	return &model.TaskList{Tasks: tasks, Total: total}, nil
 }
 
+func (r *queryResolver) AllTasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error) {
+	principal, ok := Principal(ctx)
+	if !ok {
+		return nil, newError(_codeUnauthenticated, _msgUnauthorized)
+	}
+
+	if limit < _minLimit || offset < 0 {
+		return nil, newError(_codeBadUserInput, _msgInvalidInput)
+	}
+
+	tasks, total, err := r.task.ListAll(ctx, principal, status, limit, offset)
+	if err != nil {
+		return nil, r.mapError(err, "allTasks")
+	}
+
+	return &model.TaskList{Tasks: tasks, Total: total}, nil
+}
+
 func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }

@@ -728,9 +728,10 @@ func TestPasskeyLogin(t *testing.T) {
 	authToken, err := f.uc.FinishLogin(context.Background(), token, body)
 	require.NoError(t, err)
 
-	subject, err := f.tokens.ParseToken(authToken)
+	claims, err := f.tokens.Parse(authToken)
 	require.NoError(t, err)
-	assert.Equal(t, acc.user.ID, subject)
+	assert.Equal(t, acc.user.ID, claims.UserID)
+	assert.Equal(t, []string{"user"}, claims.Roles, "a passkey sign-in grants only the user role")
 
 	require.Contains(t, burns.used, string(challenge[:]), "the burned hash is the challenge's SHA-256")
 	assert.WithinDuration(t, before.Add(_ceremonyTimeout), burns.used[string(challenge[:])], time.Minute)

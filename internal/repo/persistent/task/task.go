@@ -77,6 +77,32 @@ func (r *Repo) List(ctx context.Context, userID string, filter repo.TaskFilter) 
 	return tasks, int(total), nil
 }
 
+// ListAll -.
+func (r *Repo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Task, int, error) {
+	status := (*string)(filter.Status)
+
+	total, err := r.q.CountAllTasks(ctx, status)
+	if err != nil {
+		return nil, 0, fmt.Errorf("TaskRepo - ListAll - r.q.CountAllTasks: %w", err)
+	}
+
+	rows, err := r.q.ListAllTasks(ctx, queries.ListAllTasksParams{
+		Status: status,
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("TaskRepo - ListAll - r.q.ListAllTasks: %w", err)
+	}
+
+	tasks := make([]entity.Task, len(rows))
+	for i := range rows {
+		tasks[i] = entity.Task(rows[i])
+	}
+
+	return tasks, int(total), nil
+}
+
 // Update -.
 func (r *Repo) Update(ctx context.Context, task *entity.Task) error {
 	affected, err := r.q.UpdateTask(ctx, queries.UpdateTaskParams{
