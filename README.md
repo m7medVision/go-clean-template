@@ -43,7 +43,7 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 - **Generated code wherever it can be:** SQL, mocks,
   protobuf, <!-- scaffold:grpc -->
   GraphQL, <!-- scaffold:graphql -->
-  frontend types, <!-- scaffold:web -->
+  frontend types, <!-- scaffold:wbe -->
   and the OpenAPI document.
 
 ## Clean Architecture
