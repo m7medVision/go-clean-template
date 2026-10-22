@@ -55,6 +55,9 @@ blocks updating and deleting tags.
 - `go run github.com/m7medvision/go-clean-template/cmd/create@v0.4.0` (or `@latest`) runs the
   scaffold CLI at that version. It downloads the template at the same version and generates from
   it, so the CLI and the template always match. See [scaffold.md](scaffold.md).
+  For a few minutes after a release, the Go module proxy may not list the new tag yet, so
+  `@latest` still resolves to the version before it (or, before the first release, to a
+  pseudo-version of master). Name the version (`@v0.4.0`) to get it at once.
 - `api.tar.gz`, `api-grpc.tar.gz`, `fullstack.tar.gz` and `everything.tar.gz` on the release page
   are those presets, generated and checked. They keep the template's module path; use the CLI
   with `--module` for your own.
