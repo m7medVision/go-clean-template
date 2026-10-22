@@ -43,6 +43,72 @@ selection cannot be submitted.
 Presets: `api` (REST), `api-grpc` (REST + gRPC), `fullstack` (REST + GraphQL + Frontend +
 Passkeys + Queue + Email + Welcome email), `everything`.
 
+### The interactive form, step by step
+
+Run `make scaffold` from anywhere inside the template. The form opens when a terminal is attached and none of
+`PRESET`, `WITH`, `WITHOUT`, `NAME` or `MODULE` is set. Set any of them and it is skipped:
+
+1. **Project name.** The directory under `scaffold/out/`. A name, not a path. Leave it empty to
+   name the project after the preset, or `custom` once you change the preset's features.
+2. **Go module path.** For example `github.com/acme/billing`. Every import is rewritten to it.
+   Leave it empty to keep the template's module.
+3. **Start from a preset.** Pick one of the presets above, or *Custom* to start from REST only.
+4. **Features.** A checklist that starts with the preset's features ticked. `↑`/`↓` move, `space`
+   ticks or unticks, and `enter` goes to the next step. A pick that breaks a rule (Frontend without
+   GraphQL) shows the reason under the list, and the form stays on this step until you fix it.
+5. **Summary.** Shows the output path, the features kept, and how many files are kept and
+   removed. Then it asks two questions:
+   - whether to run `make pre-commit` in the project afterwards (a few minutes);
+   - whether to *Generate* or *Back out*. Backing out writes nothing.
+
+`ctrl+c` quits at any step and writes nothing. Without a terminal (in CI, or with output piped),
+the form doesn't open and the command behaves as `PRESET=everything`.
+
+### Examples
+
+```sh
+make scaffold PRESET=api                                # REST only → scaffold/out/api
+make scaffold PRESET=fullstack WITHOUT=welcome          # → scaffold/out/custom
+make scaffold WITH=grpc,queue NAME=billing \
+  MODULE=github.com/acme/billing                        # REST + gRPC + queue → scaffold/out/billing
+make scaffold-check PRESET=api-grpc                     # generate, then make pre-commit inside
+make scaffold-dev PRESET=fullstack                      # generate, then make dev beside the root's
+```
+
+`make scaffold WITH=web` is refused with `web needs graphql`. Write `WITH=graphql,web` instead.
+
+### Flags
+
+The Makefile targets wrap `go run ./cmd/create` and always pass `--force`. Use the flags directly
+when you want to write somewhere outside `scaffold/out`:
+
+| Flag | Meaning |
+| --- | --- |
+| `--preset <id>` | Start from this preset |
+| `--with a,b` / `--without a,b` | Add or leave out features |
+| `--name <name>` | Project name and directory under `scaffold/out` |
+| `--module <path>` | Go module path of the generated project |
+| `--out <dir>` | Write here instead of `scaffold/out/<name>`. Refuses the template itself and its parents |
+| `--force` | Replace the output directory if it is not empty |
+| `--no-regen` | Copy and strip only. Skip `make sqlc`, mocks, gqlgen and the rest |
+| `--check` | Run `make pre-commit` in the project once it is generated |
+| `--then '<cmd>'` | Run a command in the project afterwards (`scaffold-dev` passes `make dev` with other ports) |
+| `--matrix` | Generate and check every preset, then print PASS/FAIL per preset |
+
+```sh
+go run ./cmd/create --preset api --name billing --module github.com/acme/billing --out ~/src/billing
+```
+
+### After generating
+
+The project is a fresh git repository with no commits. Move it out and make it your own:
+
+```sh
+mv scaffold/out/billing ~/src/billing && cd ~/src/billing
+git add -A && git commit -m "Initial commit from go-clean-template"
+make dev
+```
+
 Generating runs these steps:
 
 1. Copy every file git tracks or would track, so uncommitted changes are included.
