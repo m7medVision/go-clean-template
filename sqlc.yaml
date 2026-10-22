@@ -22,8 +22,10 @@ sql:
             go_type: github.com/shopspring/decimal.Decimal
           - column: exchange_history.rate_date
             go_type: time.Time
+          # scaffold:queue:begin
           - column: queue_messages.body
             go_type: encoding/json.RawMessage
+          # scaffold:queue:end
           - db_type: timestamptz
             go_type: time.Time
           - db_type: timestamptz
@@ -32,7 +34,9 @@ sql:
               import: time
               type: Time
               pointer: true
+          # scaffold:passkeys:begin
           - column: webauthn_credentials.id
             go_type: github.com/m7medvision/go-clean-template/internal/entity.PasskeyID
           - column: webauthn_credentials.credential
             go_type: encoding/json.RawMessage
+          # scaffold:passkeys:end

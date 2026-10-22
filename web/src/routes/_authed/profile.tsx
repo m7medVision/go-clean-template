@@ -1,9 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 import { profileQuery } from "#/user/api";
-import { passkeysQuery } from "#/passkey/api";
-import { PasskeysCard } from "#/passkey/passkeys-card";
+import { passkeysQuery } from "#/passkey/api"; // scaffold:passkeys
+import { PasskeysCard } from "#/passkey/passkeys-card"; // scaffold:passkeys
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 
@@ -12,10 +13,15 @@ export const Route = createFileRoute("/_authed/profile")({
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(profileQuery),
-      context.queryClient.ensureQueryData(passkeysQuery),
+      context.queryClient.ensureQueryData(passkeysQuery), // scaffold:passkeys
     ]),
   component: Profile,
 });
+
+// The cards under the account details, one per feature that adds account settings.
+const settingsCards: ReactNode[] = [
+  <PasskeysCard key="passkeys" />, // scaffold:passkeys
+];
 
 function Profile() {
   const { data: user } = useSuspenseQuery(profileQuery);
@@ -51,7 +57,7 @@ function Profile() {
           </dl>
         </CardContent>
       </Card>
-      <PasskeysCard />
+      {settingsCards}
     </div>
   );
 }

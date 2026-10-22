@@ -23,20 +23,29 @@ func newMailUseCase(t *testing.T) (usecase.Mail, *MockMailRenderer, *MockMailer)
 	return mail.New(renderer, mailer), renderer, mailer
 }
 
+// noteEmail is a test-only email, so the mail use case's tests do not depend on a real email type.
+type noteEmail struct {
+	To   string
+	Body string
+}
+
+func (noteEmail) Template() string    { return "note" }
+func (e noteEmail) Recipient() string { return e.To }
+
 func TestDeliver(t *testing.T) {
 	t.Parallel()
 
-	welcome := entity.WelcomeEmail{To: "john@example.com", Username: "johndoe", LoginURL: "https://example.com/login"}
-	rendered := smtp.Message{To: "john@example.com", Subject: "Welcome", HTML: "<p>Hi</p>\n", Text: "Hi\n"}
+	note := noteEmail{To: "john@example.com", Body: "Hi"}
+	rendered := smtp.Message{To: "john@example.com", Subject: "Note", HTML: "<p>Hi</p>\n", Text: "Hi\n"}
 
 	t.Run("sends the rendered message", func(t *testing.T) {
 		t.Parallel()
 
 		uc, renderer, mailer := newMailUseCase(t)
-		renderer.EXPECT().Render(gomock.Any(), welcome).Return(rendered, nil)
+		renderer.EXPECT().Render(gomock.Any(), note).Return(rendered, nil)
 		mailer.EXPECT().Send(gomock.Any(), rendered).Return(nil)
 
-		err := uc.Deliver(context.Background(), welcome)
+		err := uc.Deliver(context.Background(), note)
 
 		require.NoError(t, err)
 	})
@@ -45,9 +54,9 @@ func TestDeliver(t *testing.T) {
 		t.Parallel()
 
 		uc, renderer, _ := newMailUseCase(t)
-		renderer.EXPECT().Render(gomock.Any(), welcome).Return(smtp.Message{}, errInternalServErr)
+		renderer.EXPECT().Render(gomock.Any(), note).Return(smtp.Message{}, errInternalServErr)
 
-		err := uc.Deliver(context.Background(), welcome)
+		err := uc.Deliver(context.Background(), note)
 
 		require.ErrorIs(t, err, errInternalServErr)
 	})
@@ -56,9 +65,9 @@ func TestDeliver(t *testing.T) {
 		t.Parallel()
 
 		uc, renderer, _ := newMailUseCase(t)
-		renderer.EXPECT().Render(gomock.Any(), welcome).Return(smtp.Message{}, entity.ErrUnknownEmail)
+		renderer.EXPECT().Render(gomock.Any(), note).Return(smtp.Message{}, entity.ErrUnknownEmail)
 
-		err := uc.Deliver(context.Background(), welcome)
+		err := uc.Deliver(context.Background(), note)
 
 		require.ErrorIs(t, err, entity.ErrUnknownEmail)
 	})
@@ -67,10 +76,10 @@ func TestDeliver(t *testing.T) {
 		t.Parallel()
 
 		uc, renderer, mailer := newMailUseCase(t)
-		renderer.EXPECT().Render(gomock.Any(), welcome).Return(rendered, nil)
+		renderer.EXPECT().Render(gomock.Any(), note).Return(rendered, nil)
 		mailer.EXPECT().Send(gomock.Any(), rendered).Return(errInternalServErr)
 
-		err := uc.Deliver(context.Background(), welcome)
+		err := uc.Deliver(context.Background(), note)
 
 		require.ErrorIs(t, err, errInternalServErr)
 	})

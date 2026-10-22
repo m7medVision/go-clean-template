@@ -23,10 +23,10 @@ import (
 
 const _from = "Go Clean Template <noreply@example.com>"
 
-func welcome() smtp.Message {
+func greeting() smtp.Message {
 	return smtp.Message{
 		To:      "john@example.com",
-		Subject: "Welcome, johndoe",
+		Subject: "Hello, johndoe",
 		HTML:    "<p>Hi johndoe,</p>\n",
 		Text:    "Hi johndoe,\n",
 	}
@@ -38,7 +38,7 @@ func TestSend_DeliversToTheEnvelopeAddresses(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	require.NoError(t, c.Send(context.Background(), welcome()))
+	require.NoError(t, c.Send(context.Background(), greeting()))
 
 	got := srv.only(t)
 	assert.Equal(t, "noreply@example.com", got.from)
@@ -51,7 +51,7 @@ func TestSend_WritesHeaders(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	require.NoError(t, c.Send(context.Background(), welcome()))
+	require.NoError(t, c.Send(context.Background(), greeting()))
 
 	msg := parse(t, srv.only(t).data)
 
@@ -63,7 +63,7 @@ func TestSend_WritesHeaders(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []*mail.Address{{Address: "john@example.com"}}, to)
 
-	assert.Equal(t, "Welcome, johndoe", msg.Header.Get("Subject"))
+	assert.Equal(t, "Hello, johndoe", msg.Header.Get("Subject"))
 	assert.Equal(t, "1.0", msg.Header.Get("MIME-Version"))
 	assert.Regexp(t, `^<[0-9a-f]+@example\.com>$`, msg.Header.Get("Message-ID"))
 
@@ -77,7 +77,7 @@ func TestSend_WritesTextThenHTML(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	require.NoError(t, c.Send(context.Background(), welcome()))
+	require.NoError(t, c.Send(context.Background(), greeting()))
 
 	parts := alternatives(t, parse(t, srv.only(t).data))
 	require.Len(t, parts, 2, "a text part, then an HTML part")
@@ -93,7 +93,7 @@ func TestSend_EncodesANonASCIISubject(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	m := welcome()
+	m := greeting()
 	m.Subject = "Bienvenue, José"
 	require.NoError(t, c.Send(context.Background(), m))
 
@@ -111,7 +111,7 @@ func TestSend_SubjectCannotInjectHeaders(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	m := welcome()
+	m := greeting()
 	m.Subject = "Hi\r\nBcc: attacker@example.com"
 	require.NoError(t, c.Send(context.Background(), m))
 
@@ -127,7 +127,7 @@ func TestSend_RejectsAnInvalidRecipient(t *testing.T) {
 	c := smtp.New(srv.host, srv.port, _from)
 
 	for _, to := range []string{"", "not an address", "john@example.com\r\nBcc: attacker@example.com"} {
-		m := welcome()
+		m := greeting()
 		m.To = to
 
 		err := c.Send(context.Background(), m)
@@ -143,7 +143,7 @@ func TestSend_RejectsAnInvalidSender(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{})
 	c := smtp.New(srv.host, srv.port, "not an address")
 
-	err := c.Send(context.Background(), welcome())
+	err := c.Send(context.Background(), greeting())
 	assert.ErrorIs(t, err, smtp.ErrInvalidAddress)
 }
 
@@ -153,7 +153,7 @@ func TestSend_ReturnsTheServersRefusal(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{refuseRcpt: true})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	err := c.Send(context.Background(), welcome())
+	err := c.Send(context.Background(), greeting())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "550")
 	assert.Empty(t, srv.received())
@@ -165,7 +165,7 @@ func TestSend_AuthenticatesWhenGivenCredentials(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{auth: true})
 	c := smtp.New(srv.host, srv.port, _from, smtp.Auth("user", "secret"))
 
-	require.NoError(t, c.Send(context.Background(), welcome()))
+	require.NoError(t, c.Send(context.Background(), greeting()))
 	assert.Equal(t, "\x00user\x00secret", srv.only(t).auth)
 }
 
@@ -175,7 +175,7 @@ func TestSend_SkipsAuthWithoutCredentials(t *testing.T) {
 	srv := startFakeServer(t, fakeOptions{auth: true})
 	c := smtp.New(srv.host, srv.port, _from)
 
-	require.NoError(t, c.Send(context.Background(), welcome()))
+	require.NoError(t, c.Send(context.Background(), greeting()))
 	assert.Empty(t, srv.only(t).auth)
 }
 
@@ -188,7 +188,7 @@ func TestSend_StopsOnACanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := c.Send(ctx, welcome())
+	err := c.Send(ctx, greeting())
 	assert.True(t, errors.Is(err, context.Canceled), "got %v", err)
 	assert.Empty(t, srv.received())
 }

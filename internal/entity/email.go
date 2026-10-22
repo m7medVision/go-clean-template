@@ -3,6 +3,7 @@ package entity
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
 // EmailQueue is the queue use cases send email to and the worker delivers it from.
@@ -16,18 +17,13 @@ type Email interface {
 	Recipient() string
 }
 
-// WelcomeEmail is sent once a user registers.
-type WelcomeEmail struct {
-	To       string `json:"to"`
-	Username string `json:"username"`
-	LoginURL string `json:"login_url"`
+// EmailTypes lists one zero value of every Email type. DecodeEmail reads only these, so a new
+// type needs an entry here; each type lives in its own email_<name>.go file.
+func EmailTypes() []Email {
+	return []Email{
+		WelcomeEmail{}, // scaffold:welcome
+	}
 }
-
-// Template -.
-func (WelcomeEmail) Template() string { return "welcome" }
-
-// Recipient -.
-func (e WelcomeEmail) Recipient() string { return e.To }
 
 // emailEnvelope is the queue body: the template name tells DecodeEmail which type data holds.
 type emailEnvelope struct {
@@ -50,27 +46,32 @@ func EncodeEmail(e Email) (json.RawMessage, error) {
 	return body, nil
 }
 
-// DecodeEmail reads a queue body written by EncodeEmail. A template it does not know returns
-// ErrUnknownEmail; a new Email type needs a case here.
+// DecodeEmail reads a queue body written by EncodeEmail. A template that is not in EmailTypes
+// returns ErrUnknownEmail.
 func DecodeEmail(body json.RawMessage) (Email, error) {
 	var envelope emailEnvelope
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return nil, fmt.Errorf("DecodeEmail - json.Unmarshal envelope: %w", err)
 	}
 
-	switch envelope.Template {
-	case WelcomeEmail{}.Template():
-		return decodeEmailData[WelcomeEmail](envelope.Data)
-	default:
-		return nil, fmt.Errorf("DecodeEmail: %w: %q", ErrUnknownEmail, envelope.Template)
-	}
-}
+	for _, kind := range EmailTypes() {
+		if kind.Template() != envelope.Template {
+			continue
+		}
 
-func decodeEmailData[T Email](data json.RawMessage) (Email, error) {
-	var e T
-	if err := json.Unmarshal(data, &e); err != nil {
-		return nil, fmt.Errorf("DecodeEmail - json.Unmarshal %s: %w", e.Template(), err)
+		// A new value of kind's concrete type, filled from the data.
+		e := reflect.New(reflect.TypeOf(kind))
+		if err := json.Unmarshal(envelope.Data, e.Interface()); err != nil {
+			return nil, fmt.Errorf("DecodeEmail - json.Unmarshal %s: %w", envelope.Template, err)
+		}
+
+		email, ok := e.Elem().Interface().(Email)
+		if !ok {
+			return nil, fmt.Errorf("DecodeEmail: %w: %q", ErrUnknownEmail, envelope.Template)
+		}
+
+		return email, nil
 	}
 
-	return e, nil
+	return nil, fmt.Errorf("DecodeEmail: %w: %q", ErrUnknownEmail, envelope.Template)
 }

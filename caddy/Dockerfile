@@ -1,17 +1,20 @@
-# Caddy with the caddy-waf (fabriziosalmi) and Souin cache (darkweak) modules, serving the React
-# client from web/. The build context is the repository root; Dockerfile.dockerignore narrows it.
+# Caddy with the caddy-waf (fabriziosalmi) and Souin cache (darkweak) modules. The build context is
+# caddy/.
 
-# The web client, built with the Vite+ toolchain image (vp provisions web/.node-version and bun).
+# scaffold:web:begin
+# The web client, built with the Vite+ toolchain image (vp provisions web/.node-version and bun) from
+# the web-src context: web/, narrowed by web/.dockerignore.
 FROM ghcr.io/voidzero-dev/vite-plus:1.3.0 AS web
 
 WORKDIR /web
 
-COPY --chown=vp:vp web/package.json web/bun.lock web/.node-version ./
+COPY --from=web-src --chown=vp:vp package.json bun.lock .node-version ./
 RUN vp install --frozen-lockfile
 
-COPY --chown=vp:vp web/ ./
+COPY --from=web-src --chown=vp:vp . ./
 RUN vp build
 
+# scaffold:web:end
 # Souin ships no storage of its own since v1.7.0, so the in-memory otter storage is built in too.
 FROM caddy:2.11.7-builder AS builder
 
@@ -27,5 +30,7 @@ FROM caddy:2.11.7-alpine
 
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 COPY --from=builder /waf-rules.json /etc/caddy/waf/rules.json
-COPY caddy/Caddyfile /etc/caddy/Caddyfile
+COPY Caddyfile /etc/caddy/Caddyfile
+# scaffold:web:begin
 COPY --from=web /web/dist /srv/web
+# scaffold:web:end

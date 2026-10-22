@@ -15,7 +15,7 @@ import (
 const _tracerName = "github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 
 // tracedUseCase wraps an Exchange usecase with OpenTelemetry spans, closing the
-// gap between transport spans (HTTP/gRPC) and repository spans.
+// gap between transport spans and repository spans.
 type tracedUseCase struct {
 	next usecase.Exchange
 }

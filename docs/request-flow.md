@@ -45,18 +45,26 @@ Nothing below constructs its own dependencies. [`internal/app/app.go`](../intern
 everything once, inner to outer:
 
 ```go
-exchangeRepo := persistExchangeRepo.New(pg)
-// ...
-exchange: exchange.New(exchangeRepo, webapi.New(cfg.Exchange.ServiceURL)),
+exchange: exchange.New(persistExchangeRepo.New(pg), webapi.New(cfg.Exchange.ServiceURL)),
 ```
 
-and passes the use case to every transport that exposes it:
+and passes the use case to every transport that exposes it, each wired in its own file:
 
 ```go
-grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l)
-router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l)
-router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l))
+router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l) // app.go
 ```
+<!-- scaffold:graphql:begin -->
+
+```go
+router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l)) // graphql.go
+```
+<!-- scaffold:graphql:end -->
+<!-- scaffold:grpc:begin -->
+
+```go
+grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l) // grpc.go
+```
+<!-- scaffold:grpc:end -->
 
 Every `New` returns an **interface** (`repo.ExchangeRepo`, `repo.ExchangeWebAPI`, `usecase.Exchange`),
 already wrapped in a tracing decorator. The use case never learns which implementation it got, which is
@@ -95,8 +103,13 @@ type Convert struct {
 
 Huma decodes the body into it and checks the tags **before the handler is called**. A body that
 fails them never reaches Go code you wrote: Huma answers `422` with an RFC 9457 problem naming the
-failing field. The same tags produce the OpenAPI schema at `/openapi.json`, the checked-in
-[`openapi/v1.json`](openapi/v1.json), and the TypeScript types in `web/`. One declaration, four uses.
+failing field. The same tags also produce:
+
+- the OpenAPI schema at `/openapi.json`
+- the checked-in [`openapi/v1.json`](openapi/v1.json)
+- the TypeScript types in `web/` <!-- scaffold:web -->
+
+One declaration, and nothing to keep in sync by hand.
 
 The DTO checks only **shape**: three letters, a decimal-looking string. Whether `"omr"` and `"OMR"` are
 the same currency, or whether converting OMR to OMR makes sense, is a domain rule and lives in the
@@ -230,8 +243,8 @@ func (c *Conversion) ApplyRate(rate decimal.Decimal, date time.Time) {
 }
 ```
 
-- `"omr"` becomes `"OMR"` here, once, for every transport. gRPC requests carry no Huma tags, so this is
-  the check that protects them.
+- `"omr"` becomes `"OMR"` here, once, for every transport.
+  gRPC requests carry no Huma tags, so this is the check that protects them. <!-- scaffold:grpc -->
 - `RoundBank` is round-half-to-even, the usual rule for money: halves don't always round up, so
   rounding errors don't add up in one direction over many conversions. `100 × 17.406483 = 1740.6483`
   → `1740.65`.
@@ -299,26 +312,33 @@ the wrapped error message.
 
 ## Where each failure ends up
 
-| What went wrong | Caught by | REST | gRPC |
-| --- | --- | --- | --- |
-| No token, malformed header, expired token | `Auth` middleware (gRPC interceptor) | 401 | `Unauthenticated` |
-| `from` not three letters, amount not a decimal string | Huma tags on `request.Convert` | 422 | (no tags; falls to the entity) |
-| Amount that doesn't parse as a decimal | handler | 422 | `InvalidArgument` |
-| `from` = `to`, amount ≤ 0, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 | `InvalidArgument` |
-| Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 | `InvalidArgument` |
-| Provider down, non-200, bad JSON; database error | wrapped error, logged by the handler | 500 | `Internal` |
+| What went wrong | Caught by | REST |
+| --- | --- | --- |
+| No token, malformed header, expired token | `Auth` middleware | 401 |
+| `from` not three letters, amount not a decimal string | Huma tags on `request.Convert` | 422 |
+| Amount that doesn't parse as a decimal | handler | 422 |
+| `from` = `to`, amount ≤ 0, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 |
+| Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 |
+| Provider down, non-200, bad JSON; database error | wrapped error, logged by the handler | 500 |
 
 The caller sees a fixed message (`"unsupported currency"`, `"internal server error"`). The wrapped
 error with the layer path goes only to the log.
 
+<!-- scaffold:grpc:begin -->
 ## The same use case over gRPC
 
 [`internal/controller/grpc/v1/exchange.go`](../internal/controller/grpc/v1/exchange.go) is the same
 five steps with different types: `grpcmw.UserIDFromContext` instead of the middleware, the generated
 `v1.ConvertRequest` instead of a Huma DTO, `codes.InvalidArgument` instead of 400, and
 `response.NewConversionResponse` instead of `response.NewConversion`. It calls the identical
-`Convert`, so the two transports cannot disagree about a rule. GraphQL exposes only the history query
-(`exchangeHistory`); conversion is a form, and forms use REST.
+`Convert`, so the two transports cannot disagree about a rule.
+
+On gRPC the gRPC interceptor rejects a missing or expired token with `Unauthenticated`. There are no
+Huma tags, so a malformed code falls through to the entity. A bad amount, an invalid conversion and an
+unknown currency are all `InvalidArgument`, and the 500 cases are `Internal`.
+
+<!-- scaffold:grpc:end -->
+GraphQL exposes only the history query (`exchangeHistory`); conversion is a form, and forms use REST. <!-- scaffold:graphql -->
 
 ## How each layer is tested
 

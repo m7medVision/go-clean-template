@@ -1,10 +1,12 @@
 {
 	auto_https off
 
+	# scaffold:grpc:begin
 	# h2c lets gRPC clients reach grpc.lvh.me over plain HTTP on port 80.
 	servers :80 {
 		protocols h1 h2c
 	}
+	# scaffold:grpc:end
 
 	cache {
 		ttl 120s
@@ -28,13 +30,17 @@ http://app.lvh.me {
 		}
 		cache @public
 
-		# Everything the Go app owns. Keep in sync with restapi.NewRouter, internal/app/app.go
-		# and the proxy list in web/vite.config.ts.
-		@backend path /v1/* /graphql /graphql/* /docs /docs/* /openapi.json /openapi.yaml /schemas/* /healthz /metrics
+		# Everything the Go app owns. Keep in sync with restapi.NewRouter and internal/app/app.go,
+		# and with the proxy list in web/vite.config.ts. # scaffold:web
+		@backend {
+			path /v1/* /docs /docs/* /openapi.json /openapi.yaml /schemas/* /healthz /metrics
+			path /graphql /graphql/* # scaffold:graphql
+		}
 		handle @backend {
 			reverse_proxy app:8080
 		}
 
+		# scaffold:web:begin
 		# Everything else is the React client, with history fallback to index.html.
 		handle {
 			root * /srv/web
@@ -55,12 +61,15 @@ http://app.lvh.me {
 			try_files {path} /index.html
 			file_server
 		}
+		# scaffold:web:end
 	}
 }
 
+# scaffold:grpc:begin
 http://grpc.lvh.me {
 	reverse_proxy h2c://app:8081
 }
+# scaffold:grpc:end
 
 http://jaeger.lvh.me {
 	reverse_proxy jaeger:16686

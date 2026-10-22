@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
-# Dev mode in one tmux window: Postgres, Mailpit and Keycloak in docker; the app and the worker on the host under
-# air; the Vite+ web dev server. Run it through `make dev`, which exports .env (or .env.example); stop
-# with `make dev-down`.
+# Dev mode in one tmux window: the compose services in DEV_SERVICES in docker, and the Go binaries on
+# the host under air.
+# The Vite+ web dev server runs beside them. # scaffold:web
+# Run it through `make dev`, which exports .env (or .env.example) and DEV_SERVICES; stop with
+# `make dev-down`.
 set -euo pipefail
-
-SESSION=go-clean-template
 
 cd "$(dirname "$0")/.."
 
-for cmd in tmux docker go vp curl; do
+# One session per checkout, named after its directory, so a generated project runs beside this one.
+SESSION=$(basename "$PWD")
+
+required=(tmux docker go curl)
+required+=(vp) # scaffold:web
+for cmd in "${required[@]}"; do
 	if ! command -v "$cmd" >/dev/null 2>&1; then
 		echo "make dev: $cmd is not on PATH" >&2
 		exit 1
 	fi
 done
 
-if [ -z "${PG_URL:-}" ]; then
-	echo "make dev: PG_URL is not set; run this through make dev" >&2
+if [ -z "${PG_URL:-}" ] || [ -z "${DEV_SERVICES:-}" ]; then
+	echo "make dev: PG_URL or DEV_SERVICES is not set; run this through make dev" >&2
 	exit 1
 fi
+
+read -ra services <<<"$DEV_SERVICES"
 
 attach() {
 	if [ -n "${TMUX:-}" ]; then
@@ -33,8 +40,10 @@ if tmux has-session -t "=$SESSION" 2>/dev/null; then
 fi
 
 export TRACING_ENABLED=false
-# The web client is the Vite dev server here, not Caddy: email links and the SSO callback point at it.
-export APP_BASE_URL=http://localhost:3000
+# scaffold:web:begin
+# The web client is the Vite dev server here, not Caddy: the links the app builds point at it.
+export APP_BASE_URL=http://localhost:${WEB_PORT:-3000}
+# scaffold:web:end
 
 # A pane gets the tmux server's environment, not this shell's, when a server is already running, so
 # hand every setting over explicitly: each name in the env file make loaded, with the value make
@@ -47,7 +56,7 @@ while IFS= read -r name; do
 	env_args+=(-e "$name=${!name-}")
 done < <(sed -nE 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' "$env_file")
 
-docker compose up -d db mailpit keycloak
+docker compose up -d "${services[@]}"
 
 pane() {
 	local title=$1 cmd=$2 id
@@ -68,13 +77,16 @@ pane() {
 }
 
 pane app 'go tool air -c .air.app.toml'
+# scaffold:queue:begin
 # Only the app applies the schema, and it serves /healthz once it has.
 pane worker 'until curl -sf -o /dev/null "http://localhost:$HTTP_PORT/healthz"; do
 	echo "waiting for the app on :$HTTP_PORT..."; sleep 2
 done
 exec go tool air -c .air.worker.toml'
-pane web 'vp -C web dev'
-pane 'db + mailpit + keycloak' 'docker compose logs -f db mailpit keycloak'
+# scaffold:queue:end
+pane web 'vp -C web dev' # scaffold:web
+title=$(printf ' + %s' "${services[@]}")
+pane "${title:3}" "docker compose logs -f ${services[*]}"
 
 tmux select-pane -t "=$SESSION:dev.0"
 

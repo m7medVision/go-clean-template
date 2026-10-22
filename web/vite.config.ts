@@ -34,7 +34,8 @@ const config = defineConfig({
   },
   resolve: { tsconfigPaths: true },
   server: {
-    port: 3000,
+    // `make dev` and `make web-dev` export WEB_PORT from .env / .env.example.
+    port: Number(process.env.WEB_PORT ?? "3000"),
     // Same origin as in production, so no CORS and no absolute API URLs.
     proxy: Object.fromEntries(backendPaths.map((path) => [path, api])),
   },

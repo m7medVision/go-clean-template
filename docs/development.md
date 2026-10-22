@@ -6,28 +6,37 @@ that CI uses too.
 
 ## Dev mode
 
-`make dev` runs everything in one [tmux](https://github.com/tmux/tmux) window. Postgres, Mailpit and
-Keycloak run in docker. The app and the worker run on the host under [air](https://github.com/air-verse/air) and
-rebuild when you save a file. Tracing is off and Jaeger is not started. It needs `tmux`, `curl` and the
-Vite+ `vp` CLI; run `make web-deps` once first.
+`make dev` runs everything in one [tmux](https://github.com/tmux/tmux) window. The compose services
+in `DEV_SERVICES` (see the `Makefile`) run in docker:
+
+- `db`: Postgres.
+- `mailpit`: [Mailpit](https://mailpit.axllent.org/), which catches email. <!-- scaffold:email -->
+- `keycloak`: the SSO provider. <!-- scaffold:sso -->
+
+The Go binaries run on the host under [air](https://github.com/air-verse/air) and rebuild when you
+save a file. Tracing is off and Jaeger is not started. It needs `tmux` and `curl`.
+The web pane also needs the Vite+ `vp` CLI; run `make web-deps` once first. <!-- scaffold:web -->
 
 ```sh
 make dev       # attach; run it again to re-attach after detaching (prefix + d)
 make dev-down  # close the tmux session and stop the containers
 ```
 
-The four panes are:
+The panes are:
 
 - **app**: `.air.app.toml`, built with `-tags migrate`. It rebuilds on `.go`, `.hcl` and `.tmpl`
   changes, so saving a schema file re-syncs the database.
+<!-- scaffold:queue:begin -->
 - **worker**: `.air.worker.toml`. It starts once the app answers `/healthz`, because only the app
   applies the schema.
-- **web**: the Vite+ dev server on http://localhost:3000.
-- **db + mailpit + keycloak**: the container logs.
+<!-- scaffold:queue:end -->
+- **web**: the Vite+ dev server on http://localhost:3000. <!-- scaffold:web -->
+- **the compose services**, titled after them (`db + …`): their container logs.
 
-`make dev` sets `APP_BASE_URL` to the Vite origin, so email links and the SSO callback come back to
-the dev server. Sign in with SSO as `alice` / `alice` (admin) or `bob` / `bob`; see
-[sso.md](sso.md#keycloak-in-development).
+`make dev` sets `APP_BASE_URL` to the Vite origin, so the links the app builds from it come back to <!-- scaffold:web -->
+the dev server. <!-- scaffold:web -->
+Sign in with SSO as `alice` / `alice` (admin) or `bob` / `bob`; see <!-- scaffold:sso -->
+[sso.md](sso.md#keycloak-in-development). <!-- scaffold:sso -->
 
 If something else on the host already listens on 5432, set `PG_PORT` in `.env` (for example
 `PG_PORT=5433`). It moves the published port of the compose `db` service and the port in `PG_URL`
@@ -37,37 +46,52 @@ will try to make that database match this schema.
 The same pieces without tmux, one terminal each:
 
 ```sh
-make compose-up   # Postgres, Mailpit to catch email (inbox on http://127.0.0.1:8025), Keycloak
+make compose-up   # the compose services in COMPOSE_SERVICES (DEV_SERVICES without the dev-only ones)
 make run          # the app, applying the schema at startup
-make run-worker   # the queue worker
+```
+
+<!-- scaffold:web:begin -->
+```sh
 make web-dev      # the web client on http://localhost:3000
 ```
 
-`make run` regenerates the protobuf code first, so it needs `protoc` on `PATH`. `make bin-deps`
-installs the other tools (`mockgen`, linters, `atlas`).
+<!-- scaffold:web:end -->
+<!-- scaffold:queue:begin -->
+```sh
+make run-worker   # the queue worker, once the app has applied the schema
+```
+
+<!-- scaffold:queue:end -->
+<!-- scaffold:grpc:begin -->
+`make run` regenerates the protobuf code first, so it needs `protoc` on `PATH`.
+<!-- scaffold:grpc:end -->
+`make bin-deps` installs the tools the targets run (`mockgen`, linters, `atlas`).
 
 ## Local services
 
 | Service | URL |
 | --- | --- |
-| Web client | http://localhost:3000 |
-| REST, GraphQL, API docs | http://127.0.0.1:8080 (`/v1`, `/graphql`, `/docs`); see [api.md](api.md) |
-| gRPC | `127.0.0.1:8081` |
+| Web client | http://localhost:3000 | <!-- scaffold:web -->
+| REST and the API docs | http://127.0.0.1:8080 (`/v1`, `/docs`); see [api.md](api.md) |
+| GraphQL | http://127.0.0.1:8080/graphql; see [api.md](api.md#graphql) | <!-- scaffold:graphql -->
+| gRPC | `127.0.0.1:8081` | <!-- scaffold:grpc -->
 | Postgres | `127.0.0.1:${PG_PORT}`; credentials in `PG_URL` in [`.env.example`](../.env.example) |
-| Mailpit | http://127.0.0.1:8025 (inbox and API), SMTP on `127.0.0.1:1025` |
-| Keycloak | http://keycloak.lvh.me:8180 (realm `app`; admin console `admin` / `admin`); see [sso.md](sso.md#keycloak-in-development) |
+| Mailpit | http://127.0.0.1:8025 (inbox and API), SMTP on `127.0.0.1:1025` | <!-- scaffold:email -->
+| Keycloak | http://keycloak.lvh.me:8180 (realm `app`; admin console `admin` / `admin`); see [sso.md](sso.md#keycloak-in-development) | <!-- scaffold:sso -->
 | Jaeger | http://127.0.0.1:16686 (full stack only) |
 
-The worker has no port; with the full stack, `docker logs -f worker` follows it.
+<!-- scaffold:queue:begin -->
+The worker has no port; with the full stack, `docker compose logs -f worker` follows it.
+<!-- scaffold:queue:end -->
 
 ## Tests
 
 ```sh
 make test                         # unit tests, with -race
-make compose-up-integration-test  # DB, app, worker, Mailpit, then the integration suite
+make compose-up-integration-test  # the compose stack, then the integration suite
 ```
 
-The integration suite runs inside the docker network and reaches the app by container name, so it
+The integration suite runs inside the docker network and reaches the app by its compose service name, so it
 fails on the host. Use the compose target, not `make integration-test`. Exchange-rate calls go to a
 Caddy stub ([integration-test/exchange-stub/Caddyfile](../integration-test/exchange-stub/Caddyfile))
 instead of open.er-api.com. The stub serves the same recorded response
@@ -88,7 +112,7 @@ uses that database instead of a container, and refuses one that is not empty. In
 that change the schema, against the PR's base branch (the parent branch, for a stacked PR), on the
 Postgres `bmizerany/setup-postgres` starts, like every other job that needs one.
 
-Before pushing, `make pre-commit` runs the generators, format, lint, and the Go and web tests.
+Before pushing, `make pre-commit` runs the generators, format, lint and the tests.
 
 ## CI
 
@@ -96,14 +120,16 @@ Before pushing, `make pre-commit` runs the generators, format, lint, and the Go 
 
 | Stage | Jobs | Runs when |
 | --- | --- | --- |
-| 1 | `changes` | always; sorts the diff into `backend`, `web`, `sqlc` and `schema` |
+| 1 | `changes` | always; sorts the diff into the path filters the later jobs read |
 | 2 | `lint`: yamllint, hadolint, dotenv-linter (PRs only, on added lines), golangci-lint and govulncheck (backend) | always |
-| 3 | `unit-tests` (backend), `sqlc-generated` (sqlc), `schema-roundtrip` (schema, PRs only), `web` (web, also the OpenAPI drift check), side by side | after `lint` passes |
+| 3 | `unit-tests` (backend, also the OpenAPI drift check), `sqlc-generated` (sqlc), `schema-roundtrip` (schema, PRs only), side by side | after `lint` passes |
+| 3 | `web` (web): regenerates the client's types (failing on drift), checks and builds it, beside the other stage 3 jobs | after `lint` passes | <!-- scaffold:web -->
+| 3 | `scaffold`: one job per preset of [`make scaffold`](scaffold.md), each generated and put through its own `make pre-commit` | after `lint` passes, on every change | <!-- scaffold:self -->
 | 4 | `integration-tests` | backend, after `unit-tests` passes |
 | 5 | `ci-ok` | always; fails if any job failed or was cancelled |
 
 `ci-ok` is the check to require in branch protection: a job skipped because its paths did not change
-counts as a pass. The `backend` and `web` filters list the paths that are safe to skip, so a new
+counts as a pass. Each path filter lists the paths that are safe to skip, so a new
 directory runs everything until someone adds it to a skip list; add one only when no file under it
 can change that side's result. A new push to a PR cancels the run it supersedes.
 
@@ -116,13 +142,15 @@ packages whose code, dependencies or test inputs changed.
 make compose-up-all
 ```
 
-This runs the app, the worker, Postgres, Mailpit, Jaeger and a [Caddy](https://caddyserver.com/)
-reverse proxy, built from [`caddy/Dockerfile`](../caddy/Dockerfile) and configured in
-[`caddy/Caddyfile`](../caddy/Caddyfile). The same image builds `web/` with Vite+ and serves it on
-`app.lvh.me`. The paths the Go app owns (`/v1`, `/graphql`, `/docs`, `/openapi.*`, `/schemas`,
-`/healthz`, `/metrics`) go to the app; everything else is the web client, with a
-Content-Security-Policy and history fallback to `index.html`. Client and API share one origin, so there
-is no CORS.
+This runs every compose service in `docker-compose.yml`, the app and Jaeger among them, behind a
+[Caddy](https://caddyserver.com/) reverse proxy, built from [`caddy/Dockerfile`](../caddy/Dockerfile) and configured in
+[`caddy/Caddyfile`](../caddy/Caddyfile). It serves `app.lvh.me`, where the paths the Go app owns go
+to the app: `/v1`,
+`/graphql`, <!-- scaffold:graphql -->
+`/docs`, `/openapi.*`, `/schemas`, `/healthz` and `/metrics`.
+The same image builds `web/` with Vite+ and serves it for every other path, with a <!-- scaffold:web -->
+Content-Security-Policy and history fallback to `index.html`. Client and API share one origin, so <!-- scaffold:web -->
+there is no CORS. <!-- scaffold:web -->
 
 - [caddy-waf](https://github.com/fabriziosalmi/caddy-waf) inspects every request to `app.lvh.me` with
   its bundled rule set and answers `403` to a match. It is licensed AGPL-3.0, unlike this template.
@@ -132,8 +160,8 @@ is no CORS.
 
 | Service | URL |
 | --- | --- |
-| Web client, REST, GraphQL, docs | http://app.lvh.me |
-| gRPC | `grpc.lvh.me:80` (h2c) |
+| The app, behind Caddy | http://app.lvh.me |
+| gRPC | `grpc.lvh.me:80` (h2c) | <!-- scaffold:grpc -->
 | Jaeger | http://jaeger.lvh.me |
 
 `make compose-down` tears it down.

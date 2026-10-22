@@ -4,18 +4,11 @@ import (
 	"context"
 	"net/http"
 	"testing"
-
-	protov1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 )
 
-const _allTasksQuery = `query { allTasks { total } }`
-
 // A password sign-in grants only the user role, so the admin-only operations refuse it on every
-// transport. The admin side runs against Keycloak in oidc_test.go.
+// transport.
+// The admin side runs against Keycloak in oidc_test.go. // scaffold:sso
 func TestAdminTasksRefuseLocalUser(t *testing.T) {
 	token := registerAndLogin(t)
 
@@ -35,25 +28,19 @@ func TestAdminTasksRefuseLocalUser(t *testing.T) {
 		}
 	})
 
+	// scaffold:graphql:begin
 	t.Run("GraphQL", func(t *testing.T) {
-		resp := graphqlDo(t, token, _allTasksQuery, nil)
+		resp := graphqlDo(t, token, `query { allTasks { total } }`, nil)
 
 		if len(resp.Errors) == 0 || resp.Errors[0].Extensions["code"] != "FORBIDDEN" {
 			t.Fatalf("allTasks: expected a FORBIDDEN error, got %+v", resp.Errors)
 		}
 	})
+	// scaffold:graphql:end
 
+	// scaffold:grpc:begin
 	t.Run("gRPC", func(t *testing.T) {
-		conn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			t.Fatalf("grpc.NewClient: %v", err)
-		}
-
-		defer conn.Close()
-
-		_, err = protov1.NewTaskServiceClient(conn).ListAllTasks(grpcAuthCtx(t, token), &protov1.ListTasksRequest{Limit: 10})
-		if status.Code(err) != codes.PermissionDenied {
-			t.Fatalf("ListAllTasks: expected PermissionDenied, got %v", err)
-		}
+		requireListAllTasksDeniedGRPC(t, token)
 	})
+	// scaffold:grpc:end
 }

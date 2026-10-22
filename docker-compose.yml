@@ -19,8 +19,10 @@ x-backend-app-environment: &x-backend-app-environment
   # PG
   PG_POOL_MAX: "2"
   PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db"
+  # scaffold:grpc:begin
   # gRPC
   GRPC_PORT: "8081"
+  # scaffold:grpc:end
   # Metrics
   METRICS_ENABLED: "true"
   # API docs (Huma serves /docs, /openapi.json, /openapi.yaml)
@@ -33,34 +35,41 @@ x-backend-app-environment: &x-backend-app-environment
   # JWT
   JWT_SECRET: "your-secret-key-change-in-production"
   JWT_TOKEN_EXPIRY: "15m"
+  # scaffold:queue:begin
   # Worker (cmd/worker)
   WORKER_POLL_INTERVAL: "1s"
   WORKER_VISIBILITY_TIMEOUT: "30s"
   WORKER_BATCH_SIZE: "10"
   WORKER_SHUTDOWN_TIMEOUT: "10s"
+  # scaffold:queue:end
+  # scaffold:email:begin
   # Mail (cmd/worker sends it to Mailpit)
   SMTP_HOST: "mailpit"
   SMTP_PORT: "1025"
   MAIL_FROM: "Go Clean Template <noreply@example.com>"
+  # scaffold:email:end
   # Exchange rates (ExchangeRate-API open access)
   EXCHANGE_SERVICE_URL: "https://open.er-api.com"
-  # WebAuthn (passkeys): Caddy, the Vite dev server, and the app port the integration tests declare
+  # scaffold:passkeys:begin
+  # WebAuthn (passkeys): Caddy, a dev server, and the app port the integration tests declare
   WEBAUTHN_RP_ID: "localhost"
   WEBAUTHN_RP_NAME: "Go Clean Template"
   WEBAUTHN_RP_ORIGINS: "http://localhost,http://localhost:3000,http://localhost:8080"
   WEBAUTHN_CEREMONY_TIMEOUT: "5m"
   WEBAUTHN_REAUTH_MAX_AGE: "5m"
+  # scaffold:passkeys:end
+  # scaffold:sso:begin
   # OIDC (SSO sign-in) against the keycloak service; see keycloak/realm.json
-  OIDC_ISSUER: "http://keycloak.lvh.me:8180/realms/app"
+  OIDC_ISSUER: "http://keycloak.lvh.me:${KEYCLOAK_PORT:-8180}/realms/app"
   OIDC_CLIENT_ID: "go-clean-template"
   OIDC_CLIENT_SECRET: "go-clean-template-dev-secret"
   OIDC_ROLES_CLAIM: "realm_access.roles"
   OIDC_ROLE_MAP: "app-admin:admin,app-user:user"
+  # scaffold:sso:end
 
 
 services:
   db:
-    container_name: db
     image: postgres:18.6-alpine
     environment:
       <<: *x-db-environment
@@ -75,7 +84,6 @@ services:
           - db.lvh.me
 
   jaeger:
-    container_name: jaeger
     image: jaegertracing/all-in-one:1.76.0
     ports:
       - "16686:16686"   # Jaeger UI
@@ -87,35 +95,38 @@ services:
         aliases:
           - jaeger.lvh.me
 
-  # SMTP sink for development: catches every email the worker sends; inbox UI and API on :8025
+  # scaffold:email:begin
+  # SMTP sink for development: catches every email the worker sends. Host ports follow SMTP_PORT and
+  # MAILPIT_UI_PORT (1025 and 8025 by default).
   mailpit:
-    container_name: mailpit
     image: axllent/mailpit:v1.31.6
     ports:
-      - "1025:1025"   # SMTP
-      - "8025:8025"   # Web UI and API
+      - "${SMTP_PORT:-1025}:1025"          # SMTP
+      - "${MAILPIT_UI_PORT:-8025}:8025"    # Web UI and API
     networks:
       app_network:
         aliases:
           - mailpit.lvh.me
 
+  # scaffold:email:end
+  # scaffold:sso:begin
   # OIDC provider for SSO sign-in. One issuer URL everywhere: keycloak.lvh.me resolves to 127.0.0.1 on
-  # the host and to this container on app_network, and Keycloak listens on 8180 on both sides.
+  # the host and to this container on app_network, and Keycloak listens on KEYCLOAK_PORT (8180) on
+  # both sides.
   # Dev users: alice/alice (app-admin), bob/bob (app-user); admin console: admin/admin.
   keycloak:
-    container_name: keycloak
     image: quay.io/keycloak/keycloak:26.8.1
     command: ["start-dev", "--import-realm"]
     environment:
-      KC_HTTP_PORT: "8180"
-      KC_HOSTNAME: "http://keycloak.lvh.me:8180"
+      KC_HTTP_PORT: "${KEYCLOAK_PORT:-8180}"
+      KC_HOSTNAME: "http://keycloak.lvh.me:${KEYCLOAK_PORT:-8180}"
       KC_HEALTH_ENABLED: "true"
       KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
       KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
     volumes:
       - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     ports:
-      - "8180:8180"
+      - "${KEYCLOAK_PORT:-8180}:${KEYCLOAK_PORT:-8180}"
     healthcheck:
       # The image has no curl; ask the management port's readiness endpoint over bash's /dev/tcp.
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
@@ -128,8 +139,8 @@ services:
         aliases:
           - keycloak.lvh.me
 
+  # scaffold:sso:end
   app:
-    container_name: app
     platform: linux/amd64
     pid: "host"
     build:
@@ -138,7 +149,7 @@ services:
       <<: *x-backend-app-environment
     ports:
       - "8080:8080"
-      - "8081:8081"
+      - "8081:8081" # scaffold:grpc
     depends_on:
       - db
       - jaeger
@@ -155,9 +166,9 @@ services:
         aliases:
           - app.lvh.me
 
+  # scaffold:queue:begin
   # Queue consumer (queue_messages table): the app image, started on its /worker entry point
   worker:
-    container_name: worker
     platform: linux/amd64
     build:
       context: .
@@ -169,18 +180,21 @@ services:
     depends_on:
       - db
       - jaeger
-      - mailpit
+      - mailpit # scaffold:email
     networks:
       app_network:
         aliases:
           - worker.lvh.me
 
+  # scaffold:queue:end
   caddy:
-    container_name: caddy
     build:
-      # The repository root, so the image can build web/ too; see caddy/Dockerfile.dockerignore.
-      context: .
-      dockerfile: caddy/Dockerfile
+      context: ./caddy
+      # scaffold:web:begin
+      # The web client's source, for the stage that builds it (narrowed by web/.dockerignore).
+      additional_contexts:
+        web-src: ./web
+      # scaffold:web:end
     ports:
       - "80:80"
     depends_on:

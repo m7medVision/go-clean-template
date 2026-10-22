@@ -127,7 +127,7 @@ func TestMain(m *testing.M) {
 		{"LOG_LEVEL", "info"},
 		{"PG_POOL_MAX", "1"},
 		{"PG_URL", "postgres://localhost/db"},
-		{"GRPC_PORT", "0"},
+
 		{"JWT_SECRET", "test-secret"},
 		{"DOCS_ENABLED", "true"},
 	} {
@@ -148,26 +148,11 @@ func newTestConfig(t *testing.T) *config.Config {
 	return cfg
 }
 
+// newRouter serves the core routes; a feature's tests build their own router with its option.
 func newRouter(cfg *config.Config, e usecase.Exchange, u usecase.User, tk usecase.Task) http.Handler {
-	return newRouterWithPasskey(cfg, e, u, tk, &fakePasskey{})
-}
-
-func newRouterWithOIDC(cfg *config.Config, oc usecase.OIDC) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, &fakePasskey{}, oc, jwtManager, noopLogger{})
-}
-
-func newRouterWithPasskey(
-	cfg *config.Config,
-	e usecase.Exchange,
-	u usecase.User,
-	tk usecase.Task,
-	pk usecase.Passkey,
-) http.Handler {
-	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
-
-	return restapi.NewRouter(cfg, e, u, tk, pk, &fakeOIDC{}, jwtManager, noopLogger{})
+	return restapi.NewRouter(cfg, e, u, tk, jwtManager, noopLogger{})
 }
 
 func newToken(t *testing.T) string {
@@ -193,6 +178,27 @@ func doRequest(
 	handler.ServeHTTP(resp, req)
 
 	return resp
+}
+
+func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
+	t.Parallel()
+
+	cfg := newTestConfig(t)
+	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
+	handler := restapi.NewRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, jwtManager, noopLogger{})
+
+	for _, tt := range []struct{ method, target string }{
+		{http.MethodGet, "/v1/auth/oidc"},           // scaffold:sso
+		{http.MethodPost, "/v1/auth/oidc/begin"},    // scaffold:sso
+		{http.MethodPost, "/v1/auth/passkey/begin"}, // scaffold:passkeys
+		{http.MethodGet, "/v1/passkeys"},            // scaffold:passkeys
+	} {
+		resp := doRequest(t.Context(), handler, tt.method, tt.target, newToken(t), "{}")
+		assert.Equal(t, http.StatusNotFound, resp.Code, tt.target)
+	}
+
+	resp := doRequest(t.Context(), handler, http.MethodGet, "/v1/user/profile", "", "")
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "core routes are still served")
 }
 
 func TestApplianceRoutesArePublic(t *testing.T) {
@@ -583,7 +589,9 @@ func TestOpenAPIExportsEveryOperation(t *testing.T) {
 		"/v1/auth/register", "/v1/auth/login", "/v1/user/profile",
 		"/v1/tasks", "/v1/tasks/{id}", "/v1/tasks/{id}/status",
 		"/v1/exchange/convert", "/v1/exchange/history",
-		"/v1/passkeys", "/v1/passkeys/register/begin", "/v1/passkeys/register/finish",
+		"/v1/passkeys", "/v1/passkeys/register/begin", "/v1/passkeys/register/finish", // scaffold:passkeys
+		"/v1/auth/passkey/begin", "/v1/auth/passkey/finish", // scaffold:passkeys
+		"/v1/auth/oidc", "/v1/auth/oidc/begin", "/v1/auth/oidc/finish", // scaffold:sso
 	} {
 		assert.Contains(t, spec.Paths, path)
 	}

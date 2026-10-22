@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -94,6 +96,11 @@ func New(l logger.Interface, q Queue, opts ...Option) *Worker {
 // Handle registers the handler for a queue. Call it before Start.
 func (w *Worker) Handle(queue string, h HandlerFunc) {
 	w.handlers[queue] = h
+}
+
+// Queues lists the queues that have a handler, sorted.
+func (w *Worker) Queues() []string {
+	return slices.Sorted(maps.Keys(w.handlers))
 }
 
 // Start starts one poll loop per registered queue.

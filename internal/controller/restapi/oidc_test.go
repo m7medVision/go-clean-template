@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/m7medvision/go-clean-template/config"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,6 +40,26 @@ func (f *fakeOIDC) Finish(_ context.Context, code, state, token string) (string,
 	f.gotCode, f.gotState, f.gotToken = code, state, token
 
 	return f.token, f.err
+}
+
+func newRouterWithOIDC(cfg *config.Config, oc usecase.OIDC) http.Handler {
+	return restapi.NewRouter(
+		cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), noopLogger{},
+		restapi.WithOIDC(oc),
+	)
+}
+
+// postFinish posts body to path with a ceremony token, as the web client posts the callback.
+func postFinish(t *testing.T, handler http.Handler, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("X-Ceremony-Token", "ceremony")
+
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+
+	return resp
 }
 
 func TestOIDCStatus(t *testing.T) {
@@ -75,7 +100,7 @@ func TestOIDCFinish(t *testing.T) {
 	handler := newRouterWithOIDC(newTestConfig(t), oc)
 
 	req := `{"code":"the-code","state":"the-state"}`
-	resp := doCeremonyRequest(t.Context(), handler, "/v1/auth/oidc/finish", "", "ceremony", req)
+	resp := postFinish(t, handler, "/v1/auth/oidc/finish", req)
 
 	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
 	assert.JSONEq(t, `{"token":"app-jwt"}`, resp.Body.String())
@@ -89,7 +114,7 @@ func TestOIDCFinishRejectsEmptyFields(t *testing.T) {
 
 	handler := newRouterWithOIDC(newTestConfig(t), &fakeOIDC{enabled: true})
 
-	resp := doCeremonyRequest(t.Context(), handler, "/v1/auth/oidc/finish", "", "ceremony", `{"code":"","state":"s"}`)
+	resp := postFinish(t, handler, "/v1/auth/oidc/finish", `{"code":"","state":"s"}`)
 
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 }
@@ -119,7 +144,7 @@ func TestOIDCErrors(t *testing.T) {
 
 			handler := newRouterWithOIDC(newTestConfig(t), &fakeOIDC{enabled: true, err: tt.err})
 
-			resp := doCeremonyRequest(t.Context(), handler, tt.path, "", "ceremony", `{"code":"c","state":"s"}`)
+			resp := postFinish(t, handler, tt.path, `{"code":"c","state":"s"}`)
 
 			assert.Equal(t, tt.want, resp.Code, resp.Body.String())
 			assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))

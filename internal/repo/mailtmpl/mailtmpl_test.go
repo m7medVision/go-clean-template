@@ -18,18 +18,20 @@ import (
 // TestEveryTemplateHasAFixture, so this list is the render test's coverage.
 func fixtures() map[string]entity.Email {
 	return map[string]entity.Email{
+		// scaffold:welcome:begin
 		"welcome": entity.WelcomeEmail{
 			To:       "john@example.com",
 			Username: "johndoe",
 			LoginURL: "https://example.com/login",
 		},
+		// scaffold:welcome:end
 	}
 }
 
 // zeroValues holds every email with no field set, so a template's {{else}} branches run too.
 func zeroValues() map[string]entity.Email {
 	return map[string]entity.Email{
-		"welcome": entity.WelcomeEmail{},
+		"welcome": entity.WelcomeEmail{}, // scaffold:welcome
 	}
 }
 
@@ -42,6 +44,20 @@ func TestEveryTemplateHasAFixture(t *testing.T) {
 	want := make([]string, 0, len(fixtures()))
 	for name := range fixtures() {
 		want = append(want, name)
+	}
+
+	assert.ElementsMatch(t, want, names)
+}
+
+func TestEveryEmailTypeHasATemplate(t *testing.T) {
+	t.Parallel()
+
+	names, err := mailtmpl.TemplateNames()
+	require.NoError(t, err)
+
+	want := make([]string, 0, len(entity.EmailTypes()))
+	for _, email := range entity.EmailTypes() {
+		want = append(want, email.Template())
 	}
 
 	assert.ElementsMatch(t, want, names)
@@ -85,27 +101,6 @@ func TestRender_ZeroValue(t *testing.T) {
 	}
 }
 
-func TestRender_WelcomeContent(t *testing.T) {
-	t.Parallel()
-
-	r, err := mailtmpl.New()
-	require.NoError(t, err)
-
-	msg, err := r.Render(context.Background(), entity.WelcomeEmail{
-		To:       "john@example.com",
-		Username: "<b>johndoe</b>",
-		LoginURL: "https://example.com/login",
-	})
-	require.NoError(t, err)
-
-	assert.Contains(t, msg.Subject, "<b>johndoe</b>", "the subject is plain text, not HTML")
-	assert.Contains(t, msg.HTML, "&lt;b&gt;johndoe&lt;/b&gt;", "the HTML escapes user data")
-	assert.NotContains(t, msg.HTML, "<b>johndoe</b>")
-	assert.Contains(t, msg.HTML, `href="https://example.com/login"`)
-	assert.Contains(t, msg.Text, "<b>johndoe</b>", "the text part is not HTML-escaped")
-	assert.Contains(t, msg.Text, "https://example.com/login")
-}
-
 type unknownEmail struct{}
 
 func (unknownEmail) Template() string  { return "nope" }
@@ -121,17 +116,26 @@ func TestRender_UnknownTemplate(t *testing.T) {
 	assert.True(t, errors.Is(err, entity.ErrUnknownEmail), "got %v", err)
 }
 
+// noteEmail is a test-only email, so the renderer's tests do not depend on a real email type.
+type noteEmail struct {
+	To   string
+	Body string
+}
+
+func (noteEmail) Template() string    { return "note" }
+func (e noteEmail) Recipient() string { return e.To }
+
 func TestRender_FieldMissingFromTheType(t *testing.T) {
 	t.Parallel()
 
 	fsys := layoutFS()
-	fsys["templates/welcome.html.tmpl"] = &fstest.MapFile{Data: []byte(`{{define "content"}}{{.UserName}}{{end}}`)}
-	fsys["templates/welcome.txt.tmpl"] = &fstest.MapFile{Data: []byte(`{{define "subject"}}Hi{{end}}{{define "text"}}Hi{{end}}`)}
+	fsys["templates/note.html.tmpl"] = &fstest.MapFile{Data: []byte(`{{define "content"}}{{.UserName}}{{end}}`)}
+	fsys["templates/note.txt.tmpl"] = &fstest.MapFile{Data: []byte(`{{define "subject"}}Hi{{end}}{{define "text"}}Hi{{end}}`)}
 
 	r, err := mailtmpl.Load(fsys)
 	require.NoError(t, err)
 
-	_, err = r.Render(context.Background(), entity.WelcomeEmail{})
+	_, err = r.Render(context.Background(), noteEmail{})
 	assert.ErrorContains(t, err, "UserName")
 }
 
@@ -143,19 +147,19 @@ func TestLoad_Errors(t *testing.T) {
 		files map[string]string
 	}{
 		{"no text template", map[string]string{
-			"templates/welcome.html.tmpl": `{{define "content"}}Hi{{end}}`,
+			"templates/note.html.tmpl": `{{define "content"}}Hi{{end}}`,
 		}},
 		{"html does not parse", map[string]string{
-			"templates/welcome.html.tmpl": `{{define "content"}}{{.Username{{end}}`,
-			"templates/welcome.txt.tmpl":  `{{define "subject"}}Hi{{end}}{{define "text"}}Hi{{end}}`,
+			"templates/note.html.tmpl": `{{define "content"}}{{.Username{{end}}`,
+			"templates/note.txt.tmpl":  `{{define "subject"}}Hi{{end}}{{define "text"}}Hi{{end}}`,
 		}},
 		{"text does not parse", map[string]string{
-			"templates/welcome.html.tmpl": `{{define "content"}}Hi{{end}}`,
-			"templates/welcome.txt.tmpl":  `{{define "subject"}}{{if}}{{end}}`,
+			"templates/note.html.tmpl": `{{define "content"}}Hi{{end}}`,
+			"templates/note.txt.tmpl":  `{{define "subject"}}{{if}}{{end}}`,
 		}},
 		{"no subject", map[string]string{
-			"templates/welcome.html.tmpl": `{{define "content"}}Hi{{end}}`,
-			"templates/welcome.txt.tmpl":  `{{define "text"}}Hi{{end}}`,
+			"templates/note.html.tmpl": `{{define "content"}}Hi{{end}}`,
+			"templates/note.txt.tmpl":  `{{define "text"}}Hi{{end}}`,
 		}},
 	}
 

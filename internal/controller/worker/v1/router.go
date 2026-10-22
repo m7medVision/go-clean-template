@@ -1,8 +1,6 @@
 package v1
 
 import (
-	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
@@ -18,14 +16,4 @@ func NewExampleController(l logger.Interface) *ExampleController {
 // NewExampleRoutes -.
 func NewExampleRoutes(w *worker.Worker, l logger.Interface) {
 	w.Handle(ExampleQueue, NewExampleController(l).Handle)
-}
-
-// NewMailController -.
-func NewMailController(m usecase.Mail, l logger.Interface) *MailController {
-	return &MailController{mail: m, l: l}
-}
-
-// NewMailRoutes -.
-func NewMailRoutes(w *worker.Worker, m usecase.Mail, l logger.Interface) {
-	w.Handle(entity.EmailQueue, NewMailController(m, l).Handle)
 }

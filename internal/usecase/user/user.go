@@ -16,19 +16,20 @@ import (
 // UseCase -.
 type UseCase struct {
 	repo     repo.UserRepo
-	queue    repo.QueueRepo
+	notifier repo.UserNotifier // scaffold:welcome
 	jwt      *jwt.Manager
-	loginURL string
 }
 
-// New returns a User usecase instrumented with OpenTelemetry tracing spans. loginURL is the sign-in
-// page the welcome email links to.
-func New(r repo.UserRepo, q repo.QueueRepo, j *jwt.Manager, loginURL string) usecase.User {
+// New returns a User usecase instrumented with OpenTelemetry tracing spans.
+func New(
+	r repo.UserRepo,
+	n repo.UserNotifier, // scaffold:welcome
+	j *jwt.Manager,
+) usecase.User {
 	return newTraced(&UseCase{
 		repo:     r,
-		queue:    q,
+		notifier: n, // scaffold:welcome
 		jwt:      j,
-		loginURL: loginURL,
 	})
 }
 
@@ -55,21 +56,14 @@ func (uc *UseCase) Register(ctx context.Context, username, email, password strin
 		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.repo.Store: %w", err)
 	}
 
-	// The worker sends it. Store and Send are not one transaction: if Send fails the user exists but
-	// the caller still gets the error, rather than the email being lost unseen.
-	welcome, err := entity.EncodeEmail(entity.WelcomeEmail{
-		To:       user.Email,
-		Username: user.Username,
-		LoginURL: uc.loginURL,
-	})
+	// scaffold:welcome:begin
+	// Store and Welcome are not one transaction: if Welcome fails the user exists but the caller
+	// still gets the error, rather than the welcome being lost unseen.
+	err = uc.notifier.Welcome(ctx, &user)
 	if err != nil {
-		return entity.User{}, fmt.Errorf("UserUseCase - Register - entity.EncodeEmail: %w", err)
+		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.notifier.Welcome: %w", err)
 	}
-
-	_, err = uc.queue.Send(ctx, entity.EmailQueue, welcome)
-	if err != nil {
-		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.queue.Send: %w", err)
-	}
+	// scaffold:welcome:end
 
 	return user, nil
 }
@@ -81,7 +75,7 @@ func (uc *UseCase) Login(ctx context.Context, email, password string) (string, e
 		return "", entity.ErrInvalidCredentials
 	}
 
-	// A user created by an SSO sign-in has no password.
+	// A user stored without a password hash has no password to sign in with.
 	if user.PasswordHash == "" {
 		return "", entity.ErrInvalidCredentials
 	}

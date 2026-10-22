@@ -40,6 +40,7 @@ type (
 		Delete(ctx context.Context, userID, taskID string) error
 	}
 
+	// scaffold:passkeys:begin
 	// Passkey registers, lists, renames and deletes users' WebAuthn credentials, and signs users in
 	// with them. Options and credential bodies are the WebAuthn JSON the browser reads and writes;
 	// the token carries the ceremony state between begin and finish. A token or body that does not
@@ -60,7 +61,9 @@ type (
 		// FinishLogin returns the same auth token password login issues.
 		FinishLogin(ctx context.Context, token string, body []byte) (string, error)
 	}
+	// scaffold:passkeys:end
 
+	// scaffold:sso:begin
 	// OIDC signs users in through an OpenID Connect provider (authorization code with PKCE). Begin
 	// returns the provider URL to send the browser to and a token carrying the ceremony state; the
 	// provider redirects back with a code and the state, which Finish checks against the token
@@ -72,10 +75,13 @@ type (
 		Begin(ctx context.Context) (authURL, token string, err error)
 		Finish(ctx context.Context, code, state, token string) (string, error)
 	}
+	// scaffold:sso:end
 
+	// scaffold:email:begin
 	// Mail delivers email. Use cases do not call it: they enqueue with repo.QueueRepo, and the
 	// worker calls Deliver for each message on entity.EmailQueue.
 	Mail interface {
 		Deliver(ctx context.Context, email entity.Email) error
 	}
+	// scaffold:email:end
 )

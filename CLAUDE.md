@@ -1,12 +1,19 @@
 # go-clean-template
 
-Go clean-architecture reference service. Three domains (`user`, `task`, `exchange`) exposed
-over three transports (REST — chi + Huma v2, gRPC, and GraphQL via gqlgen at
-`/graphql` on the REST port, tasks and the exchange history, GraphiQL at `/graphql/playground` when `DOCS_ENABLED`) from one shared use-case layer.
+Go clean-architecture reference service. Three domains (`user`, `task`, `exchange`) exposed from
+one shared use-case layer over each of these transports:
+
+- REST — chi + Huma v2.
+- gRPC. <!-- scaffold:grpc -->
+- GraphQL via gqlgen at `/graphql` on the REST port, for tasks and the exchange history; GraphiQL <!-- scaffold:graphql -->
+  at `/graphql/playground` when `DOCS_ENABLED`. <!-- scaffold:graphql -->
+
+<!-- scaffold:queue:begin -->
 A second binary, `cmd/worker`, consumes a minimal Postgres queue (the `queue_messages` table);
 see **Queue and worker** below.
+<!-- scaffold:queue:end -->
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
-A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
+A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below. <!-- scaffold:web -->
 
 ## Commands — drive everything through the Makefile
 
@@ -22,42 +29,48 @@ different settings than CI. Use the target, not the tool.
 | Lint | `make linter-golangci` | `golangci-lint run` |
 | Format | `make format` | `gofmt` — the target runs `go fix`, `gofumpt`, and `gci` with the repo's import grouping |
 | Regenerate mocks | `make mock` | `mockgen ...` |
-| Regenerate protobuf | `make proto-v1` | `protoc ...` |
+| Regenerate protobuf | `make proto-v1` | `protoc ...` | <!-- scaffold:grpc -->
 | Regenerate SQL query code | `make sqlc` | `sqlc generate` — the target first renders the HCL schema to SQL with Atlas (needs Docker for `ATLAS_DEV_URL`), then runs the sqlc pinned in `go.mod` |
 | Regenerate the REST OpenAPI document | `make openapi` | `go run ./cmd/openapi` — the target writes through a temp file so a failed run never truncates `docs/openapi/v1.json` |
-| Install frontend dependencies | `make web-deps` | `bun install` / `vp install` — the target uses the frozen lockfile |
-| Regenerate frontend REST types | `make web-api` | `npx openapi-typescript ...` — the target refreshes `docs/openapi/v1.json` first |
-| Regenerate frontend GraphQL types | `make web-graphql` | `npx graphql-codegen` — reads the gqlgen schema and the operations in `web/src/` |
-| Run the frontend dev server | `make web-dev` | `vp dev` — the target exports `HTTP_PORT`, which the Vite proxy targets |
-| Format / lint / test the frontend | `make web-format`, `make web-check` | `vp check`, `vp test`, `tsc`, `eslint`, `prettier` |
-| Build the frontend | `make web-build` | `vp build` |
-| Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
+| Install frontend dependencies | `make web-deps` | `bun install` / `vp install` — the target uses the frozen lockfile | <!-- scaffold:web -->
+| Regenerate frontend REST types | `make web-api` | `npx openapi-typescript ...` — the target refreshes `docs/openapi/v1.json` first | <!-- scaffold:web -->
+| Regenerate frontend GraphQL types | `make web-graphql` | `npx graphql-codegen` — reads the gqlgen schema and the operations in `web/src/` | <!-- scaffold:web -->
+| Run the frontend dev server | `make web-dev` | `vp dev` — the target exports `HTTP_PORT`, which the Vite proxy targets | <!-- scaffold:web -->
+| Format / lint / test the frontend | `make web-format`, `make web-check` | `vp check`, `vp test`, `tsc`, `eslint`, `prettier` | <!-- scaffold:web -->
+| Build the frontend | `make web-build` | `vp build` | <!-- scaffold:web -->
+| Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory | <!-- scaffold:graphql -->
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
 | Start dependencies (Postgres) | `make compose-up` | `docker compose up` |
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
-| Run the queue worker locally | `make run-worker` | `go run ./cmd/worker` |
+| Run the queue worker locally | `make run-worker` | `go run ./cmd/worker` | <!-- scaffold:queue -->
 | Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
+| Generate a project with only some features | `make scaffold` (form) or `make scaffold PRESET=api`; `scaffold-check`, `scaffold-dev`, `scaffold-matrix` | `go run ./cmd/create` — the targets pass `--force` for the `scaffold/out` scratch area | <!-- scaffold:self -->
 
 `make help` lists every target.
 
-Three traps in these targets:
+Traps in these targets:
 
 - **`make integration-test` is not the one you want.** It runs `go test ./integration-test/...` on
   the host, where the suite cannot resolve the container hostnames it needs, so it always fails.
   `make compose-up-integration-test` is the real entry point.
+<!-- scaffold:grpc:begin -->
 - **`make run` and `make pre-commit` depend on `proto-v1`**, so they need `protoc` on `PATH`.
   Run `make bin-deps` first (`protoc` itself is not installed by it).
+<!-- scaffold:grpc:end -->
+<!-- scaffold:web:begin -->
 - **`make pre-commit` also runs the frontend targets**, so it needs the `vp` CLI (Vite+) on `PATH`;
   `vp` provisions the Node version in `web/.node-version` and bun itself.
+<!-- scaffold:web:end -->
 
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
-For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too.
-For changes to a GraphQL schema file or to an operation in `web/src/`, `make web-graphql` too.
+For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too. <!-- scaffold:web -->
+For changes to a GraphQL schema file or to an operation in `web/src/`, `make web-graphql` too. <!-- scaffold:web -->
+For changes to markers or `scaffold/features.yaml`, `make scaffold-check WITHOUT=<feature>` too. <!-- scaffold:self -->
 
 ## Dependency rule
 
@@ -92,10 +105,12 @@ Decide by asking what the code knows about:
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | method on `Repo` calling the generated query |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
-| an HTTP status, a gRPC code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
-| a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
-| the data an email shows | `internal/entity/email.go` | struct with `Template()`/`Recipient()`, plus a case in `DecodeEmail` |
+| a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
+| a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` | <!-- scaffold:queue -->
+<!-- scaffold:email:begin -->
+| the data an email shows | `internal/entity/email_<name>.go` | struct with `Template()`/`Recipient()`, plus an entry in `EmailTypes()` (`email.go`) |
 | an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
+<!-- scaffold:email:end -->
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
 
 Layout rules:
@@ -116,15 +131,18 @@ Every controller method, on every transport, does the same six things in the sam
 shape from a neighbouring handler in the same transport.
 
 1. **Get the caller.** REST: `middleware.UserID(ctx)` (the chi `middleware.Auth` middleware stores
-   it in the request context). gRPC: `grpcmw.UserIDFromContext(ctx)`. GraphQL: `caller(ctx)`.
+   it in the request context).
+   gRPC: `grpcmw.UserIDFromContext(ctx)`. <!-- scaffold:grpc -->
+   GraphQL: `caller(ctx)`. <!-- scaffold:graphql -->
    A failure here is an auth error, not a 500.
 2. **Decode into a transport-local DTO** from `<transport>/v1/request/`. On REST the DTO is the
    `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass a
    `request.*` type into a use case.
 3. **Validate the DTO structurally through Huma's built-in validation** on the REST transport:
    length, format, enum, and default constraints live on the input struct / request DTO tags, and
-   the REST v1 controller takes no `*validator.Validate` (other transports still construct their
-   own). Domain validation — anything that needs to know the rules, like a status transition —
+   the REST v1 controller takes no `*validator.Validate`.
+   The gRPC controller validates its request DTOs with its own. <!-- scaffold:grpc -->
+   Domain validation — anything that needs to know the rules, like a status transition —
    lives on the entity or the use case and must not be duplicated in the controller.
 4. **Call the use case** with the request context: the Huma handler's `ctx` on REST (do not build a
    second context), the handler's `ctx` everywhere else. `context.Context`
@@ -137,7 +155,8 @@ shape from a neighbouring handler in the same transport.
    the API shape — `entity.User` is safe this way because `PasswordHash` is tagged `json:"-"`.
    Anything with a wrapper, a projection or a different field set gets a type in
    `<transport>/v1/response/` used as the Huma output `Body` (`response.TaskList`,
-   `response.Token`). gRPC always converts through `response.New*Response`.
+   `response.Token`).
+   gRPC always converts through `response.New*Response`. <!-- scaffold:grpc -->
 
 ## Conventions that will bite you
 
@@ -165,7 +184,9 @@ schema for `decimal.Decimal`, so REST returns `response.Conversion`, not the ent
 **Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env`. A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
-startup.
+startup. `.env.example` is read both by `make` (`include`) and by the shell in CI
+(`. ./.env.example`), so values there must not need quoting: no spaces.
+`MAIL_FROM` is a bare address for that reason. <!-- scaffold:email -->
 
 **The linter is strict and non-obvious.** `.golangci.yml` enables ~45 linters. The ones that
 reject otherwise-fine code: `wsl_v5` and `nlreturn` (blank line required before `return` and
@@ -175,25 +196,30 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 ## Generated files — do not hand-edit
 
-- `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
+- `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them. <!-- scaffold:grpc -->
 - `internal/usecase/mocks_*_test.go` ← `make mock`.
 - `internal/repo/persistent/queries/schema/schema.sql` ← `make sqlc`, rendered by Atlas from
   `internal/app/schema/*.hcl`. It exists only because sqlc cannot read HCL; CI fails when it is stale.
 - `internal/repo/persistent/queries/*.go` ← `make sqlc` from the `.sql` query files beside them,
   that rendered schema, and `sqlc.yaml`.
+<!-- scaffold:graphql:begin -->
 - `internal/controller/graphql/generated/` and `internal/controller/graphql/model/` ← `make graphql`
   from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. The resolver bodies in
   `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
   place on every run (signatures follow the schema, bodies are kept).
+<!-- scaffold:graphql:end -->
+<!-- scaffold:web:begin -->
 - `web/src/api/schema.gen.ts` ← `make web-api` (openapi-typescript) from `docs/openapi/v1.json`.
 - `web/src/graphql/` ← `make web-graphql` (GraphQL Code Generator, `web/codegen.ts`) from
   `internal/controller/graphql/schema/*.graphqls` and the `graphql(...)` operations in `web/src/`.
 - `web/src/routeTree.gen.ts` ← the TanStack Router Vite plugin, on every `vp dev` / `vp build`.
+<!-- scaffold:web:end -->
 - `docs/openapi/v1.json` ← `make openapi`, exported by `cmd/openapi` from the same Huma config the
   server uses (`restapi.OpenAPI`). Huma still serves the live document at `/openapi.json` when
   `DOCS_ENABLED`; the checked-in copy exists so REST contract changes show up as a reviewable diff
   and so clients can generate types without a running server. CI fails when it is stale.
 
+<!-- scaffold:queue:begin -->
 ## Queue and worker
 
 - The queue is one ordinary table, `queue_messages` (`internal/app/schema/queue_messages.hcl`), on the
@@ -213,16 +239,23 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   them from `initUseCases`, like the servers. The Dockerfile builds `/app` and `/worker` into one
   image; the compose `worker` service runs `/worker`. Only the app applies the schema.
 - A use case enqueues by taking `repo.QueueRepo` and calling `Send`.
-- Email goes through the `mail` queue (`entity.EmailQueue`): the use case writes the body with
+<!-- scaffold:welcome:begin -->
+- A use case can also enqueue through a port that hides the queue: the user use case calls
+  `repo.UserNotifier.Welcome`, implemented by `internal/repo/notify`.
+<!-- scaffold:welcome:end -->
+<!-- scaffold:email:begin -->
+- Email goes through the `mail` queue (`entity.EmailQueue`): the sender writes the body with
   `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
   handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
   The `mail` use case (`Deliver`) renders with `internal/repo/mailtmpl` and sends through `pkg/smtp`;
   only the worker calls it. `initUseCases` builds it for both binaries, and fails if a template is broken.
-- `.env.example` is read both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so
-  values there must not need quoting: no spaces. `MAIL_FROM` is a bare address for that reason.
 - Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
-  integration tests; `integration-test/mail_test.go` asserts on it.
+  integration stack.
+  `integration-test/mail_test.go` asserts on what reaches it. <!-- scaffold:welcome -->
+<!-- scaffold:email:end -->
+<!-- scaffold:queue:end -->
 
+<!-- scaffold:web:begin -->
 ## Frontend
 
 `web/` is a client-rendered React app: TanStack Router (file-based routes in `web/src/routes/`) and
@@ -278,6 +311,37 @@ TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest)
   `/openapi.*`, `/schemas`, `/healthz`, `/metrics`.
 - Tests import from `vite-plus/test` and sit next to the code as `*.test.ts`.
 
+<!-- scaffold:web:end -->
+<!-- scaffold:self:begin -->
+## Optional features and scaffold markers
+
+`make scaffold` (`cmd/create`, `internal/scaffold`, [docs/scaffold.md](docs/scaffold.md)) generates a
+project with only some features, driven by `scaffold/features.yaml`. The template keeps every
+feature; what it drops in a generated project is described by two things, which every change must
+keep true:
+
+- **A feature's own files are listed under its `paths`** in `scaffold/features.yaml`. A new file
+  for an optional feature goes in a path it owns (its package, `config/<feature>.go`,
+  `integration-test/<feature>_test.go`), or the manifest gets a new path.
+- **Its lines in shared files sit between markers** in the file's comment syntax
+  (`// scaffold:grpc:begin` … `// scaffold:grpc:end`, `# …` in Makefile/YAML/env, `<!-- … -->` in
+  Markdown, or one trailing `// scaffold:grpc`). This includes docs prose: write lists, not counts
+  ("every transport", not "three transports"). Mermaid and JSON cannot hold markers.
+- Wire a feature through one call or one option (`restapi.WithPasskeys`, `workerctl.WithMail`,
+  `internal/app/grpc.go`) so the shared files need few markers. A marked Go block between two
+  top-level functions breaks the identity test after `gofumpt`; move that code to an owned file.
+
+`make test` runs `internal/scaffold`'s repository tests:
+- every file is claimed;
+- markers are balanced and name real features;
+- generating everything reproduces the template;
+- a project without each feature contains none of its `leaks`;
+- no project mentions the scaffolder.
+
+`make scaffold-check WITHOUT=<id>` proves a project without a feature passes `make pre-commit`; CI
+runs `scaffold-check` for every preset.
+
+<!-- scaffold:self:end -->
 ## Keep the docs current
 
 `README.md` is a short front page for a visitor: what the template is, the Clean Architecture
@@ -287,14 +351,16 @@ the matching page whenever a change touches what it documents:
 
 | Change | What to update |
 | --- | --- |
-| New or changed REST / gRPC / GraphQL operation | the domain table in `docs/api.md` |
+| New or changed operation on any transport | the domain table in `docs/api.md` |
 | New domain | a section in `docs/api.md`, the `What you get` list in `README.md` |
 | New or renamed env var | the matching table in `docs/configuration.md` |
 | New transport, server, port or service URL | `docs/development.md` (service tables), `docs/api.md` if it is an API |
 | Change to `make dev` or its prerequisites | `Quick start` in `README.md`, `docs/development.md` |
 | Renamed or moved package under `internal/` or `pkg/` | the `Packages` table in `docs/architecture.md` |
-| Queue, worker or email behaviour | `docs/worker.md` |
-| Frontend stack or conventions | `docs/web.md` |
+| Queue or worker behaviour | `docs/worker.md` | <!-- scaffold:queue -->
+| Email behaviour | the `Email` section of `docs/worker.md` | <!-- scaffold:email -->
+| Frontend stack or conventions | `docs/web.md` | <!-- scaffold:web -->
+| Scaffold manifest, markers or `make scaffold*` targets | `docs/scaffold.md` | <!-- scaffold:self -->
 | The exchange `Convert` path (handler, use case, entity, webapi, repo) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
 
@@ -310,13 +376,17 @@ the matching page whenever a change touches what it documents:
    `paralleltest` enforces it).
 5. Expose it on whichever transports need it:
    - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
-     (op registered in the same domain file), then `make web-api` (which runs `make openapi`), commit both
-     generated diffs, and fix any `make web-check` errors in `web/`.
+     (op registered in the same domain file), then `make openapi`, and commit the generated diff.
+     Then `make web-api`, commit its diff too, and fix any `make web-check` errors in `web/`. <!-- scaffold:web -->
+   <!-- scaffold:graphql:begin -->
    - GraphQL (task and exchange today): schema change in `internal/controller/graphql/schema/` →
-     `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go` → `make web-graphql`
-     and fix any `make web-check` errors in `web/`.
+     `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
+     Then `make web-graphql` and fix any `make web-check` errors in `web/`. <!-- scaffold:web -->
+   <!-- scaffold:graphql:end -->
+   <!-- scaffold:grpc:begin -->
    - gRPC: `.proto` change → `make proto-v1` → controller method in
      `internal/controller/grpc/v1/`.
+   <!-- scaffold:grpc:end -->
 
 Transports are independent by design; adding a method to only one is a legitimate choice, not an
 oversight — but say which ones you covered.
@@ -344,8 +414,8 @@ before writing.
    `initUseCases`, and thread the use case through `initServers` into each router you are exposing.
 9. **Transports** — for each one: DTOs in `<transport>/v1/request/` and `response/`, handlers in
    `<transport>/v1/<domain>.go`, registration in that transport's `v1/router.go`, and the use case
-   added to the `V1` / controller struct in `<transport>/v1/controller.go`. gRPC also needs
-   `docs/proto/v1/<domain>.proto` and `make proto-v1`.
+   added to the `V1` / controller struct in `<transport>/v1/controller.go`.
+   gRPC also needs `docs/proto/v1/<domain>.proto` and `make proto-v1`. <!-- scaffold:grpc -->
 10. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the docs updates listed
     above.
 11. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
@@ -355,8 +425,9 @@ before writing.
 
 Routes are grouped under a version package (`<transport>/v1/`). A v2 means a new sibling package
 with the same layout, registered alongside v1 in the transport's top-level `router.go` — REST adds
-operations under the new `/v2/...` paths from a `v2.NewRoutes(api, ...)` in `restapi/router.go`,
-and gRPC registers a second set of `NewXRoutes`. v1 stays untouched. `docs/api.md` documents this
+operations under the new `/v2/...` paths from a `v2.NewRoutes(api, ...)` in `restapi/router.go`.
+gRPC registers a second set of `NewXRoutes`. <!-- scaffold:grpc -->
+v1 stays untouched. `docs/api.md` documents this
 with worked examples per transport; follow it rather than inventing a scheme.
 
 ## Database
@@ -384,7 +455,9 @@ plain conversion. A schema change that breaks that alignment fails to compile.
 - Unit: `internal/...` and `pkg/...`, run by `make test` with `-race`. Use-case tests use the
   generated gomock mocks, are table-driven, and call `t.Parallel()` (`paralleltest` enforces it).
 - Integration: `integration-test/` runs *inside* the docker network — it resolves the service as
-  host `app` by container name, so it fails on the host machine.
+  host `app` by its compose service name, so it fails on the host machine.
   Always run it through `make compose-up-integration-test`.
+<!-- scaffold:email:begin -->
 - Mail templates: `internal/repo/mailtmpl/testdata/*.golden.*` are compared by the render test;
   after an intended template change, `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/` and review the diff.
+<!-- scaffold:email:end -->

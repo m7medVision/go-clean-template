@@ -12,7 +12,7 @@ import (
 func TestScoped_SignAndVerify(t *testing.T) {
 	t.Parallel()
 
-	s, err := jwt.NewScoped("test-secret", "webauthn-ceremony", time.Minute)
+	s, err := jwt.NewScoped("test-secret", "test-ceremony", time.Minute)
 	require.NoError(t, err)
 
 	token, err := s.Sign([]byte(`{"challenge":"abc"}`))
@@ -26,7 +26,7 @@ func TestScoped_SignAndVerify(t *testing.T) {
 func TestScoped_Verify_Expired(t *testing.T) {
 	t.Parallel()
 
-	s, err := jwt.NewScoped("test-secret", "webauthn-ceremony", -time.Minute)
+	s, err := jwt.NewScoped("test-secret", "test-ceremony", -time.Minute)
 	require.NoError(t, err)
 
 	token, err := s.Sign([]byte("payload"))
@@ -39,7 +39,7 @@ func TestScoped_Verify_Expired(t *testing.T) {
 func TestScoped_Verify_Tampered(t *testing.T) {
 	t.Parallel()
 
-	s, err := jwt.NewScoped("test-secret", "webauthn-ceremony", time.Minute)
+	s, err := jwt.NewScoped("test-secret", "test-ceremony", time.Minute)
 	require.NoError(t, err)
 
 	token, err := s.Sign([]byte("payload"))
@@ -70,7 +70,7 @@ func TestScoped_Verify_RejectsAuthToken(t *testing.T) {
 
 	auth := jwt.New("test-secret", time.Hour)
 
-	s, err := jwt.NewScoped("test-secret", "webauthn-ceremony", time.Minute)
+	s, err := jwt.NewScoped("test-secret", "test-ceremony", time.Minute)
 	require.NoError(t, err)
 
 	token, err := auth.GenerateToken("user-123", nil)
@@ -85,7 +85,7 @@ func TestManager_ParseToken_RejectsScopedToken(t *testing.T) {
 
 	auth := jwt.New("test-secret", time.Hour)
 
-	s, err := jwt.NewScoped("test-secret", "webauthn-ceremony", time.Minute)
+	s, err := jwt.NewScoped("test-secret", "test-ceremony", time.Minute)
 	require.NoError(t, err)
 
 	token, err := s.Sign([]byte("payload"))

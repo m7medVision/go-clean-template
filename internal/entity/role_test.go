@@ -56,7 +56,7 @@ func TestPrincipal_Has(t *testing.T) {
 func TestLocalRoles(t *testing.T) {
 	t.Parallel()
 
-	// Password and passkey sign-ins never grant admin; only an identity provider can.
+	// Sign-ins the app verifies itself never grant admin; only an identity provider can.
 	assert.Equal(t, []entity.Role{entity.RoleUser}, entity.LocalRoles())
 }
 

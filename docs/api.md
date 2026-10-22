@@ -1,30 +1,31 @@
 # API
 
-The three domains and how each transport exposes them: REST, gRPC, and GraphQL. All three call
-the same use cases, so behaviour and errors match across transports.
+The three domains and how each transport exposes them. Every transport calls the same use cases, so
+behaviour and errors match across transports.
 
 | Transport | Local | Behind Caddy (`make compose-up-all`) |
 | --- | --- | --- |
 | REST | `http://127.0.0.1:8080/v1/...` | `http://app.lvh.me/v1/...` |
-| GraphQL | `POST http://127.0.0.1:8080/graphql` | `POST http://app.lvh.me/graphql` |
-| gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) |
+| GraphQL | `POST http://127.0.0.1:8080/graphql` | `POST http://app.lvh.me/graphql` | <!-- scaffold:graphql -->
+| gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) | <!-- scaffold:grpc -->
 
-Every operation except register, login, passkey login and SSO sign-in needs
-`Authorization: Bearer <token>`, with the token from a sign-in.
+Every operation except register and the sign-ins needs `Authorization: Bearer <token>`, with the
+token from a sign-in.
 
 ## User authentication
 
 Registration, login, and JWT-based authorization.
 
-| Operation | REST | gRPC |
-| --- | --- | --- |
-| Register | `POST /v1/auth/register` | `AuthService/Register` |
-| Login | `POST /v1/auth/login` | `AuthService/Login` |
-| Get profile | `GET /v1/user/profile` | `AuthService/GetProfile` |
+| Operation | REST |
+| --- | --- |
+| Register | `POST /v1/auth/register` |
+| Login | `POST /v1/auth/login` |
+| Get profile | `GET /v1/user/profile` |
 
 - Passwords are hashed with bcrypt; JWTs expire after `JWT_TOKEN_EXPIRY`.
-- Registration queues a welcome email that the worker sends (see [worker.md](worker.md)).
+- Registration queues a welcome email that the worker sends (see [worker.md](worker.md)). <!-- scaffold:welcome -->
 
+<!-- scaffold:sso:begin -->
 ## SSO
 
 Sign-in through an OpenID Connect provider (Keycloak in development), for the same JWT password login
@@ -37,6 +38,8 @@ setup are in [sso.md](sso.md).
 | `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down |
 | `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in, `409` when the email or username belongs to another account |
 
+<!-- scaffold:sso:end -->
+<!-- scaffold:passkeys:begin -->
 ## Passkeys
 
 WebAuthn passkeys alongside passwords: add them while signed in, then sign in with one for the same
@@ -64,25 +67,25 @@ setup are in [passkeys.md](passkeys.md).
 - An invalid ceremony is `400` on registration and `401` on sign-in; finishing a sign-in twice is
   `409`. The full mapping is in [passkeys.md](passkeys.md#errors).
 
+<!-- scaffold:passkeys:end -->
 ## Task management
 
 CRUD with a status state machine. Tasks are scoped to the authenticated user.
 
-| Operation | REST | gRPC | GraphQL |
-| --- | --- | --- | --- |
-| Create | `POST /v1/tasks` | `TaskService/CreateTask` | `mutation createTask` |
-| List | `GET /v1/tasks` | `TaskService/ListTasks` | `query tasks` |
-| List every user's (admin) | `GET /v1/admin/tasks` | `TaskService/ListAllTasks` | `query allTasks` |
-| Get | `GET /v1/tasks/{id}` | `TaskService/GetTask` | `query task` |
-| Update | `PUT /v1/tasks/{id}` | `TaskService/UpdateTask` | `mutation updateTask` |
-| Transition | `PATCH /v1/tasks/{id}/status` | `TaskService/TransitionTask` | `mutation transitionTask` |
-| Delete | `DELETE /v1/tasks/{id}` | `TaskService/DeleteTask` | `mutation deleteTask` |
+| Operation | REST |
+| --- | --- |
+| Create | `POST /v1/tasks` |
+| List | `GET /v1/tasks` |
+| List every user's (admin) | `GET /v1/admin/tasks` |
+| Get | `GET /v1/tasks/{id}` |
+| Update | `PUT /v1/tasks/{id}` |
+| Transition | `PATCH /v1/tasks/{id}/status` |
+| Delete | `DELETE /v1/tasks/{id}` |
 
 - Status transitions: `todo` → `in_progress` → `done`, and `in_progress` → `todo`.
 - Lists page with `limit`/`offset` and take an optional `status` filter.
-- The admin list needs the `admin` role in the caller's token, or it answers `403`, `FORBIDDEN` or
-  `PERMISSION_DENIED`. Password and passkey sign-ins grant only `user`; see
-  [architecture.md](architecture.md#roles).
+- The admin list needs the `admin` role in the caller's token, or it answers `403`. A password
+  sign-in grants only `user`; see [architecture.md](architecture.md#roles).
 
 ## Currency exchange
 
@@ -91,17 +94,17 @@ Converts an amount between currencies at the latest daily rate from the
 160 currencies, including the Gulf currencies), and keeps each user's history. It is the template's
 example of an outbound HTTP API behind a repository interface.
 
-| Operation | REST | gRPC | GraphQL |
-| --- | --- | --- | --- |
-| Convert | `POST /v1/exchange/convert` | `ExchangeService/Convert` | |
-| History | `GET /v1/exchange/history` | `ExchangeService/GetHistory` | `query exchangeHistory` |
+| Operation | REST |
+| --- | --- |
+| Convert | `POST /v1/exchange/convert` |
+| History | `GET /v1/exchange/history` |
 
 - Request: `{"from": "OMR", "to": "CNY", "amount": "100.10"}`. Codes are case-insensitive.
 - Amounts and rates are decimal strings, computed with exact decimals (no `float64`). The result is
   rounded half-even to 2 places.
 - Rates update once a day and are not live market rates; the response carries the rate's `rate_date`.
   The provider's terms require a link back to it wherever the rates are shown (the web page has one).
-- An unknown currency, or `from` equal to `to`, answers 400 (`InvalidArgument` on gRPC). History pages
+- An unknown currency, or `from` equal to `to`, answers 400. History pages
   with `limit`/`offset` and returns a `total`.
 
 ## REST
@@ -127,23 +130,60 @@ changes show up in review and clients can generate types without a running serve
   `code`.
 - `/healthz` answers when the app is up.
 
+<!-- scaffold:graphql:begin -->
 ## GraphQL
 
 [gqlgen](https://github.com/99designs/gqlgen) on the REST port, covering tasks and the exchange
 history. The schemas are [task.graphqls](../internal/controller/graphql/schema/task.graphqls) and
 [exchange.graphqls](../internal/controller/graphql/schema/exchange.graphqls).
 
+| Operation | GraphQL |
+| --- | --- |
+| Create a task | `mutation createTask` |
+| List tasks | `query tasks` |
+| List every user's tasks (admin) | `query allTasks` |
+| Get a task | `query task` |
+| Update a task | `mutation updateTask` |
+| Transition a task | `mutation transitionTask` |
+| Delete a task | `mutation deleteTask` |
+| Exchange history | `query exchangeHistory` |
+
 - With `DOCS_ENABLED=true`, a playground is at `/graphql/playground`. Put
   `{"Authorization": "Bearer <token>"}` in its headers pane.
 - Resolvers check the bearer token themselves, so introspection works without one.
-- Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`,
-  `INTERNAL`. An expired token is `UNAUTHENTICATED` in a 200 response.
+- Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`
+  (the admin list without the `admin` role), `INTERNAL`. An expired token is `UNAUTHENTICATED` in a
+  200 response.
 
+<!-- scaffold:graphql:end -->
+<!-- scaffold:grpc:begin -->
 ## gRPC
 
 Services are defined in [auth.proto](proto/v1/auth.proto), [task.proto](proto/v1/task.proto) and
 [exchange.proto](proto/v1/exchange.proto); `make proto-v1` regenerates the Go code beside them. Server
 reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
+
+| Operation | Method |
+| --- | --- |
+| Register | `AuthService/Register` |
+| Login | `AuthService/Login` |
+| Get profile | `AuthService/GetProfile` |
+| Create a task | `TaskService/CreateTask` |
+| List tasks | `TaskService/ListTasks` |
+| List every user's tasks (admin) | `TaskService/ListAllTasks` |
+| Get a task | `TaskService/GetTask` |
+| Update a task | `TaskService/UpdateTask` |
+| Transition a task | `TaskService/TransitionTask` |
+| Delete a task | `TaskService/DeleteTask` |
+| Convert | `ExchangeService/Convert` |
+| Exchange history | `ExchangeService/GetHistory` |
+
+- The token goes in the `authorization` metadata as it is, with no `Bearer` prefix; without a valid
+  one a call answers `Unauthenticated`.
+- Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
+  user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
+  list without the `admin` role `PermissionDenied`, and anything else `Internal`.
+<!-- scaffold:grpc:end -->
 
 ## Versioning
 
@@ -160,6 +200,7 @@ v1.NewRoutes(api, e, u, tk, l)
 v2.NewRoutes(api, e, u, tk, l)
 ```
 
+<!-- scaffold:grpc:begin -->
 gRPC, in [`internal/controller/grpc/router.go`](../internal/controller/grpc/router.go), with the new
 protos in `docs/proto/v2`:
 
@@ -178,3 +219,4 @@ protos in `docs/proto/v2`:
 
 reflection.Register(app)
 ```
+<!-- scaffold:grpc:end -->
