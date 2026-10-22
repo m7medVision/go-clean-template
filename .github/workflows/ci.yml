@@ -378,6 +378,25 @@ jobs:
           cache: true
       - name: Generate and check
         run: make scaffold-check PRESET=${{ matrix.preset }}
+      # On master, keep the project that just passed: release.yml attaches it
+      # to the release. Only the files its .gitignore allows (no build output,
+      # no node_modules, no .git).
+      - name: Pack the checked project
+        if: github.event_name == 'push'
+        working-directory: scaffold/out
+        env:
+          PRESET: ${{ matrix.preset }}
+        run: |
+          git -C "$PRESET" ls-files -z --cached --others --exclude-standard |
+            sed -z "s|^|$PRESET/|" |
+            tar --null -czf "$PRESET.tar.gz" -T -
+      - uses: actions/upload-artifact@v7
+        if: github.event_name == 'push'
+        with:
+          name: scaffold-${{ matrix.preset }}
+          path: scaffold/out/${{ matrix.preset }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
 
   # scaffold:self:end
   ci-ok:

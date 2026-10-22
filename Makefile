@@ -229,6 +229,14 @@ scaffold-clean: ### remove the projects generated under scaffold/out
 	rm -rf scaffold/out
 .PHONY: scaffold-clean
 
+release-version: ### print the next release version from the commits since the last tag, or nothing
+	@go run ./cmd/release
+.PHONY: release-version
+
+release-notes: ### print the release notes for the commits since the last tag
+	@go run ./cmd/release -notes
+.PHONY: release-notes
+
 # scaffold:self:end
 pre-commit: deps mock format linter-golangci test ### run pre-commit
 # scaffold:web:begin
