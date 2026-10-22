@@ -1,6 +1,6 @@
 # Release system: automatic tags, scaffold from a tag
 
-Status: idea, not built.
+Status: built (see docs/releasing.md). The tooling became a small Go tool, `cmd/release`, instead of svu + git-cliff.
 
 ## Problem statement
 

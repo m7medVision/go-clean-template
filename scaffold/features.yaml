@@ -21,6 +21,7 @@ self:
   - internal/release/**
   - internal/scaffold/**
   - scaffold/**
+  - docs/releasing.md
   - docs/scaffold.md
   - docs/ideas/**
   - tasks/**

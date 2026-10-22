@@ -50,6 +50,7 @@ different settings than CI. Use the target, not the tool.
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
 | Generate a project with only some features | `make scaffold` (form) or `make scaffold PRESET=api`; `scaffold-check`, `scaffold-dev`, `scaffold-matrix` | `go run ./cmd/create` — the targets pass `--force` for the `scaffold/out` scratch area | <!-- scaffold:self -->
+| See what master would be released as | `make release-version`, `make release-notes` | tagging by hand — `release.yml` tags and releases on its own; see `docs/releasing.md` | <!-- scaffold:self -->
 
 `make help` lists every target.
 
@@ -71,6 +72,11 @@ Never claim a change is done without `make format`, `make linter-golangci` and `
 For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too. <!-- scaffold:web -->
 For changes to a GraphQL schema file or to an operation in `web/src/`, `make web-graphql` too. <!-- scaffold:web -->
 For changes to markers or `scaffold/features.yaml`, `make scaffold-check WITHOUT=<feature>` too. <!-- scaffold:self -->
+<!-- scaffold:self:begin -->
+Commit subjects are Conventional Commits, and they name the release: a `feat`, `fix`, `perf` or
+breaking (`!`) commit merged to master is released as the next version (`docs/releasing.md`);
+`docs`, `ci`, `chore`, `test`, `build` and `refactor` release nothing. Never move or delete a `v*` tag.
+<!-- scaffold:self:end -->
 
 ## Dependency rule
 
@@ -361,6 +367,7 @@ the matching page whenever a change touches what it documents:
 | Email behaviour | the `Email` section of `docs/worker.md` | <!-- scaffold:email -->
 | Frontend stack or conventions | `docs/web.md` | <!-- scaffold:web -->
 | Scaffold manifest, markers or `make scaffold*` targets | `docs/scaffold.md` | <!-- scaffold:self -->
+| Release rules, `release.yml` or `cmd/release` | `docs/releasing.md` | <!-- scaffold:self -->
 | The exchange `Convert` path (handler, use case, entity, webapi, repo) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
 

@@ -195,7 +195,7 @@ func TestCIChecksEveryPreset(t *testing.T) {
 }
 
 // TestGeneratedProjectsNeverMentionTheScaffolder: the self blocks and paths are gone from every
-// project, even one with every feature.
+// project, even one with every feature: the scaffolder and the template's own release tooling.
 func TestGeneratedProjectsNeverMentionTheScaffolder(t *testing.T) {
 	t.Parallel()
 
@@ -204,5 +204,10 @@ func TestGeneratedProjectsNeverMentionTheScaffolder(t *testing.T) {
 
 	for _, hit := range leaks(t, m, out, regexp.MustCompile(`(?i)scaffold`), nil) {
 		t.Errorf("mentions the scaffolder: %s", hit)
+	}
+
+	releases := regexp.MustCompile(`release-(version|notes)|cmd/release|internal/release|releasing\.md|release\.yml|/releases\b|(?i)conventional commits`)
+	for _, hit := range leaks(t, m, out, releases, nil) {
+		t.Errorf("mentions the template's releases: %s", hit)
 	}
 }
