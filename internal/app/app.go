@@ -8,163 +8,81 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/controller/graphql"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc"
-	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
-	"github.com/m7medvision/go-clean-template/internal/repo"
-	"github.com/m7medvision/go-clean-template/internal/repo/mailtmpl"
+	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
-	persistIdentityRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/identity"
-	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
-	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
-	"github.com/m7medvision/go-clean-template/pkg/grpcserver"
 	"github.com/m7medvision/go-clean-template/pkg/httpserver"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
-	"github.com/m7medvision/go-clean-template/pkg/smtp"
 	"github.com/m7medvision/go-clean-template/pkg/tracing"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	pbgrpc "google.golang.org/grpc"
-)
-
-const (
-	// _webauthnCeremonyScope scopes the WebAuthn ceremony token's key and audience.
-	_webauthnCeremonyScope = "webauthn-ceremony"
-	// _oidcStateScope scopes the SSO sign-in state token's key and audience.
-	_oidcStateScope = "oidc-state"
-	// _oidcStateTimeout is how long a user has to sign in at the provider.
-	_oidcStateTimeout = 10 * time.Minute
-	// _oidcCallbackPath is the web client's route the provider redirects back to.
-	_oidcCallbackPath = "/sso/callback"
 )
 
 type useCases struct {
 	exchange usecase.Exchange
 	user     usecase.User
 	task     usecase.Task
-	mail     usecase.Mail
-	passkey  usecase.Passkey
-	oidc     usecase.OIDC
+	mail     usecase.Mail    // scaffold:email
+	passkey  usecase.Passkey // scaffold:passkeys
+	oidc     usecase.OIDC    // scaffold:sso
 }
 
-type servers struct {
-	grpc *grpcserver.Server
-	http *httpserver.Server
-}
-
-// initUseCases builds every use case for both binaries. It fails only when an embedded mail
-// template is broken or the WebAuthn settings are invalid. SSO never fails here: the provider is
-// discovered on the first sign-in, so the app starts while it is down.
+// initUseCases builds every use case.
+// The worker builds them with the same call. // scaffold:email
+// It fails when an optional feature's use case cannot be built from its settings.
 func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager) (useCases, error) {
-	exchangeRepo := persistExchangeRepo.New(pg)
-	taskRepo := persistTaskRepo.New(pg)
-	userRepo := persistUserRepo.New(pg)
-	queueRepo := queue.New(pg)
-
-	mailRenderer, err := mailtmpl.New()
-	if err != nil {
-		return useCases{}, fmt.Errorf("mailtmpl.New: %w", err)
+	uc := useCases{
+		user: user.New(
+			persistUserRepo.New(pg),
+			notify.New(queue.New(pg), strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"), // scaffold:welcome
+			jwtManager,
+		),
+		task:     task.New(persistTaskRepo.New(pg)),
+		exchange: exchange.New(persistExchangeRepo.New(pg), webapi.New(cfg.Exchange.ServiceURL)),
 	}
 
-	passkeyUseCase, err := newPasskeyUseCase(cfg, userRepo, persistPasskeyRepo.New(pg), jwtManager)
-	if err != nil {
-		return useCases{}, err
-	}
+	deps := featureDeps{cfg: cfg, pg: pg, jwt: jwtManager}
 
-	oidcUseCase, err := newOIDCUseCase(cfg, persistIdentityRepo.New(pg), jwtManager)
-	if err != nil {
-		return useCases{}, err
-	}
-
-	mailer := smtp.New(
-		cfg.Mail.SMTPHost,
-		cfg.Mail.SMTPPort,
-		cfg.Mail.From,
-		smtp.Auth(cfg.Mail.SMTPUsername, cfg.Mail.SMTPPassword),
-	)
-
-	return useCases{
-		user:     user.New(userRepo, queueRepo, jwtManager, strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
-		task:     task.New(taskRepo),
-		exchange: exchange.New(exchangeRepo, webapi.New(cfg.Exchange.ServiceURL)),
-		mail:     mail.New(mailRenderer, mailer),
-		passkey:  passkeyUseCase,
-		oidc:     oidcUseCase,
-	}, nil
-}
-
-func newOIDCUseCase(cfg *config.Config, identities repo.IdentityRepo, tokens *jwt.Manager) (usecase.OIDC, error) {
-	state, err := jwt.NewScoped(cfg.JWT.Secret, _oidcStateScope, _oidcStateTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
-	}
-
-	return oidc.New(identities, state, tokens, &oidc.Config{
-		Issuer:       cfg.OIDC.Issuer,
-		ClientID:     cfg.OIDC.ClientID,
-		ClientSecret: cfg.OIDC.ClientSecret,
-		RedirectURL:  strings.TrimSuffix(cfg.App.BaseURL, "/") + _oidcCallbackPath,
-		RolesClaim:   cfg.OIDC.RolesClaim,
-		RoleMap:      cfg.OIDC.RoleMap,
-	}), nil
-}
-
-func newPasskeyUseCase(
-	cfg *config.Config, users repo.UserRepo, passkeys repo.PasskeyRepo, tokens *jwt.Manager,
-) (usecase.Passkey, error) {
-	ceremony, err := jwt.NewScoped(cfg.JWT.Secret, _webauthnCeremonyScope, cfg.WebAuthn.CeremonyTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
-	}
-
-	uc, err := passkey.New(users, passkeys, ceremony, tokens, &passkey.Config{
-		RPID:         cfg.WebAuthn.RPID,
-		RPName:       cfg.WebAuthn.RPName,
-		RPOrigins:    cfg.WebAuthn.RPOrigins,
-		Timeout:      cfg.WebAuthn.CeremonyTimeout,
-		ReauthMaxAge: cfg.WebAuthn.ReauthMaxAge,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("passkey.New: %w", err)
+	for _, add := range []addUseCase{
+		addMailUseCase,    // scaffold:email
+		addPasskeyUseCase, // scaffold:passkeys
+		addOIDCUseCase,    // scaffold:sso
+	} {
+		if err := add(deps, &uc); err != nil {
+			return useCases{}, err
+		}
 	}
 
 	return uc, nil
 }
 
+// featureDeps is what an optional feature's use case is built from.
+type featureDeps struct {
+	cfg *config.Config
+	pg  *postgres.Postgres
+	jwt *jwt.Manager
+}
+
+// addUseCase builds one optional feature's use case into uc. Each lives in the feature's file here.
+type addUseCase func(deps featureDeps, uc *useCases) error
+
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
-	// gRPC Server
-	grpcServer := grpcserver.New(
-		l,
-		grpcserver.Port(cfg.GRPC.Port),
-		grpcserver.ServerOptions(
-			pbgrpc.UnaryInterceptor(grpcmw.AuthInterceptor(jwtManager)),
-			pbgrpc.StatsHandler(otelgrpc.NewServerHandler()),
-		),
+	router := restapi.NewRouter(
+		cfg, uc.exchange, uc.user, uc.task, jwtManager, l,
+		restapi.WithPasskeys(uc.passkey), // scaffold:passkeys
+		restapi.WithOIDC(uc.oidc),        // scaffold:sso
 	)
-	grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l)
-
-	// HTTP Server
-	router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, uc.passkey, uc.oidc, jwtManager, l)
-	router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l))
-
-	if cfg.Docs.Enabled {
-		router.Handle("/graphql/playground", graphql.NewPlayground("/graphql"))
-	}
+	mountGraphQL(router, cfg, uc, jwtManager, l) // scaffold:graphql
 
 	httpServer := httpserver.New(
 		l,
@@ -173,41 +91,8 @@ func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l lo
 	)
 
 	return servers{
-		grpc: grpcServer,
-		http: httpServer,
-	}
-}
-
-func (s *servers) startServers() {
-	s.grpc.Start()
-	s.http.Start()
-}
-
-func (s *servers) waitForShutdown(l logger.Interface) {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-
-	var err error
-
-	select {
-	case sig := <-interrupt:
-		l.Info("app - Run - signal: %s", sig.String())
-	case err = <-s.http.Notify():
-		l.Error(fmt.Errorf("app - Run - httpServer.Notify: %w", err))
-	case err = <-s.grpc.Notify():
-		l.Error(fmt.Errorf("app - Run - grpcServer.Notify: %w", err))
-	}
-
-	s.shutdownServers(l)
-}
-
-func (s *servers) shutdownServers(l logger.Interface) {
-	if err := s.http.Shutdown(); err != nil {
-		l.Error(fmt.Errorf("app - Run - httpServer.Shutdown: %w", err))
-	}
-
-	if err := s.grpc.Shutdown(); err != nil {
-		l.Error(fmt.Errorf("app - Run - grpcServer.Shutdown: %w", err))
+		{name: "httpServer", server: httpServer},
+		newGRPCServer(cfg, uc, jwtManager, l), // scaffold:grpc
 	}
 }
 
@@ -262,6 +147,10 @@ func Run(cfg *config.Config) {
 	}
 
 	s := initServers(cfg, &uc, jwtManager, l)
-	s.startServers()
-	s.waitForShutdown(l)
+	s.start()
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
+	s.waitForShutdown(interrupt, l)
 }

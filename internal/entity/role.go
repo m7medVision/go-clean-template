@@ -35,8 +35,8 @@ func ParseRoles(names []string) []Role {
 	return roles
 }
 
-// LocalRoles are the roles password and passkey sign-ins grant. Admin comes only from an identity
-// provider.
+// LocalRoles are the roles a sign-in the app verifies itself grants, such as a password. Admin
+// comes only from an identity provider.
 func LocalRoles() []Role {
 	return []Role{RoleUser}
 }

@@ -1,0 +1,255 @@
+# The scaffold manifest: what `make scaffold` can leave out of a generated project.
+#
+# A path listed under a feature belongs to it: a project without the feature has none of it. Code
+# for a feature inside a shared file sits between markers in that file's comment syntax:
+#
+#   // scaffold:grpc:begin      # scaffold:grpc:begin      <!-- scaffold:grpc:begin -->
+#   ...                         ...                        ...
+#   // scaffold:grpc:end        # scaffold:grpc:end        <!-- scaffold:grpc:end -->
+#
+# or, for one line, a trailing `// scaffold:grpc`. A path or block tagged with several features
+# (`scaffold:passkeys,web`) is kept only when all of them are. `self` is the scaffolder itself and
+# is never kept. See docs/scaffold.md.
+
+module: github.com/m7medvision/go-clean-template
+
+# The scaffolder and the template's own planning notes.
+self:
+  - cmd/create/**
+  - internal/scaffold/**
+  - scaffold/**
+  - docs/scaffold.md
+  - docs/ideas/**
+  - tasks/**
+
+# Every project gets these, apart from what the features below claim inside them.
+core:
+  - .air.app.toml
+  - .dockerignore
+  - .env.example
+  - .github/**
+  - .gitignore
+  - .golangci.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - Dockerfile
+  - LICENSE
+  - Makefile
+  - README.md
+  - caddy/**
+  - cmd/app/**
+  - cmd/openapi/**
+  - config/**
+  - docker-compose-integration-test.yml
+  - docker-compose.yml
+  - docs/**
+  - go.mod
+  - go.sum
+  - integration-test/**
+  - internal/**
+  - pkg/**
+  - scripts/**
+  - sqlc.yaml
+
+# Rebuilt by regen, so they may still name a dropped feature until then.
+generated:
+  - docs/openapi/**
+  - docs/proto/**
+  - go.sum
+  - internal/controller/graphql/generated/**
+  - internal/controller/graphql/model/**
+  - internal/repo/persistent/queries/*.sql.go
+  - internal/repo/persistent/queries/db.go
+  - internal/repo/persistent/queries/models.go
+  - internal/repo/persistent/queries/schema/**
+  - internal/usecase/mocks_*_test.go
+  - web/src/api/schema.gen.ts
+  - web/src/graphql/**
+  - web/src/routeTree.gen.ts
+
+features:
+  - id: rest
+    label: REST
+    description: chi + Huma v2 at /v1; sign-in, users, tasks and exchange. Always on.
+    core: true
+
+  - id: graphql
+    label: GraphQL
+    description: gqlgen at /graphql for tasks and the exchange history; GraphiQL with DOCS_ENABLED.
+    paths:
+      - internal/app/graphql.go
+      - internal/controller/graphql/**
+      - integration-test/graphql_test.go
+    leaks: ['(?i)graphql', 'gqlgen', '(?i)graphiql', 'mountGraphQL', 'gqlparser']
+
+  - id: grpc
+    label: gRPC
+    description: the gRPC transport on GRPC_PORT, from the .proto files in docs/proto.
+    paths:
+      - config/grpc.go
+      - config/grpc_test.go
+      - docs/proto/**
+      - integration-test/grpc_*
+      - internal/app/grpc.go
+      - internal/controller/grpc/**
+      - pkg/grpcserver/**
+    leaks: ['(?i)\bgrpc\b', 'protov1', 'GRPC_PORT', 'proto-v1', '\bprotoc\b', '\b8081\b', 'docs/proto']
+    # The OTLP trace exporter speaks gRPC too: that is tracing, not the transport. Indirect
+    # requirements in go.mod (grpc-gateway, riza-io/grpc-go) are rewritten by `go mod tidy` in regen.
+    allow: ['(?i)otlp', 'otelgrpc', 'google\.golang\.org/grpc v', '4317', '// indirect$']
+
+  - id: web
+    label: Frontend (web/)
+    description: the React client (TanStack Router + Query, Vite+). Its tables read through GraphQL.
+    requires: [graphql]
+    paths:
+      - docs/web.md
+      - web/**
+    leaks: ['\bweb/', '\./web\b', '\bvp\b', '(?i)vite', 'web-(api|graphql|dev|deps|check|format|build)', '(?i)tanstack', '\bbun\b', '(?i)\breact\b', '(?i)frontend', '(?i)web client', '(?i)oxlint|oxfmt|vitest', 'node_modules', '\b3000\b']
+    # The WebAuthn origins default to the dev server's port too: one allowed origin nobody serves, in
+    # a default the env var replaces whole.
+    allow: ['WEBAUTHN_RP_ORIGINS']
+
+  - id: passkeys
+    label: Passkeys
+    description: WebAuthn registration and passwordless sign-in.
+    paths:
+      - config/webauthn.go
+      - internal/app/passkey.go
+      - docs/passkeys.md
+      - integration-test/passkey_test.go
+      - internal/app/schema/webauthn_*.hcl
+      - internal/controller/restapi/passkey.go
+      - internal/controller/restapi/passkey_test.go
+      - internal/controller/restapi/v1/passkey.go
+      - internal/controller/restapi/v1/request/passkey.go
+      - internal/controller/restapi/v1/response/passkey.go
+      - internal/entity/passkey.go
+      - internal/entity/passkey_test.go
+      - internal/repo/persistent/passkey/**
+      - internal/repo/persistent/queries/passkey.sql
+      - internal/repo/persistent/queries/passkey.sql.go
+      - internal/usecase/passkey/**
+      - internal/usecase/passkey_test.go
+      - web/src/passkey/**
+    leaks: ['(?i)passkey', '(?i)webauthn', 'WEBAUTHN_', 'WithPasskeys', 'go-webauthn']
+    # go-webauthn's own requirements in go.mod; `go mod tidy` in regen drops them.
+    allow: ['// indirect$']
+
+  - id: sso
+    label: SSO (OIDC)
+    description: sign-in through an OpenID Connect provider; Keycloak in development.
+    requires: [web]
+    paths:
+      - config/oidc.go
+      - config/oidc_test.go
+      - docs/sso.md
+      - integration-test/oidc_test.go
+      - internal/app/oidc.go
+      - internal/app/schema/user_identities.hcl
+      - internal/controller/restapi/oidc.go
+      - internal/controller/restapi/oidc_test.go
+      - internal/controller/restapi/v1/oidc.go
+      - internal/controller/restapi/v1/request/oidc.go
+      - internal/controller/restapi/v1/response/oidc.go
+      - internal/repo/persistent/identity/**
+      - internal/repo/persistent/queries/identity.sql
+      - internal/repo/persistent/queries/identity.sql.go
+      - internal/usecase/oidc/**
+      - internal/usecase/oidc_test.go
+      - keycloak/**
+      - web/src/routes/sso.callback.tsx
+      - web/src/sso/**
+    leaks: ['(?i)\boidc\b', 'OIDC_', '(?i)keycloak', '(?i)\bsso\b', 'user_identities', 'IdentityRepo', 'WithOIDC', '(?i)openid', 'go-oidc']
+
+  - id: queue
+    label: Queue + worker
+    description: the queue_messages table and the cmd/worker binary that consumes it.
+    paths:
+      - .air.worker.toml
+      - cmd/worker/**
+      - docs/worker.md
+      - config/worker.go
+      - integration-test/queue_test.go
+      - internal/app/schema/queue_messages.hcl
+      - internal/app/worker.go
+      - internal/controller/worker/**
+      - internal/repo/persistent/queries/queue.sql
+      - internal/repo/persistent/queries/queue.sql.go
+      - internal/repo/persistent/queue/**
+      - pkg/worker/**
+    leaks: ['queue_messages', 'QueueRepo', 'pkg/worker', 'cmd/worker', 'WORKER_', 'run-worker', '(?i)\bworker\b', '(?i)\bqueue\b', 'workerctl', 'RunWorker', '\.air\.worker']
+    # npm packages in web/bun.lock.
+    allow: ['queue-microtask', 'yocto-queue']
+
+  - id: email
+    label: Email (SMTP)
+    description: rendering and SMTP delivery from the worker, with Mailpit in development.
+    requires: [queue]
+    paths:
+      - config/mail.go
+      - internal/controller/worker/mail.go
+      - internal/controller/worker/mail_test.go
+      - internal/controller/worker/v1/mail.go
+      - internal/controller/worker/v1/mail_test.go
+      - internal/entity/email.go
+      - internal/entity/email_test.go
+      - internal/repo/mailtmpl/**
+      - internal/usecase/mail/**
+      - internal/app/mail.go
+      - internal/usecase/mail_test.go
+      - pkg/smtp/**
+    leaks: ['(?i)mailpit', 'SMTP', 'MAIL_FROM', 'pkg/smtp', 'mailtmpl', 'usecase\.Mail\b', 'EmailQueue', 'WithMail', '(?i)\bmail queue', 'EncodeEmail', 'DecodeEmail', 'entity\.Email\b', '\b8025\b', '\b1025\b', '(?i)email from templates', '(?i)sends? email', '(?i)\bemail_<name>', '(?i)mail templates?\b', 'ErrUnknownEmail', '(?i)email behaviour']
+
+  - id: welcome
+    label: Welcome email
+    description: the email a user gets on registering.
+    requires: [email]
+    paths:
+      - integration-test/mail_test.go
+      - internal/controller/worker/v1/mail_welcome_test.go
+      - internal/entity/email_welcome.go
+      - internal/entity/email_welcome_test.go
+      - internal/repo/mailtmpl/templates/welcome.*
+      - internal/repo/mailtmpl/testdata/welcome.*
+      - internal/repo/mailtmpl/welcome_test.go
+      - internal/repo/notify/**
+      - internal/usecase/user_welcome_test.go
+    leaks: ['(?i)\bwelcom', 'UserNotifier', 'internal/repo/notify', '\bnotify\.', '(?i)\bnotifier']
+    # The sign-in page greets returning users; that is not the email.
+    allow: ['Welcome back']
+
+presets:
+  - id: api
+    label: API only (REST)
+    features: []
+  - id: api-grpc
+    label: API (REST + gRPC)
+    features: [grpc]
+  - id: fullstack
+    label: Fullstack (REST + GraphQL + web)
+    features: [graphql, web, passkeys, queue, email, welcome]
+  - id: everything
+    label: Everything
+    features: [graphql, grpc, web, passkeys, sso, queue, email, welcome]
+
+# Run in order inside the generated project, once the files are written.
+regen:
+  - run: make sqlc
+  # Before graphql: gqlgen loads every package, tests too, and the old mocks may still import a
+  # dropped feature's package.
+  - run: make mock
+  - run: make proto-v1
+    when: grpc
+  - run: make graphql
+    when: graphql
+  - run: make deps
+  - run: make openapi
+  - run: make web-deps
+    when: web
+  - run: make web-api
+    when: web
+  - run: make web-graphql
+    when: web
+  - run: make format
+  - run: golangci-lint fmt

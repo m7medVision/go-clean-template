@@ -558,6 +558,44 @@ func (mr *MockQueueRepoMockRecorder) Send(ctx, queue, body any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockQueueRepo)(nil).Send), ctx, queue, body)
 }
 
+// MockUserNotifier is a mock of UserNotifier interface.
+type MockUserNotifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockUserNotifierMockRecorder
+	isgomock struct{}
+}
+
+// MockUserNotifierMockRecorder is the mock recorder for MockUserNotifier.
+type MockUserNotifierMockRecorder struct {
+	mock *MockUserNotifier
+}
+
+// NewMockUserNotifier creates a new mock instance.
+func NewMockUserNotifier(ctrl *gomock.Controller) *MockUserNotifier {
+	mock := &MockUserNotifier{ctrl: ctrl}
+	mock.recorder = &MockUserNotifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockUserNotifier) EXPECT() *MockUserNotifierMockRecorder {
+	return m.recorder
+}
+
+// Welcome mocks base method.
+func (m *MockUserNotifier) Welcome(ctx context.Context, user *entity.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Welcome", ctx, user)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Welcome indicates an expected call of Welcome.
+func (mr *MockUserNotifierMockRecorder) Welcome(ctx, user any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Welcome", reflect.TypeOf((*MockUserNotifier)(nil).Welcome), ctx, user)
+}
+
 // MockMailRenderer is a mock of MailRenderer interface.
 type MockMailRenderer struct {
 	ctrl     *gomock.Controller

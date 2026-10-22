@@ -14,7 +14,7 @@ import (
 const _tracerName = "github.com/m7medvision/go-clean-template/internal/usecase/task"
 
 // tracedUseCase wraps a Task usecase with OpenTelemetry spans, closing the
-// gap between transport spans (HTTP/gRPC/GraphQL) and repository spans.
+// gap between transport spans and repository spans.
 type tracedUseCase struct {
 	next usecase.Task
 }

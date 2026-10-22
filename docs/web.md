@@ -14,7 +14,10 @@ make web-check  # format, lint, type-check and test
 ## Screens
 
 Signed-in screens (`/tasks`, `/exchange`, `/profile`, and `/admin/tasks` for admins) share a sidebar
-layout under the `_authed` route; `/login`, `/register` and `/sso/callback` use a centred card.
+layout under the `_authed` route; `/login` and `/register` use a centred card. Under its password
+form, `/login` offers a button for each other way of signing in: a `SignInMethod`
+(`web/src/auth/sign-in-method.ts`) built by a hook in that feature's folder.
+So does `/sso/callback`. <!-- scaffold:sso -->
 
 `/admin/tasks` ("All tasks") is a read-only data table of every user's tasks over GraphQL `allTasks`.
 The sidebar shows its link when the token's `roles` claim includes `admin` (`web/src/auth/roles.ts`
@@ -50,6 +53,7 @@ options in `web/src/<domain>/api.ts`.
   [Zod](https://zod.dev/) schema per domain (`web/src/components/form/`). A currency picker is
   `field.SelectField`.
 
+<!-- scaffold:passkeys:begin -->
 ## Passkeys
 
 The browser half of a WebAuthn ceremony is in `web/src/passkey/webauthn.ts`, on the browser's own
@@ -75,6 +79,8 @@ resolve to `null` and show nothing; only the server's rejections reach `FormErro
 Run it under `make dev` and open the client as `localhost`; see
 [passkeys.md](passkeys.md#relying-party-setup).
 
+<!-- scaffold:passkeys:end -->
+<!-- scaffold:sso:begin -->
 ## SSO
 
 When `GET /v1/auth/oidc` reports SSO as enabled, `/login` shows "Sign in with SSO". It calls `begin`
@@ -86,6 +92,7 @@ entry with the redirect. A refusal from the provider (`?error=…`), a link with
 ceremony (another tab, a reload) shows a message and a way back to `/login` (`callbackProblem`,
 `web/src/sso/callback.ts`). See [sso.md](sso.md).
 
+<!-- scaffold:sso:end -->
 ## Token storage
 
 The JWT lives in memory, mirrored to `sessionStorage` (`web/src/auth/token.ts`) so it survives a reload

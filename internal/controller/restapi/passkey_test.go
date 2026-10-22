@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -99,7 +101,12 @@ func doCeremonyRequest(
 func newPasskeyRouter(t *testing.T, pk usecase.Passkey) http.Handler {
 	t.Helper()
 
-	return newRouterWithPasskey(newTestConfig(t), &fakeExchange{}, &fakeUser{}, &fakeTask{}, pk)
+	cfg := newTestConfig(t)
+
+	return restapi.NewRouter(
+		cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), noopLogger{},
+		restapi.WithPasskeys(pk),
+	)
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

@@ -1,6 +1,6 @@
 # air config for the queue worker (cmd/worker): `go tool air -c .air.worker.toml`, started by
-# `make dev` once the app has applied the schema. .tmpl is watched because the mail templates are
-# embedded in the binary.
+# `make dev` once the app has applied the schema.
+# .tmpl is watched because the mail templates are embedded in the binary. # scaffold:email
 root = "."
 tmp_dir = "tmp"
 

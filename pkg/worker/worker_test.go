@@ -224,3 +224,15 @@ func TestWorker_ShutdownCancelsHandlerAfterTimeout(t *testing.T) {
 	require.NoError(t, w.Shutdown())
 	assert.Empty(t, q.deletedIDs())
 }
+
+func TestWorker_QueuesListsHandledQueuesSorted(t *testing.T) {
+	t.Parallel()
+
+	w := newWorker(newFakeQueue())
+	noop := func(context.Context, *worker.Message) error { return nil }
+
+	w.Handle("mail", noop)
+	w.Handle("example", noop)
+
+	assert.Equal(t, []string{"example", "mail"}, w.Queues())
+}

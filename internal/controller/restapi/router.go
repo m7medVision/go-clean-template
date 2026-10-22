@@ -28,10 +28,9 @@ func NewRouter(
 	e usecase.Exchange,
 	u usecase.User,
 	tk usecase.Task,
-	pk usecase.Passkey,
-	oc usecase.OIDC,
 	jwtManager *jwt.Manager,
 	l logger.Interface,
+	opts ...Option,
 ) *chi.Mux {
 	apiConfig := newAPIConfig(cfg.App.Version)
 
@@ -64,10 +63,18 @@ func NewRouter(
 
 	r.Get("/healthz", healthz)
 
-	v1.NewRoutes(humachi.New(r, apiConfig), e, u, tk, pk, oc, l)
+	api := humachi.New(r, apiConfig)
+	v1.NewRoutes(api, e, u, tk, l)
+
+	for _, opt := range opts {
+		opt(api, l)
+	}
 
 	return r
 }
+
+// Option registers an optional feature's operations on the REST API.
+type Option func(api huma.API, l logger.Interface)
 
 // newAPIConfig is shared by NewRouter and OpenAPI so the exported document matches the served one.
 func newAPIConfig(version string) huma.Config {

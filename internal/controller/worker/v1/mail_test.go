@@ -3,7 +3,6 @@ package v1_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -14,8 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-var errSMTPDown = errors.New("smtp down")
 
 // fakeMail records what the handler delivers and fails with err.
 type fakeMail struct {
@@ -29,19 +26,6 @@ func (f *fakeMail) Deliver(_ context.Context, email entity.Email) error {
 	return f.err
 }
 
-func welcomeBody(t *testing.T) json.RawMessage {
-	t.Helper()
-
-	body, err := entity.EncodeEmail(entity.WelcomeEmail{
-		To:       "john@example.com",
-		Username: "johndoe",
-		LoginURL: "https://example.com/login",
-	})
-	require.NoError(t, err)
-
-	return body
-}
-
 func TestMailController_Handle(t *testing.T) {
 	t.Parallel()
 
@@ -52,11 +36,13 @@ func TestMailController_Handle(t *testing.T) {
 		wantErr       error
 		wantDelivered int
 	}{
+		// scaffold:welcome:begin
 		{
 			name:          "delivers the decoded email and acknowledges it",
 			body:          welcomeBody,
 			wantDelivered: 1,
 		},
+		// scaffold:welcome:end
 		{
 			name:          "a body that is not an email is dropped, retrying cannot fix it",
 			body:          func(*testing.T) json.RawMessage { return json.RawMessage(`"not an object"`) },
@@ -69,6 +55,7 @@ func TestMailController_Handle(t *testing.T) {
 			},
 			wantDelivered: 0,
 		},
+		// scaffold:welcome:begin
 		{
 			name:          "an email without a template is dropped",
 			body:          welcomeBody,
@@ -82,6 +69,7 @@ func TestMailController_Handle(t *testing.T) {
 			wantErr:       errSMTPDown,
 			wantDelivered: 1,
 		},
+		// scaffold:welcome:end
 	}
 
 	for _, tc := range tests {
@@ -102,20 +90,4 @@ func TestMailController_Handle(t *testing.T) {
 			assert.Len(t, mail.delivered, tc.wantDelivered)
 		})
 	}
-}
-
-func TestMailController_HandleDeliversWhatWasEnqueued(t *testing.T) {
-	t.Parallel()
-
-	mail := &fakeMail{}
-	c := v1.NewMailController(mail, logger.New("error"))
-
-	require.NoError(t, c.Handle(context.Background(), &worker.Message{ID: 1, Body: welcomeBody(t)}))
-
-	require.Len(t, mail.delivered, 1)
-	assert.Equal(t, entity.WelcomeEmail{
-		To:       "john@example.com",
-		Username: "johndoe",
-		LoginURL: "https://example.com/login",
-	}, mail.delivered[0])
 }

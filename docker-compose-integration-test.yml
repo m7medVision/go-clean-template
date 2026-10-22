@@ -1,7 +1,6 @@
 services:
   # Stands in for open.er-api.com so the exchange tests never call a third party.
   exchange:
-    container_name: exchange
     image: caddy:2.11.7-alpine
     volumes:
       - ./integration-test/exchange-stub/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -18,25 +17,32 @@ services:
       - exchange
 
   integration-test:
-    container_name: integration-test
     platform: linux/amd64
     pid: "host"
     build:
       context: .
       dockerfile: integration-test/Dockerfile
+    # scaffold:queue:begin
     environment:
       # Read by queue_test.go to check what the worker consumed.
       PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db?sslmode=disable"
+    # scaffold:queue:end
     depends_on:
       app:
         condition: service_started
+      # scaffold:queue:begin
       worker:
         condition: service_started
+      # scaffold:queue:end
+      # scaffold:email:begin
       mailpit:
         condition: service_started
+      # scaffold:email:end
+      # scaffold:sso:begin
       # oidc_test.go signs in through Keycloak; its realm import takes a while on a cold start.
       keycloak:
         condition: service_healthy
+      # scaffold:sso:end
     networks:
       app_network:
         aliases:

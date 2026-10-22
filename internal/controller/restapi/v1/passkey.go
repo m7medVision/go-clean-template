@@ -10,7 +10,23 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
+
+// NewPasskeyRoutes registers the passkey sign-in and passkey management operations.
+func NewPasskeyRoutes(api huma.API, pk usecase.Passkey, l logger.Interface) {
+	r := &V1{pk: pk, l: l}
+
+	r.beginPasskeyLogin(api)
+	r.finishPasskeyLogin(api)
+
+	r.beginPasskeyRegistration(api)
+	r.finishPasskeyRegistration(api)
+	r.listPasskeys(api)
+	r.renamePasskey(api)
+	r.deletePasskey(api)
+}
 
 // _reauthRequired is the problem detail of a register/begin refused for a stale sign-in. Clients
 // match on it to ask for the password again, so it must not change.

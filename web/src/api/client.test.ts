@@ -26,14 +26,14 @@ beforeEach(() => {
 
 describe("bearer.onResponse", () => {
   it("signs out when the API rejects the token", async () => {
-    await respond("/v1/passkeys", 401, { status: 401, detail: "invalid or expired token" });
+    await respond("/v1/tasks", 401, { status: 401, detail: "invalid or expired token" });
 
     expect(unauthorized).toHaveBeenCalledOnce();
     expect(auth.token()).toBeNull();
   });
 
   it("keeps the session when the API asks to reauthenticate", async () => {
-    const response = await respond("/v1/passkeys/register/begin", 401, {
+    const response = await respond("/v1/tasks", 401, {
       status: 401,
       detail: REAUTH_REQUIRED,
     });

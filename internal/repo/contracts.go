@@ -12,9 +12,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// The SMTP client is the Mailer the app wires in.
-var _ Mailer = (*smtp.Client)(nil)
-
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 
 type (
@@ -37,6 +34,7 @@ type (
 		GetByEmail(ctx context.Context, email string) (entity.User, error)
 	}
 
+	// scaffold:sso:begin
 	// IdentityRepo links identities at an OpenID Connect provider, keyed by (issuer, subject), to
 	// users. UserByIdentity of an unlinked identity is entity.ErrUserNotFound. CreateWithIdentity
 	// stores a user with no password together with its identity; an email or username already taken
@@ -45,6 +43,7 @@ type (
 		UserByIdentity(ctx context.Context, issuer, subject string) (entity.User, error)
 		CreateWithIdentity(ctx context.Context, user *entity.User, issuer, subject string) error
 	}
+	// scaffold:sso:end
 
 	// TaskRepo -.
 	TaskRepo interface {
@@ -57,6 +56,7 @@ type (
 		Delete(ctx context.Context, userID, taskID string) error
 	}
 
+	// scaffold:passkeys:begin
 	// PasskeyRepo stores users' WebAuthn credentials and the login challenges already used. A
 	// credential ID already stored is entity.ErrPasskeyExists; an unknown one is
 	// entity.ErrPasskeyNotFound, as is another user's passkey on Rename and Delete, which match on
@@ -72,7 +72,9 @@ type (
 		BurnChallenge(ctx context.Context, hash []byte, expiresAt time.Time) error
 		DeleteExpiredChallenges(ctx context.Context) error
 	}
+	// scaffold:passkeys:end
 
+	// scaffold:queue:begin
 	// QueueRepo is a Postgres-backed message queue. Use cases enqueue with Send; the worker binary
 	// consumes with Read and Delete (it satisfies worker.Queue).
 	QueueRepo interface {
@@ -80,7 +82,17 @@ type (
 		Read(ctx context.Context, queue string, vt time.Duration, qty int) ([]worker.Message, error)
 		Delete(ctx context.Context, queue string, id int64) error
 	}
+	// scaffold:queue:end
 
+	// scaffold:welcome:begin
+	// UserNotifier tells a user about events on their account. The queue-backed implementation
+	// (internal/repo/notify) enqueues an email for the worker to send.
+	UserNotifier interface {
+		Welcome(ctx context.Context, user *entity.User) error
+	}
+	// scaffold:welcome:end
+
+	// scaffold:email:begin
 	// MailRenderer turns an email into the message the mailer sends, from the templates embedded in
 	// the binary.
 	MailRenderer interface {
@@ -92,6 +104,7 @@ type (
 	Mailer interface {
 		Send(ctx context.Context, m smtp.Message) error
 	}
+	// scaffold:email:end
 
 	// TaskFilter -.
 	TaskFilter struct {

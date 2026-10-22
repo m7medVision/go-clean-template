@@ -10,33 +10,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEncodeEmail_RoundTrips(t *testing.T) {
+func TestEmailTypes_EveryTypeRoundTripsAndHasAUniqueTemplate(t *testing.T) {
 	t.Parallel()
 
-	sent := entity.WelcomeEmail{To: "john@example.com", Username: "johndoe", LoginURL: "https://example.com/login"}
+	seen := map[string]bool{}
 
-	body, err := entity.EncodeEmail(sent)
-	require.NoError(t, err)
+	for _, email := range entity.EmailTypes() {
+		assert.False(t, seen[email.Template()], "template %q registered twice", email.Template())
+		seen[email.Template()] = true
 
-	got, err := entity.DecodeEmail(body)
-	require.NoError(t, err)
+		body, err := entity.EncodeEmail(email)
+		require.NoError(t, err)
 
-	assert.Equal(t, sent, got)
-	assert.Equal(t, "john@example.com", got.Recipient())
+		got, err := entity.DecodeEmail(body)
+		require.NoError(t, err)
+		assert.Equal(t, email, got)
+	}
 }
+
+// noteEmail is a test-only email, so these tests do not depend on a real email type.
+type noteEmail struct {
+	To string `json:"to"`
+}
+
+func (noteEmail) Template() string    { return "note" }
+func (e noteEmail) Recipient() string { return e.To }
 
 func TestEncodeEmail_NamesTheTemplate(t *testing.T) {
 	t.Parallel()
 
-	body, err := entity.EncodeEmail(entity.WelcomeEmail{To: "john@example.com"})
+	body, err := entity.EncodeEmail(noteEmail{To: "john@example.com"})
 	require.NoError(t, err)
 
 	var envelope struct {
-		Template string `json:"template"`
+		Template string          `json:"template"`
+		Data     json.RawMessage `json:"data"`
 	}
 
 	require.NoError(t, json.Unmarshal(body, &envelope))
-	assert.Equal(t, "welcome", envelope.Template)
+	assert.Equal(t, "note", envelope.Template)
+	assert.JSONEq(t, `{"to":"john@example.com"}`, string(envelope.Data))
 }
 
 func TestDecodeEmail_Errors(t *testing.T) {
@@ -50,7 +63,7 @@ func TestDecodeEmail_Errors(t *testing.T) {
 		{"unknown template", `{"template":"nope","data":{}}`, true},
 		{"missing template", `{"data":{}}`, true},
 		{"body is not JSON", `not json`, false},
-		{"data does not match the template", `{"template":"welcome","data":"a string"}`, false},
+		{"data does not match the template", `{"template":"welcome","data":"a string"}`, false}, // scaffold:welcome
 	}
 
 	for _, tt := range tests {

@@ -9,7 +9,18 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
+
+// NewOIDCRoutes registers the SSO status and sign-in operations.
+func NewOIDCRoutes(api huma.API, oc usecase.OIDC, l logger.Interface) {
+	r := &V1{oc: oc, l: l}
+
+	r.oidcStatus(api)
+	r.beginOIDC(api)
+	r.finishOIDC(api)
+}
 
 type oidcStatusOutput struct {
 	Body response.OIDCStatus
