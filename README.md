@@ -7,6 +7,7 @@ transport shares.
 
 [![Go version](https://img.shields.io/github/go-mod/go-version/m7medVision/go-clean-template)](go.mod)
 [![License](https://img.shields.io/github/license/m7medVision/go-clean-template)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/m7medVision/go-clean-template)](https://github.com/m7medVision/go-clean-template/releases) <!-- scaffold:self -->
 
 Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-template).
 
@@ -76,6 +77,20 @@ Then open:
 
 If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` first.
 
+<!-- scaffold:self:begin -->
+## Start your own project
+
+Generate a service with only the features you pick (REST always, plus gRPC, GraphQL, the web
+client, passkeys, SSO, the queue and email), without cloning this repository:
+
+```sh
+go run github.com/m7medvision/go-clean-template/cmd/create@latest
+```
+
+Each [release](https://github.com/m7medVision/go-clean-template/releases) also has the presets
+ready-made as tarballs. See [docs/scaffold.md](docs/scaffold.md).
+
+<!-- scaffold:self:end -->
 ## Docs
 
 - [Architecture](docs/architecture.md): the rules, where code goes, packages, Clean Architecture
@@ -88,6 +103,7 @@ If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` f
 - [Queue and worker](docs/worker.md) <!-- scaffold:queue -->
 - [Web client](docs/web.md) <!-- scaffold:web -->
 - [Scaffolding a project](docs/scaffold.md): `make scaffold` generates a new service with only the features you pick <!-- scaffold:self -->
+- [Releases](docs/releasing.md): how versions are named from commits and what each release ships <!-- scaffold:self -->
 
 ## License
 

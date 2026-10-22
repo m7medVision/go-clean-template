@@ -13,11 +13,15 @@
 
 module: github.com/m7medvision/go-clean-template
 
-# The scaffolder and the template's own planning notes.
+# The scaffolder, the template's release tooling and its planning notes.
 self:
+  - .github/workflows/release.yml
   - cmd/create/**
+  - cmd/release/**
+  - internal/release/**
   - internal/scaffold/**
   - scaffold/**
+  - docs/releasing.md
   - docs/scaffold.md
   - docs/ideas/**
   - tasks/**

@@ -1,0 +1,79 @@
+name: Release
+# Every master commit whose CI passed gets a release when its commits call for
+# one: a feat, fix, perf or breaking change since the last tag
+# (`make release-version`). The release attaches the preset projects that CI's
+# scaffold job just checked. See docs/releasing.md.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  # A dry run: prints the version and notes master would get, publishes nothing.
+  workflow_dispatch:
+
+# One release at a time, in order; a queued run is never cancelled.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    name: runner / release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    env:
+      # The commit CI checked, not whatever master is now.
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          # Every commit and tag: the version is computed from the history.
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27'
+      - name: Name the version
+        id: version
+        run: |
+          v=$(make --no-print-directory release-version)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Write the notes
+        if: steps.version.outputs.version != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          make --no-print-directory release-notes > "$RUNNER_TEMP/notes.md"
+          {
+            echo "## $VERSION"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/download-artifact@v8
+        if: >-
+          steps.version.outputs.version != '' &&
+          github.event_name == 'workflow_run'
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          pattern: scaffold-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/assets
+      # The API creates the tag on HEAD_SHA; tags are never moved afterwards.
+      - name: Publish
+        if: >-
+          steps.version.outputs.version != '' &&
+          github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" --target "$HEAD_SHA" --title "$VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP"/assets/*.tar.gz

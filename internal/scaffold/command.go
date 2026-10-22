@@ -32,8 +32,11 @@ type Command struct {
 	Name string
 	// Module is the generated project's module path; empty keeps the template's.
 	Module string
-	// Out overrides scaffold/out/<name>.
-	Out     string
+	// Out overrides <OutBase>/<name>.
+	Out string
+	// OutBase is the directory projects are generated into; empty means the template's
+	// scaffold/out.
+	OutBase string
 	Force   bool
 	NoRegen bool
 	// Check runs `make pre-commit` in the generated project once it is regenerated.
@@ -145,7 +148,12 @@ func (c *Command) OutDir(root string) string {
 		return c.Out
 	}
 
-	return filepath.Join(root, filepath.FromSlash(_outDir), c.name())
+	base := c.OutBase
+	if base == "" {
+		base = filepath.Join(root, filepath.FromSlash(_outDir))
+	}
+
+	return filepath.Join(base, c.name())
 }
 
 // Display shows a path relative to the template's root when it is inside it.
