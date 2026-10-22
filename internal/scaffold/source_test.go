@@ -48,6 +48,7 @@ type sourceCase struct {
 	src       scaffold.Source
 	local     bool
 	url       string
+	outBase   string
 	errSubstr string
 }
 
@@ -57,6 +58,8 @@ func sourceCases(template, elsewhere string) []sourceCase {
 			name: "an explicit ref is fetched even inside the template",
 			src:  scaffold.Source{Ref: "main", Dir: template, Version: "v0.4.0"},
 			url:  "https://github.com/acme/t/archive/main.tar.gz",
+			// Still the checkout's scratch area, not the checkout's root.
+			outBase: filepath.Join(template, "scaffold", "out"),
 		},
 		{
 			name:  "inside the template, its own files",
@@ -64,14 +67,16 @@ func sourceCases(template, elsewhere string) []sourceCase {
 			local: true,
 		},
 		{
-			name: "outside it, the CLI's own version",
-			src:  scaffold.Source{Dir: elsewhere, Version: "v0.4.0"},
-			url:  "https://github.com/acme/t/archive/v0.4.0.tar.gz",
+			name:    "outside it, the CLI's own version",
+			src:     scaffold.Source{Dir: elsewhere, Version: "v0.4.0"},
+			url:     "https://github.com/acme/t/archive/v0.4.0.tar.gz",
+			outBase: elsewhere,
 		},
 		{
-			name: "outside it, the commit of a pseudo-version",
-			src:  scaffold.Source{Dir: elsewhere, Version: "v0.0.0-20261022041711-5e4fc3213fe8"},
-			url:  "https://github.com/acme/t/archive/5e4fc3213fe8.tar.gz",
+			name:    "outside it, the commit of a pseudo-version",
+			src:     scaffold.Source{Dir: elsewhere, Version: "v0.0.0-20261022041711-5e4fc3213fe8"},
+			url:     "https://github.com/acme/t/archive/5e4fc3213fe8.tar.gz",
+			outBase: elsewhere,
 		},
 		{
 			name:      "outside it, with no version to fetch",
@@ -109,6 +114,7 @@ func TestSourceOpen(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.local, opened.Local)
+			assert.Equal(t, tt.outBase, opened.OutBase, "where projects go by default")
 			assert.Equal(t, tt.url, f.url)
 			assert.FileExists(t, filepath.Join(opened.Root, scaffold.ManifestPath))
 

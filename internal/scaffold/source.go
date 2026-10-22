@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/mod/module"
@@ -31,7 +32,10 @@ type Opened struct {
 	Local bool
 	// Ref is the ref a fetched copy came from.
 	Ref string
-	tmp string
+	// OutBase is where projects go by default: empty for a local template (its scaffold/out),
+	// the checkout's scaffold/out for a ref fetched inside one, the working directory otherwise.
+	OutBase string
+	tmp     string
 }
 
 // Close removes a fetched copy. A local template is left alone.
@@ -51,22 +55,34 @@ func (o Opened) Close() error {
 // used; otherwise the ref of the CLI's own version is fetched, so a CLI run as
 // `go run …/cmd/create@v0.4.0` generates from v0.4.0.
 func (s Source) Open(ctx context.Context) (Opened, error) {
-	if s.Ref != "" {
-		return s.fetch(ctx, s.Ref)
-	}
+	checkout, err := FindRoot(s.Dir)
+	inCheckout := err == nil
 
-	if root, err := FindRoot(s.Dir); err == nil {
-		return Opened{Root: root, Local: true}, nil
+	switch {
+	case s.Ref != "":
+		return s.fetch(ctx, s.Ref, checkout)
+	case inCheckout:
+		return Opened{Root: checkout, Local: true}, nil
 	}
 
 	if ref := RefFromVersion(s.Version); ref != "" {
-		return s.fetch(ctx, ref)
+		return s.fetch(ctx, ref, "")
 	}
 
 	return Opened{}, fmt.Errorf("%w; run it as go run %s/cmd/create@latest, or pass --ref", ErrNoTemplate, s.Module)
 }
 
-func (s Source) fetch(ctx context.Context, ref string) (Opened, error) {
+// fetch downloads ref. checkout is the template checkout around Dir, if any: projects then still
+// go in its scaffold/out.
+func (s Source) fetch(ctx context.Context, ref, checkout string) (Opened, error) {
+	outBase := filepath.Join(checkout, filepath.FromSlash(_outDir))
+	if checkout == "" {
+		var err error
+		if outBase, err = filepath.Abs(s.Dir); err != nil {
+			return Opened{}, fmt.Errorf("scaffold - Source.Open - filepath.Abs: %w", err)
+		}
+	}
+
 	tmp, err := os.MkdirTemp("", "scaffold-template-")
 	if err != nil {
 		return Opened{}, fmt.Errorf("scaffold - Source.Open - os.MkdirTemp: %w", err)
@@ -79,7 +95,7 @@ func (s Source) fetch(ctx context.Context, ref string) (Opened, error) {
 		return Opened{}, err
 	}
 
-	return Opened{Root: root, Ref: ref, tmp: tmp}, nil
+	return Opened{Root: root, Ref: ref, OutBase: outBase, tmp: tmp}, nil
 }
 
 // RefFromVersion is the template ref a CLI of this build version was built from: a release or

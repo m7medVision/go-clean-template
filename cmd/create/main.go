@@ -48,14 +48,9 @@ func run() error {
 	}
 	defer src.Close()
 
-	cmd.Source = src.Root
+	cmd.Source, cmd.OutBase = src.Root, src.OutBase
 
 	if !src.Local {
-		// Outside a checkout, the project goes in the working directory.
-		if cmd.OutBase, err = os.Getwd(); err != nil {
-			return fmt.Errorf("create - os.Getwd: %w", err)
-		}
-
 		fmt.Fprintln(os.Stderr, "create: using the template at", src.Ref)
 	}
 
