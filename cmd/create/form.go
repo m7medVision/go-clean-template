@@ -17,12 +17,7 @@ func (e fieldError) Error() string { return scaffold.Reason(e.err) }
 
 // ask fills cmd from the interactive form: name, module path, preset, features, then a summary to
 // confirm. It returns false when the user declines the summary.
-func ask(ctx context.Context, cmd *scaffold.Command) (bool, error) {
-	root, err := scaffold.FindRoot(".")
-	if err != nil {
-		return false, err
-	}
-
+func ask(ctx context.Context, root string, cmd *scaffold.Command) (bool, error) {
 	m, err := scaffold.Load(root + "/" + scaffold.ManifestPath)
 	if err != nil {
 		return false, err
@@ -60,7 +55,7 @@ func basics(m *scaffold.Manifest, cmd *scaffold.Command, preset *string) *huh.Fo
 
 	return huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Project name").
-			Description("Its directory under scaffold/out; empty names it after the preset.").
+			Description("Its directory; empty names it after the preset.").
 			Value(&cmd.Name).
 			Validate(func(s string) error {
 				if strings.ContainsAny(s, `/\ `) {

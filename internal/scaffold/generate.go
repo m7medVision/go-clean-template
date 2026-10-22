@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -97,8 +98,13 @@ func (m *Manifest) Keeps(keep Set, name string) bool {
 	return true
 }
 
-// ListFiles lists what git tracks under root plus the untracked files it does not ignore.
+// ListFiles lists what git tracks under root plus the untracked files it does not ignore. When root
+// is not the top of a git work tree (a downloaded source archive), it lists every file instead.
 func ListFiles(ctx context.Context, root string) ([]string, error) {
+	if !isWorkTreeTop(ctx, root) {
+		return walkFiles(root)
+	}
+
 	cmd := exec.CommandContext(ctx, "git", "ls-files", "--cached", "--others", "--exclude-standard", "-z")
 	cmd.Dir = root
 
@@ -115,6 +121,65 @@ func ListFiles(ctx context.Context, root string) ([]string, error) {
 			files = append(files, name)
 		}
 	}
+
+	return files, nil
+}
+
+// isWorkTreeTop reports whether root is the top of a git work tree. A directory nested in an
+// unrelated repository (an archive extracted under one) is not: that repository's index and
+// ignore rules say nothing about it.
+func isWorkTreeTop(ctx context.Context, root string) bool {
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
+	cmd.Dir = root
+
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	top, err := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+	if err != nil {
+		return false
+	}
+
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+
+	abs, err = filepath.EvalSymlinks(abs)
+
+	return err == nil && top == abs
+}
+
+// walkFiles lists every file and symlink under root, sorted. A source archive holds exactly the
+// tracked files, so this is what git would list for it.
+func walkFiles(root string) ([]string, error) {
+	var files []string
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+
+		files = append(files, filepath.ToSlash(rel))
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scaffold - ListFiles - filepath.WalkDir: %w", err)
+	}
+
+	slices.Sort(files)
 
 	return files, nil
 }
