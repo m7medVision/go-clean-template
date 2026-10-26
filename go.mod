@@ -23,7 +23,7 @@ tool (
 require (
 	ariga.io/atlas v1.3.0
 	charm.land/huh/v2 v2.0.3
-	github.com/99designs/gqlgen v0.17.97 // scaffold:graphql
+	github.com/99designs/gqlgen v0.17.98 // scaffold:graphql
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/coreos/go-oidc/v3 v3.21.0 // scaffold:sso
 	github.com/danielgtaylor/huma/v2 v2.39.1
@@ -40,7 +40,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/shopspring/decimal v1.6.0
 	github.com/stretchr/testify v1.12.1
-	github.com/vektah/gqlparser/v2 v2.5.63 // scaffold:graphql
+	github.com/vektah/gqlparser/v2 v2.5.64 // scaffold:graphql
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
 	go.opentelemetry.io/otel v1.47.0
@@ -86,7 +86,7 @@ require (
 	github.com/MirrexOne/unqueryvet v1.5.4 // indirect
 	github.com/OpenPeeDeeP/depguard/v2 v2.2.1 // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
-	github.com/agnivade/levenshtein v1.2.1 // indirect
+	github.com/agnivade/levenshtein v1.2.2 // indirect
 	github.com/air-verse/air v1.67.4 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/alecthomas/go-check-sumtype v0.5.1-0.20260828200218-ae6904d28606 // indirect

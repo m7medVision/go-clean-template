@@ -4,7 +4,7 @@
 # scaffold:web:begin
 # The web client, built with the Vite+ toolchain image (vp provisions web/.node-version and bun) from
 # the web-src context: web/, narrowed by web/.dockerignore.
-FROM ghcr.io/voidzero-dev/vite-plus:1.3.0 AS web
+FROM ghcr.io/voidzero-dev/vite-plus:1.4.0 AS web
 
 WORKDIR /web
 
