@@ -19,8 +19,8 @@ it.
 | `APP_VERSION` | required | |
 | `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds |
 | `HTTP_PORT` | required | the HTTP API, its docs and metrics |
-| `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it | <!-- scaffold:web -->
-| `GRPC_PORT` | `8081` | the gRPC transport | <!-- scaffold:grpc -->
+| `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
+| `GRPC_PORT` | `8081` | the gRPC transport |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |
 | `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
 | `PG_POOL_MAX` | required | |
@@ -42,7 +42,6 @@ Two variables are read by tooling, not by the app:
 | --- | --- | --- |
 | `EXCHANGE_SERVICE_URL` | `https://open.er-api.com` | base URL of the rate provider; the integration tests point it at a stub |
 
-<!-- scaffold:passkeys:begin -->
 ## WebAuthn
 
 Passkeys. See [passkeys.md](passkeys.md#relying-party-setup) for the values to use in development,
@@ -58,8 +57,6 @@ compose and production.
 
 The ceremony token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
 
-<!-- scaffold:passkeys:end -->
-<!-- scaffold:sso:begin -->
 ## OIDC
 
 SSO sign-in ([sso.md](sso.md)). It is on when `OIDC_ISSUER` is set; `.env.example` and the compose
@@ -77,8 +74,6 @@ be a redirect URI of the client.
 
 The state token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
 
-<!-- scaffold:sso:end -->
-<!-- scaffold:queue:begin -->
 ## Worker
 
 Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.md) for how they behave.
@@ -89,7 +84,6 @@ Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.m
 | `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery |
 | `WORKER_BATCH_SIZE` | `10` | messages per read |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
-<!-- scaffold:email:begin -->
 
 ### Email
 
@@ -103,8 +97,6 @@ Also read only by the worker, which sends the email.
 | `SMTP_USERNAME` | empty | empty turns auth off; when set, PLAIN auth, sent only over TLS or to localhost |
 | `SMTP_PASSWORD` | empty | |
 | `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; `.env.example` uses a bare address because of the no-spaces rule |
-<!-- scaffold:email:end -->
-<!-- scaffold:queue:end -->
 
 ## Tracing
 
@@ -116,7 +108,7 @@ http://127.0.0.1:16686.
   The HTTP transports use the
   [otelhttp](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp)
   middleware.
-  gRPC uses the [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler. <!-- scaffold:grpc -->
+  gRPC uses the [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler.
   The outbound exchange-rate call uses an `otelhttp` transport, so it joins the same trace.
 - **Every layer has spans.** Use cases and repositories are wrapped in tracing decorators
   (`*/tracing.go`), so a trace shows controller → use case → repo or webapi.

@@ -23,8 +23,8 @@ func setRequired(t *testing.T) {
 	// make exports .env.example into every target, so clear what these tests read as defaults.
 	for _, k := range []string{
 		"JWT_TOKEN_EXPIRY",
-		"GRPC_PORT",                                        // scaffold:grpc
-		"OIDC_ISSUER", "OIDC_ROLES_CLAIM", "OIDC_ROLE_MAP", // scaffold:sso
+		"GRPC_PORT",
+		"OIDC_ISSUER", "OIDC_ROLES_CLAIM", "OIDC_ROLE_MAP",
 	} {
 		t.Setenv(k, "") // restores the variable after the test
 		require.NoError(t, os.Unsetenv(k))

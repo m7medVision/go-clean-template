@@ -11,10 +11,9 @@ var (
 	// ErrAdminRequired is a request only a caller holding RoleAdmin may make.
 	ErrAdminRequired       = errors.New("admin role required")
 	ErrInvalidTransition   = errors.New("invalid status transition")
-	ErrUnknownEmail        = errors.New("unknown email template") // scaffold:email
+	ErrUnknownEmail        = errors.New("unknown email template")
 	ErrInvalidConversion   = errors.New("invalid currency conversion")
 	ErrUnsupportedCurrency = errors.New("unsupported currency")
-	// scaffold:sso:begin
 	// ErrOIDCDisabled is an SSO request to an app with no OpenID Connect provider configured.
 	ErrOIDCDisabled = errors.New("sso sign-in is not configured")
 	// ErrOIDCUnavailable is an SSO sign-in while the OpenID Connect provider cannot be reached.
@@ -25,8 +24,6 @@ var (
 	// ErrAccountConflict is an SSO sign-in whose email or username already belongs to another account.
 	// Accounts are never linked by email, so the sign-in is refused.
 	ErrAccountConflict = errors.New("an account with this email or username already exists")
-	// scaffold:sso:end
-	// scaffold:passkeys:begin
 	ErrPasskeyNotFound = errors.New("passkey not found")
 	ErrPasskeyExists   = errors.New("passkey already registered")
 	// ErrPasskeyCeremonyInvalid is a WebAuthn ceremony that cannot complete: a bad, expired or
@@ -37,5 +34,4 @@ var (
 	// ErrPasskeyReauthRequired is a request to add a passkey from a sign-in older than the allowed
 	// age: the caller must sign in again first.
 	ErrPasskeyReauthRequired = errors.New("passkey registration requires a recent sign-in")
-	// scaffold:passkeys:end
 )

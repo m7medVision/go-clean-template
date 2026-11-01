@@ -18,20 +18,18 @@ import (
 // TestEveryTemplateHasAFixture, so this list is the render test's coverage.
 func fixtures() map[string]entity.Email {
 	return map[string]entity.Email{
-		// scaffold:welcome:begin
 		"welcome": entity.WelcomeEmail{
 			To:       "john@example.com",
 			Username: "johndoe",
 			LoginURL: "https://example.com/login",
 		},
-		// scaffold:welcome:end
 	}
 }
 
 // zeroValues holds every email with no field set, so a template's {{else}} branches run too.
 func zeroValues() map[string]entity.Email {
 	return map[string]entity.Email{
-		"welcome": entity.WelcomeEmail{}, // scaffold:welcome
+		"welcome": entity.WelcomeEmail{},
 	}
 }
 

@@ -32,19 +32,19 @@ type useCases struct {
 	exchange usecase.Exchange
 	user     usecase.User
 	task     usecase.Task
-	mail     usecase.Mail    // scaffold:email
-	passkey  usecase.Passkey // scaffold:passkeys
-	oidc     usecase.OIDC    // scaffold:sso
+	mail     usecase.Mail
+	passkey  usecase.Passkey
+	oidc     usecase.OIDC
 }
 
 // initUseCases builds every use case.
-// The worker builds them with the same call. // scaffold:email
+// The worker builds them with the same call.
 // It fails when an optional feature's use case cannot be built from its settings.
 func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager) (useCases, error) {
 	uc := useCases{
 		user: user.New(
 			persistUserRepo.New(pg),
-			notify.New(queue.New(pg), strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"), // scaffold:welcome
+			notify.New(queue.New(pg), strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
 			jwtManager,
 		),
 		task:     task.New(persistTaskRepo.New(pg)),
@@ -54,9 +54,9 @@ func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Man
 	deps := featureDeps{cfg: cfg, pg: pg, jwt: jwtManager}
 
 	for _, add := range []addUseCase{
-		addMailUseCase,    // scaffold:email
-		addPasskeyUseCase, // scaffold:passkeys
-		addOIDCUseCase,    // scaffold:sso
+		addMailUseCase,
+		addPasskeyUseCase,
+		addOIDCUseCase,
 	} {
 		if err := add(deps, &uc); err != nil {
 			return useCases{}, err
@@ -79,10 +79,10 @@ type addUseCase func(deps featureDeps, uc *useCases) error
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
 	router := restapi.NewRouter(
 		cfg, uc.exchange, uc.user, uc.task, jwtManager, l,
-		restapi.WithPasskeys(uc.passkey), // scaffold:passkeys
-		restapi.WithOIDC(uc.oidc),        // scaffold:sso
+		restapi.WithPasskeys(uc.passkey),
+		restapi.WithOIDC(uc.oidc),
 	)
-	mountGraphQL(router, cfg, uc, jwtManager, l) // scaffold:graphql
+	mountGraphQL(router, cfg, uc, jwtManager, l)
 
 	httpServer := httpserver.New(
 		l,
@@ -92,7 +92,7 @@ func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l lo
 
 	return servers{
 		{name: "httpServer", server: httpServer},
-		newGRPCServer(cfg, uc, jwtManager, l), // scaffold:grpc
+		newGRPCServer(cfg, uc, jwtManager, l),
 	}
 }
 

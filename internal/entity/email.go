@@ -21,7 +21,7 @@ type Email interface {
 // type needs an entry here; each type lives in its own email_<name>.go file.
 func EmailTypes() []Email {
 	return []Email{
-		WelcomeEmail{}, // scaffold:welcome
+		WelcomeEmail{},
 	}
 }
 

@@ -19,12 +19,10 @@ flowchart TB
   UC -. "entity types" .-> E["Entities<br/>internal/entity"]
 ```
 
-<!-- scaffold:queue:begin -->
 The queue worker (`cmd/worker`) is one more way in, beside the transports: its handlers in
 `internal/controller/worker` call the same use cases, which enqueue through `repo.QueueRepo` into
 the `queue_messages` table.
-The `mail` use case it calls renders the mail templates and sends over SMTP. <!-- scaffold:email -->
-<!-- scaffold:queue:end -->
+The `mail` use case it calls renders the mail templates and sends over SMTP.
 
 Each transport is a controller package: [the packages table](#packages) lists them.
 Controllers never import each other, and none of them knows about Postgres. A REST handler that needs
@@ -81,7 +79,7 @@ Ask what the code knows about:
 | a table or a driver error code | `internal/repo/persistent/<domain>/<domain>.go` |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` |
 | a transport status or error code | `internal/controller/<transport>/v1/<domain>.go` |
-| a queue message | `internal/controller/worker/v1/<name>.go` | <!-- scaffold:queue -->
+| a queue message | `internal/controller/worker/v1/<name>.go` |
 | a server, client or middleware with no domain knowledge | `pkg/<name>/` |
 
 If the code knows about two of these, it is two pieces of code in two layers.
@@ -102,14 +100,14 @@ Any "yes" is a rule broken, and the change goes back.
 
 The app knows two roles, `entity.RoleAdmin` and `entity.RoleUser`. A sign-in writes the caller's
 roles into the app JWT (`roles` claim). A password sign-in always grants `user` (`entity.LocalRoles`).
-A passkey sign-in does too. <!-- scaffold:passkeys -->
-An SSO sign-in grants the roles the provider's claims map to ([sso.md](sso.md#roles)). <!-- scaffold:sso -->
+A passkey sign-in does too.
+An SSO sign-in grants the roles the provider's claims map to ([sso.md](sso.md#roles)).
 Each transport's auth turns the token into an `entity.Principal`, dropping role names it does not
 know:
 
 - REST: `middleware.Principal`
-- gRPC: `grpcmw.PrincipalFromContext` <!-- scaffold:grpc -->
-- GraphQL: `graphql.Principal` <!-- scaffold:graphql -->
+- gRPC: `grpcmw.PrincipalFromContext`
+- GraphQL: `graphql.Principal`
 
 A handler passes the
 principal to the use cases that check roles, such as
@@ -122,30 +120,28 @@ effect at the next sign-in.
 | Package | What it holds |
 | --- | --- |
 | [`cmd/app`](../cmd/app/main.go) | Reads config, builds the logger, then hands over to `internal/app.Run`. |
-| [`cmd/worker`](../cmd/worker/main.go) | Reads config, then `RunWorker` in `internal/app/worker.go`. Same Docker image as the app (`/worker` instead of `/app`); it never applies the schema. | <!-- scaffold:queue -->
-| [`cmd/create`](../cmd/create/main.go) | `make scaffold`: the form (or flags) that picks features, then `internal/scaffold`. See [scaffold.md](scaffold.md). | <!-- scaffold:self -->
-| [`internal/scaffold`](../internal/scaffold) | Generates a project with only some features: reads `scaffold/features.yaml`, copies the template without the dropped features' paths, strips their marked blocks, renames the module, runs the regen steps. Outside the layers: nothing imports it. | <!-- scaffold:self -->
+| [`cmd/worker`](../cmd/worker/main.go) | Reads config, then `RunWorker` in `internal/app/worker.go`. Same Docker image as the app (`/worker` instead of `/app`); it never applies the schema. |
 | [`cmd/openapi`](../cmd/openapi/main.go) | Prints the REST OpenAPI document without a server or database. `make openapi` writes it to `docs/openapi/v1.json`. |
 | [`internal/app`](../internal/app) | Wiring. `app.go` constructs every repository and use case once (`initUseCases`; each optional feature adds its own from its file here), starts the servers (`initServers`) and waits for a signal to shut down. See [Schema](#schema) for `migrate.go`. |
 | [`internal/controller`](../internal/controller) | One package per transport, each with its own `v1/request` and `v1/response` DTOs. Handlers decode, call a use case, map `entity.Err*` sentinels to a transport status, and encode. |
 | [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. |
-| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. | <!-- scaffold:grpc -->
-| [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen) resolvers mounted on the REST router. | <!-- scaffold:graphql -->
-| [`internal/controller/worker`](../internal/controller/worker) | The queue worker's message handlers. | <!-- scaffold:queue -->
+| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. |
+| [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen) resolvers mounted on the REST router. |
+| [`internal/controller/worker`](../internal/controller/worker) | The queue worker's message handlers. |
 | [`internal/entity`](../internal/entity) | Domain types, their invariants (`Task.Transition`, `entity.NewConversion`) and sentinel errors. |
 | [`internal/usecase`](../internal/usecase) | Business logic, one package per domain. Every constructor returns its interface wrapped in a tracing decorator (`tracing.go`). |
-| [`internal/usecase/passkey`](../internal/usecase/passkey) | WebAuthn registration and sign-in. The only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn); controllers pass it the browser's JSON as bytes. Ceremony state travels in a signed token and a login challenge is burned on finish. See [passkeys.md](passkeys.md). | <!-- scaffold:passkeys -->
-| [`internal/usecase/oidc`](../internal/usecase/oidc) | SSO sign-in through an OpenID Connect provider. The only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `x/oauth2`; it maps the provider's role claim to app roles. See [sso.md](sso.md). | <!-- scaffold:sso -->
+| [`internal/usecase/passkey`](../internal/usecase/passkey) | WebAuthn registration and sign-in. The only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn); controllers pass it the browser's JSON as bytes. Ceremony state travels in a signed token and a login challenge is burned on finish. See [passkeys.md](passkeys.md). |
+| [`internal/usecase/oidc`](../internal/usecase/oidc) | SSO sign-in through an OpenID Connect provider. The only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `x/oauth2`; it maps the provider's role claim to app roles. See [sso.md](sso.md). |
 | [`internal/repo/persistent`](../internal/repo/persistent) | Postgres repositories. SQL lives in `queries/*.sql` and [sqlc](https://sqlc.dev/) compiles it to typed Go; there is no ORM. `make sqlc` first renders the HCL schema to `queries/schema/schema.sql` with Atlas in a throwaway container, so it needs Docker. |
-| [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey) | Passkeys (`webauthn_credentials`, the library's credential record in a `jsonb` column) and burned login challenges (`webauthn_used_challenges`). A unique violation is `entity.ErrPasskeyExists`; a burn that inserts no row is `entity.ErrPasskeyChallengeUsed`. | <!-- scaffold:passkeys -->
-| [`internal/repo/persistent/identity`](../internal/repo/persistent/identity) | Provider identities (`user_identities`, keyed by issuer and subject) and the password-less users they create, in one statement. A taken email or username is `entity.ErrAccountConflict`. | <!-- scaffold:sso -->
+| [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey) | Passkeys (`webauthn_credentials`, the library's credential record in a `jsonb` column) and burned login challenges (`webauthn_used_challenges`). A unique violation is `entity.ErrPasskeyExists`; a burn that inserts no row is `entity.ErrPasskeyChallengeUsed`. |
+| [`internal/repo/persistent/identity`](../internal/repo/persistent/identity) | Provider identities (`user_identities`, keyed by issuer and subject) and the password-less users they create, in one statement. A taken email or username is `entity.ErrAccountConflict`. |
 | [`internal/repo/webapi`](../internal/repo/webapi) | Outbound HTTP. `exchange_openerapi.go` reads daily rates from open.er-api.com with plain `net/http`, decodes them straight into `decimal.Decimal`, and maps the provider's `unsupported-code` error (sent with HTTP 200) to `entity.ErrUnsupportedCurrency`. Its unit test serves the recorded response in `testdata/`. |
-| [`internal/repo/mailtmpl`](../internal/repo/mailtmpl) | Email rendering. See [worker.md](worker.md). | <!-- scaffold:email -->
-| [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail queue, so the user use case knows nothing about queues or email encoding. | <!-- scaffold:welcome -->
+| [`internal/repo/mailtmpl`](../internal/repo/mailtmpl) | Email rendering. See [worker.md](worker.md). |
+| [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail queue, so the user use case knows nothing about queues or email encoding. |
 | [`pkg/jwt`](../pkg/jwt) | `Manager` signs and parses the auth JWT. `Scoped` signs short-lived payloads for one purpose, with a key derived from the same secret by HKDF and the purpose as audience, so neither token passes for the other; a sign-in flow that spans two requests keeps its state in one. The auth JWT carries a `roles` claim ([Roles](#roles)). |
 | [`pkg/tracing`](../pkg/tracing) | OpenTelemetry setup; a no-op provider when tracing is off. See [configuration.md](configuration.md#tracing). |
-| [`pkg/worker`](../pkg/worker) | The queue consumer. See [worker.md](worker.md). | <!-- scaffold:queue -->
-| [`pkg/smtp`](../pkg/smtp) | The SMTP client. See [worker.md](worker.md#smtp). | <!-- scaffold:email -->
+| [`pkg/worker`](../pkg/worker) | The queue consumer. See [worker.md](worker.md). |
+| [`pkg/smtp`](../pkg/smtp) | The SMTP client. See [worker.md](worker.md#smtp). |
 
 ### Schema
 

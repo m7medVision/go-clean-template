@@ -41,13 +41,11 @@ func RunWorker(cfg *config.Config) {
 	}
 	defer pg.Close()
 
-	// scaffold:email:begin
 	// Use cases, built as the app builds them; the worker's handlers use only some
 	uc, err := initUseCases(cfg, pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry))
 	if err != nil {
 		l.Fatal(fmt.Errorf("app - RunWorker - initUseCases: %w", err))
 	}
-	// scaffold:email:end
 
 	// Worker
 	w := worker.New(
@@ -60,7 +58,7 @@ func RunWorker(cfg *config.Config) {
 	)
 	workerctl.NewRouter(
 		w, l,
-		workerctl.WithMail(uc.mail), // scaffold:email
+		workerctl.WithMail(uc.mail),
 	)
 
 	w.Start()

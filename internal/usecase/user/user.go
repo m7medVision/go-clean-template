@@ -16,19 +16,19 @@ import (
 // UseCase -.
 type UseCase struct {
 	repo     repo.UserRepo
-	notifier repo.UserNotifier // scaffold:welcome
+	notifier repo.UserNotifier
 	jwt      *jwt.Manager
 }
 
 // New returns a User usecase instrumented with OpenTelemetry tracing spans.
 func New(
 	r repo.UserRepo,
-	n repo.UserNotifier, // scaffold:welcome
+	n repo.UserNotifier,
 	j *jwt.Manager,
 ) usecase.User {
 	return newTraced(&UseCase{
 		repo:     r,
-		notifier: n, // scaffold:welcome
+		notifier: n,
 		jwt:      j,
 	})
 }
@@ -56,14 +56,12 @@ func (uc *UseCase) Register(ctx context.Context, username, email, password strin
 		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.repo.Store: %w", err)
 	}
 
-	// scaffold:welcome:begin
 	// Store and Welcome are not one transaction: if Welcome fails the user exists but the caller
 	// still gets the error, rather than the welcome being lost unseen.
 	err = uc.notifier.Welcome(ctx, &user)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("UserUseCase - Register - uc.notifier.Welcome: %w", err)
 	}
-	// scaffold:welcome:end
 
 	return user, nil
 }

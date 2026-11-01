@@ -2,9 +2,7 @@
 .git
 .github
 caddy
-# scaffold:web:begin
 web
-# scaffold:web:end
 
 .dockerignore
 .env

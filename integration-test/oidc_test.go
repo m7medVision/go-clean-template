@@ -234,15 +234,12 @@ func TestSSOAdminListsEveryUsersTasks(t *testing.T) {
 		}
 	})
 
-	// scaffold:graphql:begin
 	t.Run("GraphQL", func(t *testing.T) {
 		if resp := graphqlDo(t, alice, `query { allTasks(limit: 1) { total } }`, nil); len(resp.Errors) != 0 {
 			t.Fatalf("allTasks as admin: %+v", resp.Errors)
 		}
 	})
-	// scaffold:graphql:end
 
-	// scaffold:grpc:begin
 	t.Run("gRPC", func(t *testing.T) {
 		conn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -260,7 +257,6 @@ func TestSSOAdminListsEveryUsersTasks(t *testing.T) {
 			t.Fatalf("ListAllTasks as admin: expected bob's task in the total, got %d", resp.GetTotal())
 		}
 	})
-	// scaffold:grpc:end
 
 	t.Run("a user is refused", func(t *testing.T) {
 		adminTasksREST(t, bob, http.StatusForbidden)

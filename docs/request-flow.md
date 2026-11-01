@@ -53,18 +53,14 @@ and passes the use case to every transport that exposes it, each wired in its ow
 ```go
 router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l) // app.go
 ```
-<!-- scaffold:graphql:begin -->
 
 ```go
 router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l)) // graphql.go
 ```
-<!-- scaffold:graphql:end -->
-<!-- scaffold:grpc:begin -->
 
 ```go
 grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l) // grpc.go
 ```
-<!-- scaffold:grpc:end -->
 
 Every `New` returns an **interface** (`repo.ExchangeRepo`, `repo.ExchangeWebAPI`, `usecase.Exchange`),
 already wrapped in a tracing decorator. The use case never learns which implementation it got, which is
@@ -107,7 +103,7 @@ failing field. The same tags also produce:
 
 - the OpenAPI schema at `/openapi.json`
 - the checked-in [`openapi/v1.json`](openapi/v1.json)
-- the TypeScript types in `web/` <!-- scaffold:web -->
+- the TypeScript types in `web/`
 
 One declaration, and nothing to keep in sync by hand.
 
@@ -244,7 +240,7 @@ func (c *Conversion) ApplyRate(rate decimal.Decimal, date time.Time) {
 ```
 
 - `"omr"` becomes `"OMR"` here, once, for every transport.
-  gRPC requests carry no Huma tags, so this is the check that protects them. <!-- scaffold:grpc -->
+  gRPC requests carry no Huma tags, so this is the check that protects them.
 - `RoundBank` is round-half-to-even, the usual rule for money: halves don't always round up, so
   rounding errors don't add up in one direction over many conversions. `100 × 17.406483 = 1740.6483`
   → `1740.65`.
@@ -324,7 +320,6 @@ the wrapped error message.
 The caller sees a fixed message (`"unsupported currency"`, `"internal server error"`). The wrapped
 error with the layer path goes only to the log.
 
-<!-- scaffold:grpc:begin -->
 ## The same use case over gRPC
 
 [`internal/controller/grpc/v1/exchange.go`](../internal/controller/grpc/v1/exchange.go) is the same
@@ -337,8 +332,7 @@ On gRPC the gRPC interceptor rejects a missing or expired token with `Unauthenti
 Huma tags, so a malformed code falls through to the entity. A bad amount, an invalid conversion and an
 unknown currency are all `InvalidArgument`, and the 500 cases are `Internal`.
 
-<!-- scaffold:grpc:end -->
-GraphQL exposes only the history query (`exchangeHistory`); conversion is a form, and forms use REST. <!-- scaffold:graphql -->
+GraphQL exposes only the history query (`exchangeHistory`); conversion is a form, and forms use REST.
 
 ## How each layer is tested
 

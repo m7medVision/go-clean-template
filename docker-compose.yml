@@ -19,10 +19,8 @@ x-backend-app-environment: &x-backend-app-environment
   # PG
   PG_POOL_MAX: "2"
   PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db"
-  # scaffold:grpc:begin
   # gRPC
   GRPC_PORT: "8081"
-  # scaffold:grpc:end
   # Metrics
   METRICS_ENABLED: "true"
   # API docs (Huma serves /docs, /openapi.json, /openapi.yaml)
@@ -35,37 +33,29 @@ x-backend-app-environment: &x-backend-app-environment
   # JWT
   JWT_SECRET: "your-secret-key-change-in-production"
   JWT_TOKEN_EXPIRY: "15m"
-  # scaffold:queue:begin
   # Worker (cmd/worker)
   WORKER_POLL_INTERVAL: "1s"
   WORKER_VISIBILITY_TIMEOUT: "30s"
   WORKER_BATCH_SIZE: "10"
   WORKER_SHUTDOWN_TIMEOUT: "10s"
-  # scaffold:queue:end
-  # scaffold:email:begin
   # Mail (cmd/worker sends it to Mailpit)
   SMTP_HOST: "mailpit"
   SMTP_PORT: "1025"
   MAIL_FROM: "Go Clean Template <noreply@example.com>"
-  # scaffold:email:end
   # Exchange rates (ExchangeRate-API open access)
   EXCHANGE_SERVICE_URL: "https://open.er-api.com"
-  # scaffold:passkeys:begin
   # WebAuthn (passkeys): Caddy, a dev server, and the app port the integration tests declare
   WEBAUTHN_RP_ID: "localhost"
   WEBAUTHN_RP_NAME: "Go Clean Template"
   WEBAUTHN_RP_ORIGINS: "http://localhost,http://localhost:3000,http://localhost:8080"
   WEBAUTHN_CEREMONY_TIMEOUT: "5m"
   WEBAUTHN_REAUTH_MAX_AGE: "5m"
-  # scaffold:passkeys:end
-  # scaffold:sso:begin
   # OIDC (SSO sign-in) against the keycloak service; see keycloak/realm.json
   OIDC_ISSUER: "http://keycloak.lvh.me:${KEYCLOAK_PORT:-8180}/realms/app"
   OIDC_CLIENT_ID: "go-clean-template"
   OIDC_CLIENT_SECRET: "go-clean-template-dev-secret"
   OIDC_ROLES_CLAIM: "realm_access.roles"
   OIDC_ROLE_MAP: "app-admin:admin,app-user:user"
-  # scaffold:sso:end
 
 
 services:
@@ -95,7 +85,6 @@ services:
         aliases:
           - jaeger.lvh.me
 
-  # scaffold:email:begin
   # SMTP sink for development: catches every email the worker sends. Host ports follow SMTP_PORT and
   # MAILPIT_UI_PORT (1025 and 8025 by default).
   mailpit:
@@ -108,8 +97,6 @@ services:
         aliases:
           - mailpit.lvh.me
 
-  # scaffold:email:end
-  # scaffold:sso:begin
   # OIDC provider for SSO sign-in. One issuer URL everywhere: keycloak.lvh.me resolves to 127.0.0.1 on
   # the host and to this container on app_network, and Keycloak listens on KEYCLOAK_PORT (8180) on
   # both sides.
@@ -139,7 +126,6 @@ services:
         aliases:
           - keycloak.lvh.me
 
-  # scaffold:sso:end
   app:
     platform: linux/amd64
     pid: "host"
@@ -149,7 +135,7 @@ services:
       <<: *x-backend-app-environment
     ports:
       - "8080:8080"
-      - "8081:8081" # scaffold:grpc
+      - "8081:8081"
     depends_on:
       - db
       - jaeger
@@ -166,7 +152,6 @@ services:
         aliases:
           - app.lvh.me
 
-  # scaffold:queue:begin
   # Queue consumer (queue_messages table): the app image, started on its /worker entry point
   worker:
     platform: linux/amd64
@@ -180,21 +165,18 @@ services:
     depends_on:
       - db
       - jaeger
-      - mailpit # scaffold:email
+      - mailpit
     networks:
       app_network:
         aliases:
           - worker.lvh.me
 
-  # scaffold:queue:end
   caddy:
     build:
       context: ./caddy
-      # scaffold:web:begin
       # The web client's source, for the stage that builds it (narrowed by web/.dockerignore).
       additional_contexts:
         web-src: ./web
-      # scaffold:web:end
     ports:
       - "80:80"
     depends_on:

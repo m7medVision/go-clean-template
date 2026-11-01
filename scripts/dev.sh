@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Dev mode in one tmux window: the compose services in DEV_SERVICES in docker, and the Go binaries on
 # the host under air.
-# The Vite+ web dev server runs beside them. # scaffold:web
+# The Vite+ web dev server runs beside them.
 # Run it through `make dev`, which exports .env (or .env.example) and DEV_SERVICES; stop with
 # `make dev-down`.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# One session per checkout, named after its directory, so a generated project runs beside this one.
+# One session per checkout, named after its directory, so two checkouts can run side by side.
 SESSION=$(basename "$PWD")
 
 required=(tmux docker go curl)
-required+=(vp) # scaffold:web
+required+=(vp)
 for cmd in "${required[@]}"; do
 	if ! command -v "$cmd" >/dev/null 2>&1; then
 		echo "make dev: $cmd is not on PATH" >&2
@@ -40,10 +40,8 @@ if tmux has-session -t "=$SESSION" 2>/dev/null; then
 fi
 
 export TRACING_ENABLED=false
-# scaffold:web:begin
 # The web client is the Vite dev server here, not Caddy: the links the app builds point at it.
 export APP_BASE_URL=http://localhost:${WEB_PORT:-3000}
-# scaffold:web:end
 
 # A pane gets the tmux server's environment, not this shell's, when a server is already running, so
 # hand every setting over explicitly: each name in the env file make loaded, with the value make
@@ -77,14 +75,12 @@ pane() {
 }
 
 pane app 'go tool air -c .air.app.toml'
-# scaffold:queue:begin
 # Only the app applies the schema, and it serves /healthz once it has.
 pane worker 'until curl -sf -o /dev/null "http://localhost:$HTTP_PORT/healthz"; do
 	echo "waiting for the app on :$HTTP_PORT..."; sleep 2
 done
 exec go tool air -c .air.worker.toml'
-# scaffold:queue:end
-pane web 'vp -C web dev' # scaffold:web
+pane web 'vp -C web dev'
 title=$(printf ' + %s' "${services[@]}")
 pane "${title:3}" "docker compose logs -f ${services[*]}"
 

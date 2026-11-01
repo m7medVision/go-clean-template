@@ -10,7 +10,7 @@ type V1 struct {
 	e  usecase.Exchange
 	u  usecase.User
 	tk usecase.Task
-	pk usecase.Passkey // scaffold:passkeys
-	oc usecase.OIDC    // scaffold:sso
+	pk usecase.Passkey
+	oc usecase.OIDC
 	l  logger.Interface
 }

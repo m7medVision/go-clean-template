@@ -63,7 +63,7 @@ func TestDecodeEmail_Errors(t *testing.T) {
 		{"unknown template", `{"template":"nope","data":{}}`, true},
 		{"missing template", `{"data":{}}`, true},
 		{"body is not JSON", `not json`, false},
-		{"data does not match the template", `{"template":"welcome","data":"a string"}`, false}, // scaffold:welcome
+		{"data does not match the template", `{"template":"welcome","data":"a string"}`, false},
 	}
 
 	for _, tt := range tests {

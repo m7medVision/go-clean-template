@@ -17,7 +17,7 @@ The code, layer by layer:
 | Repository | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey/passkey.go), queries in [`queries/passkey.sql`](../internal/repo/persistent/queries/passkey.sql) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/passkey.go`](../internal/controller/restapi/v1/passkey.go) |
-| Web | [`web/src/passkey/`](../web/src/passkey), and the login screen in [`web/src/routes/login.tsx`](../web/src/routes/login.tsx) | <!-- scaffold:web -->
+| Web | [`web/src/passkey/`](../web/src/passkey), and the login screen in [`web/src/routes/login.tsx`](../web/src/routes/login.tsx) |
 
 go-webauthn stays inside the use case, the way `user` keeps bcrypt to itself. Controllers pass the
 browser's JSON in as bytes and hand the options JSON back out; no WebAuthn type reaches `entity` or a
@@ -69,8 +69,8 @@ controller.
 The controller answers it with a `401` problem whose `detail` is exactly `reauthentication
 required`. That string is the contract clients match on; it does not change. The token is still
 valid for everything else, so a client must not sign the user out on it.
-The web client's Add dialog asks for the password, signs in again through `POST /v1/auth/login` <!-- scaffold:web -->
-with the user's email, stores the new token and starts the ceremony again. <!-- scaffold:web -->
+The web client's Add dialog asks for the password, signs in again through `POST /v1/auth/login`
+with the user's email, stores the new token and starts the ceremony again.
 A passkey login also counts as a sign-in: its JWT is as fresh as a password one.
 
 #### User verification
@@ -221,7 +221,6 @@ ID or a subdomain of it, in a secure context (HTTPS, or `http://localhost`). go-
 that the origin in the browser's signed client data is one of `WEBAUTHN_RP_ORIGINS`. Both settings
 are described in [configuration.md](configuration.md#webauthn); the defaults fit local development.
 
-<!-- scaffold:web:begin -->
 ### `make dev`
 
 The web client runs on the Vite dev server at <http://localhost:3000>, which proxies `/v1` to the app,
@@ -230,7 +229,6 @@ defaults cover this.
 
 Open the client as `localhost`, not `127.0.0.1`: an RP ID cannot be an IP address, and a passkey made
 for `localhost` is not offered on another host.
-<!-- scaffold:web:end -->
 
 ### Compose
 
@@ -240,7 +238,7 @@ integration tests reach the app as host `app`, but the virtual authenticator dec
 
 The full stack behind Caddy serves the client at `http://app.lvh.me`. That host is not under
 `localhost`, and plain HTTP on it is not a secure context, so browsers do not offer passkeys there.
-To try passkeys in the browser, use `make dev`. <!-- scaffold:web -->
+To try passkeys in the browser, use `make dev`.
 To use them behind Caddy, serve the site over HTTPS and set the RP values to its host, as in
 production.
 
@@ -292,7 +290,7 @@ Run them with `make test` and `make compose-up-integration-test`
 - **Attestation verification and AAGUID allowlists.** That is enterprise policy; attestation `none`
   is right for a general template.
 - **Emails** (a new-passkey alert, a recovery link).
-  A natural follow-up on the existing mail queue. <!-- scaffold:email -->
+  A natural follow-up on the existing mail queue.
 - **Step-up re-authentication with a passkey.** Adding a passkey re-asks for the password; other
   sensitive actions, and re-authenticating with an existing passkey, are not covered.
 - **A generic "auth methods" abstraction.** Two concrete methods read better than one speculative

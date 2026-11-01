@@ -9,22 +9,19 @@ import { FormError } from "#/components/form/form-components";
 import { useAppForm, zodValidation } from "#/components/form/use-app-form";
 import { Button } from "#/components/ui/button";
 import { FieldSeparator } from "#/components/ui/field";
-import { usePasskeySignIn } from "#/passkey/use-passkey-sign-in"; // scaffold:passkeys
-import { ssoStatusQuery } from "#/sso/api"; // scaffold:sso
-import { useSsoSignIn } from "#/sso/use-sso-sign-in"; // scaffold:sso
+import { usePasskeySignIn } from "#/passkey/use-passkey-sign-in";
+import { ssoStatusQuery } from "#/sso/api";
+import { useSsoSignIn } from "#/sso/use-sso-sign-in";
 
 // The email field's autofill tokens.
-const emailAutoComplete = [
-  "username",
-  "webauthn", // scaffold:passkeys
-].join(" ");
+const emailAutoComplete = ["username", "webauthn"].join(" ");
 
 type LoginSearch = { redirect?: string };
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch =>
     typeof search.redirect === "string" ? { redirect: search.redirect } : {},
-  loader: ({ context }) => context.queryClient.ensureQueryData(ssoStatusQuery), // scaffold:sso
+  loader: ({ context }) => context.queryClient.ensureQueryData(ssoStatusQuery),
   component: Login,
 });
 
@@ -40,10 +37,7 @@ function Login() {
   };
 
   // The other ways of signing in, as buttons under the form.
-  const methods: SignInMethod[] = [
-    useSsoSignIn(safeRedirect(redirect)), // scaffold:sso
-    usePasskeySignIn(signIn), // scaffold:passkeys
-  ];
+  const methods: SignInMethod[] = [useSsoSignIn(safeRedirect(redirect)), usePasskeySignIn(signIn)];
   const available = methods.filter((method) => method.available);
 
   const login = $api.useMutation("post", "/v1/auth/login", {

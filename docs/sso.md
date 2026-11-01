@@ -26,7 +26,7 @@ The code, layer by layer:
 
 Authorization code with PKCE, with a confidential client. The browser holds the redirects, and the
 backend only answers JSON.
-It has the same shape as a passkey ceremony: <!-- scaffold:passkeys -->
+It has the same shape as a passkey ceremony:
 
 1. `POST /v1/auth/oidc/begin` returns the provider's authorize URL and a `ceremony_token`. The token
    is a short-lived signed payload (`jwt.Scoped`, 10 minutes) holding the `state`, the `nonce` and

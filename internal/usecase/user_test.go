@@ -26,15 +26,13 @@ func newUserUseCase(t *testing.T) (usecase.User, *MockUserRepo) {
 
 	repo := NewMockUserRepo(ctrl)
 
-	// scaffold:welcome:begin
 	// Register welcomes every user it stores; user_welcome_test.go checks the call itself.
 	notifier := NewMockUserNotifier(ctrl)
 	notifier.EXPECT().Welcome(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	// scaffold:welcome:end
 
 	useCase := user.New(
 		repo,
-		notifier, // scaffold:welcome
+		notifier,
 		jwt.New("test-secret", time.Hour),
 	)
 
