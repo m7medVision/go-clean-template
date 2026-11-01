@@ -2,7 +2,7 @@
 
 Background work goes through a queue in Postgres, consumed by a separate binary, `cmd/worker`. There is
 no broker and no extension: the queue is one ordinary table on the stock Postgres image.
-Registration uses it to send a welcome email. <!-- scaffold:welcome -->
+Registration uses it to send a welcome email.
 
 ## The queue
 
@@ -40,22 +40,19 @@ with the handler's `ctx`, and return its error.
   psql "$PG_URL" -c "INSERT INTO queue_messages (queue, body) VALUES ('example', '{\"text\": \"hi\"}')"
   ```
 
-- `mail.go` delivers email from the `mail` queue (below). <!-- scaffold:email -->
+- `mail.go` delivers email from the `mail` queue (below).
 
 ### Adding a queue
 
 1. Handler: `internal/controller/worker/v1/<name>.go`, registered in `v1/router.go`.
 2. Producer: inject `repo.QueueRepo` into the use case and call `Send(ctx, "<name>", body)`.
 
-<!-- scaffold:email:begin -->
 ## Email
 
 Sending is asynchronous. The sender writes the email with `entity.EncodeEmail` and enqueues it on
 `entity.EmailQueue`.
-<!-- scaffold:welcome:begin -->
 For the user domain the sender is a notifier port, `repo.UserNotifier`, implemented in
 `internal/repo/notify`, so the use case never sees the queue or the email encoding.
-<!-- scaffold:welcome:end -->
 The worker's `mail` handler (registered by `workerctl.WithMail`) decodes it with
 `entity.DecodeEmail` (both ends are this codebase, so it skips the request DTO) and calls the `mail` use case, which renders and sends.
 Delivery is at-least-once, so an email can arrive twice if the worker stops between the relay
@@ -63,7 +60,7 @@ accepting it and the queue row being deleted.
 
 In development and in the integration stack, [Mailpit](https://mailpit.axllent.org/) catches every
 email: the inbox is at http://127.0.0.1:8025.
-Register a user to get one. <!-- scaffold:welcome -->
+Register a user to get one.
 
 ### Templates
 
@@ -97,9 +94,6 @@ interface.
    `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/`, and review the golden files.
 4. Enqueue it where the event happens: `body, err := entity.EncodeEmail(e)`, then
    `queue.Send(ctx, entity.EmailQueue, body)` on a `repo.QueueRepo`.
-   <!-- scaffold:welcome:begin -->
    To keep the use case unaware of the queue, put this behind a port, as the welcome email does: a
    method on `repo.UserNotifier` in `internal/repo/contracts.go`, implemented in
    `internal/repo/notify` and mirrored in `notify/tracing.go`.
-   <!-- scaffold:welcome:end -->
-<!-- scaffold:email:end -->

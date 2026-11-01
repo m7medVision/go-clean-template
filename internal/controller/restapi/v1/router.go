@@ -12,7 +12,7 @@ const (
 	_usersTag         = "users"
 	_tasksTag         = "tasks"
 	_exchangeTag      = "exchange"
-	_passkeysTag      = "passkeys" // scaffold:passkeys
+	_passkeysTag      = "passkeys"
 )
 
 // NewRoutes registers the core v1 REST operations on the Huma API and sets up the

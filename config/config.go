@@ -14,16 +14,16 @@ type (
 		HTTP     http
 		Log      log
 		PG       pg
-		GRPC     grpc // scaffold:grpc
+		GRPC     grpc
 		JWT      jwt
 		Metrics  metrics
 		Docs     docs
 		Tracing  tracing
-		Worker   worker // scaffold:queue
-		Mail     mail   // scaffold:email
+		Worker   worker
+		Mail     mail
 		Exchange exchange
-		WebAuthn webAuthn // scaffold:passkeys
-		OIDC     oidc     // scaffold:sso
+		WebAuthn webAuthn
+		OIDC     oidc
 	}
 
 	// App -.

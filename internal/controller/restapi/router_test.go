@@ -188,10 +188,10 @@ func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 	handler := restapi.NewRouter(cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, jwtManager, noopLogger{})
 
 	for _, tt := range []struct{ method, target string }{
-		{http.MethodGet, "/v1/auth/oidc"},           // scaffold:sso
-		{http.MethodPost, "/v1/auth/oidc/begin"},    // scaffold:sso
-		{http.MethodPost, "/v1/auth/passkey/begin"}, // scaffold:passkeys
-		{http.MethodGet, "/v1/passkeys"},            // scaffold:passkeys
+		{http.MethodGet, "/v1/auth/oidc"},
+		{http.MethodPost, "/v1/auth/oidc/begin"},
+		{http.MethodPost, "/v1/auth/passkey/begin"},
+		{http.MethodGet, "/v1/passkeys"},
 	} {
 		resp := doRequest(t.Context(), handler, tt.method, tt.target, newToken(t), "{}")
 		assert.Equal(t, http.StatusNotFound, resp.Code, tt.target)
@@ -589,9 +589,9 @@ func TestOpenAPIExportsEveryOperation(t *testing.T) {
 		"/v1/auth/register", "/v1/auth/login", "/v1/user/profile",
 		"/v1/tasks", "/v1/tasks/{id}", "/v1/tasks/{id}/status",
 		"/v1/exchange/convert", "/v1/exchange/history",
-		"/v1/passkeys", "/v1/passkeys/register/begin", "/v1/passkeys/register/finish", // scaffold:passkeys
-		"/v1/auth/passkey/begin", "/v1/auth/passkey/finish", // scaffold:passkeys
-		"/v1/auth/oidc", "/v1/auth/oidc/begin", "/v1/auth/oidc/finish", // scaffold:sso
+		"/v1/passkeys", "/v1/passkeys/register/begin", "/v1/passkeys/register/finish",
+		"/v1/auth/passkey/begin", "/v1/auth/passkey/finish",
+		"/v1/auth/oidc", "/v1/auth/oidc/begin", "/v1/auth/oidc/finish",
 	} {
 		assert.Contains(t, spec.Paths, path)
 	}

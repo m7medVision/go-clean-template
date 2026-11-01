@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
-      web: ${{ steps.filter.outputs.web }} # scaffold:web
+      web: ${{ steps.filter.outputs.web }}
       sqlc: ${{ steps.codegen.outputs.sqlc }}
       schema: ${{ steps.codegen.outputs.schema }}
     steps:
@@ -36,9 +36,8 @@ jobs:
           filters: |
             backend:
               - '**'
-              - '!web/**' # scaffold:web
+              - '!web/**'
               - '!**/*.md'
-            # scaffold:web:begin
             # Paths that cannot change docs/openapi/v1.json, the GraphQL
             # schema or web/.
             web:
@@ -48,15 +47,14 @@ jobs:
               - '!internal/repo/**'
               - '!internal/usecase/**'
               - '!internal/app/schema/**'
-              - '!internal/controller/grpc/**' # scaffold:grpc
-              - '!internal/controller/worker/**' # scaffold:queue
-              - '!docs/proto/**' # scaffold:grpc
-              - '!cmd/worker/**' # scaffold:queue
+              - '!internal/controller/grpc/**'
+              - '!internal/controller/worker/**'
+              - '!docs/proto/**'
+              - '!cmd/worker/**'
               - '!integration-test/**'
               - '!Dockerfile'
               - '!docker-compose*.yml'
               - '!.golangci.yml'
-            # scaffold:web:end
       # The drift check regenerates from exactly these inputs (any one).
       - uses: dorny/paths-filter@v4
         id: codegen
@@ -214,7 +212,6 @@ jobs:
             postgres://postgres@localhost:5432/postgres?sslmode=disable
         run: make schema-roundtrip BASE_REF="origin/$BASE"
 
-  # scaffold:web:begin
   # Also the OpenAPI drift check: `make web-api` re-exports
   # docs/openapi/v1.json first.
   web:
@@ -229,7 +226,7 @@ jobs:
           go-version: '1.27'
       # Installs Vite+, the Node version in web/.node-version and bun, then
       # runs `vp install`.
-      - uses: voidzero-dev/setup-vp@v1.22.0
+      - uses: voidzero-dev/setup-vp@v1.21.2
         with:
           working-directory: web
           # Resolved relative to working-directory.
@@ -248,7 +245,6 @@ jobs:
       - name: Build
         run: make web-build
 
-  # scaffold:web:end
   integration-tests:
     name: runner / tests / integration
     needs: [changes, unit-tests]
@@ -265,7 +261,6 @@ jobs:
       - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
-      # scaffold:sso:begin
       # .env.example turns SSO on against this Keycloak; it boots while the rest of the job runs.
       # It listens on 8180 inside and out, so the issuer is keycloak.lvh.me:8180 everywhere.
       - name: Start Keycloak
@@ -275,7 +270,6 @@ jobs:
           -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin
           -v "$PWD/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro"
           quay.io/keycloak/keycloak:26.8.1 start-dev --import-realm
-      # scaffold:sso:end
       - name: Create the app database
         run: createdb db
       - name: Install Atlas
@@ -294,24 +288,19 @@ jobs:
           export TRACING_ENABLED=false
           export EXCHANGE_SERVICE_URL=http://localhost:8090
           nohup "$RUNNER_TEMP/app" > "$RUNNER_TEMP/app.log" 2>&1 &
-      # scaffold:queue:begin
       - name: Build and start the worker
         run: |
           go build -o "$RUNNER_TEMP/worker" ./cmd/worker
           set -a && . ./.env.example && set +a
           export TRACING_ENABLED=false
           nohup "$RUNNER_TEMP/worker" > "$RUNNER_TEMP/worker.log" 2>&1 &
-      # scaffold:queue:end
-      # scaffold:email:begin
       - name: Start Mailpit
         run: docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3
-      # scaffold:email:end
       - name: Resolve the service hostnames to the runner
         run: |
           echo '127.0.0.1 app' | sudo tee -a /etc/hosts
-          echo '127.0.0.1 mailpit' | sudo tee -a /etc/hosts # scaffold:email
-          echo '127.0.0.1 keycloak.lvh.me' | sudo tee -a /etc/hosts # scaffold:sso
-      # scaffold:sso:begin
+          echo '127.0.0.1 mailpit' | sudo tee -a /etc/hosts
+          echo '127.0.0.1 keycloak.lvh.me' | sudo tee -a /etc/hosts
       - name: Wait for Keycloak
         run: |
           for _ in $(seq 60); do
@@ -320,85 +309,24 @@ jobs:
           done
           echo "Keycloak did not become ready" >&2
           exit 1
-      # scaffold:sso:end
       - name: Integration tests
         run: make integration-test
       - name: App log
         if: failure()
         run: cat "$RUNNER_TEMP/app.log"
-      # scaffold:queue:begin
       - name: Worker log
         if: failure()
         run: cat "$RUNNER_TEMP/worker.log"
-      # scaffold:queue:end
-      # scaffold:email:begin
       - name: Mailpit log
         if: failure()
         run: docker logs mailpit
-      # scaffold:email:end
       - name: Exchange stub log
         if: failure()
         run: docker logs exchange
-      # scaffold:sso:begin
       - name: Keycloak log
         if: failure()
         run: docker logs keycloak
-      # scaffold:sso:end
 
-  # scaffold:self:begin
-  # Every preset `make scaffold` offers, generated and put through its own
-  # make pre-commit, so a marker or manifest mistake fails here rather than in
-  # a new project. It runs on every change: a docs edit can break a marker.
-  # The preset list must match scaffold/features.yaml (a unit test checks).
-  scaffold:
-    name: runner / scaffold / ${{ matrix.preset }}
-    needs: [changes, lint]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        preset: [api, api-grpc, fullstack, everything]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: '1.27'
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      - name: Install Atlas
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
-      - name: Install the Go tools
-        run: go install tool
-      # The fullstack and everything presets keep web/, whose check needs
-      # Vite+, Node and bun.
-      - uses: voidzero-dev/setup-vp@v1.22.0
-        with:
-          working-directory: web
-          node-version-file: .node-version
-          cache: true
-      - name: Generate and check
-        run: make scaffold-check PRESET=${{ matrix.preset }}
-      # On master, keep the project that just passed: release.yml attaches it
-      # to the release. Only the files its .gitignore allows (no build output,
-      # no node_modules, no .git).
-      - name: Pack the checked project
-        if: github.event_name == 'push'
-        working-directory: scaffold/out
-        env:
-          PRESET: ${{ matrix.preset }}
-        run: |
-          git -C "$PRESET" ls-files -z --cached --others --exclude-standard |
-            sed -z "s|^|$PRESET/|" |
-            tar --null -czf "$PRESET.tar.gz" -T -
-      - uses: actions/upload-artifact@v7
-        if: github.event_name == 'push'
-        with:
-          name: scaffold-${{ matrix.preset }}
-          path: scaffold/out/${{ matrix.preset }}.tar.gz
-          if-no-files-found: error
-          retention-days: 7
-
-  # scaffold:self:end
   ci-ok:
     name: runner / ci-ok
     needs:
@@ -407,9 +335,8 @@ jobs:
       - unit-tests
       - sqlc-generated
       - schema-roundtrip
-      - web # scaffold:web
+      - web
       - integration-tests
-      - scaffold # scaffold:self
     if: always()
     runs-on: ubuntu-latest
     steps:

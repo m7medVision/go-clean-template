@@ -6,8 +6,8 @@ behaviour and errors match across transports.
 | Transport | Local | Behind Caddy (`make compose-up-all`) |
 | --- | --- | --- |
 | REST | `http://127.0.0.1:8080/v1/...` | `http://app.lvh.me/v1/...` |
-| GraphQL | `POST http://127.0.0.1:8080/graphql` | `POST http://app.lvh.me/graphql` | <!-- scaffold:graphql -->
-| gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) | <!-- scaffold:grpc -->
+| GraphQL | `POST http://127.0.0.1:8080/graphql` | `POST http://app.lvh.me/graphql` |
+| gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) |
 
 Every operation except register and the sign-ins needs `Authorization: Bearer <token>`, with the
 token from a sign-in.
@@ -23,9 +23,8 @@ Registration, login, and JWT-based authorization.
 | Get profile | `GET /v1/user/profile` |
 
 - Passwords are hashed with bcrypt; JWTs expire after `JWT_TOKEN_EXPIRY`.
-- Registration queues a welcome email that the worker sends (see [worker.md](worker.md)). <!-- scaffold:welcome -->
+- Registration queues a welcome email that the worker sends (see [worker.md](worker.md)).
 
-<!-- scaffold:sso:begin -->
 ## SSO
 
 Sign-in through an OpenID Connect provider (Keycloak in development), for the same JWT password login
@@ -38,8 +37,6 @@ setup are in [sso.md](sso.md).
 | `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down |
 | `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in, `409` when the email or username belongs to another account |
 
-<!-- scaffold:sso:end -->
-<!-- scaffold:passkeys:begin -->
 ## Passkeys
 
 WebAuthn passkeys alongside passwords: add them while signed in, then sign in with one for the same
@@ -67,7 +64,6 @@ setup are in [passkeys.md](passkeys.md).
 - An invalid ceremony is `400` on registration and `401` on sign-in; finishing a sign-in twice is
   `409`. The full mapping is in [passkeys.md](passkeys.md#errors).
 
-<!-- scaffold:passkeys:end -->
 ## Task management
 
 CRUD with a status state machine. Tasks are scoped to the authenticated user.
@@ -130,7 +126,6 @@ changes show up in review and clients can generate types without a running serve
   `code`.
 - `/healthz` answers when the app is up.
 
-<!-- scaffold:graphql:begin -->
 ## GraphQL
 
 [gqlgen](https://github.com/99designs/gqlgen) on the REST port, covering tasks and the exchange
@@ -155,8 +150,6 @@ history. The schemas are [task.graphqls](../internal/controller/graphql/schema/t
   (the admin list without the `admin` role), `INTERNAL`. An expired token is `UNAUTHENTICATED` in a
   200 response.
 
-<!-- scaffold:graphql:end -->
-<!-- scaffold:grpc:begin -->
 ## gRPC
 
 Services are defined in [auth.proto](proto/v1/auth.proto), [task.proto](proto/v1/task.proto) and
@@ -183,7 +176,6 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 - Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
   user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
   list without the `admin` role `PermissionDenied`, and anything else `Internal`.
-<!-- scaffold:grpc:end -->
 
 ## Versioning
 
@@ -200,7 +192,6 @@ v1.NewRoutes(api, e, u, tk, l)
 v2.NewRoutes(api, e, u, tk, l)
 ```
 
-<!-- scaffold:grpc:begin -->
 gRPC, in [`internal/controller/grpc/router.go`](../internal/controller/grpc/router.go), with the new
 protos in `docs/proto/v2`:
 
@@ -219,4 +210,3 @@ protos in `docs/proto/v2`:
 
 reflection.Register(app)
 ```
-<!-- scaffold:grpc:end -->

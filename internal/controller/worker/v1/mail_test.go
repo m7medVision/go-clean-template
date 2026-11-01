@@ -36,13 +36,11 @@ func TestMailController_Handle(t *testing.T) {
 		wantErr       error
 		wantDelivered int
 	}{
-		// scaffold:welcome:begin
 		{
 			name:          "delivers the decoded email and acknowledges it",
 			body:          welcomeBody,
 			wantDelivered: 1,
 		},
-		// scaffold:welcome:end
 		{
 			name:          "a body that is not an email is dropped, retrying cannot fix it",
 			body:          func(*testing.T) json.RawMessage { return json.RawMessage(`"not an object"`) },
@@ -55,7 +53,6 @@ func TestMailController_Handle(t *testing.T) {
 			},
 			wantDelivered: 0,
 		},
-		// scaffold:welcome:begin
 		{
 			name:          "an email without a template is dropped",
 			body:          welcomeBody,
@@ -69,7 +66,6 @@ func TestMailController_Handle(t *testing.T) {
 			wantErr:       errSMTPDown,
 			wantDelivered: 1,
 		},
-		// scaffold:welcome:end
 	}
 
 	for _, tc := range tests {

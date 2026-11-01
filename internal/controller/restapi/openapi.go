@@ -16,8 +16,8 @@ func OpenAPI(version string) ([]byte, error) {
 	v1.NewRoutes(api, nil, nil, nil, nil)
 
 	for _, opt := range []Option{
-		WithPasskeys(nil), // scaffold:passkeys
-		WithOIDC(nil),     // scaffold:sso
+		WithPasskeys(nil),
+		WithOIDC(nil),
 	} {
 		opt(api, nil)
 	}

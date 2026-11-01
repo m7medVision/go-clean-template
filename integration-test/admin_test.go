@@ -8,7 +8,7 @@ import (
 
 // A password sign-in grants only the user role, so the admin-only operations refuse it on every
 // transport.
-// The admin side runs against Keycloak in oidc_test.go. // scaffold:sso
+// The admin side runs against Keycloak in oidc_test.go.
 func TestAdminTasksRefuseLocalUser(t *testing.T) {
 	token := registerAndLogin(t)
 
@@ -28,7 +28,6 @@ func TestAdminTasksRefuseLocalUser(t *testing.T) {
 		}
 	})
 
-	// scaffold:graphql:begin
 	t.Run("GraphQL", func(t *testing.T) {
 		resp := graphqlDo(t, token, `query { allTasks { total } }`, nil)
 
@@ -36,11 +35,8 @@ func TestAdminTasksRefuseLocalUser(t *testing.T) {
 			t.Fatalf("allTasks: expected a FORBIDDEN error, got %+v", resp.Errors)
 		}
 	})
-	// scaffold:graphql:end
 
-	// scaffold:grpc:begin
 	t.Run("gRPC", func(t *testing.T) {
 		requireListAllTasksDeniedGRPC(t, token)
 	})
-	// scaffold:grpc:end
 }
