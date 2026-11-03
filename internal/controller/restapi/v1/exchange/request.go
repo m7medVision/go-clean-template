@@ -1,4 +1,4 @@
-package request
+package exchange
 
 // Convert -. Amounts are decimal strings so they never pass through a float; the controller parses
 // them into decimal.Decimal. Code case and "from != to" are domain rules, checked by the entity.

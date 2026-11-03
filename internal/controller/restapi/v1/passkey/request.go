@@ -1,4 +1,4 @@
-package request
+package passkey
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 
 // PasskeyCredential is the browser's PublicKeyCredential.toJSON() as sent, unparsed. Its shape is
 // owned by the WebAuthn spec and checked by the use case, so the schema only requires an object.
-type PasskeyCredential json.RawMessage
+type PasskeyCredential json.RawMessage //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 
 // UnmarshalJSON keeps the body's bytes as they are.
 func (c *PasskeyCredential) UnmarshalJSON(data []byte) error {

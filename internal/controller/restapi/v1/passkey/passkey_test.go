@@ -1,4 +1,4 @@
-package restapi_test
+package passkey_test
 
 import (
 	"context"
@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,6 +77,23 @@ func (f *fakePasskey) FinishLogin(_ context.Context, token string, body []byte) 
 // _ceremonyHeader carries the ceremony token on both finish endpoints.
 const _ceremonyHeader = "X-Ceremony-Token"
 
+// doRequest and newToken are resttest.Do and resttest.Token. The error tables below are
+// near-duplicates, so they keep the short calls they had before this file moved here; the resttest
+// selectors in each would tip them over dupl's threshold.
+func doRequest(
+	ctx context.Context,
+	handler http.Handler,
+	method, target, token, body string,
+) *httptest.ResponseRecorder {
+	return resttest.Do(ctx, handler, method, target, token, body)
+}
+
+func newToken(t *testing.T) string {
+	t.Helper()
+
+	return resttest.Token(t)
+}
+
 // doCeremonyRequest is doRequest with the ceremony token in its header; an empty one is left out.
 func doCeremonyRequest(
 	ctx context.Context,
@@ -101,12 +118,9 @@ func doCeremonyRequest(
 func newPasskeyRouter(t *testing.T, pk usecase.Passkey) http.Handler {
 	t.Helper()
 
-	cfg := newTestConfig(t)
+	cfg := resttest.Config(t)
 
-	return restapi.NewRouter(
-		cfg, &fakeExchange{}, &fakeUser{}, &fakeTask{}, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), noopLogger{},
-		restapi.WithPasskeys(pk),
-	)
+	return resttest.NewRouter(cfg, nil, nil, nil, restapi.WithPasskeys(pk))
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

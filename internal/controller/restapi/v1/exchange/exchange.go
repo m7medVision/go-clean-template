@@ -1,4 +1,4 @@
-package v1
+package exchange
 
 import (
 	"context"
@@ -7,18 +7,17 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/shopspring/decimal"
 )
 
 type convertInput struct {
-	Body request.Convert
+	Body Convert
 }
 
 type convertOutput struct {
-	Body response.Conversion
+	Body Conversion
 }
 
 type exchangeHistoryInput struct {
@@ -27,10 +26,10 @@ type exchangeHistoryInput struct {
 }
 
 type exchangeHistoryOutput struct {
-	Body response.ExchangeHistory
+	Body ExchangeHistory
 }
 
-func (r *V1) convert(api huma.API) {
+func (r *controller) convert(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "convert-currency",
 		Summary:     "Convert currency",
@@ -38,7 +37,7 @@ func (r *V1) convert(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/v1/exchange/convert",
 		Tags:        []string{_exchangeTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *convertInput) (*convertOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -66,11 +65,11 @@ func (r *V1) convert(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &convertOutput{Body: response.NewConversion(&conversion)}, nil
+		return &convertOutput{Body: NewConversion(&conversion)}, nil
 	})
 }
 
-func (r *V1) exchangeHistory(api huma.API) {
+func (r *controller) exchangeHistory(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "exchange-history",
 		Summary:     "Show conversion history",
@@ -78,7 +77,7 @@ func (r *V1) exchangeHistory(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/exchange/history",
 		Tags:        []string{_exchangeTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *exchangeHistoryInput) (*exchangeHistoryOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -93,6 +92,6 @@ func (r *V1) exchangeHistory(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &exchangeHistoryOutput{Body: response.NewExchangeHistory(history)}, nil
+		return &exchangeHistoryOutput{Body: NewExchangeHistory(history)}, nil
 	})
 }

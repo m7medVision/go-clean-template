@@ -1,4 +1,4 @@
-package request
+package user
 
 // Register -.
 type Register struct {

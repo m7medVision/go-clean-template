@@ -1,4 +1,4 @@
-package response
+package passkey
 
 import (
 	"encoding/json"
@@ -9,13 +9,13 @@ import (
 
 // PasskeyCeremony starts a WebAuthn ceremony: the options to pass to the browser, and the token to
 // send back with its answer.
-type PasskeyCeremony struct {
+type PasskeyCeremony struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	Options       PasskeyOptions `json:"options"`
 	CeremonyToken string         `json:"ceremony_token" example:"eyJhbGciOiJIUzI1NiIs..."`
 }
 
 // PasskeyOptions is the WebAuthn options JSON (the publicKey member) as the use case wrote it.
-type PasskeyOptions json.RawMessage
+type PasskeyOptions json.RawMessage //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 
 // MarshalJSON writes the options as they are.
 func (o PasskeyOptions) MarshalJSON() ([]byte, error) {
@@ -37,7 +37,7 @@ func (PasskeyOptions) Schema(huma.Registry) *huma.Schema {
 }
 
 // PasskeyList -.
-type PasskeyList struct {
+type PasskeyList struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	Passkeys []entity.Passkey `json:"passkeys" nullable:"false"`
 }
 

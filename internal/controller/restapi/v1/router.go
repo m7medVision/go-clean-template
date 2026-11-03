@@ -2,45 +2,40 @@ package v1
 
 import (
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/exchange"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/oidc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/passkey"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
-const (
-	_bearerAuthScheme = "BearerAuth"
-	_authTag          = "auth"
-	_usersTag         = "users"
-	_tasksTag         = "tasks"
-	_exchangeTag      = "exchange"
-	_passkeysTag      = "passkeys"
-)
-
 // NewRoutes registers the core v1 REST operations on the Huma API and sets up the
-// security scheme reproducing the BearerAuth header of the previous transport. Optional
-// features register their own operations afterwards, each from its own file in this package.
+// security scheme reproducing the BearerAuth header of the previous transport. Each domain
+// registers its own operations from its folder; optional features register theirs afterwards
+// through NewPasskeyRoutes and NewOIDCRoutes.
 func NewRoutes(api huma.API, e usecase.Exchange, u usecase.User, tk usecase.Task, l logger.Interface) {
 	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
-		_bearerAuthScheme: {
+		apidoc.BearerAuthScheme: {
 			Type: "apiKey",
 			In:   "header",
 			Name: "Authorization",
 		},
 	}
 
-	r := &V1{e: e, u: u, tk: tk, l: l}
+	user.NewRoutes(api, u, l)
+	task.NewRoutes(api, tk, l)
+	exchange.NewRoutes(api, e, l)
+}
 
-	r.register(api)
-	r.login(api)
-	r.profile(api)
+// NewPasskeyRoutes registers the passkey sign-in and passkey management operations.
+func NewPasskeyRoutes(api huma.API, pk usecase.Passkey, l logger.Interface) {
+	passkey.NewRoutes(api, pk, l)
+}
 
-	r.createTask(api)
-	r.listTasks(api)
-	r.listAllTasks(api)
-	r.getTask(api)
-	r.updateTask(api)
-	r.transitionTask(api)
-	r.deleteTask(api)
-
-	r.convert(api)
-	r.exchangeHistory(api)
+// NewOIDCRoutes registers the SSO status and sign-in operations.
+func NewOIDCRoutes(api huma.API, oc usecase.OIDC, l logger.Interface) {
+	oidc.NewRoutes(api, oc, l)
 }

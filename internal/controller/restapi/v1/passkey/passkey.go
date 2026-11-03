@@ -1,4 +1,4 @@
-package v1
+package passkey
 
 import (
 	"context"
@@ -7,26 +7,10 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
-
-// NewPasskeyRoutes registers the passkey sign-in and passkey management operations.
-func NewPasskeyRoutes(api huma.API, pk usecase.Passkey, l logger.Interface) {
-	r := &V1{pk: pk, l: l}
-
-	r.beginPasskeyLogin(api)
-	r.finishPasskeyLogin(api)
-
-	r.beginPasskeyRegistration(api)
-	r.finishPasskeyRegistration(api)
-	r.listPasskeys(api)
-	r.renamePasskey(api)
-	r.deletePasskey(api)
-}
 
 // _reauthRequired is the problem detail of a register/begin refused for a stale sign-in. Clients
 // match on it to ask for the password again, so it must not change.
@@ -35,14 +19,14 @@ const _reauthRequired = "reauthentication required"
 type beginPasskeyRegistrationInput struct{}
 
 type beginPasskeyRegistrationOutput struct {
-	Body response.PasskeyCeremony
+	Body PasskeyCeremony
 }
 
 type finishPasskeyRegistrationInput struct {
 	CeremonyToken string `header:"X-Ceremony-Token" required:"true" minLength:"1" doc:"The ceremony_token from begin"`
 	Name          string `query:"name" maxLength:"64" doc:"A label for the passkey; defaults to \"Passkey\""`
 
-	Body request.PasskeyCredential
+	Body PasskeyCredential
 }
 
 type finishPasskeyRegistrationOutput struct {
@@ -52,10 +36,10 @@ type finishPasskeyRegistrationOutput struct {
 type listPasskeysInput struct{}
 
 type listPasskeysOutput struct {
-	Body response.PasskeyList
+	Body PasskeyList
 }
 
-func (r *V1) beginPasskeyRegistration(api huma.API) {
+func (r *controller) beginPasskeyRegistration(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "begin-passkey-registration",
 		Summary:     "Begin adding a passkey",
@@ -66,7 +50,7 @@ func (r *V1) beginPasskeyRegistration(api huma.API) {
 		Method:   http.MethodPost,
 		Path:     "/v1/passkeys/register/begin",
 		Tags:     []string{_passkeysTag},
-		Security: []map[string][]string{{_bearerAuthScheme: {}}},
+		Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:   []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*beginPasskeyRegistrationOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -92,14 +76,14 @@ func (r *V1) beginPasskeyRegistration(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &beginPasskeyRegistrationOutput{Body: response.PasskeyCeremony{
+		return &beginPasskeyRegistrationOutput{Body: PasskeyCeremony{
 			Options:       options,
 			CeremonyToken: token,
 		}}, nil
 	})
 }
 
-func (r *V1) finishPasskeyRegistration(api huma.API) {
+func (r *controller) finishPasskeyRegistration(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "finish-passkey-registration",
 		Summary:       "Finish adding a passkey",
@@ -108,7 +92,7 @@ func (r *V1) finishPasskeyRegistration(api huma.API) {
 		Path:          "/v1/passkeys/register/finish",
 		Tags:          []string{_passkeysTag},
 		DefaultStatus: http.StatusCreated,
-		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors: []int{
 			http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusInternalServerError,
 		},
@@ -137,7 +121,7 @@ func (r *V1) finishPasskeyRegistration(api huma.API) {
 	})
 }
 
-func (r *V1) listPasskeys(api huma.API) {
+func (r *controller) listPasskeys(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-passkeys",
 		Summary:     "List passkeys",
@@ -145,7 +129,7 @@ func (r *V1) listPasskeys(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/passkeys",
 		Tags:        []string{_passkeysTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *listPasskeysInput) (*listPasskeysOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -160,7 +144,7 @@ func (r *V1) listPasskeys(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &listPasskeysOutput{Body: response.NewPasskeyList(passkeys)}, nil
+		return &listPasskeysOutput{Body: NewPasskeyList(passkeys)}, nil
 	})
 }
 
@@ -170,7 +154,7 @@ type passkeyPathInput struct {
 
 type renamePasskeyInput struct {
 	ID   string `path:"id" example:"AQIDBA" doc:"The passkey's ID, unpadded base64url"`
-	Body request.RenamePasskey
+	Body RenamePasskey
 }
 
 type renamePasskeyOutput struct {
@@ -181,7 +165,7 @@ type deletePasskeyOutput struct {
 	Status int
 }
 
-func (r *V1) renamePasskey(api huma.API) {
+func (r *controller) renamePasskey(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "rename-passkey",
 		Summary:     "Rename a passkey",
@@ -189,7 +173,7 @@ func (r *V1) renamePasskey(api huma.API) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/passkeys/{id}",
 		Tags:        []string{_passkeysTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *renamePasskeyInput) (*renamePasskeyOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -212,7 +196,7 @@ func (r *V1) renamePasskey(api huma.API) {
 	})
 }
 
-func (r *V1) deletePasskey(api huma.API) {
+func (r *controller) deletePasskey(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-passkey",
 		Summary:     "Delete a passkey",
@@ -221,7 +205,7 @@ func (r *V1) deletePasskey(api huma.API) {
 		Method:        http.MethodDelete,
 		Path:          "/v1/passkeys/{id}",
 		Tags:          []string{_passkeysTag},
-		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *passkeyPathInput) (*deletePasskeyOutput, error) {
@@ -248,20 +232,20 @@ func (r *V1) deletePasskey(api huma.API) {
 type beginPasskeyLoginInput struct{}
 
 type beginPasskeyLoginOutput struct {
-	Body response.PasskeyCeremony
+	Body PasskeyCeremony
 }
 
 type finishPasskeyLoginInput struct {
 	CeremonyToken string `header:"X-Ceremony-Token" required:"true" minLength:"1" doc:"The ceremony_token from begin"`
 
-	Body request.PasskeyCredential
+	Body PasskeyCredential
 }
 
 type finishPasskeyLoginOutput struct {
 	Body response.Token
 }
 
-func (r *V1) beginPasskeyLogin(api huma.API) {
+func (r *controller) beginPasskeyLogin(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "begin-passkey-login",
 		Summary:     "Begin passkey login",
@@ -270,7 +254,7 @@ func (r *V1) beginPasskeyLogin(api huma.API) {
 			"X-Ceremony-Token header.",
 		Method: http.MethodPost,
 		Path:   "/v1/auth/passkey/begin",
-		Tags:   []string{_authTag},
+		Tags:   []string{apidoc.AuthTag},
 		Errors: []int{http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*beginPasskeyLoginOutput, error) {
 		options, token, err := r.pk.BeginLogin(ctx)
@@ -280,14 +264,14 @@ func (r *V1) beginPasskeyLogin(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &beginPasskeyLoginOutput{Body: response.PasskeyCeremony{
+		return &beginPasskeyLoginOutput{Body: PasskeyCeremony{
 			Options:       options,
 			CeremonyToken: token,
 		}}, nil
 	})
 }
 
-func (r *V1) finishPasskeyLogin(api huma.API) {
+func (r *controller) finishPasskeyLogin(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "finish-passkey-login",
 		Summary:     "Finish passkey login",
@@ -295,7 +279,7 @@ func (r *V1) finishPasskeyLogin(api huma.API) {
 			"A ceremony completes once; finishing it again is a conflict.",
 		Method: http.MethodPost,
 		Path:   "/v1/auth/passkey/finish",
-		Tags:   []string{_authTag},
+		Tags:   []string{apidoc.AuthTag},
 		Errors: []int{
 			http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusInternalServerError,
 		},

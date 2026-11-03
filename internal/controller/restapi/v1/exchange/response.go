@@ -1,4 +1,4 @@
-package response
+package exchange
 
 import (
 	"time"
@@ -21,7 +21,7 @@ type Conversion struct {
 }
 
 // ExchangeHistory -.
-type ExchangeHistory struct {
+type ExchangeHistory struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	History []Conversion `json:"history"`
 	Total   int          `json:"total" example:"42"`
 }

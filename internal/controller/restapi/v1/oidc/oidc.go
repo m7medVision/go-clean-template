@@ -1,4 +1,4 @@
-package v1
+package oidc
 
 import (
 	"context"
@@ -6,54 +6,43 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
-// NewOIDCRoutes registers the SSO status and sign-in operations.
-func NewOIDCRoutes(api huma.API, oc usecase.OIDC, l logger.Interface) {
-	r := &V1{oc: oc, l: l}
-
-	r.oidcStatus(api)
-	r.beginOIDC(api)
-	r.finishOIDC(api)
-}
-
 type oidcStatusOutput struct {
-	Body response.OIDCStatus
+	Body OIDCStatus
 }
 
 type beginOIDCOutput struct {
-	Body response.OIDCRedirect
+	Body OIDCRedirect
 }
 
 type finishOIDCInput struct {
 	CeremonyToken string `header:"X-Ceremony-Token" required:"true" minLength:"1" doc:"The ceremony_token from begin"`
 
-	Body request.OIDCCallback
+	Body OIDCCallback
 }
 
 type finishOIDCOutput struct {
 	Body response.Token
 }
 
-func (r *V1) oidcStatus(api huma.API) {
+func (r *controller) oidcStatus(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "oidc-status",
 		Summary:     "SSO status",
 		Description: "Whether SSO sign-in through an OpenID Connect provider is configured.",
 		Method:      http.MethodGet,
 		Path:        "/v1/auth/oidc",
-		Tags:        []string{_authTag},
+		Tags:        []string{apidoc.AuthTag},
 	}, func(_ context.Context, _ *struct{}) (*oidcStatusOutput, error) {
-		return &oidcStatusOutput{Body: response.OIDCStatus{Enabled: r.oc.Enabled()}}, nil
+		return &oidcStatusOutput{Body: OIDCStatus{Enabled: r.oc.Enabled()}}, nil
 	})
 }
 
-func (r *V1) beginOIDC(api huma.API) {
+func (r *controller) beginOIDC(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "begin-oidc",
 		Summary:     "Begin SSO sign-in",
@@ -61,7 +50,7 @@ func (r *V1) beginOIDC(api huma.API) {
 			"`url`, and finish with the code and state the provider sends back to /sso/callback.",
 		Method: http.MethodPost,
 		Path:   "/v1/auth/oidc/begin",
-		Tags:   []string{_authTag},
+		Tags:   []string{apidoc.AuthTag},
 		Errors: []int{http.StatusNotFound, http.StatusBadGateway, http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *struct{}) (*beginOIDCOutput, error) {
 		authURL, token, err := r.oc.Begin(ctx)
@@ -69,11 +58,11 @@ func (r *V1) beginOIDC(api huma.API) {
 			return nil, r.oidcError(err, "beginOIDC")
 		}
 
-		return &beginOIDCOutput{Body: response.OIDCRedirect{URL: authURL, CeremonyToken: token}}, nil
+		return &beginOIDCOutput{Body: OIDCRedirect{URL: authURL, CeremonyToken: token}}, nil
 	})
 }
 
-func (r *V1) finishOIDC(api huma.API) {
+func (r *controller) finishOIDC(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "finish-oidc",
 		Summary:     "Finish SSO sign-in",
@@ -81,7 +70,7 @@ func (r *V1) finishOIDC(api huma.API) {
 			"creates its user; an email or username that already belongs to an account is a conflict.",
 		Method: http.MethodPost,
 		Path:   "/v1/auth/oidc/finish",
-		Tags:   []string{_authTag},
+		Tags:   []string{apidoc.AuthTag},
 		Errors: []int{
 			http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict,
 			http.StatusBadGateway, http.StatusInternalServerError,
@@ -96,7 +85,7 @@ func (r *V1) finishOIDC(api huma.API) {
 	})
 }
 
-func (r *V1) oidcError(err error, op string) error {
+func (r *controller) oidcError(err error, op string) error {
 	switch {
 	case errors.Is(err, entity.ErrOIDCDisabled):
 		return huma.Error404NotFound("sso sign-in is not configured")

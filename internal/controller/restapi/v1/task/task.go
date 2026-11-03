@@ -1,4 +1,4 @@
-package v1
+package task
 
 import (
 	"context"
@@ -7,13 +7,12 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
 type createTaskInput struct {
-	Body request.CreateTask
+	Body CreateTask
 }
 
 type createTaskOutput struct {
@@ -27,7 +26,7 @@ type listTasksInput struct {
 }
 
 type listTasksOutput struct {
-	Body response.TaskList
+	Body TaskList
 }
 
 // status is the filter the query asks for, or nil for every status.
@@ -47,7 +46,7 @@ type taskPathInput struct {
 
 type updateTaskInput struct {
 	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Body request.UpdateTask
+	Body UpdateTask
 }
 
 type updateTaskOutput struct {
@@ -56,7 +55,7 @@ type updateTaskOutput struct {
 
 type transitionTaskInput struct {
 	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Body request.TransitionTask
+	Body TransitionTask
 }
 
 type transitionTaskOutput struct {
@@ -67,7 +66,7 @@ type deleteTaskOutput struct {
 	Status int
 }
 
-func (r *V1) createTask(api huma.API) {
+func (r *controller) createTask(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-task",
 		Summary:       "Create task",
@@ -75,7 +74,7 @@ func (r *V1) createTask(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/v1/tasks",
 		Tags:          []string{_tasksTag},
-		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusCreated,
 		Errors:        []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *createTaskInput) (*createTaskOutput, error) {
@@ -95,7 +94,7 @@ func (r *V1) createTask(api huma.API) {
 	})
 }
 
-func (r *V1) listTasks(api huma.API) {
+func (r *controller) listTasks(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-tasks",
 		Summary:     "List tasks",
@@ -103,7 +102,7 @@ func (r *V1) listTasks(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/tasks",
 		Tags:        []string{_tasksTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -118,11 +117,11 @@ func (r *V1) listTasks(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &listTasksOutput{Body: response.TaskList{Tasks: tasks, Total: total}}, nil
+		return &listTasksOutput{Body: TaskList{Tasks: tasks, Total: total}}, nil
 	})
 }
 
-func (r *V1) listAllTasks(api huma.API) {
+func (r *controller) listAllTasks(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-all-tasks",
 		Summary:     "List every user's tasks",
@@ -130,7 +129,7 @@ func (r *V1) listAllTasks(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/admin/tasks",
 		Tags:        []string{_tasksTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
 		caller, ok := middleware.Principal(ctx)
@@ -149,11 +148,11 @@ func (r *V1) listAllTasks(api huma.API) {
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
 
-		return &listTasksOutput{Body: response.TaskList{Tasks: tasks, Total: total}}, nil
+		return &listTasksOutput{Body: TaskList{Tasks: tasks, Total: total}}, nil
 	})
 }
 
-func (r *V1) getTask(api huma.API) {
+func (r *controller) getTask(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-task",
 		Summary:     "Get task",
@@ -161,7 +160,7 @@ func (r *V1) getTask(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/tasks/{id}",
 		Tags:        []string{_tasksTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *taskPathInput) (*updateTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -188,7 +187,7 @@ func (r *V1) getTask(api huma.API) {
 	})
 }
 
-func (r *V1) updateTask(api huma.API) {
+func (r *controller) updateTask(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-task",
 		Summary:     "Update task",
@@ -196,7 +195,7 @@ func (r *V1) updateTask(api huma.API) {
 		Method:      http.MethodPut,
 		Path:        "/v1/tasks/{id}",
 		Tags:        []string{_tasksTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *updateTaskInput) (*updateTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -223,7 +222,7 @@ func (r *V1) updateTask(api huma.API) {
 	})
 }
 
-func (r *V1) transitionTask(api huma.API) {
+func (r *controller) transitionTask(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "transition-task",
 		Summary:     "Transition task status",
@@ -231,7 +230,7 @@ func (r *V1) transitionTask(api huma.API) {
 		Method:      http.MethodPatch,
 		Path:        "/v1/tasks/{id}/status",
 		Tags:        []string{_tasksTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *transitionTaskInput) (*transitionTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
@@ -262,7 +261,7 @@ func (r *V1) transitionTask(api huma.API) {
 	})
 }
 
-func (r *V1) deleteTask(api huma.API) {
+func (r *controller) deleteTask(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-task",
 		Summary:       "Delete task",
@@ -270,7 +269,7 @@ func (r *V1) deleteTask(api huma.API) {
 		Method:        http.MethodDelete,
 		Path:          "/v1/tasks/{id}",
 		Tags:          []string{_tasksTag},
-		Security:      []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *taskPathInput) (*deleteTaskOutput, error) {

@@ -1,4 +1,4 @@
-package request
+package task
 
 import "github.com/m7medvision/go-clean-template/internal/entity"
 

@@ -1,4 +1,4 @@
-package v1
+package user
 
 import (
 	"context"
@@ -7,13 +7,13 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/request"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
 type registerInput struct {
-	Body request.Register
+	Body Register
 }
 
 type registerOutput struct {
@@ -21,7 +21,7 @@ type registerOutput struct {
 }
 
 type loginInput struct {
-	Body request.Login
+	Body Login
 }
 
 type loginOutput struct {
@@ -34,14 +34,14 @@ type profileOutput struct {
 	Body entity.User
 }
 
-func (r *V1) register(api huma.API) {
+func (r *controller) register(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "register",
 		Summary:       "Register",
 		Description:   "Register a new user",
 		Method:        http.MethodPost,
 		Path:          "/v1/auth/register",
-		Tags:          []string{_authTag},
+		Tags:          []string{apidoc.AuthTag},
 		DefaultStatus: http.StatusCreated,
 		Errors:        []int{http.StatusConflict, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *registerInput) (*registerOutput, error) {
@@ -60,14 +60,14 @@ func (r *V1) register(api huma.API) {
 	})
 }
 
-func (r *V1) login(api huma.API) {
+func (r *controller) login(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "login",
 		Summary:     "Login",
 		Description: "Authenticate user and get JWT token",
 		Method:      http.MethodPost,
 		Path:        "/v1/auth/login",
-		Tags:        []string{_authTag},
+		Tags:        []string{apidoc.AuthTag},
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *loginInput) (*loginOutput, error) {
 		token, err := r.u.Login(ctx, input.Body.Email, input.Body.Password)
@@ -85,7 +85,7 @@ func (r *V1) login(api huma.API) {
 	})
 }
 
-func (r *V1) profile(api huma.API) {
+func (r *controller) profile(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "profile",
 		Summary:     "Get profile",
@@ -93,7 +93,7 @@ func (r *V1) profile(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/user/profile",
 		Tags:        []string{_usersTag},
-		Security:    []map[string][]string{{_bearerAuthScheme: {}}},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *profileInput) (*profileOutput, error) {
 		userID, ok := middleware.UserID(ctx)
