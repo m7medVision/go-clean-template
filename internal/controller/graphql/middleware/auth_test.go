@@ -1,4 +1,4 @@
-package graphql
+package middleware_test
 
 import (
 	"net/http"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
@@ -25,8 +26,8 @@ func TestWithOptionalCallerPrincipal(t *testing.T) {
 		ok  bool
 	)
 
-	h := withOptionalCaller(manager, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		got, ok = Principal(r.Context())
+	h := middleware.WithOptionalCaller(manager, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got, ok = middleware.Principal(r.Context())
 	}))
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", http.NoBody)
@@ -42,8 +43,8 @@ func TestWithOptionalCallerAnonymous(t *testing.T) {
 
 	var ok bool
 
-	h := withOptionalCaller(jwt.New("secret", time.Hour), http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		_, ok = Principal(r.Context())
+	h := middleware.WithOptionalCaller(jwt.New("secret", time.Hour), http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		_, ok = middleware.Principal(r.Context())
 	}))
 
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql", http.NoBody))

@@ -1,0 +1,61 @@
+package exchange_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const _exchangeHistory = `query { exchangeHistory(limit: 5, offset: 10) {
+	total conversions { from to amount rate result rateDate } } }`
+
+func TestExchangeHistory(t *testing.T) {
+	t.Parallel()
+
+	ex := &fakeExchange{history: entity.ExchangeHistory{Total: 11, History: []entity.Conversion{{
+		From: "OMR", To: "CNY",
+		Amount:   decimal.RequireFromString("100.10"),
+		Rate:     decimal.RequireFromString("17.406483"),
+		Result:   decimal.RequireFromString("1742.39"),
+		RateDate: time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC),
+	}}}}
+
+	resp := do(t, ex, true, _exchangeHistory)
+
+	require.Empty(t, resp.Errors)
+	assert.JSONEq(t, `{"total":11,"conversions":[{"from":"OMR","to":"CNY","amount":"100.1",`+
+		`"rate":"17.406483","result":"1742.39","rateDate":"2026-10-19"}]}`, string(resp.Data["exchangeHistory"]))
+	assert.Equal(t, 5, ex.gotLimit)
+	assert.Equal(t, 10, ex.gotOffset)
+}
+
+func TestExchangeHistoryRejects(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name          string
+		authenticated bool
+		query         string
+		code          string
+	}{
+		{"no token", false, _exchangeHistory, "UNAUTHENTICATED"},
+		{"limit below 1", true, `query { exchangeHistory(limit: 0) { total } }`, "BAD_USER_INPUT"},
+		{"limit above 100", true, `query { exchangeHistory(limit: 101) { total } }`, "BAD_USER_INPUT"},
+		{"negative offset", true, `query { exchangeHistory(offset: -1) { total } }`, "BAD_USER_INPUT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ex := &fakeExchange{}
+
+			resp := do(t, ex, tc.authenticated, tc.query)
+
+			assert.Equal(t, tc.code, resp.Code(t))
+			assert.False(t, ex.called)
+		})
+	}
+}

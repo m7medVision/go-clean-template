@@ -1,4 +1,5 @@
-// Package graphql serves task CRUD over GraphQL, built with gqlgen.
+// Package graphql serves the GraphQL API, built with gqlgen. Each domain's resolvers live in their
+// own folder (task/, exchange/); this package joins them into the root resolver and serves it.
 package graphql
 
 import (
@@ -11,6 +12,8 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
@@ -21,7 +24,7 @@ const _playgroundTitle = "Go Clean Template GraphQL"
 // NewHandler builds the GraphQL endpoint.
 func NewHandler(tk usecase.Task, ex usecase.Exchange, jwtManager *jwt.Manager, l logger.Interface) http.Handler {
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
-		Resolvers: &Resolver{task: tk, exchange: ex, l: l},
+		Resolvers: newResolver(tk, ex, l),
 	}))
 
 	srv.AddTransport(transport.POST{})
@@ -29,10 +32,10 @@ func NewHandler(tk usecase.Task, ex usecase.Exchange, jwtManager *jwt.Manager, l
 	srv.SetRecoverFunc(func(_ context.Context, p any) error {
 		l.Error(fmt.Sprintf("graphql - panic: %v", p))
 
-		return newError(_codeInternal, _msgInternal)
+		return gqlerr.Internal()
 	})
 
-	return withOptionalCaller(jwtManager, srv)
+	return middleware.WithOptionalCaller(jwtManager, srv)
 }
 
 // NewPlayground serves the GraphiQL playground, which sends its queries to endpoint.
