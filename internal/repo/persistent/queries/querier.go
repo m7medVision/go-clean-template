@@ -24,8 +24,6 @@ type Querier interface {
 	CountAllTasks(ctx context.Context, status *string) (int64, error)
 	CountExchanges(ctx context.Context, userID string) (int64, error)
 	CountTasks(ctx context.Context, arg CountTasksParams) (int64, error)
-	// One statement, so the user and its identity are stored together or not at all.
-	CreateUserWithIdentity(ctx context.Context, arg CreateUserWithIdentityParams) error
 	DeleteExpiredChallenges(ctx context.Context) error
 	DeletePasskeyRow(ctx context.Context, id entity.PasskeyID) error
 	DeleteQueueMessage(ctx context.Context, id int64) error
@@ -38,7 +36,6 @@ type Querier interface {
 	GetTask(ctx context.Context, id string) (Task, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
-	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (User, error)
 	HasMarker(ctx context.Context, name string) (bool, error)
 	// InsertClaim reserves a value for owner_id. It affects no row when another owner holds the
 	// value, and one row when the value is new or owner_id holds it already.

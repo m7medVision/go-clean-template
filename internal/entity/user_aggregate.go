@@ -47,16 +47,17 @@ func NewUserAggregate(id, username, email, passwordHash string, at time.Time) (*
 	return u, claims
 }
 
-// NewOIDCUserAggregate creates a user on the first SSO sign-in of an identity. A taken email or
-// username is ErrAccountConflict, since accounts are never linked by email; a taken identity is
-// ErrUserAlreadyExists, a concurrent first sign-in of the same identity.
+// NewOIDCUserAggregate creates a user on the first SSO sign-in of an identity. A taken identity is
+// ErrUserAlreadyExists: a concurrent first sign-in of the same identity won. A taken email or username
+// is ErrAccountConflict, since accounts are never linked by email. The identity is claimed first, so a
+// race reads as the former even though the winner holds the same email.
 func NewOIDCUserAggregate(id, username, email, issuer, subject string, at time.Time) (*UserAggregate, []Claim) {
 	u := &UserAggregate{}
 	Record(u, UserRegisteredViaOIDC{UserID: id, Username: username, Email: email, Issuer: issuer, Subject: subject, At: at})
 
-	claims := u.nameClaims(ErrAccountConflict)
+	claims := []Claim{u.identityClaim(issuer, subject)}
 
-	return u, append(claims, u.identityClaim(issuer, subject))
+	return u, append(claims, u.nameClaims(ErrAccountConflict)...)
 }
 
 // ImportUserAggregate records a user written before users stored events, with their identities, as

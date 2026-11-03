@@ -150,12 +150,12 @@ The OIDC tasks need user (26–30), because the first SSO sign-in creates a `Use
 - [x] All gates pass, including the passkey integration tests
 
 ### Phase 6: OIDC and mail
-- [ ] 46. FinishOIDCLogin, BeginOIDCLogin, GetOIDCStatus
-- [ ] 47. OIDC registration, switch, REST on the buses, remove the old use case
-- [ ] 48. DeliverEmail; remove `usecase/contracts.go`
+- [x] 46. FinishOIDCLogin, BeginOIDCLogin, GetOIDCStatus
+- [x] 47. OIDC registration, switch, REST on the buses, remove the old use case
+- [x] 48. DeliverEmail; remove `usecase/contracts.go`
 
 ### Checkpoint G: every domain
-- [ ] No `internal/usecase/*/tracing.go`, no `usecase/contracts.go`, no `usecase_test` mocks
+- [x] No `internal/usecase/*/tracing.go`, no `usecase/contracts.go`, no `usecase_test` mocks
 
 ### Phase 7: Finish
 - [ ] 49. Backfill integration test

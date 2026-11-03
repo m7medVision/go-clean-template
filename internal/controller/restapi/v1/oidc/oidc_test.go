@@ -13,15 +13,16 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// fakeOIDC answers the OIDC command and queries on real buses, and keeps what FinishOIDCLogin was
+// sent.
 type fakeOIDC struct {
-	usecase.OIDC
-
 	enabled  bool
 	authURL  string
 	token    string
@@ -31,20 +32,27 @@ type fakeOIDC struct {
 	gotToken string
 }
 
-func (f *fakeOIDC) Enabled() bool { return f.enabled }
+func (f *fakeOIDC) buses() cqrs.Buses {
+	b := resttest.NewBuses()
 
-func (f *fakeOIDC) Begin(context.Context) (authURL, token string, err error) {
-	return f.authURL, f.token, f.err
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetOIDCStatus, bool](
+		func(context.Context, query.GetOIDCStatus) (bool, error) { return f.enabled, nil }))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginOIDCLogin, query.Started](
+		func(context.Context, query.BeginOIDCLogin) (query.Started, error) {
+			return query.Started{AuthURL: f.authURL, Token: f.token}, f.err
+		}))
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishOIDCLogin, command.SignedIn](
+		func(_ context.Context, c command.FinishOIDCLogin) (command.SignedIn, error) {
+			f.gotCode, f.gotState, f.gotToken = c.Code, c.State, c.Token
+
+			return command.SignedIn{Token: f.token}, f.err
+		}))
+
+	return b
 }
 
-func (f *fakeOIDC) Finish(_ context.Context, code, state, token string) (string, error) {
-	f.gotCode, f.gotState, f.gotToken = code, state, token
-
-	return f.token, f.err
-}
-
-func newRouterWithOIDC(cfg *config.Config, oc usecase.OIDC) http.Handler {
-	return resttest.NewRouter(cfg, cqrs.Buses{}, restapi.WithOIDC(oc))
+func newRouterWithOIDC(cfg *config.Config, oc *fakeOIDC) http.Handler {
+	return resttest.NewRouter(cfg, oc.buses(), restapi.WithOIDC())
 }
 
 // postFinish posts body to path with a ceremony token, as the web client posts the callback.

@@ -8,22 +8,31 @@ import (
 
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// fakeMail records what the handler delivers and fails with err.
+// fakeMail answers DeliverEmail on a real command bus: it records what it delivers and fails with
+// err.
 type fakeMail struct {
 	err       error
 	delivered []entity.Email
 }
 
-func (f *fakeMail) Deliver(_ context.Context, email entity.Email) error {
-	f.delivered = append(f.delivered, email)
+func (f *fakeMail) commands() *cqrs.Commands {
+	cmds := cqrs.NewCommands()
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeliverEmail, cqrs.Written](
+		func(_ context.Context, c command.DeliverEmail) (cqrs.Written, error) {
+			f.delivered = append(f.delivered, c.Email)
 
-	return f.err
+			return cqrs.Written{}, f.err
+		}))
+
+	return cmds
 }
 
 func TestMailController_Handle(t *testing.T) {
@@ -73,7 +82,7 @@ func TestMailController_Handle(t *testing.T) {
 			t.Parallel()
 
 			mail := &fakeMail{err: tc.deliverErr}
-			c := v1.NewMailController(mail, logger.New("error"))
+			c := v1.NewMailController(mail.commands(), logger.New("error"))
 
 			err := c.Handle(context.Background(), &worker.Message{ID: 1, Body: tc.body(t)})
 

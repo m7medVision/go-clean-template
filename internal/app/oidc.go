@@ -6,10 +6,7 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/repo"
-	persistIdentityRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/identity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 )
 
@@ -22,27 +19,15 @@ const (
 	_oidcCallbackPath = "/sso/callback"
 )
 
-// addOIDCUseCase adds the SSO use case.
-func addOIDCUseCase(deps featureDeps, uc *useCases) error {
-	oidcUseCase, err := newOIDCUseCase(deps.cfg, persistIdentityRepo.New(deps.pg), deps.jwt)
-	if err != nil {
-		return err
-	}
-
-	uc.oidc = oidcUseCase
-
-	return nil
-}
-
-// newOIDCUseCase builds the SSO use case. It never fails on the provider: that is discovered on the
-// first sign-in, so the app starts while it is down.
-func newOIDCUseCase(cfg *config.Config, identities repo.IdentityRepo, tokens *jwt.Manager) (usecase.OIDC, error) {
+// newSSO builds the SSO sign-in the OIDC handlers share. It never fails on the provider: that is
+// discovered on the first sign-in, so the app starts while it is down. With no OIDC_ISSUER it is off.
+func newSSO(cfg *config.Config) (*sso.SSO, error) {
 	state, err := jwt.NewScoped(cfg.JWT.Secret, _oidcStateScope, _oidcStateTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
 	}
 
-	return oidc.New(identities, state, tokens, &oidc.Config{
+	return sso.New(state, &sso.Config{
 		Issuer:       cfg.OIDC.Issuer,
 		ClientID:     cfg.OIDC.ClientID,
 		ClientSecret: cfg.OIDC.ClientSecret,

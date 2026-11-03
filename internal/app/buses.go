@@ -21,6 +21,8 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
+	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
@@ -83,6 +85,16 @@ func registerHandlers(
 		return err
 	}
 
+	signIn, err := newSSO(cfg)
+	if err != nil {
+		return err
+	}
+
+	mailDeps, err := newMailDeps(cfg)
+	if err != nil {
+		return err
+	}
+
 	task.Register(cmds, qs, task.Deps{Store: store, Tasks: persistTaskRepo.NewReadModel(pg)})
 	user.Register(cmds, qs, user.Deps{Store: store, Users: persistUserRepo.NewReadModel(pg), Tokens: tokens})
 	exchange.Register(cmds, qs, exchange.Deps{
@@ -92,6 +104,8 @@ func registerHandlers(
 		Ceremony: passkeyCeremony, Store: store, Users: persistUserRepo.NewReadModel(pg),
 		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Tx: pg, Tokens: tokens,
 	})
+	oidc.Register(cmds, qs, oidc.Deps{SSO: signIn, Store: store, Tokens: tokens})
+	mail.Register(cmds, mailDeps)
 
 	return nil
 }

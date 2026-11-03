@@ -43,13 +43,13 @@ func TestNewOIDCUserAggregateHasNoPasswordAndClaimsItsIdentity(t *testing.T) {
 	}}, user.Pending())
 	assert.Empty(t, user.State().PasswordHash)
 	assert.Equal(t, []entity.Claim{
-		{Scope: entity.ClaimUserEmail, Value: "jo@example.com", Owner: _userID, Taken: entity.ErrAccountConflict},
-		{Scope: entity.ClaimUserUsername, Value: "jo", Owner: _userID, Taken: entity.ErrAccountConflict},
 		{
 			Scope: entity.ClaimOIDCIdentity, Value: entity.OIDCIdentity(_issuer, _subject), Owner: _userID,
 			Taken: entity.ErrUserAlreadyExists,
 		},
-	}, claims)
+		{Scope: entity.ClaimUserEmail, Value: "jo@example.com", Owner: _userID, Taken: entity.ErrAccountConflict},
+		{Scope: entity.ClaimUserUsername, Value: "jo", Owner: _userID, Taken: entity.ErrAccountConflict},
+	}, claims, "the identity first, so a racing first sign-in reads as the identity taken")
 }
 
 func TestImportUserAggregateRecordsTheRowAndItsIdentities(t *testing.T) {

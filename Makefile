@@ -174,10 +174,8 @@ integration-test: ### run integration-test
 .PHONY: integration-test
 
 mock: ### run mockgen
-	mockgen -source ./internal/repo/contracts.go -package usecase_test > ./internal/usecase/mocks_repo_test.go
 	mkdir -p ./internal/repo/repomock
 	mockgen -source ./internal/repo/contracts.go -package repomock > ./internal/repo/repomock/repomock.go
-	mockgen -source ./internal/usecase/contracts.go -package usecase_test > ./internal/usecase/mocks_usecase_test.go
 .PHONY: mock
 
 schema-apply: ### apply desired schema to the database (Atlas)

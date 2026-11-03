@@ -527,11 +527,11 @@ their three tests. **Size:** L (six small files)
 ## Phase 6: OIDC and mail
 
 ### 46. FinishOIDCLogin, BeginOIDCLogin, GetOIDCStatus
-- [ ] `FinishOIDCLogin` looks up the `oidc.identity` claim. For an unknown identity, it saves a
+- [x] `FinishOIDCLogin` looks up the `oidc.identity` claim. For an unknown identity, it saves a
       `UserRegisteredViaOIDC` with the email, username and identity claims, and gives today's
       `ErrAccountConflict` when they're taken. It returns today's token with the mapped roles.
-- [ ] With no provider configured, both OIDC messages give `ErrOIDCDisabled`, as today.
-- [ ] Tests.
+- [x] With no provider configured, both OIDC messages give `ErrOIDCDisabled`, as today.
+- [x] Tests.
 
 **Verify:** G1. **Depends on:** 26, 28.
 **Files:** `internal/usecase/oidc/command/finish_oidc_login.go`, its test,
@@ -539,9 +539,9 @@ their three tests. **Size:** L (six small files)
 **Size:** L (six small files)
 
 ### 47. OIDC registration, switch, REST on the buses, remove the old use case
-- [ ] `oidc.Register` is wired up. The OIDC controller uses the buses, and `WithOIDC()` carries no
+- [x] `oidc.Register` is wired up. The OIDC controller uses the buses, and `WithOIDC()` carries no
       use case.
-- [ ] `usecase.OIDC`, `oidc.go`, its `tracing.go` and the old OIDC tests are gone.
+- [x] `usecase.OIDC`, `oidc.go`, its `tracing.go` and the old OIDC tests are gone.
       `integration-test/oidc_test.go` passes against Keycloak.
 
 **Verify:** G3. **Depends on:** 22, 46.
@@ -549,9 +549,9 @@ their three tests. **Size:** L (six small files)
 `oidc.go`, `internal/controller/restapi/oidc.go`, `internal/app/oidc.go`. **Size:** M
 
 ### 48. DeliverEmail; remove `usecase/contracts.go`
-- [ ] The `DeliverEmail` command and its handler render and send as `Deliver` does today. The
+- [x] The `DeliverEmail` command and its handler render and send as `Deliver` does today. The
       worker's mail queue handler sends it on the command bus.
-- [ ] `usecase.Mail`, `usecase/contracts.go` (now empty), the `usecase_test` mocks and their
+- [x] `usecase.Mail`, `usecase/contracts.go` (now empty), the `usecase_test` mocks and their
       `make mock` lines are gone. `mail_test.go` passes.
 
 **Verify:** G3. **Depends on:** 13.
@@ -559,7 +559,7 @@ their three tests. **Size:** L (six small files)
 `internal/controller/worker/v1/mail.go`, `internal/usecase/contracts.go`, `Makefile`. **Size:** M
 
 ### Checkpoint G: every domain
-- [ ] No `internal/usecase/*/tracing.go`, no `usecase/contracts.go`, and no `usecase_test` mocks
+- [x] No `internal/usecase/*/tracing.go`, no `usecase/contracts.go`, and no `usecase_test` mocks
       remain. G3 is green.
 
 ---

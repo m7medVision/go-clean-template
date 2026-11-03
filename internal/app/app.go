@@ -12,7 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/httpserver"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -23,17 +22,14 @@ import (
 )
 
 type useCases struct {
-	// buses are the command and query buses: each converted domain registers its handlers on them,
-	// and the transports send through them.
+	// buses are the command and query buses: every domain registers its handlers on them, and the
+	// transports and the worker send through them.
 	buses cqrs.Buses
-
-	mail usecase.Mail
-	oidc usecase.OIDC
 }
 
-// initUseCases builds every use case.
+// initUseCases builds the buses and registers every domain's handlers on them.
 // The worker builds them with the same call.
-// It fails when an optional feature's use case cannot be built from its settings.
+// It fails when a handler cannot be built from its settings, such as a broken email template.
 func initUseCases(
 	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l logger.Interface,
 ) (useCases, error) {
@@ -42,39 +38,14 @@ func initUseCases(
 		return useCases{}, err
 	}
 
-	uc := useCases{
-		buses: cqrs.Buses{Commands: cmds, Queries: qs},
-	}
-
-	deps := featureDeps{cfg: cfg, pg: pg, jwt: jwtManager}
-
-	for _, add := range []addUseCase{
-		addMailUseCase,
-		addOIDCUseCase,
-	} {
-		if err := add(deps, &uc); err != nil {
-			return useCases{}, err
-		}
-	}
-
-	return uc, nil
+	return useCases{buses: cqrs.Buses{Commands: cmds, Queries: qs}}, nil
 }
-
-// featureDeps is what an optional feature's use case is built from.
-type featureDeps struct {
-	cfg *config.Config
-	pg  *postgres.Postgres
-	jwt *jwt.Manager
-}
-
-// addUseCase builds one optional feature's use case into uc. Each lives in the feature's file here.
-type addUseCase func(deps featureDeps, uc *useCases) error
 
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
 	router := restapi.NewRouter(
 		cfg, uc.buses, jwtManager, l,
 		restapi.WithPasskeys(),
-		restapi.WithOIDC(uc.oidc),
+		restapi.WithOIDC(),
 	)
 	mountGraphQL(router, cfg, uc, jwtManager, l)
 

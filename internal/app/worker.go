@@ -67,7 +67,7 @@ func RunWorker(cfg *config.Config) {
 	)
 	workerctl.NewRouter(
 		w, l,
-		workerctl.WithMail(uc.mail),
+		workerctl.WithMail(uc.buses.Commands),
 	)
 
 	w.Start()

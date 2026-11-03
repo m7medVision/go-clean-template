@@ -12,7 +12,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-//go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 //go:generate mockgen -source=contracts.go -destination=repomock/repomock.go -package=repomock
 
 type (
@@ -74,15 +73,6 @@ type (
 	UserReadModel interface {
 		ByID(ctx context.Context, id string) (entity.User, error)
 		ByEmail(ctx context.Context, email string) (entity.User, error)
-	}
-
-	// IdentityRepo links identities at an OpenID Connect provider, keyed by (issuer, subject), to
-	// users. UserByIdentity of an unlinked identity is entity.ErrUserNotFound. CreateWithIdentity
-	// stores a user with no password together with its identity; an email or username already taken
-	// is entity.ErrAccountConflict, and an identity already linked is entity.ErrUserAlreadyExists.
-	IdentityRepo interface {
-		UserByIdentity(ctx context.Context, issuer, subject string) (entity.User, error)
-		CreateWithIdentity(ctx context.Context, user *entity.User, issuer, subject string) error
 	}
 
 	// TaskReadModel reads the tasks table, which only the task projector writes. Get of a missing

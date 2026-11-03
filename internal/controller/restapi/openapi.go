@@ -18,7 +18,7 @@ func OpenAPI(version string) ([]byte, error) {
 
 	for _, opt := range []Option{
 		WithPasskeys(),
-		WithOIDC(nil),
+		WithOIDC(),
 	} {
 		opt(api, cqrs.Buses{}, nil)
 	}

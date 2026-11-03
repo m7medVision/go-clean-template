@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/passkey"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
@@ -37,6 +36,6 @@ func NewPasskeyRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
 }
 
 // NewOIDCRoutes registers the SSO status and sign-in operations.
-func NewOIDCRoutes(api huma.API, oc usecase.OIDC, l logger.Interface) {
-	oidc.NewRoutes(api, oc, l)
+func NewOIDCRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+	oidc.NewRoutes(api, b, l)
 }

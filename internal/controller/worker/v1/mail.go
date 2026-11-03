@@ -6,25 +6,26 @@ import (
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // MailController -.
 type MailController struct {
-	mail usecase.Mail
+	cmds *cqrs.Commands
 	l    logger.Interface
 }
 
 // NewMailController -.
-func NewMailController(m usecase.Mail, l logger.Interface) *MailController {
-	return &MailController{mail: m, l: l}
+func NewMailController(cmds *cqrs.Commands, l logger.Interface) *MailController {
+	return &MailController{cmds: cmds, l: l}
 }
 
 // NewMailRoutes -.
-func NewMailRoutes(w *worker.Worker, m usecase.Mail, l logger.Interface) {
-	w.Handle(entity.EmailQueue, NewMailController(m, l).Handle)
+func NewMailRoutes(w *worker.Worker, cmds *cqrs.Commands, l logger.Interface) {
+	w.Handle(entity.EmailQueue, NewMailController(cmds, l).Handle)
 }
 
 // Handle delivers one email from entity.EmailQueue. The body is the envelope entity.EncodeEmail
@@ -43,15 +44,15 @@ func (c *MailController) Handle(ctx context.Context, msg *worker.Message) error 
 		return nil
 	}
 
-	err = c.mail.Deliver(ctx, email)
+	_, err = cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeliverEmail{Email: email})
 	if errors.Is(err, entity.ErrUnknownEmail) {
-		c.l.Error(fmt.Errorf("worker - v1 - Mail - c.mail.Deliver: message %d: %w", msg.ID, err))
+		c.l.Error(fmt.Errorf("worker - v1 - Mail - DeliverEmail: message %d: %w", msg.ID, err))
 
 		return nil
 	}
 
 	if err != nil {
-		return fmt.Errorf("worker - v1 - Mail - c.mail.Deliver: message %d: %w", msg.ID, err)
+		return fmt.Errorf("worker - v1 - Mail - DeliverEmail: message %d: %w", msg.ID, err)
 	}
 
 	return nil
