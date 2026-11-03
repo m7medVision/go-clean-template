@@ -46,7 +46,10 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
 4. **Controllers call use cases, never repositories.** No SQL, no `pkg/postgres`, no outbound HTTP in a
    controller.
 5. **Transports are independent.** The packages under `internal/controller/` never import each other.
-   Logic two transports share belongs in a use case.
+   Logic two transports share belongs in a use case. Inside a transport, the domain folders
+   (`restapi/v1/task`, `grpc/v1/task`, `graphql/task`, …) never import each other either; what
+   several domains share has its own package in that transport (`restapi/v1/response`,
+   `restapi/v1/apidoc`, `graphql/middleware`, `graphql/gqlerr`, `graphql/paging`).
 6. **`pkg/` never imports `internal/` or `config/`.** It takes its settings as arguments.
 7. **Wiring happens once,** in `internal/app/app.go`. Nothing else constructs its own dependencies.
 
@@ -78,7 +81,7 @@ Ask what the code knows about:
 | SQL | `internal/repo/persistent/queries/<domain>.sql`, then `make sqlc` |
 | a table or a driver error code | `internal/repo/persistent/<domain>/<domain>.go` |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` |
-| a transport status or error code | `internal/controller/<transport>/v1/<domain>.go` |
+| a transport status or error code | `internal/controller/<transport>/v1/<domain>/` (GraphQL: `internal/controller/graphql/<domain>/`) |
 | a queue message | `internal/controller/worker/v1/<name>.go` |
 | a server, client or middleware with no domain knowledge | `pkg/<name>/` |
 
@@ -107,7 +110,7 @@ know:
 
 - REST: `middleware.Principal`
 - gRPC: `grpcmw.PrincipalFromContext`
-- GraphQL: `graphql.Principal`
+- GraphQL: `middleware.Principal` (in `graphql/middleware`)
 
 A handler passes the
 principal to the use cases that check roles, such as
@@ -123,10 +126,10 @@ effect at the next sign-in.
 | [`cmd/worker`](../cmd/worker/main.go) | Reads config, then `RunWorker` in `internal/app/worker.go`. Same Docker image as the app (`/worker` instead of `/app`); it never applies the schema. |
 | [`cmd/openapi`](../cmd/openapi/main.go) | Prints the REST OpenAPI document without a server or database. `make openapi` writes it to `docs/openapi/v1.json`. |
 | [`internal/app`](../internal/app) | Wiring. `app.go` constructs every repository and use case once (`initUseCases`; each optional feature adds its own from its file here), starts the servers (`initServers`) and waits for a signal to shut down. See [Schema](#schema) for `migrate.go`. |
-| [`internal/controller`](../internal/controller) | One package per transport, each with its own `v1/request` and `v1/response` DTOs. Handlers decode, call a use case, map `entity.Err*` sentinels to a transport status, and encode. |
-| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. |
-| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. |
-| [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen) resolvers mounted on the REST router. |
+| [`internal/controller`](../internal/controller) | One package per transport. Inside each, one folder per domain (`restapi/v1/task/`, `grpc/v1/task/`, `graphql/task/`) holds that domain's handlers, request and response DTOs, and tests; the version's `router.go` registers every domain. Handlers decode, call a use case, map `entity.Err*` sentinels to a transport status, and encode. |
+| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `v1/response/` (`Token`) and `v1/apidoc/` (the security scheme and the `auth` tag) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with. |
+| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which `v1/router.go` registers. |
+| [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen), mounted on the REST router. One folder per domain (`task/`, `exchange/`) holds its resolvers and their tests; `resolver.go` joins them into the root `Query` and `Mutation`. `middleware/` (the caller), `gqlerr/` (error codes) and `paging/` are shared, and `graphqltest/` is the test kit. gqlgen generates only `generated/` and `model/`. |
 | [`internal/controller/worker`](../internal/controller/worker) | The queue worker's message handlers. |
 | [`internal/entity`](../internal/entity) | Domain types, their invariants (`Task.Transition`, `entity.NewConversion`) and sentinel errors. |
 | [`internal/usecase`](../internal/usecase) | Business logic, one package per domain. Every constructor returns its interface wrapped in a tracing decorator (`tracing.go`). |

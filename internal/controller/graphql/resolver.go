@@ -1,90 +1,47 @@
 package graphql
 
 import (
-	"context"
-	"errors"
-	"unicode/utf8"
-
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/exchange"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
-const (
-	_codeUnauthenticated = "UNAUTHENTICATED"
-	_codeBadUserInput    = "BAD_USER_INPUT"
-	_codeNotFound        = "NOT_FOUND"
-	_codeForbidden       = "FORBIDDEN"
-	_codeInternal        = "INTERNAL"
-
-	_msgUnauthorized = "unauthorized"
-	_msgInvalidInput = "invalid input"
-	_msgInternal     = "internal server error"
-
-	_maxTitleLen       = 255
-	_maxDescriptionLen = 1000
-	_minLimit          = 1
-	_maxLimit          = 100
-
-	// _resultPlaces matches the scale entity.Conversion rounds Result to.
-	_resultPlaces = 2
+// The root Query and Mutation embed each domain's resolver, so the domain's methods become theirs.
+// Go names an embedded field after its type, and every domain calls its types Query and Mutation,
+// so each is embedded through an alias that gives its field a distinct name. A schema field no
+// domain resolves fails the build with "missing method <Field>".
+type (
+	taskQuery     = task.Query
+	taskMutation  = task.Mutation
+	exchangeQuery = exchange.Query
 )
 
-// Resolver -.
-type Resolver struct {
-	task     usecase.Task
-	exchange usecase.Exchange
-	l        logger.Interface
+type query struct {
+	taskQuery
+	exchangeQuery
 }
 
-type errorMapping struct {
-	sentinel error
-	code     string
-	message  string
+type mutation struct {
+	taskMutation
 }
 
-func newError(code, message string) *gqlerror.Error {
-	return &gqlerror.Error{Message: message, Extensions: map[string]any{"code": code}}
+// resolver is the root gqlgen asks for the Query and Mutation resolvers.
+type resolver struct {
+	query    query
+	mutation mutation
 }
 
-func caller(ctx context.Context) (string, error) {
-	userID, ok := UserID(ctx)
-	if !ok {
-		return "", newError(_codeUnauthenticated, _msgUnauthorized)
+func newResolver(tk usecase.Task, ex usecase.Exchange, l logger.Interface) *resolver {
+	taskQ, taskM := task.New(tk, l)
+
+	return &resolver{
+		query:    query{taskQuery: taskQ, exchangeQuery: exchange.New(ex, l)},
+		mutation: mutation{taskMutation: taskM},
 	}
-
-	return userID, nil
 }
 
-func validTaskInput(title string, description *string) bool {
-	titleLen := utf8.RuneCountInString(title)
+func (r *resolver) Query() generated.QueryResolver { return r.query }
 
-	return titleLen > 0 && titleLen <= _maxTitleLen &&
-		(description == nil || utf8.RuneCountInString(*description) <= _maxDescriptionLen)
-}
-
-func (r *Resolver) mapError(err error, op string) error {
-	for _, m := range []errorMapping{
-		{entity.ErrTaskNotFound, _codeNotFound, "task not found"},
-		{entity.ErrTaskForbidden, _codeForbidden, "forbidden"},
-		{entity.ErrAdminRequired, _codeForbidden, "admin role required"},
-		{entity.ErrInvalidTransition, _codeBadUserInput, "invalid status transition"},
-	} {
-		if errors.Is(err, m.sentinel) {
-			return newError(m.code, m.message)
-		}
-	}
-
-	r.l.Error(err, "graphql - "+op)
-
-	return newError(_codeInternal, _msgInternal)
-}
-
-func deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-
-	return *s
-}
+func (r *resolver) Mutation() generated.MutationResolver { return r.mutation }

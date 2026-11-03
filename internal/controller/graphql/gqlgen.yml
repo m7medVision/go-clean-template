@@ -3,19 +3,17 @@ schema:
 
 exec:
   package: generated
-  layout: single-file
-  filename: generated/generated.go
+  layout: follow-schema
+  dir: generated
+  filename_template: "{name}.generated.go"
 
 model:
   package: model
   filename: model/models_gen.go
 
-resolver:
-  package: graphql
-  layout: follow-schema
-  dir: .
-  filename_template: "{name}.resolvers.go"
-  omit_template_comment: true
+# No resolver section: gqlgen writes no resolver code. Each domain's resolvers are hand-written in
+# their own folder (task/, exchange/) and joined in resolver.go; a schema field nobody resolves
+# fails the build with "missing method <Field>".
 
 omit_slice_element_pointers: true
 omit_getters: true

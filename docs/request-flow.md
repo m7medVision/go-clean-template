@@ -28,7 +28,7 @@ sequenceDiagram
   participant W as Rate API client
   participant R as Postgres repo
   MW->>MW: trace span, metrics, auth → user ID in ctx
-  MW->>H: Huma decodes and validates request.Convert
+  MW->>H: Huma decodes and validates the Convert DTO
   H->>U: Convert(ctx, userID, "omr", "CNY", 100)
   U->>E: NewConversion: normalise and validate
   U->>W: Rate(ctx, "OMR", "CNY")
@@ -36,7 +36,7 @@ sequenceDiagram
   U->>E: ApplyRate: exact decimals, rounded half-even
   U->>R: Store(ctx, userID, conversion)
   U-->>H: entity.Conversion
-  H-->>MW: response.Conversion as JSON
+  H-->>MW: the Conversion DTO as JSON
 ```
 
 ## 0. Wiring
@@ -85,9 +85,9 @@ middleware in this order, before any handler runs:
 ## 2. Decode and validate (Huma)
 
 The handler is registered with [Huma](https://github.com/danielgtaylor/huma) in
-[`internal/controller/restapi/v1/exchange.go`](../internal/controller/restapi/v1/exchange.go). Its input
-type wraps a transport-local DTO from
-[`v1/request/exchange.go`](../internal/controller/restapi/v1/request/exchange.go):
+[`internal/controller/restapi/v1/exchange/exchange.go`](../internal/controller/restapi/v1/exchange/exchange.go),
+in the exchange domain's folder. Its input type wraps a transport-local DTO from the same folder's
+[`request.go`](../internal/controller/restapi/v1/exchange/request.go):
 
 ```go
 type Convert struct {
@@ -141,15 +141,16 @@ if err != nil {
 	return nil, huma.Error500InternalServerError("internal server error")
 }
 
-return &convertOutput{Body: response.NewConversion(&conversion)}, nil  // 5. entity → response DTO
+return &convertOutput{Body: NewConversion(&conversion)}, nil  // 5. entity → response DTO
 ```
 
 - `ctx` is Huma's request context, passed down unchanged. It carries the trace span and is cancelled
   if the client disconnects, which cancels the outbound HTTP call and the SQL insert below.
-- The handler never passes `request.Convert` to the use case, and never returns `entity.Conversion` as
+- The handler never passes the `Convert` DTO to the use case, and never returns `entity.Conversion` as
   the body. Both sides of the transport have their own types, so the API shape and the domain can
   change independently.
-- `response.NewConversion` turns every `decimal.Decimal` into a string and the date into
+- `NewConversion` (the folder's [`response.go`](../internal/controller/restapi/v1/exchange/response.go))
+  turns every `decimal.Decimal` into a string and the date into
   `YYYY-MM-DD`. Huma cannot describe `decimal.Decimal` in OpenAPI, and strings keep full precision in
   every client.
 - Only the controller knows HTTP status codes. Lower layers return sentinel errors from
@@ -322,10 +323,10 @@ error with the layer path goes only to the log.
 
 ## The same use case over gRPC
 
-[`internal/controller/grpc/v1/exchange.go`](../internal/controller/grpc/v1/exchange.go) is the same
+[`internal/controller/grpc/v1/exchange/exchange.go`](../internal/controller/grpc/v1/exchange/exchange.go) is the same
 five steps with different types: `grpcmw.UserIDFromContext` instead of the middleware, the generated
 `v1.ConvertRequest` instead of a Huma DTO, `codes.InvalidArgument` instead of 400, and
-`response.NewConversionResponse` instead of `response.NewConversion`. It calls the identical
+`NewConversionResponse` instead of `NewConversion`. It calls the identical
 `Convert`, so the two transports cannot disagree about a rule.
 
 On gRPC the gRPC interceptor rejects a missing or expired token with `Unauthenticated`. There are no

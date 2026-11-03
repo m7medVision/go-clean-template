@@ -179,8 +179,8 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 
 ## Versioning
 
-Each transport keeps its handlers in a `v1/` package. A v2 is a sibling package with the same layout,
-registered next to v1; v1 stays untouched.
+Each transport keeps its handlers under `v1/`, one folder per domain. A v2 is a sibling `v2/` with the
+same domain folders, registered next to v1; v1 stays untouched.
 
 REST, in [`internal/controller/restapi/router.go`](../internal/controller/restapi/router.go). The v2
 operations go on the same Huma API under `/v2/...` paths, so they share one OpenAPI document:

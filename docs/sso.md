@@ -18,7 +18,7 @@ The code, layer by layer:
 | Use case | [`internal/usecase/oidc`](../internal/usecase/oidc/oidc.go): the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2` |
 | Repository | [`internal/repo/persistent/identity`](../internal/repo/persistent/identity/identity.go), queries in [`queries/identity.sql`](../internal/repo/persistent/queries/identity.sql), table [`user_identities.hcl`](../internal/app/schema/user_identities.hcl) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
-| REST | [`internal/controller/restapi/v1/oidc.go`](../internal/controller/restapi/v1/oidc.go) |
+| REST | [`internal/controller/restapi/v1/oidc/`](../internal/controller/restapi/v1/oidc) |
 | Web | [`web/src/sso/`](../web/src/sso), with the button in [`use-sso-sign-in.ts`](../web/src/sso/use-sso-sign-in.ts) that [`routes/login.tsx`](../web/src/routes/login.tsx) offers, and the callback in [`routes/sso.callback.tsx`](../web/src/routes/sso.callback.tsx) |
 | Dev provider | [`keycloak/realm.json`](../keycloak/realm.json), the `keycloak` service in [`docker-compose.yml`](../docker-compose.yml) |
 
