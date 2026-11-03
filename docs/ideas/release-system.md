@@ -1,6 +1,6 @@
 # Release system: automatic tags, scaffold from a tag
 
-Status: built (see docs/releasing.md). The tooling became a small Go tool, `cmd/release`, instead of svu + git-cliff.
+Status: built (see docs/releasing.md). svu names the version and GoReleaser writes the notes and publishes the release, instead of svu + git-cliff. (A small Go tool, `cmd/release`, did both until it was replaced.)
 
 ## Problem statement
 

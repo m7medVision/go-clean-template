@@ -1,0 +1,32 @@
+# GoReleaser publishes the GitHub release for the tag `make release-version` names: notes from
+# the commits since the last tag, and no binaries. .github/workflows/release.yml runs it; see
+# docs/releasing.md.
+version: 2
+
+builds:
+  - skip: true
+
+changelog:
+  use: git
+  # Only what a release is cut for. Groups match the subject; the first match wins.
+  filters:
+    include:
+      - '^[a-z]+(\(.+\))?!:'
+      - '^(feat|fix|perf)(\(.+\))?:'
+  groups:
+    - title: Breaking changes
+      regexp: '^[a-z]+(\(.+\))?!:'
+      order: 0
+    - title: Features
+      regexp: '^feat(\(.+\))?:'
+      order: 1
+    - title: Fixes
+      regexp: '^fix(\(.+\))?:'
+      order: 2
+    - title: Performance
+      regexp: '^perf(\(.+\))?:'
+      order: 3
+
+release:
+  # The tag exists only in the runner's checkout: GitHub creates it on this commit.
+  target_commitish: '{{ .Commit }}'

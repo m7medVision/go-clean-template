@@ -26,3 +26,6 @@ coverage.txt
 
 # air build output (make dev)
 tmp/
+
+# GoReleaser output (release.yml, or a local dry run)
+/dist/

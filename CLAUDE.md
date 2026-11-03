@@ -47,7 +47,7 @@ different settings than CI. Use the target, not the tool.
 | Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
-| See what master would be released as | `make release-version`, `make release-notes` | tagging by hand — `release.yml` tags and releases on its own; see `docs/releasing.md` |
+| See what master would be released as | `make release-version` (svu); the notes: `gh workflow run release.yml` (GoReleaser dry run) | tagging by hand — `release.yml` tags and releases on its own; see `docs/releasing.md` |
 
 `make help` lists every target.
 
@@ -64,9 +64,9 @@ Traps in these targets:
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
 For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too.
 For changes to a GraphQL schema file or to an operation in `web/src/`, `make web-graphql` too.
-Commit subjects are Conventional Commits, and they name the release: a `feat`, `fix`, `perf` or
+Commit subjects are Conventional Commits, and they name the release: a `feat`, `fix` or
 breaking (`!`) commit merged to master is released as the next version (`docs/releasing.md`);
-`docs`, `ci`, `chore`, `test`, `build` and `refactor` release nothing. Never move or delete a `v*` tag.
+`perf`, `docs`, `ci`, `chore`, `test`, `build` and `refactor` release nothing. Never move or delete a `v*` tag.
 
 ## Dependency rule
 
@@ -312,7 +312,7 @@ the matching page whenever a change touches what it documents:
 | Queue or worker behaviour | `docs/worker.md` |
 | Email behaviour | the `Email` section of `docs/worker.md` |
 | Frontend stack or conventions | `docs/web.md` |
-| Release rules, `release.yml` or `cmd/release` | `docs/releasing.md` |
+| Release rules, `release.yml` or `.goreleaser.yaml` | `docs/releasing.md` |
 | The exchange `Convert` path (handler, use case, entity, webapi, repo) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
 
