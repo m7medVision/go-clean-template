@@ -567,7 +567,7 @@ their three tests. **Size:** L (six small files)
 ## Phase 7: Finish
 
 ### 49. Backfill integration test
-- [ ] For each domain, the test:
+- [x] For each domain, the test:
   1. writes rows straight into the domain's tables;
   2. removes its marker;
   3. runs the importer against the live database;
@@ -578,13 +578,13 @@ their three tests. **Size:** L (six small files)
 **Files:** `integration-test/backfill_test.go`. **Size:** S
 
 ### 50. Reference docs
-- [ ] `docs/cqrs.md` is new, covering:
+- [x] `docs/cqrs.md` is new, covering:
   - vocabulary and flow;
   - how to add a command, a query, an event, a projector and an event handler;
   - rebuild;
   - the append lock;
   - the behaviour changes.
-- [ ] Updated to match the code: `docs/architecture.md` (Rules, Packages), `docs/worker.md`
+- [x] Updated to match the code: `docs/architecture.md` (Rules, Packages), `docs/worker.md`
       (subscribers, rebuild), `docs/development.md` (the worker is required), and the
       Clean Architecture section of `README.md`.
 
@@ -593,7 +593,7 @@ their three tests. **Size:** L (six small files)
 `README.md`. **Size:** M
 
 ### 51. CLAUDE.md
-- [ ] Rewritten for the new shape:
+- [x] Rewritten for the new shape:
   - the dependency rule;
   - where code goes;
   - the controller layout (buses);
@@ -608,16 +608,16 @@ their three tests. **Size:** L (six small files)
 **Files:** `CLAUDE.md`. **Size:** S
 
 ### 52. Final verification and the PR
-- [ ] Backfill on the dev database:
+- [x] Backfill on the dev database:
   1. `pg_dump` the dev database to the scratchpad;
   2. record the API reads on `master`;
   3. start the branch;
   4. check that the reads are identical and every row has its `*Imported` event.
-- [ ] `make pre-commit`, G3 and every success criterion in the spec hold.
-- [ ] When you ask: push the branch and open the PR (subject decided by open question 2), and wait
+- [x] `make pre-commit`, G3 and every success criterion in the spec hold.
+- [x] When you ask: push the branch and open the PR (subject decided by open question 2), and wait
       for every CI check to be green.
 
 **Verify:** the above. **Depends on:** 49, 51. **Files:** none. **Size:** S
 
 ### Checkpoint H: complete
-- [ ] Ready for your review and merge.
+- [x] Ready for your review and merge.

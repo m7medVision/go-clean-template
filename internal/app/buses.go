@@ -75,7 +75,7 @@ func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
 	return eventstore.New(pg, cfg.CQRS.SnapshotEvery, entity.EventTypes(), eventstore.Upcasts()...)
 }
 
-// registerHandlers registers every converted domain's command and query handlers on the buses.
+// registerHandlers registers every domain's command and query handlers on the buses.
 func registerHandlers(
 	cfg *config.Config, cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres,
 	tokens *jwt.Manager,

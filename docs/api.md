@@ -1,7 +1,7 @@
 # API
 
-The three domains and how each transport exposes them. Every transport calls the same use cases, so
-behaviour and errors match across transports.
+The three domains and how each transport exposes them. Every transport sends the same commands and queries
+([cqrs.md](cqrs.md)), so behaviour and errors match across transports.
 
 | Transport | Local | Behind Caddy (`make compose-up-all`) |
 | --- | --- | --- |
@@ -118,6 +118,9 @@ changes show up in review and clients can generate types without a running serve
 - **Errors** are RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, and
   `errors` for validation failures. Read `detail` for the message. Validation errors name the failing
   `location` but never echo the submitted value.
+- **Any write** can also answer `503` when it is saved but the read models have not caught up within
+  `CQRS_CONSISTENCY_TIMEOUT` (read again shortly, don't write again), or `409` when the record changed
+  while the request ran, after retries ([cqrs.md](cqrs.md#reads-after-writes)).
 - **Validation** failures answer `422`. That includes query parameters: on `GET /v1/tasks`, `limit`
   must be at least 1, `offset` at least 0, and `status` one of `todo`, `in_progress`, `done`.
   Unknown fields in a request body are ignored.
@@ -147,7 +150,8 @@ history. The schemas are [task.graphqls](../internal/controller/graphql/schema/t
   `{"Authorization": "Bearer <token>"}` in its headers pane.
 - Resolvers check the bearer token themselves, so introspection works without one.
 - Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`
-  (the admin list without the `admin` role), `INTERNAL`. An expired token is `UNAUTHENTICATED` in a
+  (the admin list without the `admin` role), `UNAVAILABLE` and `CONFLICT` (a write's `503` and `409`
+on REST), `INTERNAL`. An expired token is `UNAUTHENTICATED` in a
   200 response.
 
 ## gRPC
@@ -175,7 +179,8 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
   one a call answers `Unauthenticated`.
 - Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
   user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
-  list without the `admin` role `PermissionDenied`, and anything else `Internal`.
+  list without the `admin` role `PermissionDenied`, a write the read models have not caught up with
+`Unavailable`, a write that lost to a concurrent one `Aborted`, and anything else `Internal`.
 
 ## Versioning
 
@@ -188,25 +193,16 @@ operations go on the same Huma API under `/v2/...` paths, so they share one Open
 ```go
 api := humachi.New(r, apiConfig)
 
-v1.NewRoutes(api, e, u, tk, l)
-v2.NewRoutes(api, e, u, tk, l)
+v1.NewRoutes(api, b, l)
+v2.NewRoutes(api, b, l)
 ```
 
 gRPC, in [`internal/controller/grpc/router.go`](../internal/controller/grpc/router.go), with the new
 protos in `docs/proto/v2`:
 
 ```go
-{
-	v1.NewAuthRoutes(app, u, l)
-	v1.NewTaskRoutes(app, tk, l)
-	v1.NewExchangeRoutes(app, e, l)
-}
-
-{
-	v2.NewAuthRoutes(app, u, l)
-	v2.NewTaskRoutes(app, tk, l)
-	v2.NewExchangeRoutes(app, e, l)
-}
+v1.NewRoutes(app, b, l)
+v2.NewRoutes(app, b, l)
 
 reflection.Register(app)
 ```

@@ -27,7 +27,7 @@ The panes are:
 - **app**: `.air.app.toml`, built with `-tags migrate`. It rebuilds on `.go`, `.hcl` and `.tmpl`
   changes, so saving a schema file re-syncs the database.
 - **worker**: `.air.worker.toml`. It starts once the app answers `/healthz`, because only the app
-  applies the schema.
+  applies the schema. It runs the projections the app's reads come from, so the app needs it.
 - **web**: the Vite+ dev server on http://localhost:3000.
 - **the compose services**, titled after them (`db + …`): their container logs.
 
@@ -53,9 +53,11 @@ make web-dev      # the web client on http://localhost:3000
 ```
 
 ```sh
-make run-worker   # the queue worker, once the app has applied the schema
+make run-worker   # the worker: projections and the queue, once the app has applied the schema
 ```
 
+`make run` alone is not enough: without the worker the read models never catch up, and every write
+answers `503` after `CQRS_CONSISTENCY_TIMEOUT` ([cqrs.md](cqrs.md#reads-after-writes)).
 `make run` regenerates the protobuf code first, so it needs `protoc` on `PATH`.
 `make bin-deps` installs the tools the targets run (`mockgen`, linters, `atlas`).
 

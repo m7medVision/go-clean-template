@@ -15,8 +15,9 @@ The code, layer by layer:
 | Layer | Where |
 | --- | --- |
 | Entity | [`internal/entity/role.go`](../internal/entity/role.go) (`Role`, `Principal`), sentinels in [`errors.go`](../internal/entity/errors.go) |
-| Use case | [`internal/usecase/oidc`](../internal/usecase/oidc/oidc.go): the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2` |
-| Repository | [`internal/repo/persistent/identity`](../internal/repo/persistent/identity/identity.go), queries in [`queries/identity.sql`](../internal/repo/persistent/queries/identity.sql), table [`user_identities.hcl`](../internal/app/schema/user_identities.hcl) |
+| Events | [`internal/entity/user_aggregate.go`](../internal/entity/user_aggregate.go): `NewOIDCUserAggregate` records `UserRegisteredViaOIDC` and claims the identity, the email and the username |
+| Use case | [`internal/usecase/oidc`](../internal/usecase/oidc): the queries `BeginOIDCLogin` and `GetOIDCStatus`, the command `FinishOIDCLogin`; [`sso/`](../internal/usecase/oidc/sso/sso.go) is the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2` |
+| Read model | the `user` projector in [`internal/repo/persistent/user`](../internal/repo/persistent/user/projector.go) writes `users` and [`user_identities`](../internal/app/schema/user_identities.hcl) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/oidc/`](../internal/controller/restapi/v1/oidc) |
 | Web | [`web/src/sso/`](../web/src/sso), with the button in [`use-sso-sign-in.ts`](../web/src/sso/use-sso-sign-in.ts) that [`routes/login.tsx`](../web/src/routes/login.tsx) offers, and the callback in [`routes/sso.callback.tsx`](../web/src/routes/sso.callback.tsx) |
@@ -34,9 +35,11 @@ It has the same shape as a passkey ceremony:
 2. The web client keeps the token in `sessionStorage` and sends the browser to the URL. The user signs
    in at the provider, which redirects to `APP_BASE_URL/sso/callback?code=…&state=…`.
 3. The callback route posts `{code, state}` to `POST /v1/auth/oidc/finish`, with the token in the
-   `X-Ceremony-Token` header. The use case checks the state against the token, exchanges the code with
-   the client secret and the verifier, and verifies the ID token: signature, issuer, audience, expiry
-   and nonce. It then finds or creates the user and returns `{token}`.
+   `X-Ceremony-Token` header. `FinishOIDCLogin` checks the state against the token, exchanges the code
+   with the client secret and the verifier, and verifies the ID token: signature, issuer, audience,
+   expiry and nonce. It then finds the identity's user through the identity's claim, or creates the
+   user, and returns `{token}`. The claim lives on the write side, so a second sign-in finds its user
+   even before the projector has written it.
 
 A code works once at the provider, so replaying a finished callback is refused. The redirect URI is
 derived from `APP_BASE_URL`, and it must be one of the client's redirect URIs at the provider.
@@ -69,7 +72,8 @@ in [architecture.md](architecture.md#roles).
 - Roles are fixed when the token is issued. Removing someone from the admin group takes effect at
   their next sign-in, at most `JWT_TOKEN_EXPIRY` (15 minutes by default) later.
 
-The one role-checked operation today is the admin task list (`Task.ListAll`): `GET /v1/admin/tasks`,
+The one role-checked operation today is the admin task list (the `ListAllTasks` query, refused by the
+buses' authorize step): `GET /v1/admin/tasks`,
 `query allTasks` and `TaskService/ListAllTasks`, shown in the web client as **All tasks**.
 
 ## Errors

@@ -1,8 +1,30 @@
 # Queue and worker
 
-Background work goes through a queue in Postgres, consumed by a separate binary, `cmd/worker`. There is
-no broker and no extension: the queue is one ordinary table on the stock Postgres image.
-Registration uses it to send a welcome email.
+The worker, `cmd/worker`, is a separate binary with two jobs. It runs the **projections**: the
+projectors that keep the read models up to date from the event store, and the event handlers that
+react to events. And it consumes a **queue** in Postgres. There is no broker and no extension: the
+queue is one ordinary table on the stock Postgres image. The welcome email after a registration
+uses both: an event handler enqueues it, a queue handler delivers it.
+
+The app needs the worker: a write waits for the projectors before it answers
+([cqrs.md](cqrs.md#reads-after-writes)).
+
+## Projections
+
+The worker starts one loop per subscriber listed in `subscribers` in `internal/app/buses.go`, next to
+the queue consumer, and stops them on the same SIGTERM. How a loop reads, commits and wakes is in
+[cqrs.md](cqrs.md#projections-and-event-handlers-internalrepopersistentprojection); its settings
+(`PROJECTION_POLL_INTERVAL`, `PROJECTION_BATCH_SIZE`) are in
+[configuration.md](configuration.md#cqrs).
+
+To rebuild one projector's read model from the events, with the worker running:
+
+```sh
+make projection-rebuild name=task
+```
+
+That runs `cmd/worker -rebuild task`, which empties the tables, resets the checkpoint, notifies the
+running worker and exits; the worker replays every event into them. Only projectors can be rebuilt.
 
 ## The queue
 
@@ -31,8 +53,8 @@ The settings are in [configuration.md](configuration.md#worker).
 
 Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker/v1) and are
 registered in `v1/router.go` (`w.Handle(queue, handler)`). A queue message is an inbound request like
-an HTTP call, so a handler has the same shape: decode the body into a `v1/request` DTO, call a use case
-with the handler's `ctx`, and return its error.
+an HTTP call, so a handler has the same shape: decode the body into a `v1/request` DTO, send a command
+on the command bus with the handler's `ctx`, and return its error.
 
 - `example.go` only logs the message. Try it with:
 
@@ -45,16 +67,22 @@ with the handler's `ctx`, and return its error.
 ### Adding a queue
 
 1. Handler: `internal/controller/worker/v1/<name>.go`, registered in `v1/router.go`.
-2. Producer: inject `repo.QueueRepo` into the use case and call `Send(ctx, "<name>", body)`.
+2. Producer: give the command or event handler a `repo.QueueRepo` and call `Send(ctx, "<name>", body)`.
+   `Send` joins the transaction in `ctx`, so from an event handler the message commits with the
+   handler's checkpoint, exactly once.
 
 ## Email
 
 Sending is asynchronous. The sender writes the email with `entity.EncodeEmail` and enqueues it on
 `entity.EmailQueue`.
-For the user domain the sender is a notifier port, `repo.UserNotifier`, implemented in
-`internal/repo/notify`, so the use case never sees the queue or the email encoding.
+For the welcome email the sender is the `send-welcome-email` event handler
+(`internal/usecase/user/event`), which reacts to a registration through a notifier port,
+`repo.UserNotifier`, implemented in `internal/repo/notify`, so the handler never sees the queue or
+the email encoding. A registration answers before its email is enqueued, and an enqueue that fails
+is retried with the event, so a registration never fails over its email.
 The worker's `mail` handler (registered by `workerctl.WithMail`) decodes it with
-`entity.DecodeEmail` (both ends are this codebase, so it skips the request DTO) and calls the `mail` use case, which renders and sends.
+`entity.DecodeEmail` (both ends are this codebase, so it skips the request DTO) and sends the
+`DeliverEmail` command (`internal/usecase/mail`), whose handler renders and sends.
 Delivery is at-least-once, so an email can arrive twice if the worker stops between the relay
 accepting it and the queue row being deleted.
 
@@ -92,8 +120,8 @@ interface.
 2. `templates/<name>.html.tmpl` and `templates/<name>.txt.tmpl`.
 3. A full and a zero-value fixture in `mailtmpl_test.go`, then
    `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/`, and review the golden files.
-4. Enqueue it where the event happens: `body, err := entity.EncodeEmail(e)`, then
-   `queue.Send(ctx, entity.EmailQueue, body)` on a `repo.QueueRepo`.
-   To keep the use case unaware of the queue, put this behind a port, as the welcome email does: a
+4. Enqueue it from an event handler for the event that sends it: `body, err := entity.EncodeEmail(e)`,
+   then `queue.Send(ctx, entity.EmailQueue, body)` on a `repo.QueueRepo`.
+   To keep the handler unaware of the queue, put this behind a port, as the welcome email does: a
    method on `repo.UserNotifier` in `internal/repo/contracts.go`, implemented in
    `internal/repo/notify` and mirrored in `notify/tracing.go`.

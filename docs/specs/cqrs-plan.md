@@ -158,13 +158,13 @@ The OIDC tasks need user (26–30), because the first SSO sign-in creates a `Use
 - [x] No `internal/usecase/*/tracing.go`, no `usecase/contracts.go`, no `usecase_test` mocks
 
 ### Phase 7: Finish
-- [ ] 49. Backfill integration test
-- [ ] 50. Reference docs
-- [ ] 51. CLAUDE.md
-- [ ] 52. Final verification and the PR
+- [x] 49. Backfill integration test
+- [x] 50. Reference docs
+- [x] 51. CLAUDE.md
+- [x] 52. Final verification and the PR
 
 ### Checkpoint H: complete
-- [ ] Every success criterion in the spec holds; CI is green
+- [x] Every success criterion in the spec holds; CI is green
 
 ## Risks and mitigations
 
