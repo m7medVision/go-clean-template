@@ -92,7 +92,7 @@ func RunWorker(cfg *config.Config) {
 func newRunner(cfg *config.Config, pg *postgres.Postgres, l logger.Interface) (
 	*projection.Runner, *projection.PostgresStore, error,
 ) {
-	subs := subscribers(pg)
+	subs := subscribers(cfg, pg)
 	if err := checkSubscribers(subs); err != nil {
 		return nil, nil, err
 	}
@@ -119,7 +119,7 @@ func RebuildProjection(cfg *config.Config, name string) error {
 	}
 	defer pg.Close()
 
-	if err = projection.Rebuild(context.Background(), pg, name, subscribers(pg)...); err != nil {
+	if err = projection.Rebuild(context.Background(), pg, name, subscribers(cfg, pg)...); err != nil {
 		return fmt.Errorf("app - RebuildProjection: %w", err)
 	}
 

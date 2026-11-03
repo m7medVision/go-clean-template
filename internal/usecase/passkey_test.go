@@ -31,7 +31,7 @@ const (
 
 type passkeyFixture struct {
 	uc       usecase.Passkey
-	users    *MockUserRepo
+	users    *MockUserReadModel
 	passkeys *MockPasskeyRepo
 	tokens   *jwt.Manager
 }
@@ -48,7 +48,7 @@ func newPasskeyUseCaseAt(t *testing.T, ttl time.Duration, now func() time.Time) 
 
 	ctrl := gomock.NewController(t)
 
-	users := NewMockUserRepo(ctrl)
+	users := NewMockUserReadModel(ctrl)
 	passkeys := NewMockPasskeyRepo(ctrl)
 
 	ceremony, err := jwt.NewScoped("test-secret", _ceremonyPurpose, ttl)
@@ -75,7 +75,7 @@ func passkeyUser() entity.User {
 
 // expectBegin sets up the reads BeginRegistration makes for user, with stored as their passkeys.
 func (f passkeyFixture) expectBegin(user *entity.User, stored ...entity.Passkey) {
-	f.users.EXPECT().GetByID(gomock.Any(), user.ID).Return(*user, nil)
+	f.users.EXPECT().ByID(gomock.Any(), user.ID).Return(*user, nil)
 	f.passkeys.EXPECT().ListByUser(gomock.Any(), user.ID).Return(stored, nil)
 }
 
@@ -434,7 +434,7 @@ func TestPasskeyBeginRegistration_RepoErrors(t *testing.T) {
 		t.Parallel()
 
 		f := newPasskeyUseCase(t, _ceremonyTimeout)
-		f.users.EXPECT().GetByID(gomock.Any(), gomock.Any()).Return(entity.User{}, entity.ErrUserNotFound)
+		f.users.EXPECT().ByID(gomock.Any(), gomock.Any()).Return(entity.User{}, entity.ErrUserNotFound)
 
 		_, _, err := f.uc.BeginRegistration(context.Background(), uuid.NewString(), time.Now())
 		require.ErrorIs(t, err, entity.ErrUserNotFound)
@@ -445,7 +445,7 @@ func TestPasskeyBeginRegistration_RepoErrors(t *testing.T) {
 
 		f := newPasskeyUseCase(t, _ceremonyTimeout)
 		user := passkeyUser()
-		f.users.EXPECT().GetByID(gomock.Any(), user.ID).Return(user, nil)
+		f.users.EXPECT().ByID(gomock.Any(), user.ID).Return(user, nil)
 		f.passkeys.EXPECT().ListByUser(gomock.Any(), user.ID).Return(nil, errInternalServErr)
 
 		_, _, err := f.uc.BeginRegistration(context.Background(), user.ID, time.Now())
@@ -647,7 +647,7 @@ func assertLogin(t *testing.T, options []byte, acc *loginAccount) []byte {
 
 // expectLookup sets up the reads the discoverable handler makes for acc.
 func (f passkeyFixture) expectLookup(acc *loginAccount) {
-	f.users.EXPECT().GetByID(gomock.Any(), acc.user.ID).Return(acc.user, nil)
+	f.users.EXPECT().ByID(gomock.Any(), acc.user.ID).Return(acc.user, nil)
 	f.passkeys.EXPECT().ListByUser(gomock.Any(), acc.user.ID).Return([]entity.Passkey{acc.passkey}, nil)
 }
 
@@ -879,7 +879,7 @@ func accountRejectedCases() []loginCase {
 			prepare: func(t *testing.T, f passkeyFixture, acc *loginAccount, options []byte, token string) (string, []byte) {
 				t.Helper()
 
-				f.users.EXPECT().GetByID(gomock.Any(), acc.user.ID).Return(entity.User{}, entity.ErrUserNotFound)
+				f.users.EXPECT().ByID(gomock.Any(), acc.user.ID).Return(entity.User{}, entity.ErrUserNotFound)
 
 				return token, assertLogin(t, options, acc)
 			},
@@ -890,7 +890,7 @@ func accountRejectedCases() []loginCase {
 			prepare: func(t *testing.T, f passkeyFixture, acc *loginAccount, options []byte, token string) (string, []byte) {
 				t.Helper()
 
-				f.users.EXPECT().GetByID(gomock.Any(), acc.user.ID).Return(acc.user, nil)
+				f.users.EXPECT().ByID(gomock.Any(), acc.user.ID).Return(acc.user, nil)
 				f.passkeys.EXPECT().ListByUser(gomock.Any(), acc.user.ID).Return(nil, nil)
 
 				return token, assertLogin(t, options, acc)
@@ -1000,13 +1000,13 @@ func loginRepoErrorCases() []loginRepoCase {
 		{
 			name: "user lookup failure",
 			expect: func(f passkeyFixture, acc *loginAccount) {
-				f.users.EXPECT().GetByID(gomock.Any(), acc.user.ID).Return(entity.User{}, errInternalServErr)
+				f.users.EXPECT().ByID(gomock.Any(), acc.user.ID).Return(entity.User{}, errInternalServErr)
 			},
 		},
 		{
 			name: "passkey list failure",
 			expect: func(f passkeyFixture, acc *loginAccount) {
-				f.users.EXPECT().GetByID(gomock.Any(), acc.user.ID).Return(acc.user, nil)
+				f.users.EXPECT().ByID(gomock.Any(), acc.user.ID).Return(acc.user, nil)
 				f.passkeys.EXPECT().ListByUser(gomock.Any(), acc.user.ID).Return(nil, errInternalServErr)
 			},
 		},

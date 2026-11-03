@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+// errInternalServErr is a repository failure, shared by the use-case tests in this package.
+var errInternalServErr = errors.New("internal server error")
 
 func newExchangeUseCase(t *testing.T) (usecase.Exchange, *MockExchangeRepo, *MockExchangeWebAPI) {
 	t.Helper()

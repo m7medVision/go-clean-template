@@ -40,7 +40,7 @@ type Config struct {
 
 // UseCase -.
 type UseCase struct {
-	users    repo.UserRepo
+	users    repo.UserReadModel
 	passkeys repo.PasskeyRepo
 	ceremony *jwt.Scoped
 	tokens   *jwt.Manager
@@ -54,7 +54,7 @@ type UseCase struct {
 // state a ceremony carries from begin to finish; its lifetime should match cfg.Timeout. tokens
 // issues the auth token a passkey login returns, the same one password login issues.
 func New(
-	users repo.UserRepo, passkeys repo.PasskeyRepo, ceremony *jwt.Scoped, tokens *jwt.Manager, cfg *Config,
+	users repo.UserReadModel, passkeys repo.PasskeyRepo, ceremony *jwt.Scoped, tokens *jwt.Manager, cfg *Config,
 ) (usecase.Passkey, error) {
 	w, err := webauthn.New(&webauthn.Config{
 		RPID:                  cfg.RPID,
@@ -106,9 +106,9 @@ func (uc *UseCase) BeginRegistration(
 			authTime.UTC().Format(time.RFC3339), entity.ErrPasskeyReauthRequired)
 	}
 
-	user, err := uc.users.GetByID(ctx, userID)
+	user, err := uc.users.ByID(ctx, userID)
 	if err != nil {
-		return nil, "", fmt.Errorf("PasskeyUseCase - BeginRegistration - uc.users.GetByID: %w", err)
+		return nil, "", fmt.Errorf("PasskeyUseCase - BeginRegistration - uc.users.ByID: %w", err)
 	}
 
 	stored, err := uc.passkeys.ListByUser(ctx, userID)
@@ -357,13 +357,13 @@ func (uc *UseCase) lookupAccount(ctx context.Context, handle []byte) (*account, 
 		return nil, fmt.Errorf("uuid.FromBytes: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
 	}
 
-	user, err := uc.users.GetByID(ctx, id.String())
+	user, err := uc.users.ByID(ctx, id.String())
 	if err != nil {
 		if errors.Is(err, entity.ErrUserNotFound) {
-			return nil, fmt.Errorf("uc.users.GetByID: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
+			return nil, fmt.Errorf("uc.users.ByID: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
 		}
 
-		return nil, fmt.Errorf("uc.users.GetByID: %w", err)
+		return nil, fmt.Errorf("uc.users.ByID: %w", err)
 	}
 
 	stored, err := uc.passkeys.ListByUser(ctx, user.ID)

@@ -34,5 +34,5 @@ func (f *fakeExchange) History(_ context.Context, _ string, limit, offset int) (
 
 // newRouter serves the REST router over e; the use cases a exchange test never reaches are nil.
 func newRouter(cfg *config.Config, e usecase.Exchange) http.Handler {
-	return resttest.NewRouter(cfg, cqrs.Buses{}, e, nil)
+	return resttest.NewRouter(cfg, cqrs.Buses{}, e)
 }

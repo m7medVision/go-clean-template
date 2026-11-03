@@ -1,5 +1,5 @@
-// The task read model: written only by the task projector, from the task events. It has no foreign
-// key to users, because each projector advances on its own and the task one can be ahead.
+# The task read model: written only by the task projector, from the task events. It has no foreign
+# key to users, because each projector advances on its own and the task one can be ahead.
 table "tasks" {
   schema = schema.public
   column "id" {

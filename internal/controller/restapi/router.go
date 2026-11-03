@@ -28,7 +28,6 @@ func NewRouter(
 	cfg *config.Config,
 	b cqrs.Buses,
 	e usecase.Exchange,
-	u usecase.User,
 	jwtManager *jwt.Manager,
 	l logger.Interface,
 	opts ...Option,
@@ -65,7 +64,7 @@ func NewRouter(
 	r.Get("/healthz", healthz)
 
 	api := humachi.New(r, apiConfig)
-	v1.NewRoutes(api, b, e, u, l)
+	v1.NewRoutes(api, b, e, l)
 
 	for _, opt := range opts {
 		opt(api, l)

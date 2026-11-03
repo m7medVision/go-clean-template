@@ -115,16 +115,16 @@ The OIDC tasks need user (26–30), because the first SSO sign-in creates a `Use
 - [ ] **Your review** of the task domain, which every later domain copies
 
 ### Phase 3: User and the welcome email
-- [ ] 26. UserAggregate and its events
-- [ ] 27. User read model and projector
-- [ ] 28. RegisterUser, LogIn, GetUser
-- [ ] 29. SendWelcomeEmail event handler
-- [ ] 30. User registration, importer and switch
-- [ ] 31. REST and gRPC user on the buses
-- [ ] 32. Remove the old user use case
+- [x] 26. UserAggregate and its events
+- [x] 27. User read model and projector
+- [x] 28. RegisterUser, LogIn, GetUser
+- [x] 29. SendWelcomeEmail event handler
+- [x] 30. User registration, importer and switch
+- [x] 31. REST and gRPC user on the buses
+- [x] 32. Remove the old user use case
 
 ### Checkpoint D: user
-- [ ] All gates pass; registration still sends exactly one welcome email
+- [x] All gates pass; registration still sends exactly one welcome email
 
 ### Phase 4: Exchange
 - [ ] 33. ConversionAggregate and its events

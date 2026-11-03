@@ -17,7 +17,7 @@ const _webauthnCeremonyScope = "webauthn-ceremony"
 
 // addPasskeyUseCase adds the passkey use case. It fails when the WebAuthn settings are invalid.
 func addPasskeyUseCase(deps featureDeps, uc *useCases) error {
-	passkeyUseCase, err := newPasskeyUseCase(deps.cfg, persistUserRepo.New(deps.pg), persistPasskeyRepo.New(deps.pg), deps.jwt)
+	passkeyUseCase, err := newPasskeyUseCase(deps.cfg, persistUserRepo.NewReadModel(deps.pg), persistPasskeyRepo.New(deps.pg), deps.jwt)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func addPasskeyUseCase(deps featureDeps, uc *useCases) error {
 }
 
 func newPasskeyUseCase(
-	cfg *config.Config, users repo.UserRepo, passkeys repo.PasskeyRepo, tokens *jwt.Manager,
+	cfg *config.Config, users repo.UserReadModel, passkeys repo.PasskeyRepo, tokens *jwt.Manager,
 ) (usecase.Passkey, error) {
 	ceremony, err := jwt.NewScoped(cfg.JWT.Secret, _webauthnCeremonyScope, cfg.WebAuthn.CeremonyTimeout)
 	if err != nil {

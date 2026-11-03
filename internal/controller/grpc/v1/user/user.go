@@ -2,26 +2,29 @@ package user
 
 import (
 	"context"
-	"errors"
 
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/user/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/user/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Register -.
 func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1.RegisterResponse, error) {
-	user, err := c.u.Register(ctx, req.GetUsername(), req.GetEmail(), req.GetPassword())
+	written, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.RegisterUser{
+		Username: req.GetUsername(), Email: req.GetEmail(), Password: req.GetPassword(),
+	})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - Register")
+		return nil, c.fail(err, "Register")
+	}
 
-		if errors.Is(err, entity.ErrUserAlreadyExists) {
-			return nil, status.Error(codes.AlreadyExists, "user already exists")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+	user, err := cqrs.SendQuery[entity.User](ctx, c.qs, query.GetUser{UserID: written.ID})
+	if err != nil {
+		return nil, c.fail(err, "Register")
 	}
 
 	return NewRegisterResponse(&user), nil
@@ -29,15 +32,9 @@ func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1
 
 // Login -.
 func (c *Controller) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
-	token, err := c.u.Login(ctx, req.GetEmail(), req.GetPassword())
+	token, err := cqrs.SendQuery[string](ctx, c.qs, query.LogIn{Email: req.GetEmail(), Password: req.GetPassword()})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - Login")
-
-		if errors.Is(err, entity.ErrInvalidCredentials) {
-			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "Login")
 	}
 
 	return &v1.LoginResponse{Token: token}, nil
@@ -50,15 +47,9 @@ func (c *Controller) GetProfile(ctx context.Context, _ *v1.GetProfileRequest) (*
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	user, err := c.u.GetUser(ctx, userID)
+	user, err := cqrs.SendQuery[entity.User](ctx, c.qs, query.GetUser{UserID: userID})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - GetProfile")
-
-		if errors.Is(err, entity.ErrUserNotFound) {
-			return nil, status.Error(codes.NotFound, "user not found")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "GetProfile")
 	}
 
 	return NewGetProfileResponse(&user), nil

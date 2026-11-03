@@ -13,6 +13,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	userquery "github.com/m7medvision/go-clean-template/internal/usecase/user/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,14 +26,13 @@ func TestMain(m *testing.M) {
 // The router-wide tests reach only these use-case methods; each v1 domain folder fakes its own use
 // case in full.
 
-type fakeUser struct {
-	usecase.User
+// userBuses read registered back with GetUser.
+func userBuses(registered *entity.User) cqrs.Buses {
+	b := resttest.NewBuses()
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[userquery.GetUser, entity.User](
+		func(context.Context, userquery.GetUser) (entity.User, error) { return *registered, nil }))
 
-	registered entity.User
-}
-
-func (f *fakeUser) GetUser(context.Context, string) (entity.User, error) {
-	return f.registered, nil
+	return b
 }
 
 // taskBuses answers UpdateTask, and reads stored back with GetTask.
@@ -65,7 +65,7 @@ func panickingBuses() cqrs.Buses {
 func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{})
 
 	for _, tt := range []struct{ method, target string }{
 		{http.MethodGet, "/v1/auth/oidc"},
@@ -84,7 +84,7 @@ func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 func TestApplianceRoutesArePublic(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{})
 
 	for _, target := range []string{"/healthz", "/metrics", "/openapi.json", "/docs"} {
 		resp := resttest.Do(t.Context(), handler, http.MethodGet, target, "", "")
@@ -95,7 +95,7 @@ func TestApplianceRoutesArePublic(t *testing.T) {
 func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -105,9 +105,7 @@ func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), cqrs.Buses{}, &fakeExchange{}, &fakeUser{
-		registered: entity.User{ID: "user-1"},
-	})
+	handler := resttest.NewRouter(resttest.Config(t), userBuses(&entity.User{ID: "user-1"}), &fakeExchange{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/user/profile", resttest.Token(t), "")
 	require.Equal(t, http.StatusOK, resp.Code)
@@ -119,7 +117,7 @@ func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 	t.Parallel()
 
 	handler := resttest.NewRouter(resttest.Config(t),
-		taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}), &fakeExchange{}, &fakeUser{})
+		taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}), &fakeExchange{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPut, "/v1/tasks/task-1", resttest.Token(t),
 		`{"id":"task-1","title":"t","description":"","status":"todo","created_at":"2026-01-01T00:00:00Z"}`)
@@ -129,7 +127,7 @@ func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/auth/register", "",
 		`{"username":"johndoe","email":"john@example.com","password":"s3cr"}`)
@@ -141,7 +139,7 @@ func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -150,7 +148,7 @@ func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 func TestPanicAnswers500AndIsCounted(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), panickingBuses(), &fakeExchange{}, &fakeUser{})
+	handler := resttest.NewRouter(resttest.Config(t), panickingBuses(), &fakeExchange{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", resttest.Token(t), "")
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)

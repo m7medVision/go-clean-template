@@ -25,7 +25,6 @@ type Querier interface {
 	CountExchanges(ctx context.Context, userID string) (int64, error)
 	CountTasks(ctx context.Context, arg CountTasksParams) (int64, error)
 	CreateExchange(ctx context.Context, arg CreateExchangeParams) error
-	CreateUser(ctx context.Context, arg CreateUserParams) error
 	// One statement, so the user and its identity are stored together or not at all.
 	CreateUserWithIdentity(ctx context.Context, arg CreateUserWithIdentityParams) error
 	DeleteExpiredChallenges(ctx context.Context) error
@@ -44,12 +43,18 @@ type Querier interface {
 	// InsertClaim reserves a value for owner_id. It affects no row when another owner holds the
 	// value, and one row when the value is new or owner_id holds it already.
 	InsertClaim(ctx context.Context, arg InsertClaimParams) (int64, error)
+	InsertIdentityRow(ctx context.Context, arg InsertIdentityRowParams) error
 	// The task projector's writes. InsertTaskRow leaves an existing row alone, so replaying a task's
 	// first event (an import, a rebuild) never overwrites it.
 	InsertTaskRow(ctx context.Context, arg InsertTaskRowParams) error
+	// The user projector's writes. Each leaves an existing row alone, so replaying a user's first event
+	// (an import, a rebuild) never overwrites it.
+	InsertUserRow(ctx context.Context, arg InsertUserRowParams) error
 	LastPosition(ctx context.Context) (int64, error)
 	ListAllTasks(ctx context.Context, arg ListAllTasksParams) ([]Task, error)
+	ListEveryIdentity(ctx context.Context) ([]UserIdentity, error)
 	ListEveryTask(ctx context.Context) ([]Task, error)
+	ListEveryUser(ctx context.Context) ([]User, error)
 	ListExchanges(ctx context.Context, arg ListExchangesParams) ([]ListExchangesRow, error)
 	ListPasskeysByUser(ctx context.Context, userID string) ([]WebauthnCredential, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)

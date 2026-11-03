@@ -10,8 +10,8 @@ import (
 )
 
 // NewRouter registers every version's services, and server reflection.
-func NewRouter(app *pbgrpc.Server, b cqrs.Buses, e usecase.Exchange, u usecase.User, l logger.Interface) {
-	v1.NewRoutes(app, b, e, u, l)
+func NewRouter(app *pbgrpc.Server, b cqrs.Buses, e usecase.Exchange, l logger.Interface) {
+	v1.NewRoutes(app, b, e, l)
 
 	reflection.Register(app)
 }

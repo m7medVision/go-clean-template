@@ -1,6 +1,6 @@
-// Values that must be unique across aggregates, such as a user's email. A command reserves its
-// claims in the same transaction that appends its events, so two registrations of one email
-// cannot both succeed.
+# Values that must be unique across aggregates, such as a user's email. A command reserves its
+# claims in the same transaction that appends its events, so two registrations of one email
+# cannot both succeed.
 table "claims" {
   schema = schema.public
   column "scope" {

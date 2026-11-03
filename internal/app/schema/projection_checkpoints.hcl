@@ -1,6 +1,6 @@
-// How far each projector and event handler has read the event store, by name. Rows whose name
-// starts with an underscore are markers, not checkpoints: _backfill/<domain> records that a
-// domain's rows have been imported as events.
+# How far each projector and event handler has read the event store, by name. Rows whose name
+# starts with an underscore are markers, not checkpoints: _backfill/<domain> records that a
+# domain's rows have been imported as events.
 table "projection_checkpoints" {
   schema = schema.public
   column "name" {

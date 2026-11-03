@@ -1,4 +1,6 @@
-// Package user implements the Postgres-backed User repository.
+// Package user implements the user read model on Postgres (the users and user_identities tables),
+// the projector that writes it from the user events, and the importer that turns rows written
+// before users stored events into events.
 package user
 
 import (
@@ -7,53 +9,37 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo -.
+// Repo reads the users table.
 type Repo struct {
 	q *queries.Queries
 }
 
-// New returns a User repository instrumented with OpenTelemetry tracing spans.
-func New(pg *postgres.Postgres) repo.UserRepo {
+// NewReadModel returns the user read model, instrumented with OpenTelemetry tracing spans.
+func NewReadModel(pg *postgres.Postgres) repo.UserReadModel {
 	return newTraced(&Repo{queries.New(pg.Pool)})
 }
 
-// Store -.
-func (r *Repo) Store(ctx context.Context, user *entity.User) error {
-	err := r.q.CreateUser(ctx, queries.CreateUserParams(*user))
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return entity.ErrUserAlreadyExists
-		}
-
-		return fmt.Errorf("UserRepo - Store - r.q.CreateUser: %w", err)
-	}
-
-	return nil
-}
-
-// GetByID -.
-func (r *Repo) GetByID(ctx context.Context, id string) (entity.User, error) {
+// ByID -.
+func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
 	user, err := r.q.GetUserByID(ctx, id)
 	if err != nil {
-		return entity.User{}, mapGetError(err, "GetByID - r.q.GetUserByID")
+		return entity.User{}, mapGetError(err, "ByID - r.q.GetUserByID")
 	}
 
 	return entity.User(user), nil
 }
 
-// GetByEmail -.
-func (r *Repo) GetByEmail(ctx context.Context, email string) (entity.User, error) {
+// ByEmail -.
+func (r *Repo) ByEmail(ctx context.Context, email string) (entity.User, error) {
 	user, err := r.q.GetUserByEmail(ctx, email)
 	if err != nil {
-		return entity.User{}, mapGetError(err, "GetByEmail - r.q.GetUserByEmail")
+		return entity.User{}, mapGetError(err, "ByEmail - r.q.GetUserByEmail")
 	}
 
 	return entity.User(user), nil
@@ -64,5 +50,5 @@ func mapGetError(err error, op string) error {
 		return entity.ErrUserNotFound
 	}
 
-	return fmt.Errorf("UserRepo - %s: %w", op, err)
+	return fmt.Errorf("UserReadModel - %s: %w", op, err)
 }

@@ -10,12 +10,18 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
+	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
+	"github.com/m7medvision/go-clean-template/internal/usecase/user"
+	userevent "github.com/m7medvision/go-clean-template/internal/usecase/user/event"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/prometheus/client_golang/prometheus"
@@ -63,15 +69,25 @@ func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
 }
 
 // registerHandlers registers every converted domain's command and query handlers on the buses.
-func registerHandlers(cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres) {
+func registerHandlers(
+	cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres, tokens *jwt.Manager,
+) {
 	task.Register(cmds, qs, task.Deps{Store: store, Tasks: persistTaskRepo.NewReadModel(pg)})
+	user.Register(cmds, qs, user.Deps{Store: store, Users: persistUserRepo.NewReadModel(pg), Tokens: tokens})
 }
 
 // subscribers lists every projector and event handler the worker runs, in the order it starts them.
-func subscribers(pg *postgres.Postgres) []repo.Subscriber {
+func subscribers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
 	return []repo.Subscriber{
 		persistTaskRepo.NewProjector(pg),
+		persistUserRepo.NewProjector(pg),
+		userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(pg), loginURL(cfg))},
 	}
+}
+
+// loginURL is the sign-in page the welcome email links to.
+func loginURL(cfg *config.Config) string {
+	return strings.TrimSuffix(cfg.App.BaseURL, "/") + "/login"
 }
 
 // projectorNames lists the subscribers a write waits for: the projectors. Event handlers, such as

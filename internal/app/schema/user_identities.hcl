@@ -1,5 +1,6 @@
 # An identity at an OpenID Connect provider, linked to the local user it signs in as. A user is
 # matched by (issuer, subject) only, never by email: the provider's email is not proof of the account.
+# Part of the user read model: written only by the user projector, so it has no foreign key to users.
 table "user_identities" {
   schema = schema.public
   column "issuer" {
@@ -26,10 +27,5 @@ table "user_identities" {
     on {
       column = column.user_id
     }
-  }
-  foreign_key "user_identities_user_id_fkey" {
-    columns     = [column.user_id]
-    ref_columns = [table.users.column.id]
-    on_delete   = CASCADE
   }
 }

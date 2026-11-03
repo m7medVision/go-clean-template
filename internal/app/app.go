@@ -6,21 +6,16 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
-	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
-	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
-	"github.com/m7medvision/go-clean-template/internal/usecase/user"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/httpserver"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -36,7 +31,6 @@ type useCases struct {
 	buses cqrs.Buses
 
 	exchange usecase.Exchange
-	user     usecase.User
 	mail     usecase.Mail
 	passkey  usecase.Passkey
 	oidc     usecase.OIDC
@@ -48,16 +42,11 @@ type useCases struct {
 func initUseCases(
 	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l logger.Interface,
 ) (useCases, error) {
-	cmds, qs := newBuses(cfg, pg, projectorNames(subscribers(pg)), l)
-	registerHandlers(cmds, qs, newEventStore(cfg, pg), pg)
+	cmds, qs := newBuses(cfg, pg, projectorNames(subscribers(cfg, pg)), l)
+	registerHandlers(cmds, qs, newEventStore(cfg, pg), pg, jwtManager)
 
 	uc := useCases{
-		buses: cqrs.Buses{Commands: cmds, Queries: qs},
-		user: user.New(
-			persistUserRepo.New(pg),
-			notify.New(queue.New(pg), strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
-			jwtManager,
-		),
+		buses:    cqrs.Buses{Commands: cmds, Queries: qs},
 		exchange: exchange.New(persistExchangeRepo.New(pg), webapi.New(cfg.Exchange.ServiceURL)),
 	}
 
@@ -88,7 +77,7 @@ type addUseCase func(deps featureDeps, uc *useCases) error
 
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
 	router := restapi.NewRouter(
-		cfg, uc.buses, uc.exchange, uc.user, jwtManager, l,
+		cfg, uc.buses, uc.exchange, jwtManager, l,
 		restapi.WithPasskeys(uc.passkey),
 		restapi.WithOIDC(uc.oidc),
 	)

@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -10,6 +9,9 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/user/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/user/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 type registerInput struct {
@@ -45,15 +47,16 @@ func (r *controller) register(api huma.API) {
 		DefaultStatus: http.StatusCreated,
 		Errors:        []int{http.StatusConflict, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *registerInput) (*registerOutput, error) {
-		user, err := r.u.Register(ctx, input.Body.Username, input.Body.Email, input.Body.Password)
+		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.RegisterUser{
+			Username: input.Body.Username, Email: input.Body.Email, Password: input.Body.Password,
+		})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - register")
+			return nil, r.problem(err, "register")
+		}
 
-			if errors.Is(err, entity.ErrUserAlreadyExists) {
-				return nil, huma.Error409Conflict("user already exists")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+		user, err := cqrs.SendQuery[entity.User](ctx, r.qs, query.GetUser{UserID: written.ID})
+		if err != nil {
+			return nil, r.problem(err, "register")
 		}
 
 		return &registerOutput{Body: user}, nil
@@ -70,15 +73,9 @@ func (r *controller) login(api huma.API) {
 		Tags:        []string{apidoc.AuthTag},
 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
 	}, func(ctx context.Context, input *loginInput) (*loginOutput, error) {
-		token, err := r.u.Login(ctx, input.Body.Email, input.Body.Password)
+		token, err := cqrs.SendQuery[string](ctx, r.qs, query.LogIn{Email: input.Body.Email, Password: input.Body.Password})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - login")
-
-			if errors.Is(err, entity.ErrInvalidCredentials) {
-				return nil, huma.Error401Unauthorized("invalid credentials")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, r.problem(err, "login")
 		}
 
 		return &loginOutput{Body: response.Token{Token: token}}, nil
@@ -101,15 +98,9 @@ func (r *controller) profile(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		user, err := r.u.GetUser(ctx, userID)
+		user, err := cqrs.SendQuery[entity.User](ctx, r.qs, query.GetUser{UserID: userID})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - profile")
-
-			if errors.Is(err, entity.ErrUserNotFound) {
-				return nil, huma.Error404NotFound("user not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, r.problem(err, "profile")
 		}
 
 		return &profileOutput{Body: user}, nil

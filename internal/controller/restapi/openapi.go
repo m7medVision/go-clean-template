@@ -14,7 +14,7 @@ import (
 // operations never calls the use cases, so nil dependencies are safe here.
 func OpenAPI(version string) ([]byte, error) {
 	api := humachi.New(chi.NewRouter(), newAPIConfig(version))
-	v1.NewRoutes(api, cqrs.Buses{}, nil, nil, nil)
+	v1.NewRoutes(api, cqrs.Buses{}, nil, nil)
 
 	for _, opt := range []Option{
 		WithPasskeys(nil),

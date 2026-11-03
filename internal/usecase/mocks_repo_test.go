@@ -333,72 +333,58 @@ func (mr *MockExchangeWebAPIMockRecorder) Rate(ctx, from, to any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rate", reflect.TypeOf((*MockExchangeWebAPI)(nil).Rate), ctx, from, to)
 }
 
-// MockUserRepo is a mock of UserRepo interface.
-type MockUserRepo struct {
+// MockUserReadModel is a mock of UserReadModel interface.
+type MockUserReadModel struct {
 	ctrl     *gomock.Controller
-	recorder *MockUserRepoMockRecorder
+	recorder *MockUserReadModelMockRecorder
 	isgomock struct{}
 }
 
-// MockUserRepoMockRecorder is the mock recorder for MockUserRepo.
-type MockUserRepoMockRecorder struct {
-	mock *MockUserRepo
+// MockUserReadModelMockRecorder is the mock recorder for MockUserReadModel.
+type MockUserReadModelMockRecorder struct {
+	mock *MockUserReadModel
 }
 
-// NewMockUserRepo creates a new mock instance.
-func NewMockUserRepo(ctrl *gomock.Controller) *MockUserRepo {
-	mock := &MockUserRepo{ctrl: ctrl}
-	mock.recorder = &MockUserRepoMockRecorder{mock}
+// NewMockUserReadModel creates a new mock instance.
+func NewMockUserReadModel(ctrl *gomock.Controller) *MockUserReadModel {
+	mock := &MockUserReadModel{ctrl: ctrl}
+	mock.recorder = &MockUserReadModelMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockUserRepo) EXPECT() *MockUserRepoMockRecorder {
+func (m *MockUserReadModel) EXPECT() *MockUserReadModelMockRecorder {
 	return m.recorder
 }
 
-// GetByEmail mocks base method.
-func (m *MockUserRepo) GetByEmail(ctx context.Context, email string) (entity.User, error) {
+// ByEmail mocks base method.
+func (m *MockUserReadModel) ByEmail(ctx context.Context, email string) (entity.User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByEmail", ctx, email)
+	ret := m.ctrl.Call(m, "ByEmail", ctx, email)
 	ret0, _ := ret[0].(entity.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetByEmail indicates an expected call of GetByEmail.
-func (mr *MockUserRepoMockRecorder) GetByEmail(ctx, email any) *gomock.Call {
+// ByEmail indicates an expected call of ByEmail.
+func (mr *MockUserReadModelMockRecorder) ByEmail(ctx, email any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByEmail", reflect.TypeOf((*MockUserRepo)(nil).GetByEmail), ctx, email)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByEmail", reflect.TypeOf((*MockUserReadModel)(nil).ByEmail), ctx, email)
 }
 
-// GetByID mocks base method.
-func (m *MockUserRepo) GetByID(ctx context.Context, id string) (entity.User, error) {
+// ByID mocks base method.
+func (m *MockUserReadModel) ByID(ctx context.Context, id string) (entity.User, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetByID", ctx, id)
+	ret := m.ctrl.Call(m, "ByID", ctx, id)
 	ret0, _ := ret[0].(entity.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetByID indicates an expected call of GetByID.
-func (mr *MockUserRepoMockRecorder) GetByID(ctx, id any) *gomock.Call {
+// ByID indicates an expected call of ByID.
+func (mr *MockUserReadModelMockRecorder) ByID(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockUserRepo)(nil).GetByID), ctx, id)
-}
-
-// Store mocks base method.
-func (m *MockUserRepo) Store(ctx context.Context, user *entity.User) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Store", ctx, user)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Store indicates an expected call of Store.
-func (mr *MockUserRepoMockRecorder) Store(ctx, user any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockUserRepo)(nil).Store), ctx, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ByID", reflect.TypeOf((*MockUserReadModel)(nil).ByID), ctx, id)
 }
 
 // MockIdentityRepo is a mock of IdentityRepo interface.

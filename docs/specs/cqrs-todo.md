@@ -312,19 +312,19 @@ their three tests. **Size:** L (six small files)
 ## Phase 3: User and the welcome email
 
 ### 26. UserAggregate and its events
-- [ ] `UserRegistered` (username, email, password hash), `UserRegisteredViaOIDC` (with issuer and
+- [x] `UserRegistered` (username, email, password hash), `UserRegisteredViaOIDC` (with issuer and
       subject) and `UserImported` (with identities).
-- [ ] The aggregate method states which claims a registration needs: `user.email`, `user.username`
+- [x] The aggregate method states which claims a registration needs: `user.email`, `user.username`
       and, for OIDC, `oidc.identity`.
-- [ ] Tests, and the events registered in `EventTypes()`.
+- [x] Tests, and the events registered in `EventTypes()`.
 
 **Verify:** G1. **Depends on:** 4.
 **Files:** `internal/entity/user.go`, `user_events.go`, `user_test.go`, `event.go`. **Size:** M
 
 ### 27. User read model and projector
-- [ ] `repo.UserReadModel` has `ByID` and `ByEmail`, plus the identity lookup.
-- [ ] The projector writes `users` and `user_identities`, upserting on import.
-- [ ] `user_identities` loses its foreign key.
+- [x] `repo.UserReadModel` has `ByID` and `ByEmail`, plus the identity lookup.
+- [x] The projector writes `users` and `user_identities`, upserting on import.
+- [x] `user_identities` loses its foreign key.
 
 **Verify:** G1, then `make sqlc` gives a clean tree. **Depends on:** 5, 26.
 **Files:** `internal/repo/contracts.go`, `internal/repo/persistent/user/projector.go`,
@@ -332,32 +332,32 @@ their three tests. **Size:** L (six small files)
 **Size:** M
 
 ### 28. RegisterUser, LogIn, GetUser
-- [ ] `RegisterUser` reserves the email and username claims in the append transaction. A taken
+- [x] `RegisterUser` reserves the email and username claims in the append transaction. A taken
       claim returns today's `ErrUserAlreadyExists`.
-- [ ] `LogIn` reads the read model and returns today's token or today's error. `GetUser` reads the
+- [x] `LogIn` reads the read model and returns today's token or today's error. `GetUser` reads the
       read model.
-- [ ] memstore and repomock tests.
+- [x] memstore and repomock tests.
 
 **Verify:** G1. **Depends on:** 17, 27.
 **Files:** `internal/usecase/user/command/register_user.go`, its test,
 `internal/usecase/user/query/log_in.go`, `get_user.go`, and their tests. **Size:** L (six small files)
 
 ### 29. SendWelcomeEmail event handler
-- [ ] On `UserRegistered`, it calls `repo.UserNotifier.Welcome`. The queue's `Send` writes through
+- [x] On `UserRegistered`, it calls `repo.UserNotifier.Welcome`. The queue's `Send` writes through
       `Executor(ctx)`, so the enqueue joins the runner's transaction.
-- [ ] It ignores `UserImported` and `UserRegisteredViaOIDC`.
-- [ ] Unit test; the worker runs it as a subscriber.
+- [x] It ignores `UserImported` and `UserRegisteredViaOIDC`.
+- [x] Unit test; the worker runs it as a subscriber.
 
 **Verify:** G1. **Depends on:** 9, 26.
 **Files:** `internal/usecase/user/event/send_welcome_email.go`, its test,
 `internal/repo/persistent/queue/queue.go`, `internal/app/worker.go`. **Size:** M
 
 ### 30. User registration, importer and switch
-- [ ] `user.Register` and the `user` projector are wired up. The importer turns `users` and
+- [x] `user.Register` and the `user` projector are wired up. The importer turns `users` and
       `user_identities` rows into `UserImported` events and claims.
-- [ ] The old user use case sends the messages. The notifier call leaves `Register`, along with
+- [x] The old user use case sends the messages. The notifier call leaves `Register`, along with
       `UserRepo`'s write methods and the old user tests.
-- [ ] The integration tests pass unchanged. `mail_test.go` still sees exactly one welcome email per
+- [x] The integration tests pass unchanged. `mail_test.go` still sees exactly one welcome email per
       registration.
 
 **Verify:** G3. **Depends on:** 28, 29.
@@ -365,7 +365,7 @@ their three tests. **Size:** L (six small files)
 `internal/usecase/user/user.go`, `internal/app/buses.go`, `internal/app/app.go`. **Size:** M
 
 ### 31. REST and gRPC user on the buses
-- [ ] The user REST operations and the gRPC auth service use the buses, and their tests pass
+- [x] The user REST operations and the gRPC auth service use the buses, and their tests pass
       unchanged.
 
 **Verify:** G3. **Depends on:** 22, 23, 30.
@@ -374,16 +374,16 @@ their three tests. **Size:** L (six small files)
 **Size:** L
 
 ### 32. Remove the old user use case
-- [ ] `usecase.User`, the user `user.go` and `tracing.go`, and the old user tests
+- [x] `usecase.User`, the user `user.go` and `tracing.go`, and the old user tests
       (`user_test.go`, `user_welcome_test.go`) are gone, along with the user router parameter.
-- [ ] An integration test checks read-after-write for register followed by an immediate login.
+- [x] An integration test checks read-after-write for register followed by an immediate login.
 
 **Verify:** G3. **Depends on:** 31.
 **Files:** `internal/usecase/contracts.go`, `internal/usecase/user/user.go`, `tracing.go`,
 `internal/app/app.go`, `integration-test/cqrs_user_test.go`. **Size:** M
 
 ### Checkpoint D: user
-- [ ] G3 is green, and each registration sends exactly one welcome email.
+- [x] G3 is green, and each registration sends exactly one welcome email.
 
 ---
 

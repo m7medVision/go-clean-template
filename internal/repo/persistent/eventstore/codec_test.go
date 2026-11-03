@@ -119,7 +119,11 @@ func TestCodecKnowsEveryDomainEvent(t *testing.T) {
 
 		decoded, err := codec.Decode(stored)
 		require.NoError(t, err, e.EventType())
-		assert.Equal(t, e, decoded)
+
+		// Compared as stored: a decoded zero decimal is equal to, but not built like, the zero value.
+		again, err := codec.Encode(decoded)
+		require.NoError(t, err, e.EventType())
+		assert.Equal(t, stored, again)
 	}
 }
 

@@ -1,6 +1,6 @@
-// The event store: every event every aggregate recorded, append-only. position orders the whole
-// store; (stream_id, stream_version) orders one aggregate's stream and stops two writers from
-// appending the same version.
+# The event store: every event every aggregate recorded, append-only. position orders the whole
+# store; (stream_id, stream_version) orders one aggregate's stream and stops two writers from
+# appending the same version.
 table "events" {
   schema = schema.public
   column "position" {

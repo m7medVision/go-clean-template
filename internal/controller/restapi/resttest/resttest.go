@@ -55,12 +55,16 @@ func Config(t *testing.T) *config.Config {
 
 // NewRouter serves the REST router over the given buses and use cases, plus each option's
 // operations. A bus or use case the test never reaches may be nil.
-func NewRouter(
-	cfg *config.Config, b cqrs.Buses, e usecase.Exchange, u usecase.User, opts ...restapi.Option,
-) http.Handler {
+func NewRouter(cfg *config.Config, b cqrs.Buses, e usecase.Exchange, opts ...restapi.Option) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, b, e, u, jwtManager, noopLogger{}, opts...)
+	return restapi.NewRouter(cfg, b, e, jwtManager, noopLogger{}, opts...)
+}
+
+// NewBuses returns empty command and query buses with no pipeline steps, for a test to register
+// its fakes' handlers on.
+func NewBuses() cqrs.Buses {
+	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: cqrs.NewQueries()}
 }
 
 // Token signs a token for user-1 with no roles.

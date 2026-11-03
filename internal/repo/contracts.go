@@ -67,11 +67,11 @@ type (
 		Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error)
 	}
 
-	// UserRepo -.
-	UserRepo interface {
-		Store(ctx context.Context, user *entity.User) error
-		GetByID(ctx context.Context, id string) (entity.User, error)
-		GetByEmail(ctx context.Context, email string) (entity.User, error)
+	// UserReadModel reads the users table, which only the user projector writes. A missing user is
+	// entity.ErrUserNotFound.
+	UserReadModel interface {
+		ByID(ctx context.Context, id string) (entity.User, error)
+		ByEmail(ctx context.Context, email string) (entity.User, error)
 	}
 
 	// IdentityRepo links identities at an OpenID Connect provider, keyed by (issuer, subject), to

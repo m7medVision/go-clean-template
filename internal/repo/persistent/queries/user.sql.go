@@ -10,32 +10,6 @@ import (
 	"time"
 )
 
-const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, username, email, password_hash, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-`
-
-type CreateUserParams struct {
-	ID           string
-	Username     string
-	Email        string
-	PasswordHash string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
-
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.Exec(ctx, createUser,
-		arg.ID,
-		arg.Username,
-		arg.Email,
-		arg.PasswordHash,
-		arg.CreatedAt,
-		arg.UpdatedAt,
-	)
-	return err
-}
-
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, username, email, password_hash, created_at, updated_at FROM users
 WHERE email = $1
@@ -72,4 +46,119 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const insertIdentityRow = `-- name: InsertIdentityRow :exec
+INSERT INTO user_identities (issuer, subject, user_id, created_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (issuer, subject) DO NOTHING
+`
+
+type InsertIdentityRowParams struct {
+	Issuer    string
+	Subject   string
+	UserID    string
+	CreatedAt time.Time
+}
+
+func (q *Queries) InsertIdentityRow(ctx context.Context, arg InsertIdentityRowParams) error {
+	_, err := q.db.Exec(ctx, insertIdentityRow,
+		arg.Issuer,
+		arg.Subject,
+		arg.UserID,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertUserRow = `-- name: InsertUserRow :exec
+
+INSERT INTO users (id, username, email, password_hash, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO NOTHING
+`
+
+type InsertUserRowParams struct {
+	ID           string
+	Username     string
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// The user projector's writes. Each leaves an existing row alone, so replaying a user's first event
+// (an import, a rebuild) never overwrites it.
+func (q *Queries) InsertUserRow(ctx context.Context, arg InsertUserRowParams) error {
+	_, err := q.db.Exec(ctx, insertUserRow,
+		arg.ID,
+		arg.Username,
+		arg.Email,
+		arg.PasswordHash,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const listEveryIdentity = `-- name: ListEveryIdentity :many
+SELECT issuer, subject, user_id, created_at FROM user_identities
+ORDER BY user_id, created_at
+`
+
+func (q *Queries) ListEveryIdentity(ctx context.Context) ([]UserIdentity, error) {
+	rows, err := q.db.Query(ctx, listEveryIdentity)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserIdentity
+	for rows.Next() {
+		var i UserIdentity
+		if err := rows.Scan(
+			&i.Issuer,
+			&i.Subject,
+			&i.UserID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEveryUser = `-- name: ListEveryUser :many
+SELECT id, username, email, password_hash, created_at, updated_at FROM users
+ORDER BY created_at, id
+`
+
+func (q *Queries) ListEveryUser(ctx context.Context) ([]User, error) {
+	rows, err := q.db.Query(ctx, listEveryUser)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Email,
+			&i.PasswordHash,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

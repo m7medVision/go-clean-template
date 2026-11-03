@@ -21,7 +21,7 @@ func newGRPCServer(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l 
 			pbgrpc.StatsHandler(otelgrpc.NewServerHandler()),
 		),
 	)
-	grpc.NewRouter(grpcServer.App, uc.buses, uc.exchange, uc.user, l)
+	grpc.NewRouter(grpcServer.App, uc.buses, uc.exchange, l)
 
 	return namedServer{name: "grpcServer", server: grpcServer}
 }

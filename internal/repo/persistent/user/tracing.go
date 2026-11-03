@@ -13,12 +13,12 @@ import (
 
 const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 
-// tracedRepo wraps a UserRepo with OpenTelemetry spans.
+// tracedRepo wraps the user read model with OpenTelemetry spans.
 type tracedRepo struct {
-	next repo.UserRepo
+	next repo.UserReadModel
 }
 
-func newTraced(next repo.UserRepo) repo.UserRepo {
+func newTraced(next repo.UserReadModel) repo.UserReadModel {
 	return &tracedRepo{next: next}
 }
 
@@ -35,28 +35,19 @@ func endSpan(span trace.Span, err error) {
 	span.End()
 }
 
-func (r *tracedRepo) Store(ctx context.Context, user *entity.User) error {
-	ctx, span := startSpan(ctx, "UserRepo.Store", attribute.String("user.id", user.ID))
+func (r *tracedRepo) ByID(ctx context.Context, id string) (entity.User, error) {
+	ctx, span := startSpan(ctx, "UserReadModel.ByID", attribute.String("user.id", id))
 
-	err := r.next.Store(ctx, user)
-	endSpan(span, err)
-
-	return err
-}
-
-func (r *tracedRepo) GetByID(ctx context.Context, id string) (entity.User, error) {
-	ctx, span := startSpan(ctx, "UserRepo.GetByID", attribute.String("user.id", id))
-
-	result, err := r.next.GetByID(ctx, id)
+	result, err := r.next.ByID(ctx, id)
 	endSpan(span, err)
 
 	return result, err
 }
 
-func (r *tracedRepo) GetByEmail(ctx context.Context, email string) (entity.User, error) {
-	ctx, span := startSpan(ctx, "UserRepo.GetByEmail", attribute.String("user.email", email))
+func (r *tracedRepo) ByEmail(ctx context.Context, email string) (entity.User, error) {
+	ctx, span := startSpan(ctx, "UserReadModel.ByEmail", attribute.String("user.email", email))
 
-	result, err := r.next.GetByEmail(ctx, email)
+	result, err := r.next.ByEmail(ctx, email)
 	endSpan(span, err)
 
 	return result, err

@@ -12,8 +12,8 @@ import (
 )
 
 // NewRoutes registers every v1 service, one line per domain.
-func NewRoutes(app *pbgrpc.Server, b cqrs.Buses, e usecase.Exchange, u usecase.User, l logger.Interface) {
-	v1.RegisterAuthServiceServer(app, user.New(u, l))
+func NewRoutes(app *pbgrpc.Server, b cqrs.Buses, e usecase.Exchange, l logger.Interface) {
+	v1.RegisterAuthServiceServer(app, user.New(b, l))
 	v1.RegisterTaskServiceServer(app, task.New(b, l))
 	v1.RegisterExchangeServiceServer(app, exchange.New(e, l))
 }

@@ -1,6 +1,6 @@
-// The latest snapshot of a stream: the aggregate's whole state at stream_version, so a load
-// replays only the events after it. A snapshot whose schema_version is not the aggregate's
-// current one is ignored.
+# The latest snapshot of a stream: the aggregate's whole state at stream_version, so a load
+# replays only the events after it. A snapshot whose schema_version is not the aggregate's
+# current one is ignored.
 table "snapshots" {
   schema = schema.public
   column "stream_id" {

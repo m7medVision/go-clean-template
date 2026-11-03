@@ -68,6 +68,16 @@ CREATE TABLE "public"."tasks" (
 CREATE INDEX "idx_tasks_user_id" ON "public"."tasks" ("user_id");
 -- Create index "idx_tasks_user_status" to table: "tasks"
 CREATE INDEX "idx_tasks_user_status" ON "public"."tasks" ("user_id", "status");
+-- Create "user_identities" table
+CREATE TABLE "public"."user_identities" (
+  "issuer" text NOT NULL,
+  "subject" text NOT NULL,
+  "user_id" uuid NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("issuer", "subject")
+);
+-- Create index "idx_user_identities_user_id" to table: "user_identities"
+CREATE INDEX "idx_user_identities_user_id" ON "public"."user_identities" ("user_id");
 -- Create "users" table
 CREATE TABLE "public"."users" (
   "id" uuid NOT NULL,
@@ -106,17 +116,6 @@ CREATE TABLE "public"."exchange_history" (
 );
 -- Create index "idx_exchange_history_user_id" to table: "exchange_history"
 CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
--- Create "user_identities" table
-CREATE TABLE "public"."user_identities" (
-  "issuer" text NOT NULL,
-  "subject" text NOT NULL,
-  "user_id" uuid NOT NULL,
-  "created_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("issuer", "subject"),
-  CONSTRAINT "user_identities_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_user_identities_user_id" to table: "user_identities"
-CREATE INDEX "idx_user_identities_user_id" ON "public"."user_identities" ("user_id");
 -- Create "webauthn_credentials" table
 CREATE TABLE "public"."webauthn_credentials" (
   "id" bytea NOT NULL,

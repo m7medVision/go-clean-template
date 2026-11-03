@@ -18,13 +18,6 @@ type (
 		History(ctx context.Context, userID string, limit, offset int) (entity.ExchangeHistory, error)
 	}
 
-	// User -.
-	User interface {
-		Register(ctx context.Context, username, email, password string) (entity.User, error)
-		Login(ctx context.Context, email, password string) (string, error)
-		GetUser(ctx context.Context, userID string) (entity.User, error)
-	}
-
 	// Passkey registers, lists, renames and deletes users' WebAuthn credentials, and signs users in
 	// with them. Options and credential bodies are the WebAuthn JSON the browser reads and writes;
 	// the token carries the ceremony state between begin and finish. A token or body that does not
