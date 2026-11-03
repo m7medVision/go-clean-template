@@ -16,7 +16,7 @@ The code, layer by layer:
 | Use case | [`internal/usecase/passkey`](../internal/usecase/passkey/passkey.go): the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn) |
 | Repository | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey/passkey.go), queries in [`queries/passkey.sql`](../internal/repo/persistent/queries/passkey.sql) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
-| REST | [`internal/controller/restapi/v1/passkey.go`](../internal/controller/restapi/v1/passkey.go) |
+| REST | [`internal/controller/restapi/v1/passkey/`](../internal/controller/restapi/v1/passkey) |
 | Web | [`web/src/passkey/`](../web/src/passkey), and the login screen in [`web/src/routes/login.tsx`](../web/src/routes/login.tsx) |
 
 go-webauthn stays inside the use case, the way `user` keeps bcrypt to itself. Controllers pass the

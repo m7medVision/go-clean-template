@@ -82,8 +82,9 @@ cmd/app → internal/app → internal/controller/*  ─┐
 - `internal/repo/contracts.go` — the interfaces use cases call. `internal/repo/persistent/<domain>/`
   (Postgres) and `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
   unit-tested against the recorded response in `testdata/` that the integration stub also serves) implement them.
-- `internal/controller/<transport>/v1/` — one package per transport, each with its own
-  `request/` and `response/` DTOs. Controllers never import each other.
+- `internal/controller/<transport>/v1/<domain>/` — one folder per domain in each transport, holding
+  that domain's handlers, DTOs and tests (GraphQL has no `v1/`). Controllers never import each
+  other; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (servers, logger, jwt, postgres, tracing). Must not
   import `internal/`.
 
@@ -101,7 +102,7 @@ Decide by asking what the code knows about:
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | method on `Repo` calling the generated query |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
-| a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>.go` | handler |
+| a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<domain>.go` (GraphQL: `graphql/<domain>/query.go`, `mutation.go`) | handler |
 | a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
 | the data an email shows | `internal/entity/email_<name>.go` | struct with `Template()`/`Recipient()`, plus an entry in `EmailTypes()` (`email.go`) |
 | an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
@@ -119,6 +120,41 @@ Layout rules:
 - Unexported package constants are prefixed with an underscore (`_defaultEntityCap`,
   `_tracerName`). `mnd` rejects bare numeric literals, so add a constant rather than inlining one.
 
+## Controller layout
+
+Every transport splits by domain, then by job: **folders by domain, files by job, tests beside the
+code.** The version comes first, so a v2 is one sibling folder (`restapi/v2/`) with the same
+domain folders inside.
+
+```
+restapi/v1/<domain>/   controller.go (struct, NewRoutes), <domain>.go (Huma ops and their
+                       input/output structs), request.go, response.go, <domain>_test.go,
+                       fake_test.go, main_test.go
+grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface),
+                       <domain>.go (RPCs), request.go, response.go, tests
+graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go, input.go or
+                       response.go, tests
+```
+
+- **A domain folder never imports another domain folder.** What several domains share has its own
+  package in that transport: REST `v1/response/` (`Token`) and `v1/apidoc/` (the `BearerAuth`
+  scheme, the `auth` tag); GraphQL `middleware/`, `gqlerr/` and `paging/`.
+- Each version's `router.go` (`restapi/v1`, `grpc/v1`) is the only file that lists the domains: one
+  call per domain. `restapi/router.go`, `grpc/router.go` and `docs/api.md`'s v2 examples call it.
+- Tests go through the real server, from the domain folder: REST with `restapi/resttest`
+  (`TestMain` calls `resttest.Main`, which sets the env the config reads), GraphQL with
+  `graphql/graphqltest`, gRPC over `bufconn` in the test itself. Router-wide tests (public routes,
+  auth exemption, panics, the OpenAPI export) stay in `restapi/router_test.go`.
+- **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
+  renaming one changes `docs/openapi/v1.json` and the web client's types. A name that repeats its
+  folder (`task.TaskList`) carries a `//nolint:revive` saying so.
+- GraphQL: `resolver.go` at the root embeds each domain's `Query` and `Mutation` through a type
+  alias (`taskQuery = task.Query`): Go names an embedded field after its type, so two domains'
+  `Query` types would clash without one. gqlgen writes no resolver code (`gqlgen.yml` has no
+  `resolver:` section), so it never rewrites a hand-written file; `generated/` has one file per
+  schema file. GraphQL has no `v1/`: a schema evolves by adding fields and marking old ones
+  `@deprecated`.
+
 ## The handler contract
 
 Every controller method, on every transport, does the same six things in the same order. Copy the
@@ -127,11 +163,11 @@ shape from a neighbouring handler in the same transport.
 1. **Get the caller.** REST: `middleware.UserID(ctx)` (the chi `middleware.Auth` middleware stores
    it in the request context).
    gRPC: `grpcmw.UserIDFromContext(ctx)`.
-   GraphQL: `caller(ctx)`.
+   GraphQL: `middleware.Caller(ctx)` (`graphql/middleware`).
    A failure here is an auth error, not a 500.
-2. **Decode into a transport-local DTO** from `<transport>/v1/request/`. On REST the DTO is the
-   `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass a
-   `request.*` type into a use case.
+2. **Decode into a transport-local DTO** from the domain folder's `request.go`. On REST the DTO is
+   the `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass
+   a request DTO into a use case.
 3. **Validate the DTO structurally through Huma's built-in validation** on the REST transport:
    length, format, enum, and default constraints live on the input struct / request DTO tags, and
    the REST v1 controller takes no `*validator.Validate`.
@@ -147,10 +183,10 @@ shape from a neighbouring handler in the same transport.
    wrapped error, return a generic message to the caller.
 6. **Encode the response.** Return an `entity` type directly only when its JSON shape is already
    the API shape — `entity.User` is safe this way because `PasswordHash` is tagged `json:"-"`.
-   Anything with a wrapper, a projection or a different field set gets a type in
-   `<transport>/v1/response/` used as the Huma output `Body` (`response.TaskList`,
-   `response.Token`).
-   gRPC always converts through `response.New*Response`.
+   Anything with a wrapper, a projection or a different field set gets a type in the domain
+   folder's `response.go` used as the Huma output `Body` (`TaskList`), or in `restapi/v1/response/`
+   when several domains return it (`response.Token`).
+   gRPC always converts through its folder's `New*Response`.
 
 ## Conventions that will bite you
 
@@ -173,7 +209,8 @@ instead. Controllers are the only place that translates a sentinel into a transp
 **Money is `decimal.Decimal`, never `float64`.** `entity.Conversion` holds `shopspring/decimal`
 values; sqlc maps every `numeric` column to it (`sqlc.yaml` override) and pgx reads and writes it
 through `sql.Scanner`/`driver.Valuer`. Transports carry decimals as strings: Huma cannot build a
-schema for `decimal.Decimal`, so REST returns `response.Conversion`, not the entity.
+schema for `decimal.Decimal`, so REST returns the `Conversion` DTO (`restapi/v1/exchange/response.go`),
+not the entity.
 
 **Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env`. A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
@@ -197,9 +234,9 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 - `internal/repo/persistent/queries/*.go` ← `make sqlc` from the `.sql` query files beside them,
   that rendered schema, and `sqlc.yaml`.
 - `internal/controller/graphql/generated/` and `internal/controller/graphql/model/` ← `make graphql`
-  from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. The resolver bodies in
-  `internal/controller/graphql/task.resolvers.go` are hand-written, but gqlgen rewrites that file in
-  place on every run (signatures follow the schema, bodies are kept).
+  from `internal/controller/graphql/schema/*.graphqls` and `gqlgen.yml`. gqlgen writes no resolver
+  code: the resolvers in `internal/controller/graphql/<domain>/` are hand-written, and no tool
+  touches them.
 - `web/src/api/schema.gen.ts` ← `make web-api` (openapi-typescript) from `docs/openapi/v1.json`.
 - `web/src/graphql/` ← `make web-graphql` (GraphQL Code Generator, `web/codegen.ts`) from
   `internal/controller/graphql/schema/*.graphqls` and the `graphql(...)` operations in `web/src/`.
@@ -327,14 +364,17 @@ the matching page whenever a change touches what it documents:
 4. `make mock`, then extend `internal/usecase/<domain>_test.go` (table-driven, gomock, `t.Parallel()` —
    `paralleltest` enforces it).
 5. Expose it on whichever transports need it:
-   - REST: Huma input/output structs + registration in `internal/controller/restapi/v1/<domain>.go`
-     (op registered in the same domain file), then `make openapi`, and commit the generated diff.
+   - REST: Huma input/output structs and the op in `internal/controller/restapi/v1/<domain>/<domain>.go`,
+     DTOs in that folder's `request.go`/`response.go`, the op registered in its `controller.go`
+     (`NewRoutes`), the test beside it; then `make openapi`, and commit the generated diff.
      Then `make web-api`, commit its diff too, and fix any `make web-check` errors in `web/`.
    - GraphQL (task and exchange today): schema change in `internal/controller/graphql/schema/` →
-     `make graphql` → fill the generated resolver stub in `<domain>.resolvers.go`.
+     `make graphql` → the build fails with `missing method <Field>` → write that method in
+     `internal/controller/graphql/<domain>/query.go` or `mutation.go`, with the signature from
+     `generated.QueryResolver` / `generated.MutationResolver`, and its test beside it.
      Then `make web-graphql` and fix any `make web-check` errors in `web/`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in
-     `internal/controller/grpc/v1/`.
+     `internal/controller/grpc/v1/<domain>/<domain>.go`, its mapping in that folder's `response.go`.
 
 Transports are independent by design; adding a method to only one is a legitimate choice, not an
 oversight — but say which ones you covered.
@@ -360,10 +400,12 @@ before writing.
 7. **`make mock`**, then `internal/usecase/<domain>_test.go` against the generated mocks.
 8. **Wiring** — add a field to `useCases` in `internal/app/app.go`, construct repo and use case in
    `initUseCases`, and thread the use case through `initServers` into each router you are exposing.
-9. **Transports** — for each one: DTOs in `<transport>/v1/request/` and `response/`, handlers in
-   `<transport>/v1/<domain>.go`, registration in that transport's `v1/router.go`, and the use case
-   added to the `V1` / controller struct in `<transport>/v1/controller.go`.
+9. **Transports** — for each one, a new domain folder (see **Controller layout**):
+   `<transport>/v1/<domain>/` with its `controller.go`, handlers, `request.go`, `response.go` and
+   tests, plus one call in that transport's `v1/router.go` that registers it.
    gRPC also needs `docs/proto/v1/<domain>.proto` and `make proto-v1`.
+   GraphQL instead gets `schema/<domain>.graphqls`, a `graphql/<domain>/` folder, and an alias plus
+   an embed for its `Query`/`Mutation` in `graphql/resolver.go`; `NewHandler` takes the new use case.
 10. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the docs updates listed
     above.
 11. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
