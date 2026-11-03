@@ -17,10 +17,10 @@ func OpenAPI(version string) ([]byte, error) {
 	v1.NewRoutes(api, cqrs.Buses{}, nil)
 
 	for _, opt := range []Option{
-		WithPasskeys(nil),
+		WithPasskeys(),
 		WithOIDC(nil),
 	} {
-		opt(api, nil)
+		opt(api, cqrs.Buses{}, nil)
 	}
 
 	b, err := json.MarshalIndent(api.OpenAPI(), "", "  ")

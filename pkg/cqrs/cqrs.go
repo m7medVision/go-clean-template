@@ -48,6 +48,12 @@ type Written struct {
 	Position int64
 }
 
+// WrittenAt is the position of the write. A result that embeds Written, such as a sign-in that also
+// carries a token, has it too, so the pipeline can tell what it wrote.
+func (w Written) WrittenAt() int64 {
+	return w.Position
+}
+
 // Kind names the bus a message travels on.
 type Kind string
 

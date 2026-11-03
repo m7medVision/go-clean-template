@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
@@ -61,7 +62,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		// A missing auth time is zero, which the use case treats as a sign-in too old to add a passkey.
 		authTime, _ := middleware.AuthTime(ctx)
 
-		options, token, err := r.pk.BeginRegistration(ctx, userID, authTime)
+		started, err := r.beginRegistration(ctx, userID, authTime)
 		if err != nil {
 			r.l.Error(err, "restapi - v1 - beginPasskeyRegistration")
 
@@ -77,8 +78,8 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		}
 
 		return &beginPasskeyRegistrationOutput{Body: PasskeyCeremony{
-			Options:       options,
-			CeremonyToken: token,
+			Options:       started.Options,
+			CeremonyToken: started.Token,
 		}}, nil
 	})
 }
@@ -102,8 +103,12 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		passkey, err := r.pk.FinishRegistration(ctx, userID, input.CeremonyToken, input.Name, input.Body)
+		passkey, err := r.finishRegistration(ctx, userID, input.CeremonyToken, input.Name, input.Body)
 		if err != nil {
+			if shared := apierr.Shared(err); shared != nil {
+				return nil, shared
+			}
+
 			r.l.Error(err, "restapi - v1 - finishPasskeyRegistration")
 
 			if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
@@ -137,7 +142,7 @@ func (r *controller) listPasskeys(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		passkeys, err := r.pk.List(ctx, userID)
+		passkeys, err := r.list(ctx, userID)
 		if err != nil {
 			r.l.Error(err, "restapi - v1 - listPasskeys")
 
@@ -181,8 +186,12 @@ func (r *controller) renamePasskey(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		passkey, err := r.pk.Rename(ctx, userID, input.ID, input.Body.Name)
+		passkey, err := r.rename(ctx, userID, input.ID, input.Body.Name)
 		if err != nil {
+			if shared := apierr.Shared(err); shared != nil {
+				return nil, shared
+			}
+
 			r.l.Error(err, "restapi - v1 - renamePasskey")
 
 			if errors.Is(err, entity.ErrPasskeyNotFound) {
@@ -214,8 +223,12 @@ func (r *controller) deletePasskey(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		err := r.pk.Delete(ctx, userID, input.ID)
+		err := r.delete(ctx, userID, input.ID)
 		if err != nil {
+			if shared := apierr.Shared(err); shared != nil {
+				return nil, shared
+			}
+
 			r.l.Error(err, "restapi - v1 - deletePasskey")
 
 			if errors.Is(err, entity.ErrPasskeyNotFound) {
@@ -257,7 +270,7 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 		Tags:   []string{apidoc.AuthTag},
 		Errors: []int{http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*beginPasskeyLoginOutput, error) {
-		options, token, err := r.pk.BeginLogin(ctx)
+		started, err := r.beginLogin(ctx)
 		if err != nil {
 			r.l.Error(err, "restapi - v1 - beginPasskeyLogin")
 
@@ -265,8 +278,8 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 		}
 
 		return &beginPasskeyLoginOutput{Body: PasskeyCeremony{
-			Options:       options,
-			CeremonyToken: token,
+			Options:       started.Options,
+			CeremonyToken: started.Token,
 		}}, nil
 	})
 }
@@ -284,8 +297,12 @@ func (r *controller) finishPasskeyLogin(api huma.API) {
 			http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusInternalServerError,
 		},
 	}, func(ctx context.Context, input *finishPasskeyLoginInput) (*finishPasskeyLoginOutput, error) {
-		token, err := r.pk.FinishLogin(ctx, input.CeremonyToken, input.Body)
+		token, err := r.finishLogin(ctx, input.CeremonyToken, input.Body)
 		if err != nil {
+			if shared := apierr.Shared(err); shared != nil {
+				return nil, shared
+			}
+
 			r.l.Error(err, "restapi - v1 - finishPasskeyLogin")
 
 			if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {

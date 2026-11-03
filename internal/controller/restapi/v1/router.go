@@ -32,8 +32,8 @@ func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
 }
 
 // NewPasskeyRoutes registers the passkey sign-in and passkey management operations.
-func NewPasskeyRoutes(api huma.API, pk usecase.Passkey, l logger.Interface) {
-	passkey.NewRoutes(api, pk, l)
+func NewPasskeyRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+	passkey.NewRoutes(api, b, l)
 }
 
 // NewOIDCRoutes registers the SSO status and sign-in operations.

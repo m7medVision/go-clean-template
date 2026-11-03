@@ -42,22 +42,14 @@ func (q *Queries) DeleteExpiredChallenges(ctx context.Context) error {
 	return err
 }
 
-const deletePasskey = `-- name: DeletePasskey :execrows
+const deletePasskeyRow = `-- name: DeletePasskeyRow :exec
 DELETE FROM webauthn_credentials
-WHERE id = $1 AND user_id = $2
+WHERE id = $1
 `
 
-type DeletePasskeyParams struct {
-	ID     entity.PasskeyID
-	UserID string
-}
-
-func (q *Queries) DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deletePasskey, arg.ID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) DeletePasskeyRow(ctx context.Context, id entity.PasskeyID) error {
+	_, err := q.db.Exec(ctx, deletePasskeyRow, id)
+	return err
 }
 
 const getPasskey = `-- name: GetPasskey :one
@@ -77,6 +69,68 @@ func (q *Queries) GetPasskey(ctx context.Context, id entity.PasskeyID) (Webauthn
 		&i.LastUsedAt,
 	)
 	return i, err
+}
+
+const insertPasskeyRow = `-- name: InsertPasskeyRow :exec
+
+INSERT INTO webauthn_credentials (id, user_id, name, credential, created_at, last_used_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO NOTHING
+`
+
+type InsertPasskeyRowParams struct {
+	ID         entity.PasskeyID
+	UserID     string
+	Name       string
+	Credential json.RawMessage
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+}
+
+// The passkey projector's writes. InsertPasskeyRow leaves an existing row alone, so replaying a
+// passkey's first event (an import, a rebuild) never overwrites it.
+func (q *Queries) InsertPasskeyRow(ctx context.Context, arg InsertPasskeyRowParams) error {
+	_, err := q.db.Exec(ctx, insertPasskeyRow,
+		arg.ID,
+		arg.UserID,
+		arg.Name,
+		arg.Credential,
+		arg.CreatedAt,
+		arg.LastUsedAt,
+	)
+	return err
+}
+
+const listEveryPasskey = `-- name: ListEveryPasskey :many
+SELECT id, user_id, name, credential, created_at, last_used_at FROM webauthn_credentials
+ORDER BY created_at, id
+`
+
+func (q *Queries) ListEveryPasskey(ctx context.Context) ([]WebauthnCredential, error) {
+	rows, err := q.db.Query(ctx, listEveryPasskey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WebauthnCredential
+	for rows.Next() {
+		var i WebauthnCredential
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Credential,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listPasskeysByUser = `-- name: ListPasskeysByUser :many
@@ -112,75 +166,35 @@ func (q *Queries) ListPasskeysByUser(ctx context.Context, userID string) ([]Weba
 	return items, nil
 }
 
-const renamePasskey = `-- name: RenamePasskey :one
+const setPasskeyName = `-- name: SetPasskeyName :exec
 UPDATE webauthn_credentials
-SET name = $3
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, name, credential, created_at, last_used_at
+SET name = $2
+WHERE id = $1
 `
 
-type RenamePasskeyParams struct {
-	ID     entity.PasskeyID
-	UserID string
-	Name   string
+type SetPasskeyNameParams struct {
+	ID   entity.PasskeyID
+	Name string
 }
 
-func (q *Queries) RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (WebauthnCredential, error) {
-	row := q.db.QueryRow(ctx, renamePasskey, arg.ID, arg.UserID, arg.Name)
-	var i WebauthnCredential
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.Credential,
-		&i.CreatedAt,
-		&i.LastUsedAt,
-	)
-	return i, err
-}
-
-const storePasskey = `-- name: StorePasskey :exec
-INSERT INTO webauthn_credentials (id, user_id, name, credential, created_at, last_used_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-`
-
-type StorePasskeyParams struct {
-	ID         entity.PasskeyID
-	UserID     string
-	Name       string
-	Credential json.RawMessage
-	CreatedAt  time.Time
-	LastUsedAt *time.Time
-}
-
-func (q *Queries) StorePasskey(ctx context.Context, arg StorePasskeyParams) error {
-	_, err := q.db.Exec(ctx, storePasskey,
-		arg.ID,
-		arg.UserID,
-		arg.Name,
-		arg.Credential,
-		arg.CreatedAt,
-		arg.LastUsedAt,
-	)
+func (q *Queries) SetPasskeyName(ctx context.Context, arg SetPasskeyNameParams) error {
+	_, err := q.db.Exec(ctx, setPasskeyName, arg.ID, arg.Name)
 	return err
 }
 
-const updatePasskeyUsage = `-- name: UpdatePasskeyUsage :execrows
+const setPasskeyUsage = `-- name: SetPasskeyUsage :exec
 UPDATE webauthn_credentials
 SET credential = $2, last_used_at = $3
 WHERE id = $1
 `
 
-type UpdatePasskeyUsageParams struct {
+type SetPasskeyUsageParams struct {
 	ID         entity.PasskeyID
 	Credential json.RawMessage
 	LastUsedAt *time.Time
 }
 
-func (q *Queries) UpdatePasskeyUsage(ctx context.Context, arg UpdatePasskeyUsageParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updatePasskeyUsage, arg.ID, arg.Credential, arg.LastUsedAt)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) SetPasskeyUsage(ctx context.Context, arg SetPasskeyUsageParams) error {
+	_, err := q.db.Exec(ctx, setPasskeyUsage, arg.ID, arg.Credential, arg.LastUsedAt)
+	return err
 }

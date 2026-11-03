@@ -138,16 +138,16 @@ The OIDC tasks need user (26–30), because the first SSO sign-in creates a `Use
 - [x] All gates pass
 
 ### Phase 5: Passkey
-- [ ] 39. PasskeyAggregate and its events
-- [ ] 40. Passkey read model and projector
-- [ ] 41. FinishPasskeyRegistration and RenamePasskey
-- [ ] 42. DeletePasskey and FinishPasskeyLogin
-- [ ] 43. Passkey queries
-- [ ] 44. Passkey registration, importer and switch
-- [ ] 45. REST passkey on the buses; remove the old use case
+- [x] 39. PasskeyAggregate and its events
+- [x] 40. Passkey read model and projector
+- [x] 41. FinishPasskeyRegistration and RenamePasskey
+- [x] 42. DeletePasskey and FinishPasskeyLogin
+- [x] 43. Passkey queries
+- [x] 44. Passkey registration, importer and switch
+- [x] 45. REST passkey on the buses; remove the old use case
 
 ### Checkpoint F: passkey
-- [ ] All gates pass, including the passkey integration tests
+- [x] All gates pass, including the passkey integration tests
 
 ### Phase 6: OIDC and mail
 - [ ] 46. FinishOIDCLogin, BeginOIDCLogin, GetOIDCStatus

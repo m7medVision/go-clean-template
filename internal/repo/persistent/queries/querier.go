@@ -27,7 +27,7 @@ type Querier interface {
 	// One statement, so the user and its identity are stored together or not at all.
 	CreateUserWithIdentity(ctx context.Context, arg CreateUserWithIdentityParams) error
 	DeleteExpiredChallenges(ctx context.Context) error
-	DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (int64, error)
+	DeletePasskeyRow(ctx context.Context, id entity.PasskeyID) error
 	DeleteQueueMessage(ctx context.Context, id int64) error
 	DeleteTaskRow(ctx context.Context, id string) error
 	EnsureCheckpoint(ctx context.Context, name string) error
@@ -47,6 +47,9 @@ type Querier interface {
 	// so replaying one (an import, a rebuild) never duplicates it.
 	InsertConversionRow(ctx context.Context, arg InsertConversionRowParams) error
 	InsertIdentityRow(ctx context.Context, arg InsertIdentityRowParams) error
+	// The passkey projector's writes. InsertPasskeyRow leaves an existing row alone, so replaying a
+	// passkey's first event (an import, a rebuild) never overwrites it.
+	InsertPasskeyRow(ctx context.Context, arg InsertPasskeyRowParams) error
 	// The task projector's writes. InsertTaskRow leaves an existing row alone, so replaying a task's
 	// first event (an import, a rebuild) never overwrites it.
 	InsertTaskRow(ctx context.Context, arg InsertTaskRowParams) error
@@ -58,6 +61,7 @@ type Querier interface {
 	// ListEveryExchange is what the backfill imports, oldest first, so a rebuild keeps the order.
 	ListEveryExchange(ctx context.Context) ([]ExchangeHistory, error)
 	ListEveryIdentity(ctx context.Context) ([]UserIdentity, error)
+	ListEveryPasskey(ctx context.Context) ([]WebauthnCredential, error)
 	ListEveryTask(ctx context.Context) ([]Task, error)
 	ListEveryUser(ctx context.Context) ([]User, error)
 	ListExchanges(ctx context.Context, arg ListExchangesParams) ([]ListExchangesRow, error)
@@ -80,18 +84,17 @@ type Querier interface {
 	ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]QueueMessage, error)
 	ReadStream(ctx context.Context, arg ReadStreamParams) ([]Event, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) error
-	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (WebauthnCredential, error)
 	ResetCheckpoint(ctx context.Context, name string) error
 	SendQueueMessage(ctx context.Context, arg SendQueueMessageParams) (int64, error)
 	SetConversionID(ctx context.Context, arg SetConversionIDParams) error
+	SetPasskeyName(ctx context.Context, arg SetPasskeyNameParams) error
+	SetPasskeyUsage(ctx context.Context, arg SetPasskeyUsageParams) error
 	SetTaskStatus(ctx context.Context, arg SetTaskStatusParams) error
 	SetTaskText(ctx context.Context, arg SetTaskTextParams) error
-	StorePasskey(ctx context.Context, arg StorePasskeyParams) error
 	StreamVersion(ctx context.Context, streamID string) (int32, error)
 	// TryLockSubscriber takes a subscriber's lock until the transaction ends, so one runner at a time
 	// handles it; false when another runner holds it.
 	TryLockSubscriber(ctx context.Context, name string) (bool, error)
-	UpdatePasskeyUsage(ctx context.Context, arg UpdatePasskeyUsageParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

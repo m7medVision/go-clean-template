@@ -24,6 +24,7 @@ func EventTypes() []Event {
 		taskEvents(),
 		userEvents(),
 		conversionEvents(),
+		passkeyEvents(),
 	)
 }
 

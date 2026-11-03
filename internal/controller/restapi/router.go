@@ -65,14 +65,14 @@ func NewRouter(
 	v1.NewRoutes(api, b, l)
 
 	for _, opt := range opts {
-		opt(api, l)
+		opt(api, b, l)
 	}
 
 	return r
 }
 
-// Option registers an optional feature's operations on the REST API.
-type Option func(api huma.API, l logger.Interface)
+// Option registers an optional feature's operations on the REST API, over the buses.
+type Option func(api huma.API, b cqrs.Buses, l logger.Interface)
 
 // newAPIConfig is shared by NewRouter and OpenAPI so the exported document matches the served one.
 func newAPIConfig(version string) huma.Config {

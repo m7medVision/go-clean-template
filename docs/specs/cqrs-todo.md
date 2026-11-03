@@ -453,10 +453,10 @@ their three tests. **Size:** L (six small files)
 ## Phase 5: Passkey
 
 ### 39. PasskeyAggregate and its events
-- [ ] `PasskeyRegistered`, `PasskeyRenamed`, `PasskeyUsed` (credential JSON, used at),
+- [x] `PasskeyRegistered`, `PasskeyRenamed`, `PasskeyUsed` (credential JSON, used at),
       `PasskeyDeleted` and `PasskeyImported`. The rename and delete owner checks give today's
       `ErrPasskeyNotFound`.
-- [ ] Re-registering a deleted credential ID behaves as it does today. Tests, and the events
+- [x] Re-registering a deleted credential ID behaves as it does today. Tests, and the events
       registered.
 
 **Verify:** G1. **Depends on:** 4.
@@ -464,8 +464,8 @@ their three tests. **Size:** L (six small files)
 **Size:** M
 
 ### 40. Passkey read model and projector
-- [ ] `webauthn_credentials` is written by the projector only, and loses its foreign key.
-- [ ] `repo.PasskeyReadModel` has `ListByUser` and `Get`. `webauthn_used_challenges` stays a
+- [x] `webauthn_credentials` is written by the projector only, and loses its foreign key.
+- [x] `repo.PasskeyReadModel` has `ListByUser` and `Get`. `webauthn_used_challenges` stays a
       write-side guard.
 
 **Verify:** G1, then `make sqlc` gives a clean tree. **Depends on:** 5, 39.
@@ -474,37 +474,37 @@ their three tests. **Size:** L (six small files)
 **Size:** M
 
 ### 41. FinishPasskeyRegistration and RenamePasskey
-- [ ] A registration whose stream already exists gives today's `ErrPasskeyExists`. A bad body or
+- [x] A registration whose stream already exists gives today's `ErrPasskeyExists`. A bad body or
       token gives today's ceremony errors.
-- [ ] memstore tests.
+- [x] memstore tests.
 
 **Verify:** G1. **Depends on:** 17, 39.
 **Files:** `internal/usecase/passkey/command/finish_passkey_registration.go`, its test,
 `rename_passkey.go`, its test. **Size:** M
 
 ### 42. DeletePasskey and FinishPasskeyLogin
-- [ ] `FinishPasskeyLogin` saves `PasskeyUsed` and burns the challenge as a guard row in the same
+- [x] `FinishPasskeyLogin` saves `PasskeyUsed` and burns the challenge as a guard row in the same
       transaction. A second finish is `ErrPasskeyChallengeUsed`. It returns today's token.
-- [ ] Expired challenges are still cleaned up as they are today.
-- [ ] memstore tests.
+- [x] Expired challenges are still cleaned up as they are today.
+- [x] memstore tests.
 
 **Verify:** G1. **Depends on:** 41.
 **Files:** `internal/usecase/passkey/command/delete_passkey.go`, its test,
 `finish_passkey_login.go`, its test. **Size:** M
 
 ### 43. Passkey queries
-- [ ] `BeginPasskeyRegistration` (it still checks the reauth age, with `ErrPasskeyReauthRequired`),
+- [x] `BeginPasskeyRegistration` (it still checks the reauth age, with `ErrPasskeyReauthRequired`),
       `BeginPasskeyLogin`, `ListPasskeys` and `GetPasskey`, read-only.
-- [ ] repomock tests.
+- [x] repomock tests.
 
 **Verify:** G1. **Depends on:** 40.
 **Files:** four query files under `internal/usecase/passkey/query/` and their tests. **Size:** L
 (eight small files)
 
 ### 44. Passkey registration, importer and switch
-- [ ] Registration and the projector are wired up. The importer turns `webauthn_credentials` rows
+- [x] Registration and the projector are wired up. The importer turns `webauthn_credentials` rows
       into `PasskeyImported` events.
-- [ ] The old passkey use case sends the messages. `PasskeyRepo`'s write methods and the old tests
+- [x] The old passkey use case sends the messages. `PasskeyRepo`'s write methods and the old tests
       are gone.
 
 **Verify:** G3, including `integration-test/passkey_test.go`. **Depends on:** 42, 43.
@@ -512,15 +512,15 @@ their three tests. **Size:** L (six small files)
 `internal/usecase/passkey/passkey.go`, `internal/app/buses.go`, `internal/app/passkey.go`. **Size:** M
 
 ### 45. REST passkey on the buses; remove the old use case
-- [ ] The passkey controller uses the buses, and `WithPasskeys()` carries no use case.
-- [ ] `usecase.Passkey`, `passkey.go` and its `tracing.go` are gone.
+- [x] The passkey controller uses the buses, and `WithPasskeys()` carries no use case.
+- [x] `usecase.Passkey`, `passkey.go` and its `tracing.go` are gone.
 
 **Verify:** G3. **Depends on:** 22, 44.
 **Files:** `internal/controller/restapi/v1/passkey/controller.go`, `passkey.go`, `passkey_test.go`,
 `internal/controller/restapi/passkey.go`, `internal/usecase/contracts.go`. **Size:** M
 
 ### Checkpoint F: passkey
-- [ ] G3 is green, including the passkey integration tests.
+- [x] G3 is green, including the passkey integration tests.
 
 ---
 

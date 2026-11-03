@@ -13,6 +13,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
+	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
@@ -20,6 +21,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
+	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
 	userevent "github.com/m7medvision/go-clean-template/internal/usecase/user/event"
@@ -75,12 +77,23 @@ func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
 func registerHandlers(
 	cfg *config.Config, cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres,
 	tokens *jwt.Manager,
-) {
+) error {
+	passkeyCeremony, err := newPasskeyCeremony(cfg)
+	if err != nil {
+		return err
+	}
+
 	task.Register(cmds, qs, task.Deps{Store: store, Tasks: persistTaskRepo.NewReadModel(pg)})
 	user.Register(cmds, qs, user.Deps{Store: store, Users: persistUserRepo.NewReadModel(pg), Tokens: tokens})
 	exchange.Register(cmds, qs, exchange.Deps{
 		Store: store, Rates: webapi.New(cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(pg),
 	})
+	passkey.Register(cmds, qs, &passkey.Deps{
+		Ceremony: passkeyCeremony, Store: store, Users: persistUserRepo.NewReadModel(pg),
+		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Tx: pg, Tokens: tokens,
+	})
+
+	return nil
 }
 
 // subscribers lists every projector and event handler the worker runs, in the order it starts them.
@@ -89,6 +102,7 @@ func subscribers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
 		persistTaskRepo.NewProjector(pg),
 		persistUserRepo.NewProjector(pg),
 		persistExchangeRepo.NewProjector(pg),
+		persistPasskeyRepo.NewProjector(pg),
 		userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(pg), loginURL(cfg))},
 	}
 }

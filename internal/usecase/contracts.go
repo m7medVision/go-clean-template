@@ -3,7 +3,6 @@ package usecase
 
 import (
 	"context"
-	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
@@ -11,27 +10,6 @@ import (
 //go:generate mockgen -source=contracts.go -destination=./mocks_usecase_test.go -package=usecase_test
 
 type (
-	// Passkey registers, lists, renames and deletes users' WebAuthn credentials, and signs users in
-	// with them. Options and credential bodies are the WebAuthn JSON the browser reads and writes;
-	// the token carries the ceremony state between begin and finish. A token or body that does not
-	// complete the ceremony is entity.ErrPasskeyCeremonyInvalid; a login finished a second time is
-	// entity.ErrPasskeyChallengeUsed.
-	Passkey interface {
-		// BeginRegistration needs a recent sign-in: authTime is when the caller's auth token was
-		// issued, and one older than the configured max age (or zero) is
-		// entity.ErrPasskeyReauthRequired.
-		BeginRegistration(ctx context.Context, userID string, authTime time.Time) (options []byte, token string, err error)
-		FinishRegistration(ctx context.Context, userID, token, name string, body []byte) (entity.Passkey, error)
-		List(ctx context.Context, userID string) ([]entity.Passkey, error)
-		// Rename and Delete act on the user's own passkey id (base64url). Any other id, including
-		// another user's passkey, is entity.ErrPasskeyNotFound.
-		Rename(ctx context.Context, userID, id, name string) (entity.Passkey, error)
-		Delete(ctx context.Context, userID, id string) error
-		BeginLogin(ctx context.Context) (options []byte, token string, err error)
-		// FinishLogin returns the same auth token password login issues.
-		FinishLogin(ctx context.Context, token string, body []byte) (string, error)
-	}
-
 	// OIDC signs users in through an OpenID Connect provider (authorization code with PKCE). Begin
 	// returns the provider URL to send the browser to and a token carrying the ceremony state; the
 	// provider redirects back with a code and the state, which Finish checks against the token

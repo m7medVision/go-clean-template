@@ -239,3 +239,24 @@ func TestStampPutsTheActorAndTheMessageInTheMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, entity.Metadata{UserID: "u1", CausationID: "command WriteThing"}, md)
 }
+
+// signedIn is a command result that carries a token beside the write, as a sign-in does.
+type signedIn struct {
+	cqrs.Written
+
+	Token string
+}
+
+func TestWaitAlsoWaitsForAResultThatEmbedsWritten(t *testing.T) {
+	t.Parallel()
+
+	cmds := cqrs.NewCommands(behavior.Wait(&fakeCheckpoints{}, []string{"task"}, _timeout, _tick))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[writeThing, signedIn](
+		func(context.Context, writeThing) (signedIn, error) {
+			return signedIn{ID: "u1", Position: 7, Token: "t"}, nil
+		}))
+
+	_, err := cqrs.SendCommand[signedIn](context.Background(), cmds, writeThing{Title: "a"})
+
+	require.ErrorIs(t, err, entity.ErrReadModelBehind)
+}

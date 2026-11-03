@@ -1,3 +1,4 @@
+# The passkey read model: written only by the passkey projector, so it has no foreign key to users.
 table "webauthn_credentials" {
   schema = schema.public
   column "id" {
@@ -32,10 +33,5 @@ table "webauthn_credentials" {
     on {
       column = column.user_id
     }
-  }
-  foreign_key "webauthn_credentials_user_id_fkey" {
-    columns     = [column.user_id]
-    ref_columns = [table.users.column.id]
-    on_delete   = CASCADE
   }
 }

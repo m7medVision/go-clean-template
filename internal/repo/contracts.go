@@ -94,20 +94,26 @@ type (
 		ListAll(ctx context.Context, filter TaskFilter) ([]entity.Task, int, error)
 	}
 
-	// PasskeyRepo stores users' WebAuthn credentials and the login challenges already used. A
-	// credential ID already stored is entity.ErrPasskeyExists; an unknown one is
-	// entity.ErrPasskeyNotFound, as is another user's passkey on Rename and Delete, which match on
-	// the owner too. BurnChallenge records a challenge hash once: a second burn of the
-	// same hash is entity.ErrPasskeyChallengeUsed.
-	PasskeyRepo interface {
-		Store(ctx context.Context, passkey *entity.Passkey) error
+	// PasskeyReadModel reads webauthn_credentials, which only the passkey projector writes.
+	// ListByUser is the user's passkeys, oldest first. Get of another user's or a missing passkey is
+	// entity.ErrPasskeyNotFound.
+	PasskeyReadModel interface {
 		ListByUser(ctx context.Context, userID string) ([]entity.Passkey, error)
-		GetByID(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error)
-		UpdateUsage(ctx context.Context, id entity.PasskeyID, credential json.RawMessage, usedAt time.Time) error
-		Rename(ctx context.Context, userID string, id entity.PasskeyID, name string) (entity.Passkey, error)
-		Delete(ctx context.Context, userID string, id entity.PasskeyID) error
+		Get(ctx context.Context, userID string, id entity.PasskeyID) (entity.Passkey, error)
+	}
+
+	// ChallengeGuard keeps the login challenges already used, a write-side guard a passkey login
+	// writes in the same transaction as its events. BurnChallenge records a challenge hash once: a
+	// second burn of the same hash is entity.ErrPasskeyChallengeUsed.
+	ChallengeGuard interface {
 		BurnChallenge(ctx context.Context, hash []byte, expiresAt time.Time) error
 		DeleteExpiredChallenges(ctx context.Context) error
+	}
+
+	// Transactor runs fn in one transaction, carried by the context fn receives; every repository and
+	// the event store join it. *postgres.Postgres implements it.
+	Transactor interface {
+		InTx(ctx context.Context, fn func(ctx context.Context) error) error
 	}
 
 	// QueueRepo is a Postgres-backed message queue. Use cases enqueue with Send; the worker binary

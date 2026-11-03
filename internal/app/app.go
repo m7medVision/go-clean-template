@@ -27,9 +27,8 @@ type useCases struct {
 	// and the transports send through them.
 	buses cqrs.Buses
 
-	mail    usecase.Mail
-	passkey usecase.Passkey
-	oidc    usecase.OIDC
+	mail usecase.Mail
+	oidc usecase.OIDC
 }
 
 // initUseCases builds every use case.
@@ -39,7 +38,9 @@ func initUseCases(
 	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l logger.Interface,
 ) (useCases, error) {
 	cmds, qs := newBuses(cfg, pg, projectorNames(subscribers(cfg, pg)), l)
-	registerHandlers(cfg, cmds, qs, newEventStore(cfg, pg), pg, jwtManager)
+	if err := registerHandlers(cfg, cmds, qs, newEventStore(cfg, pg), pg, jwtManager); err != nil {
+		return useCases{}, err
+	}
 
 	uc := useCases{
 		buses: cqrs.Buses{Commands: cmds, Queries: qs},
@@ -49,7 +50,6 @@ func initUseCases(
 
 	for _, add := range []addUseCase{
 		addMailUseCase,
-		addPasskeyUseCase,
 		addOIDCUseCase,
 	} {
 		if err := add(deps, &uc); err != nil {
@@ -73,7 +73,7 @@ type addUseCase func(deps featureDeps, uc *useCases) error
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
 	router := restapi.NewRouter(
 		cfg, uc.buses, jwtManager, l,
-		restapi.WithPasskeys(uc.passkey),
+		restapi.WithPasskeys(),
 		restapi.WithOIDC(uc.oidc),
 	)
 	mountGraphQL(router, cfg, uc, jwtManager, l)
