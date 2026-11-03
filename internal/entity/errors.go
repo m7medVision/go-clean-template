@@ -9,7 +9,9 @@ var (
 	ErrTaskNotFound       = errors.New("task not found")
 	ErrTaskForbidden      = errors.New("task does not belong to user")
 	// ErrAdminRequired is a request only a caller holding RoleAdmin may make.
-	ErrAdminRequired       = errors.New("admin role required")
+	ErrAdminRequired = errors.New("admin role required")
+	// ErrRoleRequired is a request only a caller holding some other role may make.
+	ErrRoleRequired        = errors.New("role required")
 	ErrInvalidTransition   = errors.New("invalid status transition")
 	ErrUnknownEmail        = errors.New("unknown email template")
 	ErrInvalidConversion   = errors.New("invalid currency conversion")
@@ -34,4 +36,15 @@ var (
 	// ErrPasskeyReauthRequired is a request to add a passkey from a sign-in older than the allowed
 	// age: the caller must sign in again first.
 	ErrPasskeyReauthRequired = errors.New("passkey registration requires a recent sign-in")
+	// ErrStreamNotFound is a load of a stream that has no events. Command handlers turn it into
+	// their domain's not-found error.
+	ErrStreamNotFound = errors.New("stream not found")
+	// ErrClaimNotFound is a lookup of a claim nobody holds.
+	ErrClaimNotFound = errors.New("claim not found")
+	// ErrConcurrencyConflict is an append whose stream moved on since the aggregate was loaded:
+	// another write got there first. The command bus retries the command before giving up.
+	ErrConcurrencyConflict = errors.New("concurrent write to the same record")
+	// ErrReadModelBehind is a write that committed but whose projections had not caught up within
+	// the consistency timeout, so a read straight after it could still miss it.
+	ErrReadModelBehind = errors.New("write saved but not yet readable")
 )

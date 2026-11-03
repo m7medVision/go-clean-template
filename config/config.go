@@ -20,6 +20,7 @@ type (
 		Docs     docs
 		Tracing  tracing
 		Worker   worker
+		CQRS     cqrs
 		Mail     mail
 		Exchange exchange
 		WebAuthn webAuthn

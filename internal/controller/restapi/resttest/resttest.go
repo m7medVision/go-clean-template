@@ -14,6 +14,7 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
 )
@@ -52,14 +53,14 @@ func Config(t *testing.T) *config.Config {
 	return cfg
 }
 
-// NewRouter serves the REST router over the given use cases, plus each option's operations. A use
-// case the test never reaches may be nil.
+// NewRouter serves the REST router over the given buses and use cases, plus each option's
+// operations. A bus or use case the test never reaches may be nil.
 func NewRouter(
-	cfg *config.Config, e usecase.Exchange, u usecase.User, tk usecase.Task, opts ...restapi.Option,
+	cfg *config.Config, b cqrs.Buses, e usecase.Exchange, u usecase.User, opts ...restapi.Option,
 ) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, e, u, tk, jwtManager, noopLogger{}, opts...)
+	return restapi.NewRouter(cfg, b, e, u, jwtManager, noopLogger{}, opts...)
 }
 
 // Token signs a token for user-1 with no roles.

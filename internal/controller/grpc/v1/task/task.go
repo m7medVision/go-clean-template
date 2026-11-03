@@ -2,11 +2,13 @@ package task
 
 import (
 	"context"
-	"errors"
 
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -18,14 +20,19 @@ func (c *Controller) CreateTask(ctx context.Context, req *v1.CreateTaskRequest) 
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	task, err := c.tk.Create(ctx, userID, req.GetTitle(), req.GetDescription())
+	written, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.CreateTask{
+		UserID: userID, Title: req.GetTitle(), Description: req.GetDescription(),
+	})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - CreateTask")
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "CreateTask")
 	}
 
-	return NewTaskResponse(&task), nil
+	resp, err := c.readBack(ctx, userID, written.ID)
+	if err != nil {
+		return nil, c.fail(err, "CreateTask")
+	}
+
+	return resp, nil
 }
 
 // GetTask -.
@@ -35,22 +42,12 @@ func (c *Controller) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*v1.T
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	task, err := c.tk.Get(ctx, userID, req.GetId())
+	resp, err := c.readBack(ctx, userID, req.GetId())
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - GetTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return nil, status.Error(codes.NotFound, "task not found")
-		}
-
-		if errors.Is(err, entity.ErrTaskForbidden) {
-			return nil, status.Error(codes.PermissionDenied, "forbidden")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "GetTask")
 	}
 
-	return NewTaskResponse(&task), nil
+	return resp, nil
 }
 
 // ListTasks -.
@@ -65,14 +62,9 @@ func (c *Controller) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*
 		return nil, err
 	}
 
-	tasks, total, err := c.tk.List(ctx, userID, statusFilter, int(req.GetLimit()), int(req.GetOffset()))
-	if err != nil {
-		c.l.Error(err, "grpc - v1 - ListTasks")
-
-		return nil, status.Error(codes.Internal, "internal server error")
-	}
-
-	return NewListTasksResponse(tasks, total), nil
+	return listPage(ctx, c, query.ListTasks{
+		UserID: userID, Status: statusFilter, Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
+	}, "ListTasks")
 }
 
 // ListAllTasks -.
@@ -87,18 +79,19 @@ func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest)
 		return nil, err
 	}
 
-	tasks, total, err := c.tk.ListAll(ctx, caller, statusFilter, int(req.GetLimit()), int(req.GetOffset()))
+	return listPage(ctx, c, query.ListAllTasks{
+		Principal: caller, Status: statusFilter, Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
+	}, "ListAllTasks")
+}
+
+// listPage sends a list query and answers with its page.
+func listPage[Q cqrs.Query](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
+	page, err := cqrs.SendQuery[query.TaskPage](ctx, c.qs, q)
 	if err != nil {
-		if errors.Is(err, entity.ErrAdminRequired) {
-			return nil, status.Error(codes.PermissionDenied, "admin role required")
-		}
-
-		c.l.Error(err, "grpc - v1 - ListAllTasks")
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, op)
 	}
 
-	return NewListTasksResponse(tasks, total), nil
+	return NewListTasksResponse(page.Tasks, page.Total), nil
 }
 
 // UpdateTask -.
@@ -108,22 +101,19 @@ func (c *Controller) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) 
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	task, err := c.tk.Update(ctx, userID, req.GetId(), req.GetTitle(), req.GetDescription())
+	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.UpdateTask{
+		UserID: userID, TaskID: req.GetId(), Title: req.GetTitle(), Description: req.GetDescription(),
+	})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - UpdateTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return nil, status.Error(codes.NotFound, "task not found")
-		}
-
-		if errors.Is(err, entity.ErrTaskForbidden) {
-			return nil, status.Error(codes.PermissionDenied, "forbidden")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "UpdateTask")
 	}
 
-	return NewTaskResponse(&task), nil
+	resp, err := c.readBack(ctx, userID, req.GetId())
+	if err != nil {
+		return nil, c.fail(err, "UpdateTask")
+	}
+
+	return resp, nil
 }
 
 // TransitionTask -.
@@ -133,26 +123,19 @@ func (c *Controller) TransitionTask(ctx context.Context, req *v1.TransitionTaskR
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	task, err := c.tk.Transition(ctx, userID, req.GetId(), entity.TaskStatus(req.GetStatus()))
+	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.TransitionTask{
+		UserID: userID, TaskID: req.GetId(), Status: entity.TaskStatus(req.GetStatus()),
+	})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - TransitionTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return nil, status.Error(codes.NotFound, "task not found")
-		}
-
-		if errors.Is(err, entity.ErrTaskForbidden) {
-			return nil, status.Error(codes.PermissionDenied, "forbidden")
-		}
-
-		if errors.Is(err, entity.ErrInvalidTransition) {
-			return nil, status.Error(codes.InvalidArgument, "invalid status transition")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "TransitionTask")
 	}
 
-	return NewTaskResponse(&task), nil
+	resp, err := c.readBack(ctx, userID, req.GetId())
+	if err != nil {
+		return nil, c.fail(err, "TransitionTask")
+	}
+
+	return resp, nil
 }
 
 // DeleteTask -.
@@ -162,15 +145,9 @@ func (c *Controller) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) 
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	err := c.tk.Delete(ctx, userID, req.GetId())
+	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeleteTask{UserID: userID, TaskID: req.GetId()})
 	if err != nil {
-		c.l.Error(err, "grpc - v1 - DeleteTask")
-
-		if errors.Is(err, entity.ErrTaskNotFound) {
-			return nil, status.Error(codes.NotFound, "task not found")
-		}
-
-		return nil, status.Error(codes.Internal, "internal server error")
+		return nil, c.fail(err, "DeleteTask")
 	}
 
 	return &v1.DeleteTaskResponse{}, nil

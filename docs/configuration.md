@@ -85,6 +85,18 @@ Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.m
 | `WORKER_BATCH_SIZE` | `10` | messages per read |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
+## CQRS
+
+The app reads the first two; the worker, which runs the projections, the last two. None is
+required. See [cqrs.md](cqrs.md) for how they behave.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly) |
+| `EVENTSTORE_SNAPSHOT_EVERY` | `100` | snapshot a stream each time it crosses a multiple of this many events; `0` never snapshots |
+| `PROJECTION_POLL_INTERVAL` | `1s` | how often an idle projection reads the store when no notification arrives |
+| `PROJECTION_BATCH_SIZE` | `100` | events a projection reads at once |
+
 ### Email
 
 Also read only by the worker, which sends the email.

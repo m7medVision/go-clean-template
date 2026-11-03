@@ -1,7 +1,3 @@
--- name: CreateTask :exec
-INSERT INTO tasks (id, user_id, title, description, status, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
-
 -- name: GetTask :one
 SELECT * FROM tasks
 WHERE id = $1;
@@ -18,15 +14,6 @@ WHERE user_id = sqlc.arg('user_id')
 ORDER BY created_at DESC
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
 
--- name: UpdateTask :execrows
-UPDATE tasks
-SET title = $3, description = $4, status = $5, updated_at = $6
-WHERE id = $1 AND user_id = $2;
-
--- name: DeleteTask :execrows
-DELETE FROM tasks
-WHERE id = $1 AND user_id = $2;
-
 -- name: CountAllTasks :one
 SELECT count(*) FROM tasks
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text);
@@ -36,3 +23,29 @@ SELECT * FROM tasks
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
 ORDER BY created_at DESC
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
+
+-- The task projector's writes. InsertTaskRow leaves an existing row alone, so replaying a task's
+-- first event (an import, a rebuild) never overwrites it.
+
+-- name: InsertTaskRow :exec
+INSERT INTO tasks (id, user_id, title, description, status, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING;
+
+-- name: SetTaskText :exec
+UPDATE tasks
+SET title = $2, description = $3, updated_at = $4
+WHERE id = $1;
+
+-- name: SetTaskStatus :exec
+UPDATE tasks
+SET status = $2, updated_at = $3
+WHERE id = $1;
+
+-- name: DeleteTaskRow :exec
+DELETE FROM tasks
+WHERE id = $1;
+
+-- name: ListEveryTask :many
+SELECT * FROM tasks
+ORDER BY created_at, id;

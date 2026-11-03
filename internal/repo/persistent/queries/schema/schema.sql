@@ -4,6 +4,34 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 -- Set comment to schema: "public"
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+-- Create "claims" table
+CREATE TABLE "public"."claims" (
+  "scope" text NOT NULL,
+  "value" text NOT NULL,
+  "owner_id" text NOT NULL,
+  PRIMARY KEY ("scope", "value")
+);
+-- Create "events" table
+CREATE TABLE "public"."events" (
+  "position" bigserial NOT NULL,
+  "stream_id" text NOT NULL,
+  "stream_version" integer NOT NULL,
+  "type" text NOT NULL,
+  "schema_version" integer NOT NULL,
+  "payload" jsonb NOT NULL,
+  "metadata" jsonb NOT NULL DEFAULT '{}',
+  "recorded_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("position")
+);
+-- Create index "events_stream_id_stream_version_key" to table: "events"
+CREATE UNIQUE INDEX "events_stream_id_stream_version_key" ON "public"."events" ("stream_id", "stream_version");
+-- Create "projection_checkpoints" table
+CREATE TABLE "public"."projection_checkpoints" (
+  "name" text NOT NULL,
+  "position" bigint NOT NULL DEFAULT 0,
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("name")
+);
 -- Create "queue_messages" table
 CREATE TABLE "public"."queue_messages" (
   "id" bigserial NOT NULL,
@@ -16,6 +44,30 @@ CREATE TABLE "public"."queue_messages" (
 );
 -- Create index "idx_queue_messages_queue_visible_at" to table: "queue_messages"
 CREATE INDEX "idx_queue_messages_queue_visible_at" ON "public"."queue_messages" ("queue", "visible_at");
+-- Create "snapshots" table
+CREATE TABLE "public"."snapshots" (
+  "stream_id" text NOT NULL,
+  "stream_version" integer NOT NULL,
+  "schema_version" integer NOT NULL,
+  "payload" jsonb NOT NULL,
+  "taken_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("stream_id")
+);
+-- Create "tasks" table
+CREATE TABLE "public"."tasks" (
+  "id" uuid NOT NULL,
+  "user_id" uuid NOT NULL,
+  "title" character varying(255) NOT NULL,
+  "description" text NULL DEFAULT '',
+  "status" character varying(20) NOT NULL DEFAULT 'todo',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id")
+);
+-- Create index "idx_tasks_user_id" to table: "tasks"
+CREATE INDEX "idx_tasks_user_id" ON "public"."tasks" ("user_id");
+-- Create index "idx_tasks_user_status" to table: "tasks"
+CREATE INDEX "idx_tasks_user_status" ON "public"."tasks" ("user_id", "status");
 -- Create "users" table
 CREATE TABLE "public"."users" (
   "id" uuid NOT NULL,
@@ -54,22 +106,6 @@ CREATE TABLE "public"."exchange_history" (
 );
 -- Create index "idx_exchange_history_user_id" to table: "exchange_history"
 CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
--- Create "tasks" table
-CREATE TABLE "public"."tasks" (
-  "id" uuid NOT NULL,
-  "user_id" uuid NOT NULL,
-  "title" character varying(255) NOT NULL,
-  "description" text NULL DEFAULT '',
-  "status" character varying(20) NOT NULL DEFAULT 'todo',
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  "updated_at" timestamp NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "tasks_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_tasks_user_id" to table: "tasks"
-CREATE INDEX "idx_tasks_user_id" ON "public"."tasks" ("user_id");
--- Create index "idx_tasks_user_status" to table: "tasks"
-CREATE INDEX "idx_tasks_user_status" ON "public"."tasks" ("user_id", "status");
 -- Create "user_identities" table
 CREATE TABLE "public"."user_identities" (
   "issuer" text NOT NULL,

@@ -25,21 +25,6 @@ type (
 		GetUser(ctx context.Context, userID string) (entity.User, error)
 	}
 
-	// Task -.
-	Task interface {
-		Create(ctx context.Context, userID, title, description string) (entity.Task, error)
-		Get(ctx context.Context, userID, taskID string) (entity.Task, error)
-		List(ctx context.Context, userID string, status *entity.TaskStatus, limit, offset int) ([]entity.Task, int, error)
-		// ListAll is List across every user, for a caller holding entity.RoleAdmin; anyone else gets
-		// entity.ErrAdminRequired.
-		ListAll(
-			ctx context.Context, caller entity.Principal, status *entity.TaskStatus, limit, offset int,
-		) ([]entity.Task, int, error)
-		Update(ctx context.Context, userID, taskID, title, description string) (entity.Task, error)
-		Transition(ctx context.Context, userID, taskID string, newStatus entity.TaskStatus) (entity.Task, error)
-		Delete(ctx context.Context, userID, taskID string) error
-	}
-
 	// Passkey registers, lists, renames and deletes users' WebAuthn credentials, and signs users in
 	// with them. Options and credential bodies are the WebAuthn JSON the browser reads and writes;
 	// the token carries the ceremony state between begin and finish. A token or body that does not

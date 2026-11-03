@@ -1,0 +1,108 @@
+package app
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/config"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
+	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
+	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+)
+
+const (
+	// _waitTick is how often a write checks whether its projections have caught up.
+	_waitTick = 20 * time.Millisecond
+	// _commandAttempts is how many times a command runs before a concurrent write wins for good.
+	_commandAttempts = 3
+)
+
+var (
+	errDuplicateSubscriber = errors.New("two subscribers share a name")
+	errReservedSubscriber  = errors.New("a subscriber name may not start with an underscore")
+)
+
+// newBuses builds the command and query buses with their pipelines, outermost step first:
+// trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
+// concurrent write; then authorize and validate on both, right before the handler.
+func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l logger.Interface) (
+	*cqrs.Commands, *cqrs.Queries,
+) {
+	outer := []cqrs.Step{
+		cqrs.Trace(otel.GetTracerProvider()),
+		cqrs.Log(l),
+		cqrs.Metrics(prometheus.DefaultRegisterer),
+		behavior.Stamp(),
+	}
+	inner := []cqrs.Step{behavior.Authorize(), behavior.Validate()}
+
+	cmds := cqrs.NewCommands(slices.Concat(outer, []cqrs.Step{
+		behavior.Wait(projection.NewCheckpoints(pg), projectors, cfg.CQRS.ConsistencyTimeout, _waitTick),
+		behavior.Retry(_commandAttempts),
+	}, inner)...)
+	qs := cqrs.NewQueries(slices.Concat(outer, inner)...)
+
+	return cmds, qs
+}
+
+// newEventStore returns the event store every command handler appends through.
+func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
+	return eventstore.New(pg, cfg.CQRS.SnapshotEvery, entity.EventTypes(), eventstore.Upcasts()...)
+}
+
+// registerHandlers registers every converted domain's command and query handlers on the buses.
+func registerHandlers(cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres) {
+	task.Register(cmds, qs, task.Deps{Store: store, Tasks: persistTaskRepo.NewReadModel(pg)})
+}
+
+// subscribers lists every projector and event handler the worker runs, in the order it starts them.
+func subscribers(pg *postgres.Postgres) []repo.Subscriber {
+	return []repo.Subscriber{
+		persistTaskRepo.NewProjector(pg),
+	}
+}
+
+// projectorNames lists the subscribers a write waits for: the projectors. Event handlers, such as
+// the one that enqueues the welcome email, run in the background without holding the write up.
+func projectorNames(subs []repo.Subscriber) []string {
+	names := make([]string, 0, len(subs))
+
+	for _, s := range subs {
+		if _, ok := s.(projection.Projector); ok {
+			names = append(names, s.Name())
+		}
+	}
+
+	return names
+}
+
+// checkSubscribers fails on two subscribers with one name, which would share a checkpoint, and on
+// a name starting with an underscore, which is kept for the backfill markers.
+func checkSubscribers(subs []repo.Subscriber) error {
+	seen := make(map[string]bool, len(subs))
+
+	for _, s := range subs {
+		switch {
+		case strings.HasPrefix(s.Name(), "_"):
+			return fmt.Errorf("%w: %q", errReservedSubscriber, s.Name())
+		case seen[s.Name()]:
+			return fmt.Errorf("%w: %q", errDuplicateSubscriber, s.Name())
+		}
+
+		seen[s.Name()] = true
+	}
+
+	return nil
+}

@@ -12,26 +12,31 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
-	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
-	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/httpserver"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/tracing"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type useCases struct {
+	// buses are the command and query buses: each converted domain registers its handlers on them,
+	// and the transports send through them.
+	buses cqrs.Buses
+
 	exchange usecase.Exchange
 	user     usecase.User
-	task     usecase.Task
 	mail     usecase.Mail
 	passkey  usecase.Passkey
 	oidc     usecase.OIDC
@@ -40,14 +45,19 @@ type useCases struct {
 // initUseCases builds every use case.
 // The worker builds them with the same call.
 // It fails when an optional feature's use case cannot be built from its settings.
-func initUseCases(cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager) (useCases, error) {
+func initUseCases(
+	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l logger.Interface,
+) (useCases, error) {
+	cmds, qs := newBuses(cfg, pg, projectorNames(subscribers(pg)), l)
+	registerHandlers(cmds, qs, newEventStore(cfg, pg), pg)
+
 	uc := useCases{
+		buses: cqrs.Buses{Commands: cmds, Queries: qs},
 		user: user.New(
 			persistUserRepo.New(pg),
 			notify.New(queue.New(pg), strings.TrimSuffix(cfg.App.BaseURL, "/")+"/login"),
 			jwtManager,
 		),
-		task:     task.New(persistTaskRepo.New(pg)),
 		exchange: exchange.New(persistExchangeRepo.New(pg), webapi.New(cfg.Exchange.ServiceURL)),
 	}
 
@@ -78,7 +88,7 @@ type addUseCase func(deps featureDeps, uc *useCases) error
 
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
 	router := restapi.NewRouter(
-		cfg, uc.exchange, uc.user, uc.task, jwtManager, l,
+		cfg, uc.buses, uc.exchange, uc.user, jwtManager, l,
 		restapi.WithPasskeys(uc.passkey),
 		restapi.WithOIDC(uc.oidc),
 	)
@@ -138,12 +148,24 @@ func Run(cfg *config.Config) {
 	}
 	defer pg.Close()
 
+	// Rows written before a domain stored events become its first events, once.
+	if err = eventstore.Backfill(ctx, pg, importers(pg, newEventStore(cfg, pg))...); err != nil {
+		l.Fatal(fmt.Errorf("app - Run - eventstore.Backfill: %w", err))
+	}
+
 	// JWT
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	uc, err := initUseCases(cfg, pg, jwtManager)
+	uc, err := initUseCases(cfg, pg, jwtManager, l)
 	if err != nil {
 		l.Fatal(fmt.Errorf("app - Run - initUseCases: %w", err))
+	}
+
+	// The worker runs the projections; the app serves /metrics, so it reports how far behind they are.
+	if cfg.Metrics.Enabled {
+		if err = prometheus.DefaultRegisterer.Register(projection.NewLagCollector(pg)); err != nil {
+			l.Fatal(fmt.Errorf("app - Run - register the projection lag collector: %w", err))
+		}
 	}
 
 	s := initServers(cfg, &uc, jwtManager, l)

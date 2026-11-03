@@ -1,4 +1,6 @@
-// Package task implements the Postgres-backed Task repository.
+// Package task implements the task read model on Postgres (the tasks table), the projector that
+// writes it from the task events, and the importer that turns rows written before tasks stored
+// events into events.
 package task
 
 import (
@@ -13,34 +15,25 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo -.
+// Repo reads the tasks table.
 type Repo struct {
 	q *queries.Queries
 }
 
-// New returns a Task repository instrumented with OpenTelemetry tracing spans.
-func New(pg *postgres.Postgres) repo.TaskRepo {
+// NewReadModel returns the task read model, instrumented with OpenTelemetry tracing spans.
+func NewReadModel(pg *postgres.Postgres) repo.TaskReadModel {
 	return newTraced(&Repo{queries.New(pg.Pool)})
 }
 
-// Store -.
-func (r *Repo) Store(ctx context.Context, task *entity.Task) error {
-	if err := r.q.CreateTask(ctx, queries.CreateTaskParams(*task)); err != nil {
-		return fmt.Errorf("TaskRepo - Store - r.q.CreateTask: %w", err)
-	}
-
-	return nil
-}
-
-// GetByID -.
-func (r *Repo) GetByID(ctx context.Context, userID, taskID string) (entity.Task, error) {
+// Get -.
+func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
 	task, err := r.q.GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Task{}, entity.ErrTaskNotFound
 		}
 
-		return entity.Task{}, fmt.Errorf("TaskRepo - GetByID - r.q.GetTask: %w", err)
+		return entity.Task{}, fmt.Errorf("TaskReadModel - Get - r.q.GetTask: %w", err)
 	}
 
 	if task.UserID != userID {
@@ -56,7 +49,7 @@ func (r *Repo) List(ctx context.Context, userID string, filter repo.TaskFilter) 
 
 	total, err := r.q.CountTasks(ctx, queries.CountTasksParams{UserID: userID, Status: status})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - r.q.CountTasks: %w", err)
+		return nil, 0, fmt.Errorf("TaskReadModel - List - r.q.CountTasks: %w", err)
 	}
 
 	rows, err := r.q.ListTasks(ctx, queries.ListTasksParams{
@@ -66,7 +59,7 @@ func (r *Repo) List(ctx context.Context, userID string, filter repo.TaskFilter) 
 		Offset: filter.Offset,
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - List - r.q.ListTasks: %w", err)
+		return nil, 0, fmt.Errorf("TaskReadModel - List - r.q.ListTasks: %w", err)
 	}
 
 	tasks := make([]entity.Task, len(rows))
@@ -83,7 +76,7 @@ func (r *Repo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Ta
 
 	total, err := r.q.CountAllTasks(ctx, status)
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - ListAll - r.q.CountAllTasks: %w", err)
+		return nil, 0, fmt.Errorf("TaskReadModel - ListAll - r.q.CountAllTasks: %w", err)
 	}
 
 	rows, err := r.q.ListAllTasks(ctx, queries.ListAllTasksParams{
@@ -92,7 +85,7 @@ func (r *Repo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Ta
 		Offset: filter.Offset,
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskRepo - ListAll - r.q.ListAllTasks: %w", err)
+		return nil, 0, fmt.Errorf("TaskReadModel - ListAll - r.q.ListAllTasks: %w", err)
 	}
 
 	tasks := make([]entity.Task, len(rows))
@@ -101,39 +94,4 @@ func (r *Repo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Ta
 	}
 
 	return tasks, int(total), nil
-}
-
-// Update -.
-func (r *Repo) Update(ctx context.Context, task *entity.Task) error {
-	affected, err := r.q.UpdateTask(ctx, queries.UpdateTaskParams{
-		ID:          task.ID,
-		UserID:      task.UserID,
-		Title:       task.Title,
-		Description: task.Description,
-		Status:      task.Status,
-		UpdatedAt:   task.UpdatedAt,
-	})
-	if err != nil {
-		return fmt.Errorf("TaskRepo - Update - r.q.UpdateTask: %w", err)
-	}
-
-	if affected == 0 {
-		return entity.ErrTaskNotFound
-	}
-
-	return nil
-}
-
-// Delete -.
-func (r *Repo) Delete(ctx context.Context, userID, taskID string) error {
-	affected, err := r.q.DeleteTask(ctx, queries.DeleteTaskParams{ID: taskID, UserID: userID})
-	if err != nil {
-		return fmt.Errorf("TaskRepo - Delete - r.q.DeleteTask: %w", err)
-	}
-
-	if affected == 0 {
-		return entity.ErrTaskNotFound
-	}
-
-	return nil
 }

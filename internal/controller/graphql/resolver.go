@@ -5,6 +5,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
@@ -33,8 +34,8 @@ type resolver struct {
 	mutation mutation
 }
 
-func newResolver(tk usecase.Task, ex usecase.Exchange, l logger.Interface) *resolver {
-	taskQ, taskM := task.New(tk, l)
+func newResolver(b cqrs.Buses, ex usecase.Exchange, l logger.Interface) *resolver {
+	taskQ, taskM := task.New(b, l)
 
 	return &resolver{
 		query:    query{taskQuery: taskQ, exchangeQuery: exchange.New(ex, l)},

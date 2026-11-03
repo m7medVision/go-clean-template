@@ -11,6 +11,9 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,32 +35,37 @@ func (f *fakeUser) GetUser(context.Context, string) (entity.User, error) {
 	return f.registered, nil
 }
 
-type fakeTask struct {
-	usecase.Task
+// taskBuses answers UpdateTask, and reads stored back with GetTask.
+func taskBuses(stored *entity.Task) cqrs.Buses {
+	cmds, qs := cqrs.NewCommands(), cqrs.NewQueries()
 
-	stored entity.Task
-}
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, cqrs.Written](
+		func(context.Context, command.UpdateTask) (cqrs.Written, error) {
+			return cqrs.Written{ID: stored.ID}, nil
+		}))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
+		func(context.Context, query.GetTask) (entity.Task, error) { return *stored, nil }))
 
-func (f *fakeTask) Update(context.Context, string, string, string, string) (entity.Task, error) {
-	return f.stored, nil
+	return cqrs.Buses{Commands: cmds, Queries: qs}
 }
 
 type fakeExchange struct {
 	usecase.Exchange
 }
 
-type panickingTask struct {
-	usecase.Task
-}
+// panickingBuses panic on GetTask.
+func panickingBuses() cqrs.Buses {
+	qs := cqrs.NewQueries()
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
+		func(context.Context, query.GetTask) (entity.Task, error) { panic("boom") }))
 
-func (panickingTask) Get(context.Context, string, string) (entity.Task, error) {
-	panic("boom")
+	return cqrs.Buses{Queries: qs}
 }
 
 func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
 
 	for _, tt := range []struct{ method, target string }{
 		{http.MethodGet, "/v1/auth/oidc"},
@@ -76,7 +84,7 @@ func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 func TestApplianceRoutesArePublic(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
 
 	for _, target := range []string{"/healthz", "/metrics", "/openapi.json", "/docs"} {
 		resp := resttest.Do(t.Context(), handler, http.MethodGet, target, "", "")
@@ -87,7 +95,7 @@ func TestApplianceRoutesArePublic(t *testing.T) {
 func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -97,9 +105,9 @@ func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{
+	handler := resttest.NewRouter(resttest.Config(t), cqrs.Buses{}, &fakeExchange{}, &fakeUser{
 		registered: entity.User{ID: "user-1"},
-	}, &fakeTask{})
+	})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/user/profile", resttest.Token(t), "")
 	require.Equal(t, http.StatusOK, resp.Code)
@@ -110,9 +118,8 @@ func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, &fakeTask{
-		stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
-	})
+	handler := resttest.NewRouter(resttest.Config(t),
+		taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}), &fakeExchange{}, &fakeUser{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPut, "/v1/tasks/task-1", resttest.Token(t),
 		`{"id":"task-1","title":"t","description":"","status":"todo","created_at":"2026-01-01T00:00:00Z"}`)
@@ -122,7 +129,7 @@ func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/auth/register", "",
 		`{"username":"johndoe","email":"john@example.com","password":"s3cr"}`)
@@ -134,7 +141,7 @@ func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, &fakeTask{})
+	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}), &fakeExchange{}, &fakeUser{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -143,7 +150,7 @@ func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 func TestPanicAnswers500AndIsCounted(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), &fakeExchange{}, &fakeUser{}, panickingTask{})
+	handler := resttest.NewRouter(resttest.Config(t), panickingBuses(), &fakeExchange{}, &fakeUser{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", resttest.Token(t), "")
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)

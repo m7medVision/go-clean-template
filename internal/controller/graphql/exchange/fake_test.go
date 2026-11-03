@@ -7,6 +7,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 type fakeExchange struct {
@@ -34,5 +35,5 @@ func do(t *testing.T, ex *fakeExchange, authenticated bool, query string) graphq
 		token = graphqltest.Token(t)
 	}
 
-	return graphqltest.Post(t, nil, ex, token, query, nil)
+	return graphqltest.Post(t, cqrs.Buses{}, ex, token, query, nil)
 }

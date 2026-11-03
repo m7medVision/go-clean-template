@@ -8,6 +8,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 type fakeUser struct {
@@ -34,5 +35,5 @@ func (f *fakeUser) GetUser(context.Context, string) (entity.User, error) {
 
 // newRouter serves the REST router over u; the use cases a user test never reaches are nil.
 func newRouter(cfg *config.Config, u usecase.User) http.Handler {
-	return resttest.NewRouter(cfg, nil, u, nil)
+	return resttest.NewRouter(cfg, cqrs.Buses{}, nil, u)
 }

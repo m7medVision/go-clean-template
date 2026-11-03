@@ -14,6 +14,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,7 +121,7 @@ func newPasskeyRouter(t *testing.T, pk usecase.Passkey) http.Handler {
 
 	cfg := resttest.Config(t)
 
-	return resttest.NewRouter(cfg, nil, nil, nil, restapi.WithPasskeys(pk))
+	return resttest.NewRouter(cfg, cqrs.Buses{}, nil, nil, restapi.WithPasskeys(pk))
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

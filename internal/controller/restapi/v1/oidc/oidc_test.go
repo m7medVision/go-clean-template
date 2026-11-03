@@ -14,6 +14,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +44,7 @@ func (f *fakeOIDC) Finish(_ context.Context, code, state, token string) (string,
 }
 
 func newRouterWithOIDC(cfg *config.Config, oc usecase.OIDC) http.Handler {
-	return resttest.NewRouter(cfg, nil, nil, nil, restapi.WithOIDC(oc))
+	return resttest.NewRouter(cfg, cqrs.Buses{}, nil, nil, restapi.WithOIDC(oc))
 }
 
 // postFinish posts body to path with a ceremony token, as the web client posts the callback.
