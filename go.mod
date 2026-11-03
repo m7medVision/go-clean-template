@@ -28,12 +28,12 @@ require (
 	github.com/descope/virtualwebauthn v1.0.5
 	github.com/exaring/otelpgx v0.13.0
 	github.com/go-chi/chi/v5 v5.5.0
-	github.com/go-playground/validator/v10 v10.30.5
+	github.com/go-playground/validator/v10 v10.30.6
 	github.com/go-webauthn/webauthn v0.18.2
-	github.com/goccy/go-json v0.11.2
+	github.com/goccy/go-json v0.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rs/zerolog v1.35.1
 	github.com/shopspring/decimal v1.6.0
@@ -49,14 +49,14 @@ require (
 	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.24.0
-	google.golang.org/grpc v1.84.0
+	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 )
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
-	cel.dev/expr v0.25.2 // indirect
+	cel.dev/expr v0.25.3 // indirect
 	charm.land/fang/v2 v2.0.1 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
 	codeberg.org/chavacava/garif v0.2.1 // indirect
@@ -198,7 +198,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/jgautheron/goconst v1.11.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jjti/go-spancheck v0.6.5 // indirect
