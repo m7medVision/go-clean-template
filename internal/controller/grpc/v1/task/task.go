@@ -1,4 +1,4 @@
-package v1
+package task
 
 import (
 	"context"
@@ -6,14 +6,13 @@ import (
 
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // CreateTask -.
-func (c *TaskController) CreateTask(ctx context.Context, req *v1.CreateTaskRequest) (*v1.TaskResponse, error) {
+func (c *Controller) CreateTask(ctx context.Context, req *v1.CreateTaskRequest) (*v1.TaskResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -26,11 +25,11 @@ func (c *TaskController) CreateTask(ctx context.Context, req *v1.CreateTaskReque
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewTaskResponse(&task), nil
+	return NewTaskResponse(&task), nil
 }
 
 // GetTask -.
-func (c *TaskController) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*v1.TaskResponse, error) {
+func (c *Controller) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*v1.TaskResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -51,11 +50,11 @@ func (c *TaskController) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewTaskResponse(&task), nil
+	return NewTaskResponse(&task), nil
 }
 
 // ListTasks -.
-func (c *TaskController) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
+func (c *Controller) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -73,11 +72,11 @@ func (c *TaskController) ListTasks(ctx context.Context, req *v1.ListTasksRequest
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewListTasksResponse(tasks, total), nil
+	return NewListTasksResponse(tasks, total), nil
 }
 
 // ListAllTasks -.
-func (c *TaskController) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
+func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	caller, ok := grpcmw.PrincipalFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -99,25 +98,11 @@ func (c *TaskController) ListAllTasks(ctx context.Context, req *v1.ListTasksRequ
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewListTasksResponse(tasks, total), nil
-}
-
-// listStatus is the status filter req asks for, or nil for every status.
-func listStatus(req *v1.ListTasksRequest) (*entity.TaskStatus, error) {
-	if req.GetStatus() == "" {
-		return nil, nil //nolint:nilnil // no filter is not an error
-	}
-
-	s := entity.TaskStatus(req.GetStatus())
-	if !s.Valid() {
-		return nil, status.Error(codes.InvalidArgument, "invalid task status")
-	}
-
-	return &s, nil
+	return NewListTasksResponse(tasks, total), nil
 }
 
 // UpdateTask -.
-func (c *TaskController) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) (*v1.TaskResponse, error) {
+func (c *Controller) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) (*v1.TaskResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -138,11 +123,11 @@ func (c *TaskController) UpdateTask(ctx context.Context, req *v1.UpdateTaskReque
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewTaskResponse(&task), nil
+	return NewTaskResponse(&task), nil
 }
 
 // TransitionTask -.
-func (c *TaskController) TransitionTask(ctx context.Context, req *v1.TransitionTaskRequest) (*v1.TaskResponse, error) {
+func (c *Controller) TransitionTask(ctx context.Context, req *v1.TransitionTaskRequest) (*v1.TaskResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -167,11 +152,11 @@ func (c *TaskController) TransitionTask(ctx context.Context, req *v1.TransitionT
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewTaskResponse(&task), nil
+	return NewTaskResponse(&task), nil
 }
 
 // DeleteTask -.
-func (c *TaskController) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
+func (c *Controller) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")

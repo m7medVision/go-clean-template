@@ -1,4 +1,5 @@
-package v1
+// Package task serves TaskService (docs/proto/v1/task.proto) over gRPC.
+package task
 
 import (
 	"github.com/go-playground/validator/v10"
@@ -7,11 +8,16 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
-// TaskController -.
-type TaskController struct {
+// Controller -.
+type Controller struct {
 	v1.UnimplementedTaskServiceServer
 
 	tk usecase.Task
 	l  logger.Interface
 	v  *validator.Validate
+}
+
+// New -.
+func New(tk usecase.Task, l logger.Interface) v1.TaskServiceServer {
+	return &Controller{tk: tk, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
 }

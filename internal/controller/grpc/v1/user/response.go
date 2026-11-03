@@ -1,4 +1,4 @@
-package response
+package user
 
 import (
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"

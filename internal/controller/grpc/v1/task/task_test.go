@@ -1,4 +1,4 @@
-package v1_test
+package task_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
-	v1 "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -59,7 +59,7 @@ func dial(t *testing.T, tk usecase.Task) (pb.TaskServiceClient, *jwt.Manager) {
 	manager := jwt.New("test-secret", time.Hour)
 	lis := bufconn.Listen(_bufSize)
 	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
-	v1.NewTaskRoutes(srv, tk, noopLogger{})
+	pb.RegisterTaskServiceServer(srv, task.New(tk, noopLogger{}))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {

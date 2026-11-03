@@ -1,8 +1,10 @@
 package v1
 
 import (
-	"github.com/go-playground/validator/v10"
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/exchange"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	pbgrpc "google.golang.org/grpc"
@@ -10,19 +12,15 @@ import (
 
 // NewExchangeRoutes -.
 func NewExchangeRoutes(app *pbgrpc.Server, e usecase.Exchange, l logger.Interface) {
-	v1.RegisterExchangeServiceServer(app, &ExchangeController{e: e, l: l})
+	v1.RegisterExchangeServiceServer(app, exchange.New(e, l))
 }
 
 // NewAuthRoutes -.
 func NewAuthRoutes(app *pbgrpc.Server, u usecase.User, l logger.Interface) {
-	r := &AuthController{u: u, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
-
-	v1.RegisterAuthServiceServer(app, r)
+	v1.RegisterAuthServiceServer(app, user.New(u, l))
 }
 
 // NewTaskRoutes -.
 func NewTaskRoutes(app *pbgrpc.Server, tk usecase.Task, l logger.Interface) {
-	r := &TaskController{tk: tk, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
-
-	v1.RegisterTaskServiceServer(app, r)
+	v1.RegisterTaskServiceServer(app, task.New(tk, l))
 }

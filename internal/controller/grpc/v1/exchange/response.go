@@ -1,4 +1,4 @@
-package response
+package exchange
 
 import (
 	"math"

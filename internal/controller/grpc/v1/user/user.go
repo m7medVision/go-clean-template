@@ -1,4 +1,4 @@
-package v1
+package user
 
 import (
 	"context"
@@ -6,14 +6,13 @@ import (
 
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Register -.
-func (c *AuthController) Register(ctx context.Context, req *v1.RegisterRequest) (*v1.RegisterResponse, error) {
+func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1.RegisterResponse, error) {
 	user, err := c.u.Register(ctx, req.GetUsername(), req.GetEmail(), req.GetPassword())
 	if err != nil {
 		c.l.Error(err, "grpc - v1 - Register")
@@ -25,11 +24,11 @@ func (c *AuthController) Register(ctx context.Context, req *v1.RegisterRequest) 
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewRegisterResponse(&user), nil
+	return NewRegisterResponse(&user), nil
 }
 
 // Login -.
-func (c *AuthController) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
+func (c *Controller) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
 	token, err := c.u.Login(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		c.l.Error(err, "grpc - v1 - Login")
@@ -45,7 +44,7 @@ func (c *AuthController) Login(ctx context.Context, req *v1.LoginRequest) (*v1.L
 }
 
 // GetProfile -.
-func (c *AuthController) GetProfile(ctx context.Context, _ *v1.GetProfileRequest) (*v1.GetProfileResponse, error) {
+func (c *Controller) GetProfile(ctx context.Context, _ *v1.GetProfileRequest) (*v1.GetProfileResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -62,5 +61,5 @@ func (c *AuthController) GetProfile(ctx context.Context, _ *v1.GetProfileRequest
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewGetProfileResponse(&user), nil
+	return NewGetProfileResponse(&user), nil
 }

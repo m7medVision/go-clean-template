@@ -1,4 +1,4 @@
-package v1
+package exchange
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/shopspring/decimal"
 	"google.golang.org/grpc/codes"
@@ -14,7 +13,7 @@ import (
 )
 
 // Convert -.
-func (c *ExchangeController) Convert(ctx context.Context, req *v1.ConvertRequest) (*v1.ConversionResponse, error) {
+func (c *Controller) Convert(ctx context.Context, req *v1.ConvertRequest) (*v1.ConversionResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
@@ -40,11 +39,11 @@ func (c *ExchangeController) Convert(ctx context.Context, req *v1.ConvertRequest
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewConversionResponse(&conversion), nil
+	return NewConversionResponse(&conversion), nil
 }
 
 // GetHistory -.
-func (c *ExchangeController) GetHistory(
+func (c *Controller) GetHistory(
 	ctx context.Context, req *v1.GetExchangeHistoryRequest,
 ) (*v1.ExchangeHistoryResponse, error) {
 	userID, ok := grpcmw.UserIDFromContext(ctx)
@@ -59,5 +58,5 @@ func (c *ExchangeController) GetHistory(
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return response.NewExchangeHistoryResponse(history), nil
+	return NewExchangeHistoryResponse(history), nil
 }
