@@ -17,7 +17,7 @@ import (
 // security scheme reproducing the BearerAuth header of the previous transport. Each domain
 // registers its own operations from its folder; optional features register theirs afterwards
 // through NewPasskeyRoutes and NewOIDCRoutes.
-func NewRoutes(api huma.API, b cqrs.Buses, e usecase.Exchange, l logger.Interface) {
+func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
 	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		apidoc.BearerAuthScheme: {
 			Type: "apiKey",
@@ -28,7 +28,7 @@ func NewRoutes(api huma.API, b cqrs.Buses, e usecase.Exchange, l logger.Interfac
 
 	user.NewRoutes(api, b, l)
 	task.NewRoutes(api, b, l)
-	exchange.NewRoutes(api, e, l)
+	exchange.NewRoutes(api, b, l)
 }
 
 // NewPasskeyRoutes registers the passkey sign-in and passkey management operations.

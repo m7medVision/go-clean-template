@@ -6,18 +6,11 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/shopspring/decimal"
 )
 
 //go:generate mockgen -source=contracts.go -destination=./mocks_usecase_test.go -package=usecase_test
 
 type (
-	// Exchange converts amounts between currencies and keeps each user's history.
-	Exchange interface {
-		Convert(ctx context.Context, userID, from, to string, amount decimal.Decimal) (entity.Conversion, error)
-		History(ctx context.Context, userID string, limit, offset int) (entity.ExchangeHistory, error)
-	}
-
 	// Passkey registers, lists, renames and deletes users' WebAuthn credentials, and signs users in
 	// with them. Options and credential bodies are the WebAuthn JSON the browser reads and writes;
 	// the token carries the ceremony state between begin and finish. A token or body that does not

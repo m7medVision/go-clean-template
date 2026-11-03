@@ -390,7 +390,7 @@ their three tests. **Size:** L (six small files)
 ## Phase 4: Exchange
 
 ### 33. ConversionAggregate and its events
-- [ ] `CurrencyConverted` (amounts as decimal strings, rate, rate date) and `ConversionImported`.
+- [x] `CurrencyConverted` (amounts as decimal strings, rate, rate date) and `ConversionImported`.
       Tests, and the events registered.
 
 **Verify:** G1. **Depends on:** 4.
@@ -398,9 +398,9 @@ their three tests. **Size:** L (six small files)
 **Size:** M
 
 ### 34. Exchange read model and projector
-- [ ] `exchange_history` gains `conversion_id` and loses its foreign key. The projector inserts on
+- [x] `exchange_history` gains `conversion_id` and loses its foreign key. The projector inserts on
       both events, upserting on import.
-- [ ] `repo.ExchangeReadModel` has `History` and `Conversion`.
+- [x] `repo.ExchangeReadModel` has `History` and `Conversion`.
 
 **Verify:** G1, then `make sqlc` gives a clean tree. **Depends on:** 5, 33.
 **Files:** `internal/app/schema/exchange_history.hcl`, `internal/repo/persistent/queries/exchange.sql`,
@@ -408,9 +408,9 @@ their three tests. **Size:** L (six small files)
 **Size:** M
 
 ### 35. ConvertCurrency, GetExchangeHistory, GetConversion
-- [ ] `ConvertCurrency` fetches the rate through `repo.ExchangeWebAPI`, then saves a new
+- [x] `ConvertCurrency` fetches the rate through `repo.ExchangeWebAPI`, then saves a new
       `ConversionAggregate`. An unsupported currency is today's error.
-- [ ] Both queries read the read model only. memstore and repomock tests.
+- [x] Both queries read the read model only. memstore and repomock tests.
 
 **Verify:** G1. **Depends on:** 17, 34.
 **Files:** `internal/usecase/exchange/command/convert_currency.go`, its test,
@@ -418,9 +418,9 @@ their three tests. **Size:** L (six small files)
 **Size:** L (six small files)
 
 ### 36. Exchange registration, importer and switch
-- [ ] Registration and the projector are wired up. The importer turns each `exchange_history` row
+- [x] Registration and the projector are wired up. The importer turns each `exchange_history` row
       into a `ConversionImported` event, and sets `conversion_id` on the row.
-- [ ] The old exchange use case sends the messages. `ExchangeRepo.Store` and the old exchange tests
+- [x] The old exchange use case sends the messages. `ExchangeRepo.Store` and the old exchange tests
       are gone.
 
 **Verify:** G3. **Depends on:** 35.
@@ -428,7 +428,7 @@ their three tests. **Size:** L (six small files)
 `internal/usecase/exchange/exchange.go`, `internal/app/buses.go`, `internal/app/app.go`. **Size:** M
 
 ### 37. REST, gRPC and GraphQL exchange on the buses
-- [ ] All three exchange controllers use the buses. Their tests pass unchanged.
+- [x] All three exchange controllers use the buses. Their tests pass unchanged.
 
 **Verify:** G3. **Depends on:** 22, 23, 24, 36.
 **Files:** `internal/controller/restapi/v1/exchange/exchange.go`, `fake_test.go`,
@@ -436,9 +436,9 @@ their three tests. **Size:** L (six small files)
 `resolver.go`, `fake_test.go`. **Size:** L
 
 ### 38. Remove the old exchange use case; update `docs/request-flow.md`
-- [ ] `usecase.Exchange`, `exchange.go` and its `tracing.go` are gone, along with the router
+- [x] `usecase.Exchange`, `exchange.go` and its `tracing.go` are gone, along with the router
       parameter.
-- [ ] `docs/request-flow.md` quotes the new Convert path: controller, bus, handler, aggregate, store,
+- [x] `docs/request-flow.md` quotes the new Convert path: controller, bus, handler, aggregate, store,
       projector, query.
 
 **Verify:** G3. **Depends on:** 37.
@@ -446,7 +446,7 @@ their three tests. **Size:** L (six small files)
 `internal/app/app.go`, `docs/request-flow.md`. **Size:** M
 
 ### Checkpoint E: exchange
-- [ ] G3 is green.
+- [x] G3 is green.
 
 ---
 

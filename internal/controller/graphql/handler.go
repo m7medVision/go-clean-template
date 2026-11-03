@@ -14,7 +14,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
@@ -23,9 +22,9 @@ import (
 const _playgroundTitle = "Go Clean Template GraphQL"
 
 // NewHandler builds the GraphQL endpoint.
-func NewHandler(b cqrs.Buses, ex usecase.Exchange, jwtManager *jwt.Manager, l logger.Interface) http.Handler {
+func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, l logger.Interface) http.Handler {
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
-		Resolvers: newResolver(b, ex, l),
+		Resolvers: newResolver(b, l),
 	}))
 
 	srv.AddTransport(transport.POST{})

@@ -31,6 +31,7 @@ type Event struct {
 
 type ExchangeHistory struct {
 	ID           int64
+	ConversionID *string
 	UserID       string
 	FromCurrency string
 	ToCurrency   string

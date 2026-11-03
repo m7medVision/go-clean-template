@@ -13,7 +13,6 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
@@ -27,7 +26,6 @@ const _apiTitle = "Go Clean Template API"
 func NewRouter(
 	cfg *config.Config,
 	b cqrs.Buses,
-	e usecase.Exchange,
 	jwtManager *jwt.Manager,
 	l logger.Interface,
 	opts ...Option,
@@ -64,7 +62,7 @@ func NewRouter(
 	r.Get("/healthz", healthz)
 
 	api := humachi.New(r, apiConfig)
-	v1.NewRoutes(api, b, e, l)
+	v1.NewRoutes(api, b, l)
 
 	for _, opt := range opts {
 		opt(api, l)

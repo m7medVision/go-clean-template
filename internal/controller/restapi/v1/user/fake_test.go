@@ -38,5 +38,5 @@ func (f *fakeUser) buses() cqrs.Buses {
 
 // newRouter serves the REST router over u's buses; the use cases a user test never reaches are nil.
 func newRouter(cfg *config.Config, u *fakeUser) http.Handler {
-	return resttest.NewRouter(cfg, u.buses(), nil)
+	return resttest.NewRouter(cfg, u.buses())
 }

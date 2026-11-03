@@ -23,6 +23,7 @@ func EventTypes() []Event {
 	return slices.Concat(
 		taskEvents(),
 		userEvents(),
+		conversionEvents(),
 	)
 }
 

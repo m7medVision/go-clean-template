@@ -12,11 +12,14 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
+	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
+	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
+	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
 	userevent "github.com/m7medvision/go-clean-template/internal/usecase/user/event"
@@ -70,10 +73,14 @@ func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
 
 // registerHandlers registers every converted domain's command and query handlers on the buses.
 func registerHandlers(
-	cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres, tokens *jwt.Manager,
+	cfg *config.Config, cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres,
+	tokens *jwt.Manager,
 ) {
 	task.Register(cmds, qs, task.Deps{Store: store, Tasks: persistTaskRepo.NewReadModel(pg)})
 	user.Register(cmds, qs, user.Deps{Store: store, Users: persistUserRepo.NewReadModel(pg), Tokens: tokens})
+	exchange.Register(cmds, qs, exchange.Deps{
+		Store: store, Rates: webapi.New(cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(pg),
+	})
 }
 
 // subscribers lists every projector and event handler the worker runs, in the order it starts them.
@@ -81,6 +88,7 @@ func subscribers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
 	return []repo.Subscriber{
 		persistTaskRepo.NewProjector(pg),
 		persistUserRepo.NewProjector(pg),
+		persistExchangeRepo.NewProjector(pg),
 		userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(pg), loginURL(cfg))},
 	}
 }

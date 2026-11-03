@@ -2,17 +2,17 @@
 package exchange
 
 import (
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // Query resolves the exchange fields of Query.
 type Query struct {
-	exchange usecase.Exchange
-	l        logger.Interface
+	qs *cqrs.Queries
+	l  logger.Interface
 }
 
 // New returns the exchange resolver for Query.
-func New(uc usecase.Exchange, l logger.Interface) Query {
-	return Query{exchange: uc, l: l}
+func New(b cqrs.Buses, l logger.Interface) Query {
+	return Query{qs: b.Queries, l: l}
 }

@@ -24,7 +24,6 @@ type Querier interface {
 	CountAllTasks(ctx context.Context, status *string) (int64, error)
 	CountExchanges(ctx context.Context, userID string) (int64, error)
 	CountTasks(ctx context.Context, arg CountTasksParams) (int64, error)
-	CreateExchange(ctx context.Context, arg CreateExchangeParams) error
 	// One statement, so the user and its identity are stored together or not at all.
 	CreateUserWithIdentity(ctx context.Context, arg CreateUserWithIdentityParams) error
 	DeleteExpiredChallenges(ctx context.Context) error
@@ -33,6 +32,7 @@ type Querier interface {
 	DeleteTaskRow(ctx context.Context, id string) error
 	EnsureCheckpoint(ctx context.Context, name string) error
 	GetCheckpoint(ctx context.Context, name string) (int64, error)
+	GetConversion(ctx context.Context, arg GetConversionParams) (GetConversionRow, error)
 	GetPasskey(ctx context.Context, id entity.PasskeyID) (WebauthnCredential, error)
 	GetSnapshot(ctx context.Context, streamID string) (GetSnapshotRow, error)
 	GetTask(ctx context.Context, id string) (Task, error)
@@ -43,6 +43,9 @@ type Querier interface {
 	// InsertClaim reserves a value for owner_id. It affects no row when another owner holds the
 	// value, and one row when the value is new or owner_id holds it already.
 	InsertClaim(ctx context.Context, arg InsertClaimParams) (int64, error)
+	// InsertConversionRow is the exchange projector's write. It leaves an existing conversion alone,
+	// so replaying one (an import, a rebuild) never duplicates it.
+	InsertConversionRow(ctx context.Context, arg InsertConversionRowParams) error
 	InsertIdentityRow(ctx context.Context, arg InsertIdentityRowParams) error
 	// The task projector's writes. InsertTaskRow leaves an existing row alone, so replaying a task's
 	// first event (an import, a rebuild) never overwrites it.
@@ -52,6 +55,8 @@ type Querier interface {
 	InsertUserRow(ctx context.Context, arg InsertUserRowParams) error
 	LastPosition(ctx context.Context) (int64, error)
 	ListAllTasks(ctx context.Context, arg ListAllTasksParams) ([]Task, error)
+	// ListEveryExchange is what the backfill imports, oldest first, so a rebuild keeps the order.
+	ListEveryExchange(ctx context.Context) ([]ExchangeHistory, error)
 	ListEveryIdentity(ctx context.Context) ([]UserIdentity, error)
 	ListEveryTask(ctx context.Context) ([]Task, error)
 	ListEveryUser(ctx context.Context) ([]User, error)
@@ -78,6 +83,7 @@ type Querier interface {
 	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (WebauthnCredential, error)
 	ResetCheckpoint(ctx context.Context, name string) error
 	SendQueueMessage(ctx context.Context, arg SendQueueMessageParams) (int64, error)
+	SetConversionID(ctx context.Context, arg SetConversionIDParams) error
 	SetTaskStatus(ctx context.Context, arg SetTaskStatusParams) error
 	SetTaskText(ctx context.Context, arg SetTaskTextParams) error
 	StorePasskey(ctx context.Context, arg StorePasskeyParams) error

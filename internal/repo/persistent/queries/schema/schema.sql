@@ -25,6 +25,24 @@ CREATE TABLE "public"."events" (
 );
 -- Create index "events_stream_id_stream_version_key" to table: "events"
 CREATE UNIQUE INDEX "events_stream_id_stream_version_key" ON "public"."events" ("stream_id", "stream_version");
+-- Create "exchange_history" table
+CREATE TABLE "public"."exchange_history" (
+  "id" bigserial NOT NULL,
+  "conversion_id" uuid NULL,
+  "user_id" uuid NOT NULL,
+  "from_currency" character(3) NOT NULL,
+  "to_currency" character(3) NOT NULL,
+  "amount" numeric NOT NULL,
+  "rate" numeric NOT NULL,
+  "result" numeric NOT NULL,
+  "rate_date" date NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id")
+);
+-- Create index "exchange_history_conversion_id_key" to table: "exchange_history"
+CREATE UNIQUE INDEX "exchange_history_conversion_id_key" ON "public"."exchange_history" ("conversion_id");
+-- Create index "idx_exchange_history_user_id" to table: "exchange_history"
+CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
 -- Create "projection_checkpoints" table
 CREATE TABLE "public"."projection_checkpoints" (
   "name" text NOT NULL,
@@ -100,22 +118,6 @@ CREATE TABLE "public"."webauthn_used_challenges" (
 );
 -- Create index "idx_webauthn_used_challenges_expires_at" to table: "webauthn_used_challenges"
 CREATE INDEX "idx_webauthn_used_challenges_expires_at" ON "public"."webauthn_used_challenges" ("expires_at");
--- Create "exchange_history" table
-CREATE TABLE "public"."exchange_history" (
-  "id" bigserial NOT NULL,
-  "user_id" uuid NOT NULL,
-  "from_currency" character(3) NOT NULL,
-  "to_currency" character(3) NOT NULL,
-  "amount" numeric NOT NULL,
-  "rate" numeric NOT NULL,
-  "result" numeric NOT NULL,
-  "rate_date" date NOT NULL,
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "exchange_history_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_exchange_history_user_id" to table: "exchange_history"
-CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
 -- Create "webauthn_credentials" table
 CREATE TABLE "public"."webauthn_credentials" (
   "id" bytea NOT NULL,

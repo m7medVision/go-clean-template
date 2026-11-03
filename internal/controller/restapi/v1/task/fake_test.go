@@ -57,5 +57,5 @@ func (f *fakeTask) buses() cqrs.Buses {
 
 // newRouter serves the REST router over tk's buses; the use cases a task test never reaches are nil.
 func newRouter(cfg *config.Config, tk *fakeTask) http.Handler {
-	return resttest.NewRouter(cfg, tk.buses(), nil)
+	return resttest.NewRouter(cfg, tk.buses())
 }

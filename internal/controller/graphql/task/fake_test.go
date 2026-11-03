@@ -89,12 +89,12 @@ func do(t *testing.T, tk *fakeTask, authenticated bool, gql string, vars map[str
 		token = graphqltest.Token(t)
 	}
 
-	return graphqltest.Post(t, tk.buses(), nil, token, gql, vars)
+	return graphqltest.Post(t, tk.buses(), token, gql, vars)
 }
 
 // doAs sends gql signed in as graphqltest.UserID with roles.
 func doAs(t *testing.T, tk *fakeTask, roles []string, gql string) graphqltest.Response {
 	t.Helper()
 
-	return graphqltest.Post(t, tk.buses(), nil, graphqltest.Token(t, roles...), gql, nil)
+	return graphqltest.Post(t, tk.buses(), graphqltest.Token(t, roles...), gql, nil)
 }

@@ -1,10 +1,14 @@
-// Package exchange implements the Postgres-backed currency conversion history.
+// Package exchange implements the exchange read model on Postgres (exchange_history), the projector
+// that writes it from the conversion events, and the importer that turns rows stored before
+// conversions stored events into events.
 package exchange
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
@@ -16,39 +20,38 @@ type Repo struct {
 	q *queries.Queries
 }
 
-// New returns an Exchange repository instrumented with OpenTelemetry tracing spans.
-func New(pg *postgres.Postgres) repo.ExchangeRepo {
+// NewReadModel returns the exchange read model, instrumented with OpenTelemetry tracing spans.
+func NewReadModel(pg *postgres.Postgres) repo.ExchangeReadModel {
 	return newTraced(&Repo{queries.New(pg.Pool)})
 }
 
-// Store -.
-func (r *Repo) Store(ctx context.Context, userID string, c *entity.Conversion) error {
-	err := r.q.CreateExchange(ctx, queries.CreateExchangeParams{
-		UserID:       userID,
-		FromCurrency: c.From,
-		ToCurrency:   c.To,
-		Amount:       c.Amount,
-		Rate:         c.Rate,
-		Result:       c.Result,
-		RateDate:     c.RateDate,
-	})
+// Conversion -.
+func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
+	row, err := r.q.GetConversion(ctx, queries.GetConversionParams{ConversionID: &conversionID, UserID: userID})
 	if err != nil {
-		return fmt.Errorf("ExchangeRepo - Store - r.q.CreateExchange: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Conversion{}, entity.ErrConversionNotFound
+		}
+
+		return entity.Conversion{}, fmt.Errorf("ExchangeReadModel - Conversion - r.q.GetConversion: %w", err)
 	}
 
-	return nil
+	return entity.Conversion{
+		From: row.FromCurrency, To: row.ToCurrency, Amount: row.Amount, Rate: row.Rate, Result: row.Result,
+		RateDate: row.RateDate,
+	}, nil
 }
 
-// GetHistory returns one page of the user's conversions, newest first, and their total count.
-func (r *Repo) GetHistory(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
+// History returns one page of the user's conversions, newest first, and their total count.
+func (r *Repo) History(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
 	total, err := r.q.CountExchanges(ctx, userID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("ExchangeRepo - GetHistory - r.q.CountExchanges: %w", err)
+		return nil, 0, fmt.Errorf("ExchangeReadModel - History - r.q.CountExchanges: %w", err)
 	}
 
 	rows, err := r.q.ListExchanges(ctx, queries.ListExchangesParams{UserID: userID, Limit: limit, Offset: offset})
 	if err != nil {
-		return nil, 0, fmt.Errorf("ExchangeRepo - GetHistory - r.q.ListExchanges: %w", err)
+		return nil, 0, fmt.Errorf("ExchangeReadModel - History - r.q.ListExchanges: %w", err)
 	}
 
 	history := make([]entity.Conversion, 0, len(rows))

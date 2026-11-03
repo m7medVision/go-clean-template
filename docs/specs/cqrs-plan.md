@@ -127,15 +127,15 @@ The OIDC tasks need user (26–30), because the first SSO sign-in creates a `Use
 - [x] All gates pass; registration still sends exactly one welcome email
 
 ### Phase 4: Exchange
-- [ ] 33. ConversionAggregate and its events
-- [ ] 34. Exchange read model and projector
-- [ ] 35. ConvertCurrency, GetExchangeHistory, GetConversion
-- [ ] 36. Exchange registration, importer and switch
-- [ ] 37. REST, gRPC and GraphQL exchange on the buses
-- [ ] 38. Remove the old exchange use case; update `docs/request-flow.md`
+- [x] 33. ConversionAggregate and its events
+- [x] 34. Exchange read model and projector
+- [x] 35. ConvertCurrency, GetExchangeHistory, GetConversion
+- [x] 36. Exchange registration, importer and switch
+- [x] 37. REST, gRPC and GraphQL exchange on the buses
+- [x] 38. Remove the old exchange use case; update `docs/request-flow.md`
 
 ### Checkpoint E: exchange
-- [ ] All gates pass
+- [x] All gates pass
 
 ### Phase 5: Passkey
 - [ ] 39. PasskeyAggregate and its events

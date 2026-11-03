@@ -239,58 +239,59 @@ func (mr *MockProjectionCheckpointsMockRecorder) Reached(ctx, names, position an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reached", reflect.TypeOf((*MockProjectionCheckpoints)(nil).Reached), ctx, names, position)
 }
 
-// MockExchangeRepo is a mock of ExchangeRepo interface.
-type MockExchangeRepo struct {
+// MockExchangeReadModel is a mock of ExchangeReadModel interface.
+type MockExchangeReadModel struct {
 	ctrl     *gomock.Controller
-	recorder *MockExchangeRepoMockRecorder
+	recorder *MockExchangeReadModelMockRecorder
 	isgomock struct{}
 }
 
-// MockExchangeRepoMockRecorder is the mock recorder for MockExchangeRepo.
-type MockExchangeRepoMockRecorder struct {
-	mock *MockExchangeRepo
+// MockExchangeReadModelMockRecorder is the mock recorder for MockExchangeReadModel.
+type MockExchangeReadModelMockRecorder struct {
+	mock *MockExchangeReadModel
 }
 
-// NewMockExchangeRepo creates a new mock instance.
-func NewMockExchangeRepo(ctrl *gomock.Controller) *MockExchangeRepo {
-	mock := &MockExchangeRepo{ctrl: ctrl}
-	mock.recorder = &MockExchangeRepoMockRecorder{mock}
+// NewMockExchangeReadModel creates a new mock instance.
+func NewMockExchangeReadModel(ctrl *gomock.Controller) *MockExchangeReadModel {
+	mock := &MockExchangeReadModel{ctrl: ctrl}
+	mock.recorder = &MockExchangeReadModelMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockExchangeRepo) EXPECT() *MockExchangeRepoMockRecorder {
+func (m *MockExchangeReadModel) EXPECT() *MockExchangeReadModelMockRecorder {
 	return m.recorder
 }
 
-// GetHistory mocks base method.
-func (m *MockExchangeRepo) GetHistory(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
+// Conversion mocks base method.
+func (m *MockExchangeReadModel) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHistory", ctx, userID, limit, offset)
+	ret := m.ctrl.Call(m, "Conversion", ctx, userID, conversionID)
+	ret0, _ := ret[0].(entity.Conversion)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Conversion indicates an expected call of Conversion.
+func (mr *MockExchangeReadModelMockRecorder) Conversion(ctx, userID, conversionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conversion", reflect.TypeOf((*MockExchangeReadModel)(nil).Conversion), ctx, userID, conversionID)
+}
+
+// History mocks base method.
+func (m *MockExchangeReadModel) History(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "History", ctx, userID, limit, offset)
 	ret0, _ := ret[0].([]entity.Conversion)
 	ret1, _ := ret[1].(int)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// GetHistory indicates an expected call of GetHistory.
-func (mr *MockExchangeRepoMockRecorder) GetHistory(ctx, userID, limit, offset any) *gomock.Call {
+// History indicates an expected call of History.
+func (mr *MockExchangeReadModelMockRecorder) History(ctx, userID, limit, offset any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHistory", reflect.TypeOf((*MockExchangeRepo)(nil).GetHistory), ctx, userID, limit, offset)
-}
-
-// Store mocks base method.
-func (m *MockExchangeRepo) Store(ctx context.Context, userID string, c *entity.Conversion) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Store", ctx, userID, c)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Store indicates an expected call of Store.
-func (mr *MockExchangeRepoMockRecorder) Store(ctx, userID, c any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Store", reflect.TypeOf((*MockExchangeRepo)(nil).Store), ctx, userID, c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockExchangeReadModel)(nil).History), ctx, userID, limit, offset)
 }
 
 // MockExchangeWebAPI is a mock of ExchangeWebAPI interface.

@@ -55,10 +55,12 @@ type (
 		Reached(ctx context.Context, names []string, position int64) (bool, error)
 	}
 
-	// ExchangeRepo stores each user's currency conversions.
-	ExchangeRepo interface {
-		Store(ctx context.Context, userID string, c *entity.Conversion) error
-		GetHistory(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error)
+	// ExchangeReadModel reads exchange_history, which only the exchange projector writes. History is
+	// one page of the user's conversions, newest first, and their total count. Conversion of
+	// another user's or a missing conversion is entity.ErrConversionNotFound.
+	ExchangeReadModel interface {
+		History(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error)
+		Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error)
 	}
 
 	// ExchangeWebAPI fetches the reference rate from one currency to another, and the date it

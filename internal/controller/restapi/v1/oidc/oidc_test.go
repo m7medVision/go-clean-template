@@ -44,7 +44,7 @@ func (f *fakeOIDC) Finish(_ context.Context, code, state, token string) (string,
 }
 
 func newRouterWithOIDC(cfg *config.Config, oc usecase.OIDC) http.Handler {
-	return resttest.NewRouter(cfg, cqrs.Buses{}, nil, restapi.WithOIDC(oc))
+	return resttest.NewRouter(cfg, cqrs.Buses{}, restapi.WithOIDC(oc))
 }
 
 // postFinish posts body to path with a ceremony token, as the web client posts the callback.

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
@@ -53,9 +52,9 @@ func Token(t *testing.T, roles ...string) string {
 	return signed
 }
 
-// Post sends query and vars to a GraphQL handler over the buses b and ex, with token as the bearer
-// token unless it is empty. A bus or use case the query never reaches may be nil.
-func Post(t *testing.T, b cqrs.Buses, ex usecase.Exchange, token, query string, vars map[string]any) Response {
+// Post sends query and vars to a GraphQL handler over the buses b, with token as the bearer token
+// unless it is empty. A bus the query never reaches may be nil.
+func Post(t *testing.T, b cqrs.Buses, token, query string, vars map[string]any) Response {
 	t.Helper()
 
 	payload, err := json.Marshal(map[string]any{"query": query, "variables": vars})
@@ -69,7 +68,7 @@ func Post(t *testing.T, b cqrs.Buses, ex usecase.Exchange, token, query string, 
 	}
 
 	rec := httptest.NewRecorder()
-	graphql.NewHandler(b, ex, jwt.New(_signingKey, time.Hour), noopLogger{}).ServeHTTP(rec, req)
+	graphql.NewHandler(b, jwt.New(_signingKey, time.Hour), noopLogger{}).ServeHTTP(rec, req)
 
 	var resp Response
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp), rec.Body.String())

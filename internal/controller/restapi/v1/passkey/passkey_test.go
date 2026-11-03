@@ -121,7 +121,7 @@ func newPasskeyRouter(t *testing.T, pk usecase.Passkey) http.Handler {
 
 	cfg := resttest.Config(t)
 
-	return resttest.NewRouter(cfg, cqrs.Buses{}, nil, restapi.WithPasskeys(pk))
+	return resttest.NewRouter(cfg, cqrs.Buses{}, restapi.WithPasskeys(pk))
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

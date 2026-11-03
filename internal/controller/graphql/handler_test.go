@@ -29,7 +29,7 @@ func panicBuses() cqrs.Buses {
 func TestIntrospectionWithoutToken(t *testing.T) {
 	t.Parallel()
 
-	resp := graphqltest.Post(t, cqrs.Buses{}, nil, "", `{ __schema { queryType { name } } }`, nil)
+	resp := graphqltest.Post(t, cqrs.Buses{}, "", `{ __schema { queryType { name } } }`, nil)
 
 	require.Empty(t, resp.Errors)
 	assert.JSONEq(t, `{"queryType":{"name":"Query"}}`, string(resp.Data["__schema"]))
@@ -38,7 +38,7 @@ func TestIntrospectionWithoutToken(t *testing.T) {
 func TestPanicIsHidden(t *testing.T) {
 	t.Parallel()
 
-	resp := graphqltest.Post(t, panicBuses(), nil, graphqltest.Token(t), `query { task(id: "task-1") { id title status } }`, nil)
+	resp := graphqltest.Post(t, panicBuses(), graphqltest.Token(t), `query { task(id: "task-1") { id title status } }`, nil)
 
 	assert.Equal(t, "INTERNAL", resp.Code(t))
 	assert.Equal(t, "internal server error", resp.Errors[0].Message)

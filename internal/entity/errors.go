@@ -15,6 +15,7 @@ var (
 	ErrInvalidTransition   = errors.New("invalid status transition")
 	ErrUnknownEmail        = errors.New("unknown email template")
 	ErrInvalidConversion   = errors.New("invalid currency conversion")
+	ErrConversionNotFound  = errors.New("conversion not found")
 	ErrUnsupportedCurrency = errors.New("unsupported currency")
 	// ErrOIDCDisabled is an SSO request to an app with no OpenID Connect provider configured.
 	ErrOIDCDisabled = errors.New("sso sign-in is not configured")
