@@ -187,13 +187,18 @@ bin-deps: ### install tools
 	@command -v atlas >/dev/null 2>&1 || curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh
 .PHONY: bin-deps
 
+# svu names the version from the commits since the last tag; --v0 keeps a breaking change below 1.0
+# a minor bump. A tag HEAD does not contain means a later merge was released first, and covers HEAD.
 release-version: ### print the next release version from the commits since the last tag, or nothing
-	@go run ./cmd/release
+	@next=$$(go tool svu next --v0) && current=$$(go tool svu current) || exit 1; \
+	if [ -n "$$(git tag --list 'v*' --no-merged HEAD)" ]; then \
+		echo "release: nothing to release: a newer release already covers this commit" >&2; \
+	elif [ "$$next" = "$$current" ]; then \
+		echo "release: nothing to release: no feat, fix or breaking commit since $$current" >&2; \
+	else \
+		echo "$$next"; \
+	fi
 .PHONY: release-version
-
-release-notes: ### print the release notes for the commits since the last tag
-	@go run ./cmd/release -notes
-.PHONY: release-notes
 
 pre-commit: deps mock format linter-golangci test ### run pre-commit
 pre-commit: web-api web-graphql web-format web-check

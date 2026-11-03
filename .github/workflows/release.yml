@@ -1,7 +1,7 @@
 name: Release
 # Every master commit whose CI passed gets a release when its commits call for
-# one: a feat, fix, perf or breaking change since the last tag
-# (`make release-version`). See docs/releasing.md.
+# one: a feat, fix or breaking change since the last tag
+# (`make release-version`, svu). GoReleaser publishes it. See docs/releasing.md.
 on:
   workflow_run:
     workflows: [CI]
@@ -43,25 +43,30 @@ jobs:
         run: |
           v=$(make --no-print-directory release-version)
           echo "version=$v" >> "$GITHUB_OUTPUT"
+      # GoReleaser releases the tag on HEAD. The tag is never pushed: the API creates it on HEAD_SHA
+      # (release.target_commitish in .goreleaser.yaml), and tags are never moved afterwards.
+      - name: Tag
+        if: steps.version.outputs.version != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: git tag "$VERSION"
+      - name: Publish
+        if: steps.version.outputs.version != ''
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: '~> v2'
+          args: >-
+            release --clean
+            ${{ github.event_name == 'workflow_dispatch' && '--skip=publish' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Write the notes
         if: steps.version.outputs.version != ''
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          make --no-print-directory release-notes > "$RUNNER_TEMP/notes.md"
           {
             echo "## $VERSION"
             echo
-            cat "$RUNNER_TEMP/notes.md"
+            cat dist/CHANGELOG.md
           } >> "$GITHUB_STEP_SUMMARY"
-      # The API creates the tag on HEAD_SHA; tags are never moved afterwards.
-      - name: Publish
-        if: >-
-          steps.version.outputs.version != '' &&
-          github.event_name == 'workflow_run'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          gh release create "$VERSION" --target "$HEAD_SHA" --title "$VERSION" \
-            --notes-file "$RUNNER_TEMP/notes.md"
