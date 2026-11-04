@@ -1,0 +1,152 @@
+package {{.Name.Pkg}}_test
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/controller/restapi/resttest"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	// _owner is the user resttest.Token signs for, who owns the stored {{.Name.Words}}.
+	_owner = "user-1"
+	// _storedJSON is the stored {{.Name.Words}} as the API answers with it.
+	_storedJSON = `{"id":"{{.Name.Kebab}}-1","user_id":"user-1","created_at":"2026-01-02T03:04:05Z","updated_at":"2026-01-02T03:04:05Z"}`
+)
+
+// stored is the {{.Name.Words}} the fake handlers answer with.
+func stored() entity.{{.Name.Go}} {
+	at := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+
+	return entity.{{.Name.Go}}{ID: "{{.Name.Kebab}}-1", UserID: _owner, CreatedAt: at, UpdatedAt: at}
+}
+
+// operation is one request to one {{.Name.Words}} operation, with what it answers when the fake handlers
+// succeed and the commands and queries it sends them.
+type operation struct {
+	method, target, body string
+	status               int
+	want                 string // the response body as JSON, empty for none
+	sent                 []any
+}
+
+// operations are one request to each {{.Name.Words}} operation, as _owner.
+func operations() map[string]operation {
+	get := query.Get{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}
+
+	return map[string]operation{
+		"create": {
+			method: http.MethodPost, target: "/v1/{{.Name.Plural.Kebab}}", body: "{}",
+			status: http.StatusCreated, want: _storedJSON,
+			sent: []any{command.Create{{.Name.Go}}{UserID: _owner}, get},
+		},
+		"list": {
+			method: http.MethodGet, target: "/v1/{{.Name.Plural.Kebab}}?limit=5&offset=10",
+			status: http.StatusOK, want: `{"{{.Name.Plural.Snake}}":[` + _storedJSON + `],"total":1}`,
+			sent: []any{query.List{{.Name.Plural.Go}}{UserID: _owner, Limit: 5, Offset: 10}},
+		},
+		"get": {
+			method: http.MethodGet, target: "/v1/{{.Name.Plural.Kebab}}/{{.Name.Kebab}}-1",
+			status: http.StatusOK, want: _storedJSON,
+			sent: []any{get},
+		},
+		"update": {
+			method: http.MethodPut, target: "/v1/{{.Name.Plural.Kebab}}/{{.Name.Kebab}}-1", body: "{}",
+			status: http.StatusOK, want: _storedJSON,
+			sent: []any{command.Update{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}, get},
+		},
+		"delete": {
+			method: http.MethodDelete, target: "/v1/{{.Name.Plural.Kebab}}/{{.Name.Kebab}}-1",
+			status: http.StatusNoContent,
+			sent:   []any{command.Delete{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}},
+		},
+	}
+}
+
+func TestEach{{.Name.Go}}OperationDecodesTheRequestAndEncodesTheAnswer(t *testing.T) {
+	t.Parallel()
+
+	cfg := resttest.Config(t)
+
+	for name, op := range operations() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fake{{.Name.Go}}{stored: stored()}
+
+			resp := resttest.Do(t.Context(), newRouter(cfg, fake), op.method, op.target, resttest.Token(t), op.body)
+
+			require.Equal(t, op.status, resp.Code, resp.Body.String())
+			assert.Equal(t, op.sent, fake.sent)
+
+			if op.want == "" {
+				assert.Empty(t, resp.Body.String())
+
+				return
+			}
+
+			assert.JSONEq(t, op.want, resp.Body.String())
+		})
+	}
+}
+
+func TestEach{{.Name.Go}}OperationNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	cfg := resttest.Config(t)
+
+	for name, op := range operations() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fake{{.Name.Go}}{stored: stored()}
+
+			resp := resttest.Do(t.Context(), newRouter(cfg, fake), op.method, op.target, "", op.body)
+
+			assert.Equal(t, http.StatusUnauthorized, resp.Code)
+			assert.Empty(t, fake.sent, "nothing is sent without a caller")
+		})
+	}
+}
+
+// Every operation maps what a handler fails with the same way: first the failures any command can
+// produce, then the {{.Name.Words}} errors, then anything else. Until the handlers are written, every
+// operation answers 501.
+func TestEach{{.Name.Go}}OperationMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	cfg := resttest.Config(t)
+
+	for failure, tc := range map[string]struct {
+		err    error
+		status int
+	}{
+		"a stub handler":      {entity.ErrNotImplemented, http.StatusNotImplemented},
+		"a read model behind": {entity.ErrReadModelBehind, http.StatusServiceUnavailable},
+		"a concurrent change": {entity.ErrConcurrencyConflict, http.StatusConflict},
+		"another user's":      {entity.Err{{.Name.Go}}Forbidden, http.StatusForbidden},
+		"none with the ID":    {entity.Err{{.Name.Go}}NotFound, http.StatusNotFound},
+		"anything else":       {io.ErrUnexpectedEOF, http.StatusInternalServerError},
+	} {
+		for name, op := range operations() {
+			t.Run(name+"/"+failure, func(t *testing.T) {
+				t.Parallel()
+
+				fake := &fake{{.Name.Go}}{stored: stored(), err: fmt.Errorf("handler: %w", tc.err)}
+
+				resp := resttest.Do(t.Context(), newRouter(cfg, fake), op.method, op.target, resttest.Token(t), op.body)
+
+				assert.Equal(t, tc.status, resp.Code, resp.Body.String())
+				assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+			})
+		}
+	}
+}

@@ -1,0 +1,56 @@
+package {{.Name.Pkg}}_test
+
+import (
+	"context"
+	"net/http"
+
+	"{{.Module}}/config"
+	"{{.Module}}/internal/controller/restapi/resttest"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// fake{{.Name.Go}} answers every {{.Name.Words}} command and query: commands write stored's ID, queries read
+// stored, and every one of them fails with err when it is set. It keeps every message it is sent.
+type fake{{.Name.Go}} struct {
+	stored entity.{{.Name.Go}}
+	err    error
+
+	sent []any
+}
+
+// buses registers the fake's handlers on real buses whose one step is keep.
+func (f *fake{{.Name.Go}}) buses() cqrs.Buses {
+	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
+	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, cqrs.Written](
+		func(ctx context.Context, _ command.Create{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, cqrs.Written](
+		func(ctx context.Context, _ command.Update{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, cqrs.Written](
+		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.Get{{.Name.Go}}, entity.{{.Name.Go}}](
+		func(context.Context, query.Get{{.Name.Go}}) (entity.{{.Name.Go}}, error) { return f.stored, f.err }))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, query.{{.Name.Go}}Page](
+		func(context.Context, query.List{{.Name.Plural.Go}}) (query.{{.Name.Go}}Page, error) {
+			return query.{{.Name.Go}}Page{ {{- .Name.Plural.Go}}: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
+		}))
+
+	return cqrs.Buses{Commands: cmds, Queries: qs}
+}
+
+// keep is a step that keeps every message the buses carry, in the order they are sent.
+func (f *fake{{.Name.Go}}) keep(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
+	f.sent = append(f.sent, msg.Body)
+
+	return next(ctx)
+}
+
+// newRouter serves the REST router over f's buses.
+func newRouter(cfg *config.Config, f *fake{{.Name.Go}}) http.Handler {
+	return resttest.NewRouter(cfg, f.buses())
+}

@@ -71,19 +71,27 @@ func TestDomainFreeRejectsAnythingAnExistingDomainOwns(t *testing.T) {
 	}
 }
 
-func TestDomainFreeLooksAtTablesProtoServicesAndGraphQLTypes(t *testing.T) {
+// A controller folder that is not a domain's, such as the REST response package or GraphQL's
+// paging, takes its name too: the domain's controllers would be written into it.
+func TestDomainFreeLooksAtTablesProtoServicesGraphQLTypesAndControllerFolders(t *testing.T) {
 	t.Parallel()
 
 	fsys := fstest.MapFS{
 		"internal/app/schema/widgets.hcl":                   {Data: []byte("table \"widgets\" {}\n")},
 		"docs/proto/v1/thing.proto":                         {Data: []byte("syntax = \"proto3\";\n\nservice GadgetService {}\n")},
 		"internal/controller/graphql/schema/thing.graphqls": {Data: []byte("type Gizmo { id: ID! }\n")},
+		"internal/controller/restapi/v1/response/token.go":  {Data: []byte("package response\n")},
+		"internal/controller/grpc/v1/health/health.go":      {Data: []byte("package health\n")},
+		"internal/controller/graphql/paging/paging.go":      {Data: []byte("package paging\n")},
 	}
 
 	for kebab, owner := range map[string]string{
-		"widget": "internal/app/schema/widgets.hcl",
-		"gadget": "service GadgetService",
-		"gizmo":  "type Gizmo",
+		"widget":   "internal/app/schema/widgets.hcl",
+		"gadget":   "service GadgetService",
+		"gizmo":    "type Gizmo",
+		"response": "internal/controller/restapi/v1/response exists",
+		"health":   "internal/controller/grpc/v1/health exists",
+		"paging":   "internal/controller/graphql/paging exists",
 	} {
 		err := rules.DomainFree(repoOf(fsys), name(t, kebab))
 		require.ErrorIs(t, err, names.ErrInvalid, kebab)

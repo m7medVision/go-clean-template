@@ -21,6 +21,7 @@ func domainLayers() []layer {
 		{plan: planReadModel},
 		{plan: planProjector},
 		{plan: planUseCase},
+		{transport: "rest", plan: planREST},
 	}
 }
 

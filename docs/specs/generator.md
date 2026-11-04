@@ -89,7 +89,7 @@ event handlers return `entity.ErrNotImplemented`. The following are real working
 | use case | `usecase/invoice/register.go` (`Deps`, `Register`); `command/create_invoice.go`, `update_invoice.go`, `delete_invoice.go`, each with its test against `internal/repo/memstore`, and `command_test.go` with what those share (a store holding one invoice, and the commands' `CommandName` and `ActorID`), which keeps `dupl` from finding the update and delete tests to be clones; `query/get_invoice.go`, `list_invoices.go` and `query_test.go` against `internal/repo/repomock` |
 | repo | `persistent/invoice/invoice.go` (`NewReadModel`, returning `repo.InvoiceReadModel` wrapped in `newTraced`), `tracing.go`, `projector.go` (`NewProjector`, `Name`, `Tables`, `Handle`, `Project`), `projector_test.go` against a fake sqlc `Querier`; `queries/invoice.sql`. No `importer.go`: a new domain never had rows without events |
 | schema | `internal/app/schema/invoices.hcl` (the base columns, no foreign keys) |
-| REST | `restapi/v1/invoice/` `controller.go` (`NewRoutes`, the `problem` error mapping), `invoice.go`, `request.go`, `response.go`, `fake_test.go`, `invoice_test.go`, `main_test.go` |
+| REST | `restapi/v1/invoice/` `controller.go` (`NewRoutes`, the `problem` error mapping, `readBack`), `invoice.go` (create, list, get, update and delete under `/v1/invoices`, each listing 501 among its errors), `request.go` (the empty create and update bodies), `response.go` (`InvoiceList`), `fake_test.go`, `invoice_test.go`, `main_test.go` |
 | gRPC | `docs/proto/v1/invoice.proto`; `grpc/v1/invoice/` `controller.go` (`New`, the error mapping), `invoice.go`, `request.go`, `response.go`, `response_test.go`, `invoice_test.go` |
 | GraphQL | `schema/invoice.graphqls`; `graphql/invoice/` `resolver.go` (`Query`, `Mutation`, `New`), `query.go`, `mutation.go`, `fake_test.go`, `query_test.go`, `mutation_test.go` |
 | integration | `integration-test/invoice_test.go` |
@@ -158,7 +158,7 @@ prints the rule, the file and the reason, then exits non-zero having written not
 
 | Rule | Check |
 | --- | --- |
-| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, entity file, proto service, GraphQL type or table with that name. No identifier the plan adds at a package's top level, in a created file or by an edit, is declared in that package already: `record` would declare `entity.Record`, which exists. |
+| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, controller folder on any transport, entity file, proto service, GraphQL type or table with that name. A controller folder can be a package the domains share, such as REST's `response` or GraphQL's `paging`, which the domain's controllers would otherwise join. No identifier the plan adds at a package's top level, in a created file or by an edit, is declared in that package already: `record` would declare `entity.Record`, which exists. |
 | R2 targets exist or don't | No file it would create exists. Every file it would edit exists. For `new-usecase`, the domain exists and the message name is free. |
 | R3 clean | No file it would edit has uncommitted changes (`git status --porcelain -- <files>`), and neither do the paths the regenerators write (`docs/proto/v1/`, `docs/openapi/v1.json`, `internal/repo/repomock/`, `internal/repo/persistent/queries/`, `internal/controller/graphql/generated/` and `model/`, `web/src/api/schema.gen.ts`, `web/src/graphql/`), so the undo is exact. |
 | R4 one anchor | Every edit finds its place exactly once, by parsing the file: `go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`. Zero or two matches fail. An import whose name another import in the file binds fails too, as a domain called `config` would in `buses.go`. No markers, no line numbers, no regular expressions on source. |
@@ -285,6 +285,17 @@ The generator's own Go follows the repo's linters and conventions.
 6. `make gen-e2e` passes in CI, and fails when a template no longer matches the code. To prove it,
    the PR history shows one deliberately broken template.
 7. `go list -deps ./cmd/app ./cmd/worker` shows nothing from `tools/gen`.
+
+## Known limitations
+
+- **Two untouched generated domains are clones of each other.** Until one of them has fields and
+  bodies of its own, `dupl` finds their files in a shared package, such as `internal/entity`, to be
+  structural copies. Write one domain before generating the next. A file-level `//nolint:dupl` in
+  the templates can't solve this: while only one domain exists the directive suppresses nothing,
+  and `nolintlint` rejects it.
+- **The read model relies on how sqlc names a table's row struct**: after the singular of the
+  table, which holds for the plurals the generator forms. An unusual `plural=` override can break
+  that. When it does, the build at the end of `make new-domain` fails and prints the undo.
 
 ## Decided
 

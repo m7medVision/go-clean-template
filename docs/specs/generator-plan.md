@@ -134,7 +134,7 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 - [x] `make gen-e2e`; in a scratch copy the worker runs the generated projector.
 
 ### Phase 4 continued
-- [ ] 18. REST
+- [x] 18. REST
 - [ ] 19. gRPC
 - [ ] 20. GraphQL
 - [ ] 21. Integration test

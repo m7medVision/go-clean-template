@@ -16,16 +16,24 @@ import (
 )
 
 // DomainFree checks the rest of R1 for a new domain: nothing in the repository uses its name yet.
-// That means no use-case or read-model folder, no entity file, no table, no proto service and no
-// GraphQL type. The pattern and keyword checks are names.Parse's.
+// That means no use-case or read-model folder, no entity file, no table, no controller folder on
+// any transport, no proto service and no GraphQL type. A controller folder can be a package the
+// domains share, such as the REST response package, which the domain's controllers would join.
+// The pattern and keyword checks are names.Parse's.
 func DomainFree(r Repo, n *names.Name) error {
-	for _, p := range []string{
+	owned := []string{
 		"internal/usecase/" + n.Pkg,
 		"internal/repo/persistent/" + n.Pkg,
 		"internal/entity/" + n.Snake + ".go",
 		"internal/entity/" + n.Snake + "_aggregate.go",
 		"internal/app/schema/" + n.Plural.Snake + ".hcl",
-	} {
+	}
+
+	for _, t := range Transports() {
+		owned = append(owned, transportDir(t, n.Pkg))
+	}
+
+	for _, p := range owned {
 		if r.exists(p) {
 			return taken(n, p+" exists")
 		}

@@ -52,6 +52,12 @@ make web-deps
 make new-domain name=widget
 echo "gen-e2e: what generating changed:"
 git status --short
+# make openapi ran among the regenerators: the REST operations must be in the exported document,
+# which make web-api then typed for the web client.
+for op in create-widget list-widgets get-widget update-widget delete-widget; do
+	grep -q "\"operationId\": \"$op\"" docs/openapi/v1.json ||
+		{ echo "gen-e2e: docs/openapi/v1.json has no $op operation" >&2; exit 1; }
+done
 make linter-golangci test
 echo "gen-e2e: go vet ./integration-test/..."
 go vet ./integration-test/...

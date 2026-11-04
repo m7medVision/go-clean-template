@@ -199,6 +199,56 @@ func TestCreatedGoFilesAlignForALongerName(t *testing.T) {
 		"\tLineItemID string    `json:\"line_item_id\"`\n\tUserID     string    `json:\"user_id\"`\n")
 }
 
+// Each transport's layer creates the files under its controller folder and edits its router; a
+// domain without the transport gets neither.
+func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		transport, dir, router string
+		files                  int
+	}{
+		{transport: "rest", dir: "internal/controller/restapi/v1/widget/", router: "internal/controller/restapi/v1/router.go", files: 7},
+	} {
+		t.Run(tc.transport, func(t *testing.T) {
+			t.Parallel()
+
+			for _, transports := range [][]string{{tc.transport}, rules.Transports()} {
+				p := planDomain(thisRepo(), templates.FS(), parseName(t, "widget"), transports).plan
+
+				assert.Len(t, underDir(p.Created(), tc.dir), tc.files, "with %v", transports)
+				assert.Contains(t, p.Edited(), tc.router, "with %v", transports)
+			}
+
+			var others []string
+
+			for _, other := range rules.Transports() {
+				if other != tc.transport {
+					others = append(others, other)
+				}
+			}
+
+			p := planDomain(thisRepo(), templates.FS(), parseName(t, "widget"), others).plan
+
+			assert.Empty(t, underDir(p.Created(), tc.dir), "with %v", others)
+			assert.NotContains(t, p.Edited(), tc.router, "with %v", others)
+		})
+	}
+}
+
+// underDir returns the paths in dir, which ends in a slash.
+func underDir(paths []string, dir string) []string {
+	var in []string
+
+	for _, p := range paths {
+		if strings.HasPrefix(p, dir) {
+			in = append(in, p)
+		}
+	}
+
+	return in
+}
+
 func TestSelectLayersRunsTheSharedLayersAndTheTransportsAskedFor(t *testing.T) {
 	t.Parallel()
 
@@ -271,11 +321,16 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 
 	var out bytes.Buffer
 	require.NoError(t, newDomain(t.Context(), &domainRequest{root: dir, name: "invoice", transports: rules.Transports()}, &out))
-	assert.Contains(t, out.String(), "created 21, edited 4")
+	assert.Contains(t, out.String(), "created 28, edited 5")
 
 	events, err := os.ReadFile(filepath.Join(dir, "internal", "entity", "event.go"))
 	require.NoError(t, err)
 	assert.Contains(t, string(events), "\t\tinvoiceEvents(),\n\t)")
+
+	router, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "restapi", "v1", "router.go"))
+	require.NoError(t, err)
+	assert.Contains(t, string(router), "\tinvoice.NewRoutes(api, b, l)\n}", "after the last NewRoutes call")
+	assert.Contains(t, string(router), "\t\"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/invoice\"\n")
 
 	before := fingerprint(t, dir)
 

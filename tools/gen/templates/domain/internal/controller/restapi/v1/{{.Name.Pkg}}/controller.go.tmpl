@@ -1,0 +1,59 @@
+// Package {{.Name.Pkg}} serves the v1 {{.Name.Words}} operations over REST.
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"errors"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+	"{{.Module}}/pkg/logger"
+)
+
+const _{{.Name.Plural.Lower}}Tag = "{{.Name.Plural.Kebab}}"
+
+type controller struct {
+	cmds *cqrs.Commands
+	qs   *cqrs.Queries
+	l    logger.Interface
+}
+
+// NewRoutes registers the {{.Name.Words}} operations.
+func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+	r := &controller{cmds: b.Commands, qs: b.Queries, l: l}
+
+	r.create{{.Name.Go}}(api)
+	r.list{{.Name.Plural.Go}}(api)
+	r.get{{.Name.Go}}(api)
+	r.update{{.Name.Go}}(api)
+	r.delete{{.Name.Go}}(api)
+}
+
+// readBack reads the {{.Name.Words}} a command just wrote, for the response body.
+func (r *controller) readBack(ctx context.Context, userID, id string) (entity.{{.Name.Go}}, error) {
+	return cqrs.SendQuery[entity.{{.Name.Go}}](ctx, r.qs, query.Get{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: id})
+}
+
+// problem maps a failed command or query to its REST problem: first what any command can fail
+// with, then the {{.Name.Words}} errors, and anything else to a logged 500.
+func (r *controller) problem(err error, op string) error {
+	if shared := apierr.Shared(err); shared != nil {
+		r.l.Warn("restapi - v1 - %s: %v", op, err)
+
+		return shared
+	}
+
+	switch {
+	case errors.Is(err, entity.Err{{.Name.Go}}Forbidden):
+		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, entity.Err{{.Name.Go}}NotFound):
+		return huma.Error404NotFound("{{.Name.Words}} not found")
+	default:
+		r.l.Error(err, "restapi - v1 - "+op)
+
+		return huma.Error500InternalServerError("internal server error")
+	}
+}

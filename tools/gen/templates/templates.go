@@ -13,9 +13,10 @@
 // the import paths an edit adds are built in code, from Data.Module. A created file writes the app's
 // imports as {{.Module}}/internal/…, so it follows the module go.mod declares.
 //
-// Two habits keep templates parsing and reading well. In Go, a brace right before an action is
-// written "{ {{- .Name.Go}}", since "{{{" does not parse. Comments say "the" or "one" before a
-// name, never "a" or "an", which would depend on how the name sounds.
+// Three habits keep templates parsing and reading well. In Go, a brace right before an action is
+// written "{ {{- .Name.Go}}", since "{{{" does not parse. Two braces that open nested composite
+// literals, as in []map[string][]string{{…}}, are written {{"{{"}}, which renders them. Comments
+// say "the" or "one" before a name, never "a" or "an", which would depend on how the name sounds.
 package templates
 
 import (

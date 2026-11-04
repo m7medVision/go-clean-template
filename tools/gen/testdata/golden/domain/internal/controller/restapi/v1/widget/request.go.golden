@@ -1,0 +1,12 @@
+package widget
+
+// CreateWidget is the body of a create, empty until the widget has fields. Add each one here,
+// with the Huma tags that validate it, and pass it to command.CreateWidget in createWidget.
+type CreateWidget struct {
+	_ struct{} `additionalProperties:"true"`
+}
+
+// UpdateWidget is the body of an update, empty until the widget has fields, as CreateWidget is.
+type UpdateWidget struct {
+	_ struct{} `additionalProperties:"true"`
+}

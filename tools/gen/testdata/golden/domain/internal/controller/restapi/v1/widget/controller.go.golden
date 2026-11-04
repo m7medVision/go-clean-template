@@ -1,0 +1,59 @@
+// Package widget serves the v1 widget operations over REST.
+package widget
+
+import (
+	"context"
+	"errors"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
+)
+
+const _widgetsTag = "widgets"
+
+type controller struct {
+	cmds *cqrs.Commands
+	qs   *cqrs.Queries
+	l    logger.Interface
+}
+
+// NewRoutes registers the widget operations.
+func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+	r := &controller{cmds: b.Commands, qs: b.Queries, l: l}
+
+	r.createWidget(api)
+	r.listWidgets(api)
+	r.getWidget(api)
+	r.updateWidget(api)
+	r.deleteWidget(api)
+}
+
+// readBack reads the widget a command just wrote, for the response body.
+func (r *controller) readBack(ctx context.Context, userID, id string) (entity.Widget, error) {
+	return cqrs.SendQuery[entity.Widget](ctx, r.qs, query.GetWidget{UserID: userID, WidgetID: id})
+}
+
+// problem maps a failed command or query to its REST problem: first what any command can fail
+// with, then the widget errors, and anything else to a logged 500.
+func (r *controller) problem(err error, op string) error {
+	if shared := apierr.Shared(err); shared != nil {
+		r.l.Warn("restapi - v1 - %s: %v", op, err)
+
+		return shared
+	}
+
+	switch {
+	case errors.Is(err, entity.ErrWidgetForbidden):
+		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, entity.ErrWidgetNotFound):
+		return huma.Error404NotFound("widget not found")
+	default:
+		r.l.Error(err, "restapi - v1 - "+op)
+
+		return huma.Error500InternalServerError("internal server error")
+	}
+}

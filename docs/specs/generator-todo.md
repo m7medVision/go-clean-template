@@ -241,9 +241,9 @@ Templates for `restapi/v1/{{pkg}}/`:
 - `fake_test.go`, `{{name}}_test.go` and `main_test.go`.
 
 Edit: the `NewRoutes` call in `restapi/v1/router.go`, and its import.
-- [ ] The generated tests cover encoding, 401, the domain sentinels, 503, 409 and 501, through
+- [x] The generated tests cover encoding, 401, the domain sentinels, 503, 409 and 501, through
       fake handlers.
-- [ ] `make gen-e2e` now also runs `make openapi` and `make web-api` and passes.
+- [x] `make gen-e2e` now also runs `make openapi` and `make web-api` and passes.
 
 **Verify:** GE. **Depends on:** 17. **Files:** 7 templates, `tools/gen/domain.go`, goldens. **Size:** L
 
