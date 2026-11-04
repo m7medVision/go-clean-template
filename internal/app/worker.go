@@ -9,6 +9,9 @@ import (
 
 	"github.com/m7medvision/go-clean-template/config"
 	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
@@ -42,9 +45,15 @@ func RunWorker(cfg *config.Config) {
 	defer pg.Close()
 
 	// Use cases, built as the app builds them; the worker's handlers use only some
-	uc, err := initUseCases(cfg, pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry))
+	uc, err := initUseCases(cfg, pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), l)
 	if err != nil {
 		l.Fatal(fmt.Errorf("app - RunWorker - initUseCases: %w", err))
+	}
+
+	// Projections and event handlers
+	runner, store, err := newRunner(cfg, pg, l)
+	if err != nil {
+		l.Fatal(fmt.Errorf("app - RunWorker - newRunner: %w", err))
 	}
 
 	// Worker
@@ -58,10 +67,11 @@ func RunWorker(cfg *config.Config) {
 	)
 	workerctl.NewRouter(
 		w, l,
-		workerctl.WithMail(uc.mail),
+		workerctl.WithMail(uc.buses.Commands),
 	)
 
 	w.Start()
+	runner.Start()
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
@@ -72,4 +82,46 @@ func RunWorker(cfg *config.Config) {
 	if err = w.Shutdown(); err != nil {
 		l.Error(fmt.Errorf("app - RunWorker - worker.Shutdown: %w", err))
 	}
+
+	runner.Shutdown()
+	store.Close()
+}
+
+// newRunner returns the runner of every subscriber, and the store it reads, which must be closed
+// after the runner shuts down.
+func newRunner(cfg *config.Config, pg *postgres.Postgres, l logger.Interface) (
+	*projection.Runner, *projection.PostgresStore, error,
+) {
+	subs := subscribers(cfg, pg)
+	if err := checkSubscribers(subs); err != nil {
+		return nil, nil, err
+	}
+
+	store := projection.NewStore(pg, eventstore.NewReader(pg, entity.EventTypes(), eventstore.Upcasts()...), l)
+	runner := projection.New(l, store,
+		projection.PollInterval(cfg.CQRS.ProjectionPollInterval),
+		projection.BatchSize(cfg.CQRS.ProjectionBatchSize),
+	)
+
+	for _, s := range subs {
+		runner.Add(s)
+	}
+
+	return runner, store, nil
+}
+
+// RebuildProjection empties the read model of the projector called name and resets its checkpoint,
+// for the worker that runs it to replay every event into it (make projection-rebuild).
+func RebuildProjection(cfg *config.Config, name string) error {
+	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
+	if err != nil {
+		return fmt.Errorf("app - RebuildProjection - postgres.New: %w", err)
+	}
+	defer pg.Close()
+
+	if err = projection.Rebuild(context.Background(), pg, name, subscribers(cfg, pg)...); err != nil {
+		return fmt.Errorf("app - RebuildProjection: %w", err)
+	}
+
+	return nil
 }

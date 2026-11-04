@@ -6,12 +6,15 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
+// fakeTask answers every task command and query on real buses. stored is the task: commands
+// change it as the aggregate would and GetTask reads it back. Every message fails with err when it
+// is set, and called records that one reached a handler.
 type fakeTask struct {
-	usecase.Task
-
 	stored     entity.Task
 	err        error
 	called     bool
@@ -19,63 +22,66 @@ type fakeTask struct {
 	listCaller entity.Principal
 }
 
-func (f *fakeTask) Create(_ context.Context, userID, title, description string) (entity.Task, error) {
+// write runs change on stored, as a command handler would, unless err is set.
+func (f *fakeTask) write(change func(t *entity.Task)) (cqrs.Written, error) {
 	f.called = true
+	if f.err != nil {
+		return cqrs.Written{}, f.err
+	}
 
-	return entity.Task{
-		ID: "task-1", UserID: userID, Title: title, Description: description, Status: entity.TaskStatusTodo,
-	}, f.err
+	change(&f.stored)
+
+	return cqrs.Written{ID: f.stored.ID}, nil
 }
 
-func (f *fakeTask) Get(context.Context, string, string) (entity.Task, error) {
-	f.called = true
+func (f *fakeTask) buses() cqrs.Buses {
+	cmds, qs := cqrs.NewCommands(), cqrs.NewQueries()
 
-	return f.stored, f.err
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.CreateTask, cqrs.Written](
+		func(_ context.Context, c command.CreateTask) (cqrs.Written, error) {
+			return f.write(func(t *entity.Task) {
+				*t = entity.Task{
+					ID: "task-1", UserID: c.UserID, Title: c.Title, Description: c.Description, Status: entity.TaskStatusTodo,
+				}
+			})
+		}))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, cqrs.Written](
+		func(_ context.Context, c command.UpdateTask) (cqrs.Written, error) {
+			return f.write(func(t *entity.Task) { t.Title, t.Description = c.Title, c.Description })
+		}))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.TransitionTask, cqrs.Written](
+		func(_ context.Context, c command.TransitionTask) (cqrs.Written, error) {
+			return f.write(func(t *entity.Task) { t.Status = c.Status })
+		}))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeleteTask, cqrs.Written](
+		func(context.Context, command.DeleteTask) (cqrs.Written, error) {
+			return f.write(func(*entity.Task) {})
+		}))
+
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
+		func(context.Context, query.GetTask) (entity.Task, error) {
+			f.called = true
+
+			return f.stored, f.err
+		}))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, query.TaskPage](
+		func(_ context.Context, q query.ListTasks) (query.TaskPage, error) {
+			f.called, f.listStatus = true, q.Status
+
+			return query.TaskPage{Tasks: []entity.Task{f.stored}, Total: 1}, f.err
+		}))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, query.TaskPage](
+		func(_ context.Context, q query.ListAllTasks) (query.TaskPage, error) {
+			f.called, f.listCaller, f.listStatus = true, q.Principal, q.Status
+
+			return query.TaskPage{Tasks: []entity.Task{f.stored}, Total: 1}, f.err
+		}))
+
+	return cqrs.Buses{Commands: cmds, Queries: qs}
 }
 
-func (f *fakeTask) List(_ context.Context, _ string, status *entity.TaskStatus, _, _ int) ([]entity.Task, int, error) {
-	f.called = true
-	f.listStatus = status
-
-	return []entity.Task{f.stored}, 1, f.err
-}
-
-func (f *fakeTask) ListAll(
-	_ context.Context, caller entity.Principal, status *entity.TaskStatus, _, _ int,
-) ([]entity.Task, int, error) {
-	f.called = true
-	f.listCaller, f.listStatus = caller, status
-
-	return []entity.Task{f.stored}, 1, f.err
-}
-
-func (f *fakeTask) Update(_ context.Context, _, _, title, description string) (entity.Task, error) {
-	f.called = true
-
-	updated := f.stored
-	updated.Title = title
-	updated.Description = description
-
-	return updated, f.err
-}
-
-func (f *fakeTask) Transition(_ context.Context, _, _ string, status entity.TaskStatus) (entity.Task, error) {
-	f.called = true
-
-	moved := f.stored
-	moved.Status = status
-
-	return moved, f.err
-}
-
-func (f *fakeTask) Delete(context.Context, string, string) error {
-	f.called = true
-
-	return f.err
-}
-
-// do sends query to the GraphQL handler over tk, signed in as graphqltest.UserID when authenticated.
-func do(t *testing.T, tk *fakeTask, authenticated bool, query string, vars map[string]any) graphqltest.Response {
+// do sends gql to the GraphQL handler over tk, signed in as graphqltest.UserID when authenticated.
+func do(t *testing.T, tk *fakeTask, authenticated bool, gql string, vars map[string]any) graphqltest.Response {
 	t.Helper()
 
 	token := ""
@@ -83,12 +89,12 @@ func do(t *testing.T, tk *fakeTask, authenticated bool, query string, vars map[s
 		token = graphqltest.Token(t)
 	}
 
-	return graphqltest.Post(t, tk, nil, token, query, vars)
+	return graphqltest.Post(t, tk.buses(), token, gql, vars)
 }
 
-// doAs sends query signed in as graphqltest.UserID with roles.
-func doAs(t *testing.T, tk *fakeTask, roles []string, query string) graphqltest.Response {
+// doAs sends gql signed in as graphqltest.UserID with roles.
+func doAs(t *testing.T, tk *fakeTask, roles []string, gql string) graphqltest.Response {
 	t.Helper()
 
-	return graphqltest.Post(t, tk, nil, graphqltest.Token(t, roles...), query, nil)
+	return graphqltest.Post(t, tk.buses(), graphqltest.Token(t, roles...), gql, nil)
 }

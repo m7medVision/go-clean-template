@@ -2,13 +2,15 @@ package exchange
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/shopspring/decimal"
 )
 
@@ -50,19 +52,17 @@ func (r *controller) convert(api huma.API) {
 			return nil, huma.Error422UnprocessableEntity("invalid amount")
 		}
 
-		conversion, err := r.e.Convert(ctx, userID, input.Body.From, input.Body.To, amount)
+		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.ConvertCurrency{
+			UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
+		})
 		if err != nil {
-			if errors.Is(err, entity.ErrInvalidConversion) {
-				return nil, huma.Error400BadRequest("invalid conversion")
-			}
+			return nil, r.problem(err, "convert")
+		}
 
-			if errors.Is(err, entity.ErrUnsupportedCurrency) {
-				return nil, huma.Error400BadRequest("unsupported currency")
-			}
-
-			r.l.Error(err, "restapi - v1 - convert")
-
-			return nil, huma.Error500InternalServerError("internal server error")
+		conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,
+			query.GetConversion{UserID: userID, ConversionID: written.ID})
+		if err != nil {
+			return nil, r.problem(err, "convert")
 		}
 
 		return &convertOutput{Body: NewConversion(&conversion)}, nil
@@ -85,11 +85,10 @@ func (r *controller) exchangeHistory(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		history, err := r.e.History(ctx, userID, input.Limit, input.Offset)
+		history, err := cqrs.SendQuery[entity.ExchangeHistory](ctx, r.qs,
+			query.GetExchangeHistory{UserID: userID, Limit: input.Limit, Offset: input.Offset})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - exchangeHistory")
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, r.problem(err, "exchangeHistory")
 		}
 
 		return &exchangeHistoryOutput{Body: NewExchangeHistory(history)}, nil

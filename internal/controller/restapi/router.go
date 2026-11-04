@@ -13,7 +13,7 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,9 +25,7 @@ const _apiTitle = "Go Clean Template API"
 // NewRouter builds the HTTP handler for every REST surface of the app.
 func NewRouter(
 	cfg *config.Config,
-	e usecase.Exchange,
-	u usecase.User,
-	tk usecase.Task,
+	b cqrs.Buses,
 	jwtManager *jwt.Manager,
 	l logger.Interface,
 	opts ...Option,
@@ -64,17 +62,17 @@ func NewRouter(
 	r.Get("/healthz", healthz)
 
 	api := humachi.New(r, apiConfig)
-	v1.NewRoutes(api, e, u, tk, l)
+	v1.NewRoutes(api, b, l)
 
 	for _, opt := range opts {
-		opt(api, l)
+		opt(api, b, l)
 	}
 
 	return r
 }
 
-// Option registers an optional feature's operations on the REST API.
-type Option func(api huma.API, l logger.Interface)
+// Option registers an optional feature's operations on the REST API, over the buses.
+type Option func(api huma.API, b cqrs.Buses, l logger.Interface)
 
 // newAPIConfig is shared by NewRouter and OpenAPI so the exported document matches the served one.
 func newAPIConfig(version string) huma.Config {

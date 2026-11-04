@@ -9,9 +9,15 @@ sql:
         out: internal/repo/persistent/queries
         sql_package: pgx/v5
         emit_pointers_for_null_types: true
+        emit_interface: true
         overrides:
           - db_type: uuid
             go_type: string
+          - db_type: uuid
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
           - db_type: pg_catalog.timestamp
             go_type: time.Time
           - column: tasks.status
@@ -35,4 +41,10 @@ sql:
           - column: webauthn_credentials.id
             go_type: github.com/m7medvision/go-clean-template/internal/entity.PasskeyID
           - column: webauthn_credentials.credential
+            go_type: encoding/json.RawMessage
+          - column: events.payload
+            go_type: encoding/json.RawMessage
+          - column: events.metadata
+            go_type: encoding/json.RawMessage
+          - column: snapshots.payload
             go_type: encoding/json.RawMessage

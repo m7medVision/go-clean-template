@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"slices"
 	"time"
 )
 
@@ -14,7 +13,8 @@ const (
 	TaskStatusDone       TaskStatus = "done"
 )
 
-// Task -.
+// Task is a task as it is read: the shape the tasks table, and the API, hold. Its rules live on
+// TaskAggregate.
 type Task struct {
 	ID          string     `json:"id"          example:"550e8400-e29b-41d4-a716-446655440000"`
 	UserID      string     `json:"user_id"     example:"550e8400-e29b-41d4-a716-446655440000"`
@@ -35,24 +35,16 @@ func (s TaskStatus) Valid() bool {
 	}
 }
 
-// Transition validates and applies a status transition.
-func (t *Task) Transition(newStatus TaskStatus) error {
-	validTransitions := map[TaskStatus][]TaskStatus{
-		TaskStatusTodo:       {TaskStatusInProgress},
-		TaskStatusInProgress: {TaskStatusDone, TaskStatusTodo},
-		TaskStatusDone:       {},
+// CanMoveTo reports whether a task in status s may move to status to.
+func (s TaskStatus) CanMoveTo(to TaskStatus) bool {
+	switch s {
+	case TaskStatusTodo:
+		return to == TaskStatusInProgress
+	case TaskStatusInProgress:
+		return to == TaskStatusDone || to == TaskStatusTodo
+	case TaskStatusDone:
+		return false
+	default:
+		return false
 	}
-
-	allowed, ok := validTransitions[t.Status]
-	if !ok {
-		return ErrInvalidTransition
-	}
-
-	if slices.Contains(allowed, newStatus) {
-		t.Status = newStatus
-
-		return nil
-	}
-
-	return ErrInvalidTransition
 }

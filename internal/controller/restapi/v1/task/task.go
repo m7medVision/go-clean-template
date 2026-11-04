@@ -2,13 +2,15 @@ package task
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 type createTaskInput struct {
@@ -83,11 +85,16 @@ func (r *controller) createTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		task, err := r.tk.Create(ctx, userID, input.Body.Title, input.Body.Description)
+		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.CreateTask{
+			UserID: userID, Title: input.Body.Title, Description: input.Body.Description,
+		})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - createTask")
+			return nil, r.problem(err, "createTask")
+		}
 
-			return nil, huma.Error500InternalServerError("internal server error")
+		task, err := r.readBack(ctx, userID, written.ID)
+		if err != nil {
+			return nil, r.problem(err, "createTask")
 		}
 
 		return &createTaskOutput{Body: task}, nil
@@ -110,14 +117,9 @@ func (r *controller) listTasks(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		tasks, total, err := r.tk.List(ctx, userID, input.status(), input.Limit, input.Offset)
-		if err != nil {
-			r.l.Error(err, "restapi - v1 - listTasks")
-
-			return nil, huma.Error500InternalServerError("internal server error")
-		}
-
-		return &listTasksOutput{Body: TaskList{Tasks: tasks, Total: total}}, nil
+		return listPage(ctx, r, query.ListTasks{
+			UserID: userID, Status: input.status(), Limit: input.Limit, Offset: input.Offset,
+		}, "listTasks")
 	})
 }
 
@@ -137,18 +139,9 @@ func (r *controller) listAllTasks(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		tasks, total, err := r.tk.ListAll(ctx, caller, input.status(), input.Limit, input.Offset)
-		if err != nil {
-			if errors.Is(err, entity.ErrAdminRequired) {
-				return nil, huma.Error403Forbidden("admin role required")
-			}
-
-			r.l.Error(err, "restapi - v1 - listAllTasks")
-
-			return nil, huma.Error500InternalServerError("internal server error")
-		}
-
-		return &listTasksOutput{Body: TaskList{Tasks: tasks, Total: total}}, nil
+		return listPage(ctx, r, query.ListAllTasks{
+			Principal: caller, Status: input.status(), Limit: input.Limit, Offset: input.Offset,
+		}, "listAllTasks")
 	})
 }
 
@@ -168,19 +161,9 @@ func (r *controller) getTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		task, err := r.tk.Get(ctx, userID, input.ID)
+		task, err := r.readBack(ctx, userID, input.ID)
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - getTask")
-
-			if errors.Is(err, entity.ErrTaskForbidden) {
-				return nil, huma.Error403Forbidden("forbidden")
-			}
-
-			if errors.Is(err, entity.ErrTaskNotFound) {
-				return nil, huma.Error404NotFound("task not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, r.problem(err, "getTask")
 		}
 
 		return &updateTaskOutput{Body: task}, nil
@@ -203,19 +186,16 @@ func (r *controller) updateTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		task, err := r.tk.Update(ctx, userID, input.ID, input.Body.Title, input.Body.Description)
+		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.UpdateTask{
+			UserID: userID, TaskID: input.ID, Title: input.Body.Title, Description: input.Body.Description,
+		})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - updateTask")
+			return nil, r.problem(err, "updateTask")
+		}
 
-			if errors.Is(err, entity.ErrTaskForbidden) {
-				return nil, huma.Error403Forbidden("forbidden")
-			}
-
-			if errors.Is(err, entity.ErrTaskNotFound) {
-				return nil, huma.Error404NotFound("task not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+		task, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, r.problem(err, "updateTask")
 		}
 
 		return &updateTaskOutput{Body: task}, nil
@@ -238,23 +218,16 @@ func (r *controller) transitionTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		task, err := r.tk.Transition(ctx, userID, input.ID, input.Body.Status)
+		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.TransitionTask{
+			UserID: userID, TaskID: input.ID, Status: input.Body.Status,
+		})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - transitionTask")
+			return nil, r.problem(err, "transitionTask")
+		}
 
-			if errors.Is(err, entity.ErrInvalidTransition) {
-				return nil, huma.Error400BadRequest("invalid status transition")
-			}
-
-			if errors.Is(err, entity.ErrTaskForbidden) {
-				return nil, huma.Error403Forbidden("forbidden")
-			}
-
-			if errors.Is(err, entity.ErrTaskNotFound) {
-				return nil, huma.Error404NotFound("task not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+		task, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, r.problem(err, "transitionTask")
 		}
 
 		return &transitionTaskOutput{Body: task}, nil
@@ -278,15 +251,9 @@ func (r *controller) deleteTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		err := r.tk.Delete(ctx, userID, input.ID)
+		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.DeleteTask{UserID: userID, TaskID: input.ID})
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - deleteTask")
-
-			if errors.Is(err, entity.ErrTaskNotFound) {
-				return nil, huma.Error404NotFound("task not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, r.problem(err, "deleteTask")
 		}
 
 		return &deleteTaskOutput{Status: http.StatusNoContent}, nil

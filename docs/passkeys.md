@@ -12,14 +12,14 @@ The code, layer by layer:
 
 | Layer | Where |
 | --- | --- |
-| Entity | [`internal/entity/passkey.go`](../internal/entity/passkey.go), sentinels in [`errors.go`](../internal/entity/errors.go) |
-| Use case | [`internal/usecase/passkey`](../internal/usecase/passkey/passkey.go): the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn) |
-| Repository | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey/passkey.go), queries in [`queries/passkey.sql`](../internal/repo/persistent/queries/passkey.sql) |
+| Entity | [`internal/entity/passkey.go`](../internal/entity/passkey.go), the aggregate and its events in [`passkey_aggregate.go`](../internal/entity/passkey_aggregate.go) and [`passkey_events.go`](../internal/entity/passkey_events.go), sentinels in [`errors.go`](../internal/entity/errors.go) |
+| Use case | [`internal/usecase/passkey`](../internal/usecase/passkey): the `begin` steps and the reads are queries, the `finish` steps, rename and delete are commands; [`ceremony/`](../internal/usecase/passkey/ceremony/ceremony.go) is the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn) |
+| Read model | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey/passkey.go) (with the `passkey` projector and the challenge guard), queries in [`queries/passkey.sql`](../internal/repo/persistent/queries/passkey.sql) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/passkey/`](../internal/controller/restapi/v1/passkey) |
 | Web | [`web/src/passkey/`](../web/src/passkey), and the login screen in [`web/src/routes/login.tsx`](../web/src/routes/login.tsx) |
 
-go-webauthn stays inside the use case, the way `user` keeps bcrypt to itself. Controllers pass the
+go-webauthn stays inside `ceremony/`, the way `user` keeps bcrypt to itself. Controllers pass the
 browser's JSON in as bytes and hand the options JSON back out; no WebAuthn type reaches `entity` or a
 controller.
 
@@ -53,17 +53,17 @@ Signed in, from the Passkeys card on `/profile`, and signed in recently.
    caller: a token begun by another user fails. The passkey is stored under `name`, trimmed, or
    `Passkey` when it is blank, and the answer is `201` with the passkey.
 
-Registration needs no burn (below). The credential ID is the table's primary key, so finishing the
-same registration twice is a `409`, and only the signed-in user's own ceremony can finish at all.
+Registration needs no burn (below). The credential ID names the passkey's stream (`passkey-<id>`), so
+finishing the same registration twice is `entity.ErrPasskeyExists`, a `409`, and only the signed-in user's own ceremony can finish at all.
 
 #### A recent sign-in
 
 A passkey outlives the session that adds it: it keeps signing in after the JWT expires and after a
 password change. Without a check, anyone holding a stolen JWT could add their own passkey and keep
 the account. So `begin` requires that the caller signed in recently: the auth middleware
-(`middleware.AuthTime`) passes the token's `iat` to the use case, and a token older than
+(`middleware.AuthTime`) passes the token's `iat` into the query, and a token older than
 `WEBAUTHN_REAUTH_MAX_AGE` (5 minutes by default), or one without an `iat`, is
-`entity.ErrPasskeyReauthRequired`. The rule lives in the use case (`BeginRegistration`), not the
+`entity.ErrPasskeyReauthRequired`. The rule lives in the query (`BeginPasskeyRegistration`), not the
 controller.
 
 The controller answers it with a `401` problem whose `detail` is exactly `reauthentication
@@ -262,8 +262,9 @@ the options JSON, makes an EC2 key, and writes the attestation and assertion JSO
 Both test suites use it with the real go-webauthn, so the ceremonies are checked end to end, not
 mocked.
 
-- **Unit**, in [`internal/usecase/passkey_test.go`](../internal/usecase/passkey_test.go), with gomock
-  repositories: registration and login succeed; `begin` refuses a sign-in older than the max age,
+- **Unit**, in [`internal/usecase/passkey/`](../internal/usecase/passkey): `ceremony/` against the real
+  go-webauthn, the commands against the in-memory event store, the queries with gomock read models.
+  The helpers that drive the software authenticator are in `passkeytest/`. Together they check: registration and login succeed; `begin` refuses a sign-in older than the max age,
   or one without an issue time, before reading anything; a tampered, expired or foreign token fails;
   so does an attestation or assertion without the user-verified flag, an assertion for another
   ceremony's challenge, an unknown credential or user handle, a credential

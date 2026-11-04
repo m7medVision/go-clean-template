@@ -13,13 +13,13 @@ import (
 
 const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 
-// tracedRepo wraps a TaskRepo with OpenTelemetry spans on top of the
-// low-level pgx query spans, giving a semantic "TaskRepo.<Method>" view.
+// tracedRepo wraps the task read model with OpenTelemetry spans on top of the
+// low-level pgx query spans, giving a semantic "TaskReadModel.<Method>" view.
 type tracedRepo struct {
-	next repo.TaskRepo
+	next repo.TaskReadModel
 }
 
-func newTraced(next repo.TaskRepo) repo.TaskRepo {
+func newTraced(next repo.TaskReadModel) repo.TaskReadModel {
 	return &tracedRepo{next: next}
 }
 
@@ -36,27 +36,14 @@ func endSpan(span trace.Span, err error) {
 	span.End()
 }
 
-func (r *tracedRepo) Store(ctx context.Context, task *entity.Task) error {
+func (r *tracedRepo) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
 	ctx, span := startSpan(
-		ctx, "TaskRepo.Store",
-		attribute.String("user.id", task.UserID),
-		attribute.String("task.id", task.ID),
-	)
-
-	err := r.next.Store(ctx, task)
-	endSpan(span, err)
-
-	return err
-}
-
-func (r *tracedRepo) GetByID(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	ctx, span := startSpan(
-		ctx, "TaskRepo.GetByID",
+		ctx, "TaskReadModel.GetByID",
 		attribute.String("user.id", userID),
 		attribute.String("task.id", taskID),
 	)
 
-	result, err := r.next.GetByID(ctx, userID, taskID)
+	result, err := r.next.Get(ctx, userID, taskID)
 	endSpan(span, err)
 
 	return result, err
@@ -72,7 +59,7 @@ func (r *tracedRepo) List(ctx context.Context, userID string, filter repo.TaskFi
 		attrs = append(attrs, attribute.String("task.status", string(*filter.Status)))
 	}
 
-	ctx, span := startSpan(ctx, "TaskRepo.List", attrs...)
+	ctx, span := startSpan(ctx, "TaskReadModel.List", attrs...)
 
 	tasks, total, err := r.next.List(ctx, userID, filter)
 	endSpan(span, err)
@@ -89,36 +76,10 @@ func (r *tracedRepo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]ent
 		attrs = append(attrs, attribute.String("task.status", string(*filter.Status)))
 	}
 
-	ctx, span := startSpan(ctx, "TaskRepo.ListAll", attrs...)
+	ctx, span := startSpan(ctx, "TaskReadModel.ListAll", attrs...)
 
 	tasks, total, err := r.next.ListAll(ctx, filter)
 	endSpan(span, err)
 
 	return tasks, total, err
-}
-
-func (r *tracedRepo) Update(ctx context.Context, task *entity.Task) error {
-	ctx, span := startSpan(
-		ctx, "TaskRepo.Update",
-		attribute.String("user.id", task.UserID),
-		attribute.String("task.id", task.ID),
-	)
-
-	err := r.next.Update(ctx, task)
-	endSpan(span, err)
-
-	return err
-}
-
-func (r *tracedRepo) Delete(ctx context.Context, userID, taskID string) error {
-	ctx, span := startSpan(
-		ctx, "TaskRepo.Delete",
-		attribute.String("user.id", userID),
-		attribute.String("task.id", taskID),
-	)
-
-	err := r.next.Delete(ctx, userID, taskID)
-	endSpan(span, err)
-
-	return err
 }

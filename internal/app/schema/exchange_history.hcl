@@ -1,8 +1,15 @@
+# The exchange read model: written only by the exchange projector, so it has no foreign key to
+# users. conversion_id is the conversion's stream; rows stored before conversions stored events get
+# theirs from the backfill.
 table "exchange_history" {
   schema = schema.public
   column "id" {
     null = false
     type = bigserial
+  }
+  column "conversion_id" {
+    null = true
+    type = uuid
   }
   column "user_id" {
     null = false
@@ -40,14 +47,13 @@ table "exchange_history" {
   primary_key {
     columns = [column.id]
   }
+  index "exchange_history_conversion_id_key" {
+    unique  = true
+    columns = [column.conversion_id]
+  }
   index "idx_exchange_history_user_id" {
     on {
       column = column.user_id
     }
-  }
-  foreign_key "exchange_history_user_id_fkey" {
-    columns     = [column.user_id]
-    ref_columns = [table.users.column.id]
-    on_delete   = CASCADE
   }
 }

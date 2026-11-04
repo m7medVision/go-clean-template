@@ -14,12 +14,12 @@ import (
 const _tracerName = "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
 
 // tracedRepo wraps an ExchangeRepo with OpenTelemetry spans on top of the
-// low-level pgx query spans, giving a semantic "ExchangeRepo.<Method>" view.
+// low-level pgx query spans, giving a semantic "ExchangeReadModel.<Method>" view.
 type tracedRepo struct {
-	next repo.ExchangeRepo
+	next *Repo
 }
 
-func newTraced(next repo.ExchangeRepo) repo.ExchangeRepo {
+func newTraced(next *Repo) repo.ExchangeReadModel {
 	return &tracedRepo{next: next}
 }
 
@@ -36,32 +36,27 @@ func endSpan(span trace.Span, err error) {
 	span.End()
 }
 
-func (r *tracedRepo) Store(ctx context.Context, userID string, c *entity.Conversion) error {
-	ctx, span := startSpan(
-		ctx, "ExchangeRepo.Store",
-		attribute.String("user.id", userID),
-		attribute.String("exchange.from", c.From),
-		attribute.String("exchange.to", c.To),
-	)
-
-	err := r.next.Store(ctx, userID, c)
-	endSpan(span, err)
-
-	return err
-}
-
-func (r *tracedRepo) GetHistory(
+func (r *tracedRepo) History(
 	ctx context.Context, userID string, limit, offset int64,
 ) ([]entity.Conversion, int, error) {
 	ctx, span := startSpan(
-		ctx, "ExchangeRepo.GetHistory",
+		ctx, "ExchangeReadModel.GetHistory",
 		attribute.String("user.id", userID),
 		attribute.Int64("exchange.limit", limit),
 		attribute.Int64("exchange.offset", offset),
 	)
 
-	history, total, err := r.next.GetHistory(ctx, userID, limit, offset)
+	history, total, err := r.next.History(ctx, userID, limit, offset)
 	endSpan(span, err)
 
 	return history, total, err
+}
+
+func (r *tracedRepo) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
+	ctx, span := startSpan(ctx, "ExchangeReadModel.Conversion", attribute.String("user.id", userID))
+
+	c, err := r.next.Conversion(ctx, userID, conversionID)
+	endSpan(span, err)
+
+	return c, err
 }

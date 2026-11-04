@@ -4,6 +4,52 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 -- Set comment to schema: "public"
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+-- Create "claims" table
+CREATE TABLE "public"."claims" (
+  "scope" text NOT NULL,
+  "value" text NOT NULL,
+  "owner_id" text NOT NULL,
+  PRIMARY KEY ("scope", "value")
+);
+-- Create "events" table
+CREATE TABLE "public"."events" (
+  "position" bigserial NOT NULL,
+  "stream_id" text NOT NULL,
+  "stream_version" integer NOT NULL,
+  "type" text NOT NULL,
+  "schema_version" integer NOT NULL,
+  "payload" jsonb NOT NULL,
+  "metadata" jsonb NOT NULL DEFAULT '{}',
+  "recorded_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("position")
+);
+-- Create index "events_stream_id_stream_version_key" to table: "events"
+CREATE UNIQUE INDEX "events_stream_id_stream_version_key" ON "public"."events" ("stream_id", "stream_version");
+-- Create "exchange_history" table
+CREATE TABLE "public"."exchange_history" (
+  "id" bigserial NOT NULL,
+  "conversion_id" uuid NULL,
+  "user_id" uuid NOT NULL,
+  "from_currency" character(3) NOT NULL,
+  "to_currency" character(3) NOT NULL,
+  "amount" numeric NOT NULL,
+  "rate" numeric NOT NULL,
+  "result" numeric NOT NULL,
+  "rate_date" date NOT NULL,
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id")
+);
+-- Create index "exchange_history_conversion_id_key" to table: "exchange_history"
+CREATE UNIQUE INDEX "exchange_history_conversion_id_key" ON "public"."exchange_history" ("conversion_id");
+-- Create index "idx_exchange_history_user_id" to table: "exchange_history"
+CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
+-- Create "projection_checkpoints" table
+CREATE TABLE "public"."projection_checkpoints" (
+  "name" text NOT NULL,
+  "position" bigint NOT NULL DEFAULT 0,
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("name")
+);
 -- Create "queue_messages" table
 CREATE TABLE "public"."queue_messages" (
   "id" bigserial NOT NULL,
@@ -16,6 +62,40 @@ CREATE TABLE "public"."queue_messages" (
 );
 -- Create index "idx_queue_messages_queue_visible_at" to table: "queue_messages"
 CREATE INDEX "idx_queue_messages_queue_visible_at" ON "public"."queue_messages" ("queue", "visible_at");
+-- Create "snapshots" table
+CREATE TABLE "public"."snapshots" (
+  "stream_id" text NOT NULL,
+  "stream_version" integer NOT NULL,
+  "schema_version" integer NOT NULL,
+  "payload" jsonb NOT NULL,
+  "taken_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("stream_id")
+);
+-- Create "tasks" table
+CREATE TABLE "public"."tasks" (
+  "id" uuid NOT NULL,
+  "user_id" uuid NOT NULL,
+  "title" character varying(255) NOT NULL,
+  "description" text NULL DEFAULT '',
+  "status" character varying(20) NOT NULL DEFAULT 'todo',
+  "created_at" timestamp NOT NULL DEFAULT now(),
+  "updated_at" timestamp NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id")
+);
+-- Create index "idx_tasks_user_id" to table: "tasks"
+CREATE INDEX "idx_tasks_user_id" ON "public"."tasks" ("user_id");
+-- Create index "idx_tasks_user_status" to table: "tasks"
+CREATE INDEX "idx_tasks_user_status" ON "public"."tasks" ("user_id", "status");
+-- Create "user_identities" table
+CREATE TABLE "public"."user_identities" (
+  "issuer" text NOT NULL,
+  "subject" text NOT NULL,
+  "user_id" uuid NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("issuer", "subject")
+);
+-- Create index "idx_user_identities_user_id" to table: "user_identities"
+CREATE INDEX "idx_user_identities_user_id" ON "public"."user_identities" ("user_id");
 -- Create "users" table
 CREATE TABLE "public"."users" (
   "id" uuid NOT NULL,
@@ -30,57 +110,6 @@ CREATE TABLE "public"."users" (
 CREATE UNIQUE INDEX "users_email_key" ON "public"."users" ("email");
 -- Create index "users_username_key" to table: "users"
 CREATE UNIQUE INDEX "users_username_key" ON "public"."users" ("username");
--- Create "webauthn_used_challenges" table
-CREATE TABLE "public"."webauthn_used_challenges" (
-  "challenge_hash" bytea NOT NULL,
-  "expires_at" timestamptz NOT NULL,
-  PRIMARY KEY ("challenge_hash")
-);
--- Create index "idx_webauthn_used_challenges_expires_at" to table: "webauthn_used_challenges"
-CREATE INDEX "idx_webauthn_used_challenges_expires_at" ON "public"."webauthn_used_challenges" ("expires_at");
--- Create "exchange_history" table
-CREATE TABLE "public"."exchange_history" (
-  "id" bigserial NOT NULL,
-  "user_id" uuid NOT NULL,
-  "from_currency" character(3) NOT NULL,
-  "to_currency" character(3) NOT NULL,
-  "amount" numeric NOT NULL,
-  "rate" numeric NOT NULL,
-  "result" numeric NOT NULL,
-  "rate_date" date NOT NULL,
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "exchange_history_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_exchange_history_user_id" to table: "exchange_history"
-CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
--- Create "tasks" table
-CREATE TABLE "public"."tasks" (
-  "id" uuid NOT NULL,
-  "user_id" uuid NOT NULL,
-  "title" character varying(255) NOT NULL,
-  "description" text NULL DEFAULT '',
-  "status" character varying(20) NOT NULL DEFAULT 'todo',
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  "updated_at" timestamp NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "tasks_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_tasks_user_id" to table: "tasks"
-CREATE INDEX "idx_tasks_user_id" ON "public"."tasks" ("user_id");
--- Create index "idx_tasks_user_status" to table: "tasks"
-CREATE INDEX "idx_tasks_user_status" ON "public"."tasks" ("user_id", "status");
--- Create "user_identities" table
-CREATE TABLE "public"."user_identities" (
-  "issuer" text NOT NULL,
-  "subject" text NOT NULL,
-  "user_id" uuid NOT NULL,
-  "created_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("issuer", "subject"),
-  CONSTRAINT "user_identities_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "idx_user_identities_user_id" to table: "user_identities"
-CREATE INDEX "idx_user_identities_user_id" ON "public"."user_identities" ("user_id");
 -- Create "webauthn_credentials" table
 CREATE TABLE "public"."webauthn_credentials" (
   "id" bytea NOT NULL,
@@ -89,8 +118,15 @@ CREATE TABLE "public"."webauthn_credentials" (
   "credential" jsonb NOT NULL,
   "created_at" timestamptz NOT NULL DEFAULT now(),
   "last_used_at" timestamptz NULL,
-  PRIMARY KEY ("id"),
-  CONSTRAINT "webauthn_credentials_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+  PRIMARY KEY ("id")
 );
 -- Create index "idx_webauthn_credentials_user_id" to table: "webauthn_credentials"
 CREATE INDEX "idx_webauthn_credentials_user_id" ON "public"."webauthn_credentials" ("user_id");
+-- Create "webauthn_used_challenges" table
+CREATE TABLE "public"."webauthn_used_challenges" (
+  "challenge_hash" bytea NOT NULL,
+  "expires_at" timestamptz NOT NULL,
+  PRIMARY KEY ("challenge_hash")
+);
+-- Create index "idx_webauthn_used_challenges_expires_at" to table: "webauthn_used_challenges"
+CREATE INDEX "idx_webauthn_used_challenges_expires_at" ON "public"."webauthn_used_challenges" ("expires_at");

@@ -33,7 +33,7 @@ func TestMailController_HandleDeliversWhatWasEnqueued(t *testing.T) {
 	t.Parallel()
 
 	mail := &fakeMail{}
-	c := v1.NewMailController(mail, logger.New("error"))
+	c := v1.NewMailController(mail.commands(), logger.New("error"))
 
 	require.NoError(t, c.Handle(context.Background(), &worker.Message{ID: 1, Body: welcomeBody(t)}))
 

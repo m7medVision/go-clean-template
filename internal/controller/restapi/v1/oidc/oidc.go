@@ -7,8 +7,12 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 type oidcStatusOutput struct {
@@ -37,8 +41,13 @@ func (r *controller) oidcStatus(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/auth/oidc",
 		Tags:        []string{apidoc.AuthTag},
-	}, func(_ context.Context, _ *struct{}) (*oidcStatusOutput, error) {
-		return &oidcStatusOutput{Body: OIDCStatus{Enabled: r.oc.Enabled()}}, nil
+	}, func(ctx context.Context, _ *struct{}) (*oidcStatusOutput, error) {
+		enabled, err := cqrs.SendQuery[bool](ctx, r.qs, query.GetOIDCStatus{})
+		if err != nil {
+			return nil, r.oidcError(err, "oidcStatus")
+		}
+
+		return &oidcStatusOutput{Body: OIDCStatus{Enabled: enabled}}, nil
 	})
 }
 
@@ -53,12 +62,12 @@ func (r *controller) beginOIDC(api huma.API) {
 		Tags:   []string{apidoc.AuthTag},
 		Errors: []int{http.StatusNotFound, http.StatusBadGateway, http.StatusInternalServerError},
 	}, func(ctx context.Context, _ *struct{}) (*beginOIDCOutput, error) {
-		authURL, token, err := r.oc.Begin(ctx)
+		started, err := cqrs.SendQuery[query.Started](ctx, r.qs, query.BeginOIDCLogin{})
 		if err != nil {
 			return nil, r.oidcError(err, "beginOIDC")
 		}
 
-		return &beginOIDCOutput{Body: OIDCRedirect{URL: authURL, CeremonyToken: token}}, nil
+		return &beginOIDCOutput{Body: OIDCRedirect{URL: started.AuthURL, CeremonyToken: started.Token}}, nil
 	})
 }
 
@@ -76,16 +85,24 @@ func (r *controller) finishOIDC(api huma.API) {
 			http.StatusBadGateway, http.StatusInternalServerError,
 		},
 	}, func(ctx context.Context, input *finishOIDCInput) (*finishOIDCOutput, error) {
-		token, err := r.oc.Finish(ctx, input.Body.Code, input.Body.State, input.CeremonyToken)
+		signedIn, err := cqrs.SendCommand[command.SignedIn](ctx, r.cmds, command.FinishOIDCLogin{
+			Code: input.Body.Code, State: input.Body.State, Token: input.CeremonyToken,
+		})
 		if err != nil {
 			return nil, r.oidcError(err, "finishOIDC")
 		}
 
-		return &finishOIDCOutput{Body: response.Token{Token: token}}, nil
+		return &finishOIDCOutput{Body: response.Token{Token: signedIn.Token}}, nil
 	})
 }
 
 func (r *controller) oidcError(err error, op string) error {
+	if shared := apierr.Shared(err); shared != nil {
+		r.l.Warn("restapi - v1 - %s: %v", op, err)
+
+		return shared
+	}
+
 	switch {
 	case errors.Is(err, entity.ErrOIDCDisabled):
 		return huma.Error404NotFound("sso sign-in is not configured")

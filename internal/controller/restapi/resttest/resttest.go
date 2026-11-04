@@ -13,7 +13,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
 )
@@ -52,14 +52,18 @@ func Config(t *testing.T) *config.Config {
 	return cfg
 }
 
-// NewRouter serves the REST router over the given use cases, plus each option's operations. A use
-// case the test never reaches may be nil.
-func NewRouter(
-	cfg *config.Config, e usecase.Exchange, u usecase.User, tk usecase.Task, opts ...restapi.Option,
-) http.Handler {
+// NewRouter serves the REST router over the given buses, plus each option's operations. A bus the
+// test never reaches may be nil.
+func NewRouter(cfg *config.Config, b cqrs.Buses, opts ...restapi.Option) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, e, u, tk, jwtManager, noopLogger{}, opts...)
+	return restapi.NewRouter(cfg, b, jwtManager, noopLogger{}, opts...)
+}
+
+// NewBuses returns empty command and query buses with no pipeline steps, for a test to register
+// its fakes' handlers on.
+func NewBuses() cqrs.Buses {
+	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: cqrs.NewQueries()}
 }
 
 // Token signs a token for user-1 with no roles.

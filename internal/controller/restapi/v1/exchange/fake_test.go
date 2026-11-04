@@ -7,31 +7,41 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
-	"github.com/shopspring/decimal"
+	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
+// fakeExchange answers the exchange command and queries on real buses: ConvertCurrency writes
+// converted, which GetConversion reads back, and every message fails with err when it is set.
 type fakeExchange struct {
-	usecase.Exchange
-
 	converted entity.Conversion
 	err       error
 
-	// gotLimit and gotOffset record what History was called with.
+	// gotLimit and gotOffset record what GetExchangeHistory was asked.
 	gotLimit, gotOffset int
 }
 
-func (f *fakeExchange) Convert(context.Context, string, string, string, decimal.Decimal) (entity.Conversion, error) {
-	return f.converted, f.err
+func (f *fakeExchange) buses() cqrs.Buses {
+	b := resttest.NewBuses()
+
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.ConvertCurrency, cqrs.Written](
+		func(context.Context, command.ConvertCurrency) (cqrs.Written, error) {
+			return cqrs.Written{ID: "c1"}, f.err
+		}))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetConversion, entity.Conversion](
+		func(context.Context, query.GetConversion) (entity.Conversion, error) { return f.converted, f.err }))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetExchangeHistory, entity.ExchangeHistory](
+		func(_ context.Context, q query.GetExchangeHistory) (entity.ExchangeHistory, error) {
+			f.gotLimit, f.gotOffset = q.Limit, q.Offset
+
+			return entity.ExchangeHistory{History: []entity.Conversion{f.converted}, Total: 11}, f.err
+		}))
+
+	return b
 }
 
-func (f *fakeExchange) History(_ context.Context, _ string, limit, offset int) (entity.ExchangeHistory, error) {
-	f.gotLimit, f.gotOffset = limit, offset
-
-	return entity.ExchangeHistory{History: []entity.Conversion{f.converted}, Total: 11}, f.err
-}
-
-// newRouter serves the REST router over e; the use cases a exchange test never reaches are nil.
-func newRouter(cfg *config.Config, e usecase.Exchange) http.Handler {
-	return resttest.NewRouter(cfg, e, nil, nil)
+// newRouter serves the REST router over e's buses.
+func newRouter(cfg *config.Config, e *fakeExchange) http.Handler {
+	return resttest.NewRouter(cfg, e.buses())
 }

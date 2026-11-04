@@ -6,27 +6,33 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
+// fakeExchange answers GetExchangeHistory on real buses, and keeps what it was asked.
 type fakeExchange struct {
-	usecase.Exchange
-
 	history             entity.ExchangeHistory
 	err                 error
 	called              bool
 	gotLimit, gotOffset int
 }
 
-func (f *fakeExchange) History(_ context.Context, _ string, limit, offset int) (entity.ExchangeHistory, error) {
-	f.called = true
-	f.gotLimit, f.gotOffset = limit, offset
+func (f *fakeExchange) buses() cqrs.Buses {
+	qs := cqrs.NewQueries()
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetExchangeHistory, entity.ExchangeHistory](
+		func(_ context.Context, q query.GetExchangeHistory) (entity.ExchangeHistory, error) {
+			f.called = true
+			f.gotLimit, f.gotOffset = q.Limit, q.Offset
 
-	return f.history, f.err
+			return f.history, f.err
+		}))
+
+	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: qs}
 }
 
-// do sends query to the GraphQL handler over ex, signed in as graphqltest.UserID when authenticated.
-func do(t *testing.T, ex *fakeExchange, authenticated bool, query string) graphqltest.Response {
+// do sends gql to the GraphQL handler over ex, signed in as graphqltest.UserID when authenticated.
+func do(t *testing.T, ex *fakeExchange, authenticated bool, gql string) graphqltest.Response {
 	t.Helper()
 
 	token := ""
@@ -34,5 +40,5 @@ func do(t *testing.T, ex *fakeExchange, authenticated bool, query string) graphq
 		token = graphqltest.Token(t)
 	}
 
-	return graphqltest.Post(t, nil, ex, token, query, nil)
+	return graphqltest.Post(t, ex.buses(), token, gql, nil)
 }

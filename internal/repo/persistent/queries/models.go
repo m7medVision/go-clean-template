@@ -12,8 +12,26 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type Claim struct {
+	Scope   string
+	Value   string
+	OwnerID string
+}
+
+type Event struct {
+	Position      int64
+	StreamID      string
+	StreamVersion int32
+	Type          string
+	SchemaVersion int32
+	Payload       json.RawMessage
+	Metadata      json.RawMessage
+	RecordedAt    time.Time
+}
+
 type ExchangeHistory struct {
 	ID           int64
+	ConversionID *string
 	UserID       string
 	FromCurrency string
 	ToCurrency   string
@@ -24,6 +42,12 @@ type ExchangeHistory struct {
 	CreatedAt    time.Time
 }
 
+type ProjectionCheckpoint struct {
+	Name      string
+	Position  int64
+	UpdatedAt time.Time
+}
+
 type QueueMessage struct {
 	ID         int64
 	Queue      string
@@ -31,6 +55,14 @@ type QueueMessage struct {
 	ReadCount  int32
 	EnqueuedAt time.Time
 	VisibleAt  time.Time
+}
+
+type Snapshot struct {
+	StreamID      string
+	StreamVersion int32
+	SchemaVersion int32
+	Payload       json.RawMessage
+	TakenAt       time.Time
 }
 
 type Task struct {

@@ -15,56 +15,65 @@ Content-Type: application/json
 ```
 
 The exchange domain is used because it is the only one that touches every kind of dependency:
-an inbound transport, a domain rule, an outbound HTTP API, and Postgres. The other domains follow the
-same shape with fewer steps. [architecture.md](architecture.md) explains why the layers exist; this
-page shows what each one does.
+- an inbound transport;
+- a domain rule;
+- an outbound HTTP API;
+- the event store;
+- a projection.
+
+The other domains follow the same shape with fewer steps. [architecture.md](architecture.md)
+explains why the layers exist, and [cqrs.md](cqrs.md) explains the command and query split; this
+page shows what each part does.
 
 ```mermaid
 sequenceDiagram
-  participant MW as chi middleware
   participant H as REST handler
-  participant U as Exchange use case
-  participant E as entity.Conversion
+  participant CB as command bus
+  participant C as ConvertCurrency handler
   participant W as Rate API client
-  participant R as Postgres repo
-  MW->>MW: trace span, metrics, auth → user ID in ctx
-  MW->>H: Huma decodes and validates the Convert DTO
-  H->>U: Convert(ctx, userID, "omr", "CNY", 100)
-  U->>E: NewConversion: normalise and validate
-  U->>W: Rate(ctx, "OMR", "CNY")
-  W-->>U: 17.406483, 2026-10-19
-  U->>E: ApplyRate: exact decimals, rounded half-even
-  U->>R: Store(ctx, userID, conversion)
-  U-->>H: entity.Conversion
-  H-->>MW: the Conversion DTO as JSON
+  participant S as event store
+  participant P as exchange projector (worker)
+  participant QB as query bus
+  participant Q as GetConversion handler
+  H->>CB: SendCommand(ConvertCurrency)
+  CB->>C: trace, log, metrics, stamp, wait, retry, authorize, validate
+  C->>C: entity.NewConversion: normalise and validate
+  C->>W: Rate(ctx, "OMR", "CNY")
+  W-->>C: 17.406483, 2026-10-19
+  C->>S: Save(CurrencyConverted)
+  S-->>C: position 42
+  S--)P: NOTIFY events
+  P->>P: InsertConversionRow, checkpoint → 42
+  CB-->>H: Written{ID, Position: 42}, once the projector is at 42
+  H->>QB: SendQuery(GetConversion)
+  QB->>Q: read the exchange_history row
+  Q-->>H: entity.Conversion
 ```
 
 ## 0. Wiring
 
-Nothing below constructs its own dependencies. [`internal/app/app.go`](../internal/app/app.go) builds
-everything once, inner to outer:
+Nothing below constructs its own dependencies. [`internal/app/buses.go`](../internal/app/buses.go)
+builds the two buses once, and each domain registers its handlers on them:
 
 ```go
-exchange: exchange.New(persistExchangeRepo.New(pg), webapi.New(cfg.Exchange.ServiceURL)),
+exchange.Register(cmds, qs, exchange.Deps{
+	Store: store, Rates: webapi.New(cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(pg),
+})
 ```
 
-and passes the use case to every transport that exposes it, each wired in its own file:
+[`internal/usecase/exchange/register.go`](../internal/usecase/exchange/register.go) lists its
+handlers, one line each. The transports get the buses and nothing else:
 
 ```go
-router := restapi.NewRouter(cfg, uc.exchange, uc.user, uc.task, jwtManager, l) // app.go
+router := restapi.NewRouter(cfg, uc.buses, jwtManager, l) // app.go
+router.Handle("/graphql", graphql.NewHandler(uc.buses, jwtManager, l)) // graphql.go
+grpc.NewRouter(grpcServer.App, uc.buses, l) // grpc.go
 ```
 
-```go
-router.Handle("/graphql", graphql.NewHandler(uc.task, uc.exchange, jwtManager, l)) // graphql.go
-```
-
-```go
-grpc.NewRouter(grpcServer.App, uc.exchange, uc.user, uc.task, l) // grpc.go
-```
-
-Every `New` returns an **interface** (`repo.ExchangeRepo`, `repo.ExchangeWebAPI`, `usecase.Exchange`),
-already wrapped in a tracing decorator. The use case never learns which implementation it got, which is
-what lets the unit tests hand it mocks instead.
+Every handler's dependency is an **interface** from
+[`internal/repo/contracts.go`](../internal/repo/contracts.go): `repo.EventStore`,
+`repo.ExchangeWebAPI` and `repo.ExchangeReadModel`. A handler never learns which implementation it
+got, which is what lets the unit tests hand it the in-memory store and mocks instead.
 
 ## 1. Middleware
 
@@ -129,126 +138,102 @@ if err != nil {
 	return nil, huma.Error422UnprocessableEntity("invalid amount")
 }
 
-conversion, err := r.e.Convert(ctx, userID, input.Body.From, input.Body.To, amount)  // 3. use case
+written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.ConvertCurrency{  // 3. the write
+	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
+})
 if err != nil {
-	if errors.Is(err, entity.ErrInvalidConversion) {     // 4. sentinel → status
-		return nil, huma.Error400BadRequest("invalid conversion")
-	}
-	if errors.Is(err, entity.ErrUnsupportedCurrency) {
-		return nil, huma.Error400BadRequest("unsupported currency")
-	}
-	r.l.Error(err, "restapi - v1 - convert")            // anything else: log it, say nothing
-	return nil, huma.Error500InternalServerError("internal server error")
+	return nil, r.problem(err, "convert")  // 4. sentinel → status
 }
 
-return &convertOutput{Body: NewConversion(&conversion)}, nil  // 5. entity → response DTO
-```
-
-- `ctx` is Huma's request context, passed down unchanged. It carries the trace span and is cancelled
-  if the client disconnects, which cancels the outbound HTTP call and the SQL insert below.
-- The handler never passes the `Convert` DTO to the use case, and never returns `entity.Conversion` as
-  the body. Both sides of the transport have their own types, so the API shape and the domain can
-  change independently.
-- `NewConversion` (the folder's [`response.go`](../internal/controller/restapi/v1/exchange/response.go))
-  turns every `decimal.Decimal` into a string and the date into
-  `YYYY-MM-DD`. Huma cannot describe `decimal.Decimal` in OpenAPI, and strings keep full precision in
-  every client.
-- Only the controller knows HTTP status codes. Lower layers return sentinel errors from
-  [`internal/entity/errors.go`](../internal/entity/errors.go) or wrapped errors, and the controller
-  decides what they mean on its transport.
-
-## 4. The tracing decorator
-
-`r.e` is not the use case itself. It is `tracedUseCase` from
-[`usecase/exchange/tracing.go`](../internal/usecase/exchange/tracing.go), which `New` wrapped around it:
-
-```go
-func (t *tracedUseCase) Convert(ctx context.Context, userID, from, to string, amount decimal.Decimal) (entity.Conversion, error) {
-	ctx, span := startSpan(ctx, "ExchangeUseCase.Convert",
-		attribute.String("user.id", userID),
-		attribute.String("exchange.from", from),
-		attribute.String("exchange.to", to),
-	)
-
-	result, err := t.next.Convert(ctx, userID, from, to, amount)
-	endSpan(span, err)  // records the error and marks the span failed
-
-	return result, err
+conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,  // 5. read it back
+	query.GetConversion{UserID: userID, ConversionID: written.ID})
+if err != nil {
+	return nil, r.problem(err, "convert")
 }
+
+return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO
 ```
 
-Every repository and use case has one of these. Tracing stays out of the business code entirely, and
-because `New` always returns the wrapped value, nothing can forget to trace. The cost: a new contract
-method must be added to the interface, the struct **and** the decorator, or it won't compile.
+- **A command returns only what identifies the write.** `cqrs.Written` holds the conversion's ID and
+  the event store position of its event, never the conversion itself. The body comes from a query,
+  so every response a client sees was read from the read model, just as its next request will be.
+- **`ctx` is passed down unchanged.** It is Huma's request context: it carries the trace span, and
+  it is cancelled if the client disconnects, which cancels the outbound HTTP call and the event
+  store's transaction below.
+- **`problem`, in the folder's [`controller.go`](../internal/controller/restapi/v1/exchange/controller.go),
+  maps errors.** First come the two failures any command can produce, from the shared
+  [`apierr`](../internal/controller/restapi/v1/apierr/apierr.go) package: 503 when the read model
+  is behind, 409 when a concurrent write won. Then the domain sentinels: 400 for an invalid
+  conversion or an unknown currency. Anything else is logged and becomes a 500.
+- **The DTO and the entity never cross the boundary.** The handler never passes the `Convert` DTO to
+  a command, and never returns `entity.Conversion` as the body. `NewConversion` (the folder's
+  [`response.go`](../internal/controller/restapi/v1/exchange/response.go)) turns every
+  `decimal.Decimal` into a string and the date into `YYYY-MM-DD`.
 
-## 5. The use case
+## 4. The command bus
 
-[`internal/usecase/exchange/exchange.go`](../internal/usecase/exchange/exchange.go) holds the rule for
-"convert an amount", and nothing else:
+`SendCommand` finds the one handler registered for `ConvertCurrency` and runs the message through
+the pipeline from [`newBuses`](../internal/app/buses.go), outermost first:
+
+| Step | Package | What it does to this command |
+| --- | --- | --- |
+| trace | `pkg/cqrs` | opens the `command ConvertCurrency` span |
+| log | `pkg/cqrs` | logs the outcome and duration at debug |
+| metrics | `pkg/cqrs` | counts it in `cqrs_messages_total` and times it in `cqrs_message_duration_seconds` |
+| stamp | `internal/usecase/behavior` | puts the caller's user ID and `command ConvertCurrency` in the context's event metadata |
+| wait | `internal/usecase/behavior` | after the handler: holds the result until every projector has passed `Written.Position` (step 8) |
+| retry | `internal/usecase/behavior` | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
+| authorize | `internal/usecase/behavior` | nothing here: `ConvertCurrency` needs no role |
+| validate | `internal/usecase/behavior` | nothing here: `ConvertCurrency` has no `Validate` |
+
+Tracing, logging and metrics are steps, so no handler carries them, and none can forget them.
+
+## 5. The command handler
+
+[`internal/usecase/exchange/command/convert_currency.go`](../internal/usecase/exchange/command/convert_currency.go)
+holds the command and its handler, and nothing else:
 
 ```go
-func (uc *UseCase) Convert(ctx context.Context, userID, from, to string, amount decimal.Decimal) (entity.Conversion, error) {
-	conversion, err := entity.NewConversion(from, to, amount)
+func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (cqrs.Written, error) {
+	conversion, err := entity.NewConversion(cmd.From, cmd.To, cmd.Amount)
 	if err != nil {
-		return entity.Conversion{}, fmt.Errorf("ExchangeUseCase - Convert - entity.NewConversion: %w", err)
+		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
 	}
 
-	rate, date, err := uc.webAPI.Rate(ctx, conversion.From, conversion.To)
+	rate, date, err := h.Rates.Rate(ctx, conversion.From, conversion.To)
 	if err != nil {
-		return entity.Conversion{}, fmt.Errorf("ExchangeUseCase - Convert - uc.webAPI.Rate: %w", err)
+		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
 	}
 
 	conversion.ApplyRate(rate, date)
 
-	if err = uc.repo.Store(ctx, userID, &conversion); err != nil {
-		return entity.Conversion{}, fmt.Errorf("ExchangeUseCase - Convert - uc.repo.Store: %w", err)
+	id := uuid.NewString()
+
+	written, err := aggregate.Create(ctx, h.Store, id,
+		entity.NewConversionAggregate(id, cmd.UserID, &conversion, aggregate.Now(h.Now)))
+	if err != nil {
+		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
 	}
 
-	return conversion, nil
+	return written, nil
 }
 ```
 
-- Its fields are `repo.ExchangeRepo` and `repo.ExchangeWebAPI`, interfaces from
-  [`internal/repo/contracts.go`](../internal/repo/contracts.go). The package imports no HTTP client, no
-  SQL driver, no transport.
 - Validation runs first, so a bad request never costs a call to the provider.
-- Every error is wrapped with its layer path (`ExchangeUseCase - Convert - uc.webAPI.Rate: ...`), so
-  the log line the controller writes says exactly where a failure came from. `%w` keeps the sentinel
-  inside reachable by `errors.Is`.
+- The rules are the entity's ([`exchange.go`](../internal/entity/exchange.go)):
+  - `NewConversion` uppercases `"omr"` to `"OMR"`, once, for every transport. gRPC requests carry no
+    Huma tags, so this is the check that protects them. It refuses a code that isn't three letters,
+    `from` equal to `to`, and an amount that isn't positive.
+  - `ApplyRate` rounds half-to-even, the usual rule for money: `100 × 17.406483 = 1740.6483` →
+    `1740.65`.
+- `NewConversionAggregate` ([`exchange_aggregate.go`](../internal/entity/exchange_aggregate.go))
+  records the conversion as one event, `CurrencyConverted`. A conversion never changes, so its stream
+  `conversion-<id>` holds that one event. Its amounts are `decimal.Decimal`, which encode to JSON as
+  strings, so no amount passes through a float on its way to the store.
+- `aggregate.Create` saves the new aggregate and returns `Written`. `aggregate.Now` is the time to the
+  microsecond in UTC, the precision of the read model's timestamp columns.
 
-## 6. The entity
-
-[`internal/entity/exchange.go`](../internal/entity/exchange.go) owns the rules that are true no matter
-who calls them:
-
-```go
-func NewConversion(from, to string, amount decimal.Decimal) (Conversion, error) {
-	from = strings.ToUpper(strings.TrimSpace(from))
-	to = strings.ToUpper(strings.TrimSpace(to))
-
-	if !validCurrencyCode(from) || !validCurrencyCode(to) || from == to || !amount.IsPositive() {
-		return Conversion{}, ErrInvalidConversion
-	}
-
-	return Conversion{From: from, To: to, Amount: amount}, nil
-}
-
-func (c *Conversion) ApplyRate(rate decimal.Decimal, date time.Time) {
-	c.Rate = rate
-	c.RateDate = date
-	c.Result = c.Amount.Mul(rate).RoundBank(_resultScale)
-}
-```
-
-- `"omr"` becomes `"OMR"` here, once, for every transport.
-  gRPC requests carry no Huma tags, so this is the check that protects them.
-- `RoundBank` is round-half-to-even, the usual rule for money: halves don't always round up, so
-  rounding errors don't add up in one direction over many conversions. `100 × 17.406483 = 1740.6483`
-  → `1740.65`.
-- `entity` imports nothing from this module. It is plain Go and tested without mocks
-  ([`exchange_test.go`](../internal/entity/exchange_test.go)).
-
-## 7. The outbound API
+## 6. The outbound API
 
 [`internal/repo/webapi/exchange_openerapi.go`](../internal/repo/webapi/exchange_openerapi.go)
 implements `repo.ExchangeWebAPI` against the
@@ -265,32 +250,62 @@ implements `repo.ExchangeWebAPI` against the
 - **The date is the provider's.** `time_last_update_unix` is truncated to a UTC date and returned with
   the rate, so the response says which day's rate it used, not when the request ran.
 - **It joins the trace.** The `http.Client` uses an `otelhttp` transport, so the outbound GET is a
-  child span of `ExchangeWebAPI.Rate` and sends `traceparent` onward. It has a 5-second timeout and
+  child span of the `command ConvertCurrency` span and sends `traceparent` onward. It has a 5-second timeout and
   uses the request's `ctx`, so a client disconnect cancels it.
 
 This is the only file that knows the provider's URL layout or JSON shape. Switching providers means a
-new implementation of the same two-method interface. The use case doesn't change.
+new implementation of the same interface. The command handler doesn't change.
 
-## 8. Postgres
+## 7. The event store
 
-[`internal/repo/persistent/exchange/exchange.go`](../internal/repo/persistent/exchange/exchange.go)
-implements `repo.ExchangeRepo.Store` by calling a query generated by [sqlc](https://sqlc.dev/):
+[`internal/repo/persistent/eventstore/eventstore.go`](../internal/repo/persistent/eventstore/eventstore.go)
+implements `repo.EventStore.Save`. It runs one transaction, joining the context's if there is one:
 
-```sql
--- name: CreateExchange :exec
-INSERT INTO exchange_history (user_id, from_currency, to_currency, amount, rate, result, rate_date)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
-```
+1. `pg_advisory_xact_lock` on the store's key. Appends run one at a time, so positions commit in
+   the order they are assigned.
+2. Check the stream's stored version against the version the aggregate was loaded at: 0, a new
+   stream. A mismatch is `entity.ErrConcurrencyConflict`, which the retry step acts on.
+3. Insert the event into `events` with its type, schema version, JSON payload and metadata (the
+   user, the trace ID, `command ConvertCurrency`), through the sqlc query `AppendEvent`.
+4. `NOTIFY events`, which Postgres delivers to the worker when the transaction commits.
 
-- The SQL lives in [`queries/exchange.sql`](../internal/repo/persistent/queries/exchange.sql);
-  `make sqlc` turns it into the typed `CreateExchange(ctx, CreateExchangeParams)` method. There is no
-  ORM and no SQL built at runtime. A query that doesn't match the schema fails at generate time, not in
-  production.
-- The table is declared in [`internal/app/schema/exchange_history.hcl`](../internal/app/schema/exchange_history.hcl):
-  `numeric` columns for money, `char(3)` for codes, a `date` for the rate date, and a foreign key to
-  `users` with `ON DELETE CASCADE`. `sqlc.yaml` maps `numeric` to `decimal.Decimal`, so the value the
-  entity computed is written exactly.
-- The decorator in `tracing.go` adds an `ExchangeRepo.Store` span.
+The events table, like every table, is declared in [`internal/app/schema/`](../internal/app/schema/)
+(`events.hcl`), and its queries are SQL in
+[`queries/eventstore.sql`](../internal/repo/persistent/queries/eventstore.sql) that `make sqlc`
+turns into typed Go.
+
+## 8. The projector, and the wait
+
+The worker runs one loop per projector
+([`internal/repo/persistent/projection/runner.go`](../internal/repo/persistent/projection/runner.go)).
+The `NOTIFY` wakes the exchange projector's loop, which:
+1. reads the events after its checkpoint;
+2. hands `CurrencyConverted` to
+   [`persistent/exchange/projector.go`](../internal/repo/persistent/exchange/projector.go):
+
+   ```go
+   case entity.CurrencyConverted:
+   	err = q.InsertConversionRow(ctx, queries.InsertConversionRowParams{
+   		ConversionID: &ev.ConversionID, UserID: ev.UserID, FromCurrency: ev.From, ToCurrency: ev.To,
+   		Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate, CreatedAt: ev.At,
+   	})
+   ```
+
+3. moves its checkpoint to the event's position, in the same transaction as the insert. The row and
+   the checkpoint commit together or not at all, so a crash between them can neither lose the row nor
+   insert it twice.
+
+Meanwhile the app's wait step is polling `projection_checkpoints`. Once every projector is at or past
+the command's position, `SendCommand` returns. If they are still behind after
+`CQRS_CONSISTENCY_TIMEOUT` (2s), it returns `entity.ErrReadModelBehind` and the client gets a 503:
+the conversion is saved, but a read could still miss it.
+
+## 9. The query
+
+`SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp,
+authorize, validate) to
+[`query/get_conversion.go`](../internal/usecase/exchange/query/get_conversion.go), which reads
+the row from `repo.ExchangeReadModel` and only from it. A query never touches the event store.
 
 ## The trace
 
@@ -298,14 +313,15 @@ With `TRACING_ENABLED=true`, this request shows up in Jaeger as one trace:
 
 ```
 POST /v1/exchange/convert                      (otelhttp server span, REST middleware)
-└── ExchangeUseCase.Convert                    user.id, exchange.from, exchange.to
-    ├── ExchangeWebAPI.Rate
-    │   └── HTTP GET                           (otelhttp client span → open.er-api.com)
-    └── ExchangeRepo.Store
+├── command ConvertCurrency                    (the command bus)
+│   ├── HTTP GET                               (otelhttp client span → open.er-api.com)
+│   └── EventStore.Save                        stream.id, events.count
+└── query GetConversion                        (the query bus)
+    └── ExchangeReadModel.Conversion
 ```
 
-A failure is recorded on the decorator span where it happened and on `ExchangeUseCase.Convert`, with
-the wrapped error message.
+The projector's insert runs in the worker, so it isn't part of this trace; the event's metadata
+carries the trace ID as its correlation ID.
 
 ## Where each failure ends up
 
@@ -316,24 +332,36 @@ the wrapped error message.
 | Amount that doesn't parse as a decimal | handler | 422 |
 | `from` = `to`, amount ≤ 0, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 |
 | Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 |
+| Saved, but the projector didn't catch up in time | wait step → `ErrReadModelBehind` | 503 |
 | Provider down, non-200, bad JSON; database error | wrapped error, logged by the handler | 500 |
 
 The caller sees a fixed message (`"unsupported currency"`, `"internal server error"`). The wrapped
 error with the layer path goes only to the log.
 
-## The same use case over gRPC
+## The same command over gRPC
 
 [`internal/controller/grpc/v1/exchange/exchange.go`](../internal/controller/grpc/v1/exchange/exchange.go) is the same
-five steps with different types: `grpcmw.UserIDFromContext` instead of the middleware, the generated
-`v1.ConvertRequest` instead of a Huma DTO, `codes.InvalidArgument` instead of 400, and
-`NewConversionResponse` instead of `NewConversion`. It calls the identical
-`Convert`, so the two transports cannot disagree about a rule.
+six steps with different types:
 
-On gRPC the gRPC interceptor rejects a missing or expired token with `Unauthenticated`. There are no
-Huma tags, so a malformed code falls through to the entity. A bad amount, an invalid conversion and an
-unknown currency are all `InvalidArgument`, and the 500 cases are `Internal`.
+| | REST | gRPC |
+| --- | --- | --- |
+| who is calling | the `Auth` middleware | `grpcmw.UserIDFromContext` |
+| the request | a Huma DTO | the generated `v1.ConvertRequest` |
+| errors | 400 | `codes.InvalidArgument` |
+| the response | `NewConversion` | `NewConversionResponse` |
+| the shared failures | `apierr` | `rpcerr` |
 
-GraphQL exposes only the history query (`exchangeHistory`); conversion is a form, and forms use REST.
+It sends the identical `ConvertCurrency` and `GetConversion`, so the two transports cannot disagree
+about a rule.
+
+On gRPC:
+- the gRPC interceptor rejects a missing or expired token with `Unauthenticated`;
+- there are no Huma tags, so a malformed code falls through to the entity;
+- a bad amount, an invalid conversion and an unknown currency are all `InvalidArgument`;
+- a lagging read model is `Unavailable`;
+- the 500 cases are `Internal`.
+
+GraphQL exposes only the history query (`exchangeHistory`): conversion is a form, and forms use REST.
 
 ## How each layer is tested
 
@@ -341,16 +369,19 @@ Each layer is tested at its own boundary, with the layer below replaced:
 
 | Layer | Test | What stands in for the layer below |
 | --- | --- | --- |
-| Entity | [`entity/exchange_test.go`](../internal/entity/exchange_test.go) | nothing; plain values |
-| Use case | [`usecase/exchange_test.go`](../internal/usecase/exchange_test.go) | gomock mocks generated from `repo/contracts.go` (`make mock`) |
+| Entity | [`entity/exchange_test.go`](../internal/entity/exchange_test.go), [`exchange_aggregate_test.go`](../internal/entity/exchange_aggregate_test.go) | nothing; plain values |
+| Command handler | [`command/convert_currency_test.go`](../internal/usecase/exchange/command/convert_currency_test.go) | the in-memory event store (`internal/repo/memstore`), and a gomock rate client from `repomock` |
+| Query handlers | [`query/query_test.go`](../internal/usecase/exchange/query/query_test.go) | a gomock read model from `repomock` |
+| Projector | [`persistent/exchange/projector_test.go`](../internal/repo/persistent/exchange/projector_test.go) | a fake of sqlc's `Querier` |
 | Rate client | [`webapi/exchange_openerapi_test.go`](../internal/repo/webapi/exchange_openerapi_test.go) | an `httptest` server replaying a recorded OMR response from `testdata/` |
 | Whole stack | [`integration-test/exchange_test.go`](../integration-test/exchange_test.go) | a Caddy stub serving that same recorded response, so the suite never calls the real provider |
 
-The use-case test is where the rule is pinned. For example, it checks that `"eur"`→`"usd"` at
-`1.1225` stores `112.36`, and that an invalid request never calls the provider at all.
+The memstore passes the same contract suite as the Postgres store
+([`internal/repo/eventstoretest`](../internal/repo/eventstoretest/suite.go)), so a handler tested on
+it behaves the same in production.
 
 ## Adding your own
 
-A new operation follows the same path: a contract method, its implementation and decorator, a
-mock regeneration, a table-driven test, then a handler per transport. The checklist is in
+A new operation follows the same path: a command or query and its handler in their own file, a line
+in the domain's `register.go`, a test beside it, then a handler per transport. The checklist is in
 [CLAUDE.md](../CLAUDE.md#adding-a-use-case-to-an-existing-domain).

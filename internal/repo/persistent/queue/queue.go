@@ -20,17 +20,19 @@ var _ worker.Queue = repo.QueueRepo(nil)
 
 // Repo -.
 type Repo struct {
-	q *queries.Queries
+	pg *postgres.Postgres
+	q  *queries.Queries
 }
 
 // New returns a Queue repository instrumented with OpenTelemetry tracing spans.
 func New(pg *postgres.Postgres) repo.QueueRepo {
-	return newTraced(&Repo{queries.New(pg.Pool)})
+	return newTraced(&Repo{pg: pg, q: queries.New(pg.Pool)})
 }
 
-// Send enqueues body on queue and returns the message id.
+// Send enqueues body on queue and returns the message id. It joins the transaction the context
+// carries, so an event handler's message commits with its checkpoint, exactly once.
 func (r *Repo) Send(ctx context.Context, queue string, body json.RawMessage) (int64, error) {
-	id, err := r.q.SendQueueMessage(ctx, queries.SendQueueMessageParams{Queue: queue, Body: body})
+	id, err := queries.New(r.pg.Executor(ctx)).SendQueueMessage(ctx, queries.SendQueueMessageParams{Queue: queue, Body: body})
 	if err != nil {
 		return 0, fmt.Errorf("QueueRepo - Send - r.q.SendQueueMessage: %w", err)
 	}

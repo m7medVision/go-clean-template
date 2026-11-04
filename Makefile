@@ -131,6 +131,11 @@ run: deps ### run the app for API v1
 	CGO_ENABLED=0 go run -tags migrate ./cmd/app
 .PHONY: run
 
+projection-rebuild: ### rebuild one projection's read model from the event store: make projection-rebuild name=task
+	@test -n "$(name)" || { echo 'usage: make projection-rebuild name=<projector>'; exit 2; }
+	go run ./cmd/worker -rebuild '$(name)'
+.PHONY: projection-rebuild
+
 run-worker: ### run the queue worker (start the app first: it applies the schema)
 	CGO_ENABLED=0 go run ./cmd/worker
 .PHONY: run-worker
@@ -169,8 +174,8 @@ integration-test: ### run integration-test
 .PHONY: integration-test
 
 mock: ### run mockgen
-	mockgen -source ./internal/repo/contracts.go -package usecase_test > ./internal/usecase/mocks_repo_test.go
-	mockgen -source ./internal/usecase/contracts.go -package usecase_test > ./internal/usecase/mocks_usecase_test.go
+	mkdir -p ./internal/repo/repomock
+	mockgen -source ./internal/repo/contracts.go -package repomock > ./internal/repo/repomock/repomock.go
 .PHONY: mock
 
 schema-apply: ### apply desired schema to the database (Atlas)

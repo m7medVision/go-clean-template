@@ -13,65 +13,73 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
+	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// fakePasskey answers every passkey command and query on real buses, and keeps what it was sent.
 type fakePasskey struct {
-	usecase.Passkey
-
 	options  []byte
 	token    string
 	stored   entity.Passkey
 	passkeys []entity.Passkey
 	err      error
 
-	// gotToken, gotName and gotBody record what FinishRegistration was called with; gotUser and
-	// gotID what Rename and Delete were called with (Rename's name goes in gotName).
+	// gotToken, gotName and gotBody record what FinishPasskeyRegistration was sent; gotUser and gotID
+	// what RenamePasskey and DeletePasskey were sent (RenamePasskey's name goes in gotName).
 	gotToken, gotName string
 	gotBody           []byte
 	gotUser, gotID    string
-	// gotAuthTime is the auth time BeginRegistration was called with.
+	// gotAuthTime is the auth time BeginPasskeyRegistration was sent.
 	gotAuthTime time.Time
 }
 
-func (f *fakePasskey) BeginRegistration(_ context.Context, _ string, authTime time.Time) (options []byte, token string, err error) {
-	f.gotAuthTime = authTime
+func (f *fakePasskey) buses() cqrs.Buses {
+	b := resttest.NewBuses()
+	started := func() (ceremony.Started, error) { return ceremony.Started{Options: f.options, Token: f.token}, f.err }
 
-	return f.options, f.token, f.err
-}
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyRegistration, ceremony.Started](
+		func(_ context.Context, q query.BeginPasskeyRegistration) (ceremony.Started, error) {
+			f.gotAuthTime = q.AuthTime
 
-func (f *fakePasskey) FinishRegistration(_ context.Context, _, token, name string, body []byte) (entity.Passkey, error) {
-	f.gotToken, f.gotName, f.gotBody = token, name, body
+			return started()
+		}))
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyRegistration, cqrs.Written](
+		func(_ context.Context, c command.FinishPasskeyRegistration) (cqrs.Written, error) {
+			f.gotToken, f.gotName, f.gotBody = c.Token, c.Name, c.Body
 
-	return f.stored, f.err
-}
+			return cqrs.Written{ID: f.stored.ID.String()}, f.err
+		}))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetPasskey, entity.Passkey](
+		func(context.Context, query.GetPasskey) (entity.Passkey, error) { return f.stored, f.err }))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.ListPasskeys, []entity.Passkey](
+		func(context.Context, query.ListPasskeys) ([]entity.Passkey, error) { return f.passkeys, f.err }))
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.RenamePasskey, cqrs.Written](
+		func(_ context.Context, c command.RenamePasskey) (cqrs.Written, error) {
+			f.gotUser, f.gotID, f.gotName = c.UserID, c.ID, c.Name
 
-func (f *fakePasskey) List(context.Context, string) ([]entity.Passkey, error) {
-	return f.passkeys, f.err
-}
+			return cqrs.Written{ID: c.ID}, f.err
+		}))
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.DeletePasskey, cqrs.Written](
+		func(_ context.Context, c command.DeletePasskey) (cqrs.Written, error) {
+			f.gotUser, f.gotID = c.UserID, c.ID
 
-func (f *fakePasskey) Rename(_ context.Context, userID, id, name string) (entity.Passkey, error) {
-	f.gotUser, f.gotID, f.gotName = userID, id, name
+			return cqrs.Written{ID: c.ID}, f.err
+		}))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyLogin, ceremony.Started](
+		func(context.Context, query.BeginPasskeyLogin) (ceremony.Started, error) { return started() }))
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyLogin, command.SignedIn](
+		func(_ context.Context, c command.FinishPasskeyLogin) (command.SignedIn, error) {
+			f.gotToken, f.gotBody = c.Token, c.Body
 
-	return f.stored, f.err
-}
+			return command.SignedIn{Token: f.token}, f.err
+		}))
 
-func (f *fakePasskey) Delete(_ context.Context, userID, id string) error {
-	f.gotUser, f.gotID = userID, id
-
-	return f.err
-}
-
-func (f *fakePasskey) BeginLogin(context.Context) (options []byte, token string, err error) {
-	return f.options, f.token, f.err
-}
-
-func (f *fakePasskey) FinishLogin(_ context.Context, token string, body []byte) (string, error) {
-	f.gotToken, f.gotBody = token, body
-
-	return f.token, f.err
+	return b
 }
 
 // _ceremonyHeader carries the ceremony token on both finish endpoints.
@@ -98,15 +106,15 @@ func newToken(t *testing.T) string {
 func doCeremonyRequest(
 	ctx context.Context,
 	handler http.Handler,
-	target, token, ceremony, body string,
+	target, token, ceremonyToken, body string,
 ) *httptest.ResponseRecorder {
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, target, strings.NewReader(body))
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	if ceremony != "" {
-		req.Header.Set(_ceremonyHeader, ceremony)
+	if ceremonyToken != "" {
+		req.Header.Set(_ceremonyHeader, ceremonyToken)
 	}
 
 	resp := httptest.NewRecorder()
@@ -115,12 +123,12 @@ func doCeremonyRequest(
 	return resp
 }
 
-func newPasskeyRouter(t *testing.T, pk usecase.Passkey) http.Handler {
+func newPasskeyRouter(t *testing.T, pk *fakePasskey) http.Handler {
 	t.Helper()
 
 	cfg := resttest.Config(t)
 
-	return resttest.NewRouter(cfg, nil, nil, nil, restapi.WithPasskeys(pk))
+	return resttest.NewRouter(cfg, pk.buses(), restapi.WithPasskeys())
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

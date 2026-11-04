@@ -14,6 +14,8 @@ const (
 	_codeBadUserInput    = "BAD_USER_INPUT"
 	_codeNotFound        = "NOT_FOUND"
 	_codeForbidden       = "FORBIDDEN"
+	_codeUnavailable     = "UNAVAILABLE"
+	_codeConflict        = "CONFLICT"
 	_codeInternal        = "INTERNAL"
 )
 
@@ -46,6 +48,9 @@ func Map(l logger.Interface, err error, op string) error {
 		{entity.ErrTaskForbidden, _codeForbidden, "forbidden"},
 		{entity.ErrAdminRequired, _codeForbidden, "admin role required"},
 		{entity.ErrInvalidTransition, _codeBadUserInput, "invalid status transition"},
+		// Any command can produce these two, whatever its domain.
+		{entity.ErrReadModelBehind, _codeUnavailable, "saved, but not yet readable: read it again shortly"},
+		{entity.ErrConcurrencyConflict, _codeConflict, "the record changed while this request ran: try again"},
 	} {
 		if errors.Is(err, m.sentinel) {
 			return newError(m.code, m.message)

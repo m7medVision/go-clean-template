@@ -13,7 +13,10 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 
 ## What you get
 
-- **One use-case layer under every transport:**
+- **CQRS with event sourcing.** Every change is a command and every read a query, sent through
+  typed buses. The stored truth is the events each aggregate records; the tables queries read are
+  projections of them.
+- **One set of commands and queries under every transport:**
   - REST ([chi](https://github.com/go-chi/chi) + [Huma](https://github.com/danielgtaylor/huma),
     OpenAPI generated from the code).
   - gRPC.
@@ -22,13 +25,14 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
   against an outbound HTTP API.
 - **Passkeys alongside passwords.** Add one from the profile, sign in with it from a button or the
   browser's autofill; each sign-in challenge works once.
-- **Roles** carried in the auth token and checked in the use cases.
+- **Roles** carried in the auth token and checked once, on the buses, for every transport.
 - **SSO.** Sign in through any OpenID Connect provider (Keycloak ships ready in dev, with an admin
   and a user), with the provider's roles mapped to the app's.
 - **Postgres and nothing else.** Typed queries with [sqlc](https://sqlc.dev/) and a declarative
   [Atlas](https://atlasgo.io/) schema applied at startup.
-  The job queue is one ordinary table too.
-- **A worker binary.** It consumes that queue, starting from an example handler.
+  The event store and the job queue are ordinary tables too.
+- **A worker binary.** It runs the projections, and consumes that queue, starting from an example
+  handler.
   It sends email from templates embedded in the binary.
 - **A React client.** TanStack Router, Query, Table and Form, typed from the OpenAPI document and the
   GraphQL schema.
@@ -42,8 +46,12 @@ The code is split into layers, and **dependencies only point inward**:
 
 ![Clean Architecture](docs/img/layers-1.png)
 
+Inside the use-case layer, every change is a command and every read a query: controllers send them
+through the buses, command handlers record events, and query handlers read projections.
+
 These are rules, not suggestions: a change that breaks one is not merged.
-[docs/architecture.md](docs/architecture.md) lists them with where each kind of code goes, and
+[docs/architecture.md](docs/architecture.md) lists them with where each kind of code goes,
+[docs/cqrs.md](docs/cqrs.md) explains the commands, events and projections, and
 [docs/request-flow.md](docs/request-flow.md) follows one request through every layer.
 
 ## Quick start

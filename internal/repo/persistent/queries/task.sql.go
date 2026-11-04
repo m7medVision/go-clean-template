@@ -42,50 +42,14 @@ func (q *Queries) CountTasks(ctx context.Context, arg CountTasksParams) (int64, 
 	return count, err
 }
 
-const createTask = `-- name: CreateTask :exec
-INSERT INTO tasks (id, user_id, title, description, status, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-`
-
-type CreateTaskParams struct {
-	ID          string
-	UserID      string
-	Title       string
-	Description string
-	Status      entity.TaskStatus
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
-func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) error {
-	_, err := q.db.Exec(ctx, createTask,
-		arg.ID,
-		arg.UserID,
-		arg.Title,
-		arg.Description,
-		arg.Status,
-		arg.CreatedAt,
-		arg.UpdatedAt,
-	)
-	return err
-}
-
-const deleteTask = `-- name: DeleteTask :execrows
+const deleteTaskRow = `-- name: DeleteTaskRow :exec
 DELETE FROM tasks
-WHERE id = $1 AND user_id = $2
+WHERE id = $1
 `
 
-type DeleteTaskParams struct {
-	ID     string
-	UserID string
-}
-
-func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteTask, arg.ID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) DeleteTaskRow(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, deleteTaskRow, id)
+	return err
 }
 
 const getTask = `-- name: GetTask :one
@@ -108,6 +72,38 @@ func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
 	return i, err
 }
 
+const insertTaskRow = `-- name: InsertTaskRow :exec
+
+INSERT INTO tasks (id, user_id, title, description, status, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+`
+
+type InsertTaskRowParams struct {
+	ID          string
+	UserID      string
+	Title       string
+	Description string
+	Status      entity.TaskStatus
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// The task projector's writes. InsertTaskRow leaves an existing row alone, so replaying a task's
+// first event (an import, a rebuild) never overwrites it.
+func (q *Queries) InsertTaskRow(ctx context.Context, arg InsertTaskRowParams) error {
+	_, err := q.db.Exec(ctx, insertTaskRow,
+		arg.ID,
+		arg.UserID,
+		arg.Title,
+		arg.Description,
+		arg.Status,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const listAllTasks = `-- name: ListAllTasks :many
 SELECT id, user_id, title, description, status, created_at, updated_at FROM tasks
 WHERE ($1::text IS NULL OR status = $1::text)
@@ -123,6 +119,39 @@ type ListAllTasksParams struct {
 
 func (q *Queries) ListAllTasks(ctx context.Context, arg ListAllTasksParams) ([]Task, error) {
 	rows, err := q.db.Query(ctx, listAllTasks, arg.Status, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEveryTask = `-- name: ListEveryTask :many
+SELECT id, user_id, title, description, status, created_at, updated_at FROM tasks
+ORDER BY created_at, id
+`
+
+func (q *Queries) ListEveryTask(ctx context.Context) ([]Task, error) {
+	rows, err := q.db.Query(ctx, listEveryTask)
 	if err != nil {
 		return nil, err
 	}
@@ -197,32 +226,42 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 	return items, nil
 }
 
-const updateTask = `-- name: UpdateTask :execrows
+const setTaskStatus = `-- name: SetTaskStatus :exec
 UPDATE tasks
-SET title = $3, description = $4, status = $5, updated_at = $6
-WHERE id = $1 AND user_id = $2
+SET status = $2, updated_at = $3
+WHERE id = $1
 `
 
-type UpdateTaskParams struct {
+type SetTaskStatusParams struct {
+	ID        string
+	Status    entity.TaskStatus
+	UpdatedAt time.Time
+}
+
+func (q *Queries) SetTaskStatus(ctx context.Context, arg SetTaskStatusParams) error {
+	_, err := q.db.Exec(ctx, setTaskStatus, arg.ID, arg.Status, arg.UpdatedAt)
+	return err
+}
+
+const setTaskText = `-- name: SetTaskText :exec
+UPDATE tasks
+SET title = $2, description = $3, updated_at = $4
+WHERE id = $1
+`
+
+type SetTaskTextParams struct {
 	ID          string
-	UserID      string
 	Title       string
 	Description string
-	Status      entity.TaskStatus
 	UpdatedAt   time.Time
 }
 
-func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateTask,
+func (q *Queries) SetTaskText(ctx context.Context, arg SetTaskTextParams) error {
+	_, err := q.db.Exec(ctx, setTaskText,
 		arg.ID,
-		arg.UserID,
 		arg.Title,
 		arg.Description,
-		arg.Status,
 		arg.UpdatedAt,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	return err
 }

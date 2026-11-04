@@ -8,7 +8,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/passkey"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
@@ -16,7 +16,7 @@ import (
 // security scheme reproducing the BearerAuth header of the previous transport. Each domain
 // registers its own operations from its folder; optional features register theirs afterwards
 // through NewPasskeyRoutes and NewOIDCRoutes.
-func NewRoutes(api huma.API, e usecase.Exchange, u usecase.User, tk usecase.Task, l logger.Interface) {
+func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
 	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		apidoc.BearerAuthScheme: {
 			Type: "apiKey",
@@ -25,17 +25,17 @@ func NewRoutes(api huma.API, e usecase.Exchange, u usecase.User, tk usecase.Task
 		},
 	}
 
-	user.NewRoutes(api, u, l)
-	task.NewRoutes(api, tk, l)
-	exchange.NewRoutes(api, e, l)
+	user.NewRoutes(api, b, l)
+	task.NewRoutes(api, b, l)
+	exchange.NewRoutes(api, b, l)
 }
 
 // NewPasskeyRoutes registers the passkey sign-in and passkey management operations.
-func NewPasskeyRoutes(api huma.API, pk usecase.Passkey, l logger.Interface) {
-	passkey.NewRoutes(api, pk, l)
+func NewPasskeyRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+	passkey.NewRoutes(api, b, l)
 }
 
 // NewOIDCRoutes registers the SSO status and sign-in operations.
-func NewOIDCRoutes(api huma.API, oc usecase.OIDC, l logger.Interface) {
-	oidc.NewRoutes(api, oc, l)
+func NewOIDCRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+	oidc.NewRoutes(api, b, l)
 }

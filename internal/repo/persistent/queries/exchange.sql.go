@@ -24,13 +24,17 @@ func (q *Queries) CountExchanges(ctx context.Context, userID string) (int64, err
 	return count, err
 }
 
-const createExchange = `-- name: CreateExchange :exec
-INSERT INTO exchange_history (user_id, from_currency, to_currency, amount, rate, result, rate_date)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+const getConversion = `-- name: GetConversion :one
+SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
+WHERE conversion_id = $1 AND user_id = $2
 `
 
-type CreateExchangeParams struct {
+type GetConversionParams struct {
+	ConversionID *string
 	UserID       string
+}
+
+type GetConversionRow struct {
 	FromCurrency string
 	ToCurrency   string
 	Amount       decimal.Decimal
@@ -39,8 +43,44 @@ type CreateExchangeParams struct {
 	RateDate     time.Time
 }
 
-func (q *Queries) CreateExchange(ctx context.Context, arg CreateExchangeParams) error {
-	_, err := q.db.Exec(ctx, createExchange,
+func (q *Queries) GetConversion(ctx context.Context, arg GetConversionParams) (GetConversionRow, error) {
+	row := q.db.QueryRow(ctx, getConversion, arg.ConversionID, arg.UserID)
+	var i GetConversionRow
+	err := row.Scan(
+		&i.FromCurrency,
+		&i.ToCurrency,
+		&i.Amount,
+		&i.Rate,
+		&i.Result,
+		&i.RateDate,
+	)
+	return i, err
+}
+
+const insertConversionRow = `-- name: InsertConversionRow :exec
+INSERT INTO exchange_history
+  (conversion_id, user_id, from_currency, to_currency, amount, rate, result, rate_date, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (conversion_id) DO NOTHING
+`
+
+type InsertConversionRowParams struct {
+	ConversionID *string
+	UserID       string
+	FromCurrency string
+	ToCurrency   string
+	Amount       decimal.Decimal
+	Rate         decimal.Decimal
+	Result       decimal.Decimal
+	RateDate     time.Time
+	CreatedAt    time.Time
+}
+
+// InsertConversionRow is the exchange projector's write. It leaves an existing conversion alone,
+// so replaying one (an import, a rebuild) never duplicates it.
+func (q *Queries) InsertConversionRow(ctx context.Context, arg InsertConversionRowParams) error {
+	_, err := q.db.Exec(ctx, insertConversionRow,
+		arg.ConversionID,
 		arg.UserID,
 		arg.FromCurrency,
 		arg.ToCurrency,
@@ -48,8 +88,46 @@ func (q *Queries) CreateExchange(ctx context.Context, arg CreateExchangeParams) 
 		arg.Rate,
 		arg.Result,
 		arg.RateDate,
+		arg.CreatedAt,
 	)
 	return err
+}
+
+const listEveryExchange = `-- name: ListEveryExchange :many
+SELECT id, conversion_id, user_id, from_currency, to_currency, amount, rate, result, rate_date, created_at FROM exchange_history
+ORDER BY id
+`
+
+// ListEveryExchange is what the backfill imports, oldest first, so a rebuild keeps the order.
+func (q *Queries) ListEveryExchange(ctx context.Context) ([]ExchangeHistory, error) {
+	rows, err := q.db.Query(ctx, listEveryExchange)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExchangeHistory
+	for rows.Next() {
+		var i ExchangeHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversionID,
+			&i.UserID,
+			&i.FromCurrency,
+			&i.ToCurrency,
+			&i.Amount,
+			&i.Rate,
+			&i.Result,
+			&i.RateDate,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listExchanges = `-- name: ListExchanges :many
@@ -99,4 +177,20 @@ func (q *Queries) ListExchanges(ctx context.Context, arg ListExchangesParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const setConversionID = `-- name: SetConversionID :exec
+UPDATE exchange_history
+SET conversion_id = $2
+WHERE id = $1 AND conversion_id IS NULL
+`
+
+type SetConversionIDParams struct {
+	ID           int64
+	ConversionID *string
+}
+
+func (q *Queries) SetConversionID(ctx context.Context, arg SetConversionIDParams) error {
+	_, err := q.db.Exec(ctx, setConversionID, arg.ID, arg.ConversionID)
+	return err
 }

@@ -1,15 +1,17 @@
 # go-clean-template
 
-Go clean-architecture reference service. Three domains (`user`, `task`, `exchange`) exposed from
-one shared use-case layer over each of these transports:
+Go clean-architecture reference service with CQRS and event sourcing (`docs/cqrs.md`). Three domains
+(`user`, `task`, `exchange`) exposed from one shared set of commands and queries over each of these
+transports:
 
 - REST — chi + Huma v2.
 - gRPC.
 - GraphQL via gqlgen at `/graphql` on the REST port, for tasks and the exchange history; GraphiQL
   at `/graphql/playground` when `DOCS_ENABLED`.
 
-A second binary, `cmd/worker`, consumes a minimal Postgres queue (the `queue_messages` table);
-see **Queue and worker** below.
+A second binary, `cmd/worker`, runs the projections that keep the read models up to date and
+consumes a minimal Postgres queue (the `queue_messages` table); see **CQRS and event sourcing** and
+**Queue and worker** below. The app needs it running: every write waits for the projections.
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -43,7 +45,8 @@ different settings than CI. Use the target, not the tool.
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
-| Run the queue worker locally | `make run-worker` | `go run ./cmd/worker` |
+| Run the worker locally (projections and queue; the app needs it) | `make run-worker` | `go run ./cmd/worker` |
+| Rebuild one projection's read model | `make projection-rebuild name=<projector>` | `go run ./cmd/worker -rebuild ...` |
 | Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
@@ -71,24 +74,34 @@ breaking (`!`) commit merged to master is released as the next version (`docs/re
 ## Dependency rule
 
 ```
-cmd/app → internal/app → internal/controller/*  ─┐
-                       → internal/repo/*        ─┤→ internal/usecase (interfaces)
-                                                 └→ internal/entity
+cmd/app → internal/app → internal/controller/*  ── sends commands and queries on pkg/cqrs ──┐
+                       → internal/usecase/<domain> (handlers, registered on the buses) ◀───┘
+                       → internal/repo/*        ── implements internal/repo/contracts.go
+internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → internal/entity
 ```
 
-- `internal/entity` — domain types and sentinel errors. Imports nothing from this module.
-- `internal/usecase/contracts.go` — the interfaces controllers call. `internal/usecase/<domain>/`
-  implements them.
-- `internal/repo/contracts.go` — the interfaces use cases call. `internal/repo/persistent/<domain>/`
-  (Postgres) and `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
-  unit-tested against the recorded response in `testdata/` that the integration stub also serves) implement them.
+- `internal/entity` — domain types (the read shapes the API returns), aggregates and their events,
+  claims, and sentinel errors. Imports nothing from this module.
+- `internal/usecase/<domain>/` — `command/`, `query/` and `event/`: one file per message holding the
+  message type and its handler, plus `register.go`, which registers them on the buses. `aggregate/`
+  (load, change, save) and `behavior/` (the app's pipeline steps) are shared by every domain. There
+  are no use-case interfaces: a controller builds its domain's command or query and sends it.
+- `internal/repo/contracts.go` — the interfaces handlers call: `EventStore`, one read model per
+  domain, `Subscriber`, `QueueRepo` and the outbound ports. Implemented by
+  `internal/repo/persistent/eventstore` (the event store), `persistent/projection` (the runner the
+  worker runs), `persistent/<domain>/` (each domain's read model, projector and importer), and
+  `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
+  unit-tested against the recorded response in `testdata/` that the integration stub also serves).
+  `internal/repo/memstore` is the in-memory event store command-handler tests use.
 - `internal/controller/<transport>/v1/<domain>/` — one folder per domain in each transport, holding
-  that domain's handlers, DTOs and tests (GraphQL has no `v1/`). Controllers never import each
-  other; see **Controller layout** below.
-- `pkg/` — transport-agnostic infrastructure (servers, logger, jwt, postgres, tracing). Must not
-  import `internal/`.
+  that domain's handlers, DTOs and tests (GraphQL has no `v1/`). A controller takes `cqrs.Buses` and
+  imports its domain's `command`/`query` packages only for the message types. Controllers never
+  import each other; see **Controller layout** below.
+- `pkg/` — transport-agnostic infrastructure (buses, servers, logger, jwt, postgres, tracing). Must
+  not import `internal/`.
 
-Inner layers never import outer ones. Wiring happens exactly once, in `internal/app/app.go`
+Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: `buses.go`
+(`newBuses`, `registerHandlers`, `subscribers`), `backfill.go` (`importers`) and `app.go`
 (`initUseCases`, `initServers`).
 
 ## Where code goes
@@ -97,26 +110,37 @@ Decide by asking what the code knows about:
 
 | The code knows about… | It belongs in | Shape |
 | --- | --- | --- |
-| nothing but the domain | `internal/entity/<name>.go` | struct + methods (`Task.Transition`, `TaskStatus.Valid`) |
-| a domain rule that spans repositories | `internal/usecase/<domain>/<domain>.go` | method on `UseCase` |
+| nothing but the domain | `internal/entity/<name>.go` | struct + methods (`TaskStatus.CanMoveTo`, `entity.NewConversion`) |
+| a state change and its rules | `internal/entity/<name>_aggregate.go`, events in `<name>_events.go` | aggregate method that checks the rule and calls `entity.Record`; every event type listed in `EventTypes()` |
+| one change a caller asks for | `internal/usecase/<domain>/command/<name>.go` | command type + handler returning `cqrs.Written`, one line in `register.go` |
+| one thing a caller reads | `internal/usecase/<domain>/query/<name>.go` | query type + handler reading a read model, one line in `register.go` |
+| a side effect that follows an event | `internal/usecase/<domain>/event/<name>.go` | `repo.Subscriber` (`Name`, `Handle`), listed in `subscribers` (`internal/app/buses.go`) |
+| a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
-| a table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | method on `Repo` calling the generated query |
+| a read-model table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | read-model method calling the generated query |
+| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event type, listed in `subscribers` |
+| rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, listed in `importers` (`internal/app/backfill.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<domain>.go` (GraphQL: `graphql/<domain>/query.go`, `mutation.go`) | handler |
-| a queue message (decode, call a use case, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
+| a queue message (decode, send a command, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
 | the data an email shows | `internal/entity/email_<name>.go` | struct with `Template()`/`Recipient()`, plus an entry in `EmailTypes()` (`email.go`) |
 | an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
 
 Layout rules:
 
-- One file per domain per layer, named after the domain (`task.go`, `user.go`, `exchange.go`),
-  plus a `tracing.go` in every `usecase/<domain>/` and `repo/persistent/<domain>/` package.
+- In `usecase/<domain>/`, one file per message in `command/`, `query/` or `event/`, named after it
+  in snake case (`create_task.go`), with its test beside it. Elsewhere, one file per domain per
+  layer, named after the domain (`task.go`, `user.go`, `exchange.go`), plus a `tracing.go` in every
+  `repo/persistent/<domain>/` package.
 - Package name matches the directory name. A repository package shares its name with the use-case
-  package of the same domain, so `internal/app/app.go` imports the repositories under aliases
+  package of the same domain, so `internal/app` imports the repositories under aliases
   (`persistTaskRepo`, …).
-- Constructors are always `New`, return the *interface* from `contracts.go`, and take their
-  dependencies as arguments. No package-level state — `gochecknoglobals` and `gochecknoinits` are on.
+- Repository constructors take their dependencies as arguments. `New` and `NewReadModel` return the
+  *interface* from `contracts.go`, wrapped in its traced decorator; `NewProjector` and `NewImporter`
+  return their struct, which `internal/app` lists as a `repo.Subscriber` or `repo.Importer`. A handler is a struct
+  whose exported fields are its dependencies, filled in by `register.go`. No package-level state —
+  `gochecknoglobals` and `gochecknoinits` are on.
 - Unexported package constants are prefixed with an underscore (`_defaultEntityCap`,
   `_tracerName`). `mnd` rejects bare numeric literals, so add a constant rather than inlining one.
 
@@ -140,10 +164,11 @@ graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go,
   package in that transport: REST `v1/response/` (`Token`) and `v1/apidoc/` (the `BearerAuth`
   scheme, the `auth` tag); GraphQL `middleware/`, `gqlerr/` and `paging/`.
 - Each version's `router.go` (`restapi/v1`, `grpc/v1`) is the only file that lists the domains: one
-  call per domain. `restapi/router.go`, `grpc/router.go` and `docs/api.md`'s v2 examples call it.
-- Tests go through the real server, from the domain folder: REST with `restapi/resttest`
-  (`TestMain` calls `resttest.Main`, which sets the env the config reads), GraphQL with
-  `graphql/graphqltest`, gRPC over `bufconn` in the test itself. Router-wide tests (public routes,
+  call per domain, each passed the `cqrs.Buses`. `restapi/router.go`, `grpc/router.go` and `docs/api.md`'s v2 examples call it.
+- Tests go through the real server and real buses, with fake handlers registered for the domain's
+  messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (`TestMain` calls
+  `resttest.Main`, which sets the env the config reads), GraphQL with `graphql/graphqltest`, gRPC over
+  `bufconn` in the test itself. Router-wide tests (public routes,
   auth exemption, panics, the OpenAPI export) stay in `restapi/router_test.go`.
 - **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
   renaming one changes `docs/openapi/v1.json` and the web client's types. A name that repeats its
@@ -167,17 +192,24 @@ shape from a neighbouring handler in the same transport.
    A failure here is an auth error, not a 500.
 2. **Decode into a transport-local DTO** from the domain folder's `request.go`. On REST the DTO is
    the `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass
-   a request DTO into a use case.
+   a request DTO into a command or query.
 3. **Validate the DTO structurally through Huma's built-in validation** on the REST transport:
    length, format, enum, and default constraints live on the input struct / request DTO tags, and
    the REST v1 controller takes no `*validator.Validate`.
    The gRPC controller validates its request DTOs with its own.
    Domain validation — anything that needs to know the rules, like a status transition —
-   lives on the entity or the use case and must not be duplicated in the controller.
-4. **Call the use case** with the request context: the Huma handler's `ctx` on REST (do not build a
-   second context), the handler's `ctx` everywhere else. `context.Context`
-   is the first parameter of every method that crosses a layer.
-5. **Map the error.** `errors.Is` against the `entity.Err*` sentinels → a transport status. On REST
+   lives on the aggregate or in the handler and must not be duplicated in the controller.
+4. **Send the command or query** with the request context:
+   `cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.CreateTask{...})` or
+   `cqrs.SendQuery[entity.Task](ctx, r.qs, query.GetTask{...})`, with the Huma handler's `ctx` on REST
+   (do not build a second context) and the handler's `ctx` everywhere else. Build the message from the
+   DTO's fields; never put a DTO in it. A command answers only `cqrs.Written` (or a result embedding
+   it, such as a sign-in's token): a transport that returns the resource sends a query for it next.
+   `context.Context` is the first parameter of every method that crosses a layer.
+5. **Map the error.** First the failures any command can produce, through the transport's shared
+   package (`apierr.Shared`, `rpcerr.Shared`, `gqlerr`): `entity.ErrReadModelBehind` → 503 /
+   `Unavailable` / `UNAVAILABLE`, `entity.ErrConcurrencyConflict` → 409 / `Aborted` / `CONFLICT`.
+   Then `errors.Is` against the domain's `entity.Err*` sentinels → a transport status. On REST
    the sentinel maps to a `huma.Error*` constructor, which renders the standard RFC 9457
    `application/problem+json` model — no custom error type. Log the
    wrapped error, return a generic message to the caller.
@@ -190,19 +222,36 @@ shape from a neighbouring handler in the same transport.
 
 ## Conventions that will bite you
 
-**Traced decorators.** Every repo and use-case constructor returns the *interface*, wrapped:
-`func New(...) usecase.Task { return newTraced(&UseCase{...}) }`. The wrapper lives in
-`tracing.go` next to each implementation. Adding a method to a contract means implementing it in
-three places: the interface, the struct, and the `traced*` decorator. Skipping the decorator is a
-compile error that reads as an unrelated interface mismatch.
+**Pipeline steps, not decorators.** Every message passes the buses' steps, built in `newBuses`
+(`internal/app/buses.go`): trace, log, metrics and stamp on both buses; wait (for the projections)
+and retry (on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`RequiredRole()`)
+and validate (`Validate()`). A handler carries none of these. A message type with no registered
+handler is `cqrs.ErrNoHandler` at the first send, so a new message needs its line in `register.go`.
+Repositories still return their interface wrapped in a traced decorator: `func New(...)
+repo.EventStore { return newTraced(&Store{...}) }`, the wrapper in `tracing.go` beside it. Adding a
+method to a repository contract means implementing it in three places: the interface, the struct,
+and the `traced*` decorator. Skipping the decorator is a compile error that reads as an unrelated
+interface mismatch.
 
-**Mocks are generated, not written.** `internal/usecase/mocks_*_test.go` come from `go:generate`
-directives in the two `contracts.go` files. After any contract change run `make mock` before
-running tests.
+**Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
+its `SchemaVersion()` and adding an `eventstore.Upcast` from the previous version to
+`eventstore.Upcasts()`. A new event type needs an entry in `entity.EventTypes()`, a case in the
+aggregate's `Apply`, and a case in the projector; an event the codec does not know fails to load.
+
+**Writes go through aggregates; read-model tables belong to their projector.** A command handler
+loads an aggregate, calls its behavior method and saves what it recorded (`aggregate.Create`,
+`aggregate.Change`). A query reads only a read model and never loads an aggregate. Only a projector
+writes its tables, so read-model tables have no foreign keys. Uniqueness across records (emails,
+usernames, SSO identities) is a claim saved with the events, not a unique index on a read model.
+
+**Mocks are generated, not written.** `internal/repo/repomock/repomock.go` comes from the
+`go:generate` directive in `internal/repo/contracts.go`. After any repository contract change run
+`make mock` before running tests. Query handlers are tested with these mocks; command handlers
+against `internal/repo/memstore`; projectors against a fake of sqlc's `Querier`.
 
 **Error style.** Domain failures are sentinel errors in `internal/entity/errors.go`
 (`ErrTaskNotFound`, `ErrTaskForbidden`, `ErrInvalidTransition`, …). Every other error is wrapped
-with the layer path: `fmt.Errorf("TaskUseCase - Create - uc.repo.Store: %w", err)`. The `err113`
+with the layer path: `fmt.Errorf("CreateTask - aggregate.Create: %w", err)`. The `err113`
 linter rejects `errors.New`/`fmt.Errorf` for new dynamic errors — add a sentinel to `entity`
 instead. Controllers are the only place that translates a sentinel into a transport status.
 
@@ -228,7 +277,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 ## Generated files — do not hand-edit
 
 - `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
-- `internal/usecase/mocks_*_test.go` ← `make mock`.
+- `internal/repo/repomock/repomock.go` ← `make mock`.
 - `internal/repo/persistent/queries/schema/schema.sql` ← `make sqlc`, rendered by Atlas from
   `internal/app/schema/*.hcl`. It exists only because sqlc cannot read HCL; CI fails when it is stale.
 - `internal/repo/persistent/queries/*.go` ← `make sqlc` from the `.sql` query files beside them,
@@ -246,6 +295,32 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   `DOCS_ENABLED`; the checked-in copy exists so REST contract changes show up as a reviewable diff
   and so clients can generate types without a running server. CI fails when it is stale.
 
+## CQRS and event sourcing
+
+`docs/cqrs.md` is the reference; these are the parts that break things when missed.
+
+- **The event store** (`internal/repo/persistent/eventstore`) is the `events`, `snapshots` and
+  `claims` tables. `Save` takes the store's advisory lock, so positions commit in order; checks the
+  stream's version (`entity.ErrConcurrencyConflict` on a mismatch, which the retry step retries);
+  inserts claims and events; then `NOTIFY events`. Keep that lock: without it a projector can pass a
+  position whose earlier neighbour commits later, and never see it.
+- **Projections run in the worker** (`internal/repo/persistent/projection`): one loop per
+  subscriber in `subscribers`, each event handled in one transaction with its checkpoint's move.
+  A subscriber writes through `pg.Executor(ctx)` (`pkg/postgres`) so its rows join that
+  transaction; anything else (a second pool, a goroutine) breaks exactly-once.
+- **Every command waits for the projectors** (the wait step) until they pass its position, or
+  answers `entity.ErrReadModelBehind` after `CQRS_CONSISTENCY_TIMEOUT`. Event handlers are not waited
+  for. So the app and the integration tests need the worker running; `make dev` and the compose stack
+  start it.
+- **The backfill** (`eventstore.Backfill`, `internal/app/backfill.go`) runs at app start, once per
+  domain, and turns rows written before event sourcing into `*Imported` events. Projectors apply
+  `*Imported` as upserts. A new domain needs no importer: it never had rows without events.
+- **Scratch streams** start with `_` and are never delivered; the event store's integration tests use
+  only those, so they can share the database with a running worker. Subscriber names cannot start
+  with `_` either: `_backfill/<domain>` markers live in `projection_checkpoints`.
+- **Rebuild** a projector with `make projection-rebuild name=<projector>`, never by hand-editing a
+  checkpoint. Event handlers cannot be rebuilt: replaying them repeats their side effects.
+
 ## Queue and worker
 
 - The queue is one ordinary table, `queue_messages` (`internal/app/schema/queue_messages.hcl`), on the
@@ -261,17 +336,21 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 - `pkg/worker` is at-least-once: a handler returning `nil` deletes the message; an error leaves it
   to reappear after `WORKER_VISIBILITY_TIMEOUT`. Handlers must be idempotent; a body that can never
   decode should be logged and acknowledged (`return nil`), or it redelivers forever.
-- The worker is wired in `internal/app/worker.go` (`RunWorker`). Handlers that need use cases get
-  them from `initUseCases`, like the servers. The Dockerfile builds `/app` and `/worker` into one
-  image; the compose `worker` service runs `/worker`. Only the app applies the schema.
-- A use case enqueues by taking `repo.QueueRepo` and calling `Send`.
-- A use case can also enqueue through a port that hides the queue: the user use case calls
-  `repo.UserNotifier.Welcome`, implemented by `internal/repo/notify`.
+- The worker is wired in `internal/app/worker.go` (`RunWorker`): the projection runner and the queue
+  consumer. Queue handlers send commands on the buses from `initUseCases`, like the servers. The
+  Dockerfile builds `/app` and `/worker` into one image; the compose `worker` service runs
+  `/worker`. Only the app applies the schema.
+- A command or event handler enqueues by taking `repo.QueueRepo` and calling `Send`, which joins the
+  transaction in `ctx`: from an event handler, the message commits with the checkpoint.
+- A handler can also enqueue through a port that hides the queue: the `send-welcome-email` event
+  handler (`internal/usecase/user/event`) calls `repo.UserNotifier.Welcome`, implemented by
+  `internal/repo/notify`.
 - Email goes through the `mail` queue (`entity.EmailQueue`): the sender writes the body with
   `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
   handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
-  The `mail` use case (`Deliver`) renders with `internal/repo/mailtmpl` and sends through `pkg/smtp`;
-  only the worker calls it. `initUseCases` builds it for both binaries, and fails if a template is broken.
+  It sends the `DeliverEmail` command (`internal/usecase/mail`), whose handler renders with
+  `internal/repo/mailtmpl` and sends through `pkg/smtp`; only the worker sends it. `initUseCases`
+  registers it for both binaries, and fails if a template is broken.
 - Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
   integration stack.
   `integration-test/mail_test.go` asserts on what reaches it.
@@ -346,27 +425,43 @@ the matching page whenever a change touches what it documents:
 | New transport, server, port or service URL | `docs/development.md` (service tables), `docs/api.md` if it is an API |
 | Change to `make dev` or its prerequisites | `Quick start` in `README.md`, `docs/development.md` |
 | Renamed or moved package under `internal/` or `pkg/` | the `Packages` table in `docs/architecture.md` |
+| Commands, queries, events, the event store, projections or the pipeline steps | `docs/cqrs.md` |
 | Queue or worker behaviour | `docs/worker.md` |
 | Email behaviour | the `Email` section of `docs/worker.md` |
 | Frontend stack or conventions | `docs/web.md` |
 | Release rules, `release.yml` or `.goreleaser.yaml` | `docs/releasing.md` |
-| The exchange `Convert` path (handler, use case, entity, webapi, repo) | `docs/request-flow.md`, which quotes that code |
+| The exchange `Convert` path (handler, `ConvertCurrency` command, aggregate, webapi, event store, projector, query) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
 
 ## Adding a use case to an existing domain
 
-1. Add the method to `internal/usecase/contracts.go`.
-2. Implement it in `internal/usecase/<domain>/<domain>.go` and mirror it in the same package's
-   `tracing.go`.
-3. If it needs new persistence, repeat the same three steps in `internal/repo/contracts.go`,
-   `internal/repo/persistent/<domain>/`, and that package's `tracing.go`. A new query goes in
-   `internal/repo/persistent/queries/<domain>.sql`, then `make sqlc`.
-4. `make mock`, then extend `internal/usecase/<domain>_test.go` (table-driven, gomock, `t.Parallel()` —
-   `paralleltest` enforces it).
-5. Expose it on whichever transports need it:
+A use case is a command (it changes state) or a query (it reads it). Read the neighbouring one in
+the same domain before writing.
+
+1. **A command:**
+   - If it records something new, add the event to `internal/entity/<domain>_events.go`
+     (`EventType()`, `SchemaVersion()`), list it in `EventTypes()`, give the aggregate in
+     `<domain>_aggregate.go` a behavior method that checks the rule and calls `entity.Record`, and
+     a case in its `Apply`. Test it in `internal/entity`.
+   - Add `internal/usecase/<domain>/command/<name>.go`: the command type (`CommandName()`, and
+     `ActorID()` when it acts for a user, `RequiredRole()` when it needs one, `Validate()` for
+     domain checks) and its handler, which goes through `aggregate.Create` or `aggregate.Change` and
+     returns `cqrs.Written`. Test it beside it against `internal/repo/memstore`.
+   - Handle the new event in the domain's projector (`internal/repo/persistent/<domain>/projector.go`),
+     with any new SQL in `queries/<domain>.sql` and `make sqlc`; test it against the fake `Querier`.
+2. **A query:** add `internal/usecase/<domain>/query/<name>.go`: the query type (`QueryName()`) and
+   its handler, which reads only the domain's read model. A new read-model method goes in
+   `internal/repo/contracts.go`, `internal/repo/persistent/<domain>/<domain>.go` and that package's
+   `tracing.go`, with its SQL in `queries/<domain>.sql` and `make sqlc`; then `make mock`. Test the
+   handler against `internal/repo/repomock`.
+3. **Register it**: one line in `internal/usecase/<domain>/register.go`. A message with no handler is
+   `cqrs.ErrNoHandler` at the first send.
+4. Tests are table-driven where there are cases and call `t.Parallel()` (`paralleltest` enforces it).
+5. Expose it on whichever transports need it, sending the message (see **The handler contract**):
    - REST: Huma input/output structs and the op in `internal/controller/restapi/v1/<domain>/<domain>.go`,
      DTOs in that folder's `request.go`/`response.go`, the op registered in its `controller.go`
-     (`NewRoutes`), the test beside it; then `make openapi`, and commit the generated diff.
+     (`NewRoutes`), the fake handler in `fake_test.go` and the test beside it; then `make openapi`,
+     and commit the generated diff.
      Then `make web-api`, commit its diff too, and fix any `make web-check` errors in `web/`.
    - GraphQL (task and exchange today): schema change in `internal/controller/graphql/schema/` →
      `make graphql` → the build fails with `missing method <Field>` → write that method in
@@ -384,39 +479,46 @@ oversight — but say which ones you covered.
 Work outward from the entity. Every step has a counterpart in the existing `task` domain — read it
 before writing.
 
-1. **Entity** — `internal/entity/<domain>.go` with the type and its invariants; new sentinel errors
-   go in `internal/entity/errors.go`.
-2. **Schema** — add the table as `internal/app/schema/<domain>.hcl` (Atlas declarative workflow),
-   then `make sqlc` to refresh the rendered schema sqlc reads;
-   set any new env vars in `docker-compose.yml` and `.env.example`.
-3. **Repo contract** — add the interface to `internal/repo/contracts.go`.
-4. **Repo implementation** — `internal/repo/persistent/<domain>/<domain>.go` (`package <domain>`,
-   calling the sqlc queries from `internal/repo/persistent/queries/<domain>.sql` after `make sqlc`,
-   driver errors mapped to sentinels) plus `tracing.go` next to it, and a `New` returning the
-   interface wrapped in `newTraced`.
-5. **Use-case contract** — add the interface to `internal/usecase/contracts.go`.
-6. **Use-case implementation** — `internal/usecase/<domain>/<domain>.go` plus its `tracing.go`,
-   same `New` pattern.
-7. **`make mock`**, then `internal/usecase/<domain>_test.go` against the generated mocks.
-8. **Wiring** — add a field to `useCases` in `internal/app/app.go`, construct repo and use case in
-   `initUseCases`, and thread the use case through `initServers` into each router you are exposing.
-9. **Transports** — for each one, a new domain folder (see **Controller layout**):
+1. **Entity** — `internal/entity/<domain>.go` with the read shape the API returns;
+   `<domain>_aggregate.go` with the aggregate (embedding `entity.AggregateBase`, its stream ID
+   `<domain>-<id>`, `Apply`, and the behavior methods that record events); `<domain>_events.go` with
+   the events, added to `EventTypes()`. New sentinel errors go in `internal/entity/errors.go`. A
+   value unique across records is a claim (`entity.Claim`), saved with the events.
+2. **Schema** — the read-model table as `internal/app/schema/<domain>.hcl` (Atlas declarative
+   workflow), with no foreign keys: its projector advances on its own. Then `make sqlc` to refresh
+   the rendered schema sqlc reads; set any new env vars in `docker-compose.yml` and `.env.example`.
+3. **Read-model contract** — add `<Domain>ReadModel` to `internal/repo/contracts.go`, then
+   `make mock`.
+4. **Read model and projector** — in `internal/repo/persistent/<domain>/`: `<domain>.go` (`package
+   <domain>`, the read-model methods calling the sqlc queries from `queries/<domain>.sql`, driver
+   errors mapped to sentinels, `NewReadModel` returning the interface wrapped in `newTraced`) with
+   `tracing.go` next to it, and `projector.go` (`NewProjector`, `Name`, `Tables`, one case per event
+   in `Handle`, writing through `pg.Executor(ctx)`), each with its test.
+5. **Commands, queries and event handlers** — `internal/usecase/<domain>/command/`, `query/` and,
+   for side effects, `event/`, one file per message with its test (see the recipe above), and
+   `register.go` with the domain's `Deps` and `Register`.
+6. **Wiring** — in `internal/app/buses.go`: a `<domain>.Register(...)` call in `registerHandlers`,
+   and the projector (and any event handler) in `subscribers`. The transports already receive the
+   buses through `initServers`.
+7. **Transports** — for each one, a new domain folder (see **Controller layout**):
    `<transport>/v1/<domain>/` with its `controller.go`, handlers, `request.go`, `response.go` and
-   tests, plus one call in that transport's `v1/router.go` that registers it.
+   tests (with a `fake_test.go` registering fake handlers), plus one call in that transport's
+   `v1/router.go` that registers it.
    gRPC also needs `docs/proto/v1/<domain>.proto` and `make proto-v1`.
    GraphQL instead gets `schema/<domain>.graphqls`, a `graphql/<domain>/` folder, and an alias plus
-   an embed for its `Query`/`Mutation` in `graphql/resolver.go`; `NewHandler` takes the new use case.
-10. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the docs updates listed
-    above.
-11. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
-    transports you exposed.
+   an embed for its `Query`/`Mutation` in `graphql/resolver.go`.
+8. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the docs updates listed
+   above, including the aggregate and projector tables in `docs/cqrs.md`.
+9. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the
+   transports you exposed, against the running worker.
 
 ## API versioning
 
 Routes are grouped under a version package (`<transport>/v1/`). A v2 means a new sibling package
 with the same layout, registered alongside v1 in the transport's top-level `router.go` — REST adds
-operations under the new `/v2/...` paths from a `v2.NewRoutes(api, ...)` in `restapi/router.go`.
-gRPC registers a second set of `NewXRoutes`.
+operations under the new `/v2/...` paths from a `v2.NewRoutes(api, b, l)` in `restapi/router.go`.
+gRPC calls a second `v2.NewRoutes(app, b, l)` in `grpc/router.go`. Both versions send the same
+commands and queries.
 v1 stays untouched. `docs/api.md` documents this
 with worked examples per transport; follow it rather than inventing a scheme.
 
@@ -435,17 +537,23 @@ start the app. `PG_PORT` moves the compose `db` host port and `PG_URL` together.
 read only by `make sqlc`, where it is a throwaway `docker://` container. Queries are plain SQL
 in `internal/repo/persistent/queries/*.sql`, compiled by [sqlc](https://sqlc.dev/) into typed Go
 (`make sqlc`). sqlc cannot read HCL, so `make sqlc` first has Atlas render the HCL schema to
-`internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The repositories call the generated
-`*queries.Queries` and convert its rows to `entity` types; there is no ORM and no query building
-at runtime. Generated row structs share the entities' field order, so `entity.Task(row)` is a
+`internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The read models and projectors call the generated
+`*queries.Queries` (projectors through the `Querier` interface, so they can be tested with a fake)
+and convert its rows to `entity` types; there is no ORM and no query building at runtime. The event
+store's own tables (`events`, `snapshots`, `claims`, `projection_checkpoints`) are HCL files like
+any other. Generated row structs share the entities' field order, so `entity.Task(row)` is a
 plain conversion. A schema change that breaks that alignment fails to compile.
 
 ## Tests
 
-- Unit: `internal/...` and `pkg/...`, run by `make test` with `-race`. Use-case tests use the
-  generated gomock mocks, are table-driven, and call `t.Parallel()` (`paralleltest` enforces it).
+- Unit: `internal/...` and `pkg/...`, run by `make test` with `-race`, all calling `t.Parallel()`
+  (`paralleltest` enforces it). Aggregates are tested in `internal/entity`; command handlers against
+  the in-memory event store (`internal/repo/memstore`); query handlers with the gomock read models
+  (`internal/repo/repomock`); projectors against a fake sqlc `Querier`. `memstore` and the Postgres
+  event store pass the same contract suite, `internal/repo/eventstoretest`.
 - Integration: `integration-test/` runs *inside* the docker network — it resolves the service as
   host `app` by its compose service name, so it fails on the host machine.
-  Always run it through `make compose-up-integration-test`.
+  Always run it through `make compose-up-integration-test`. It needs the worker: writes wait for
+  the projections.
 - Mail templates: `internal/repo/mailtmpl/testdata/*.golden.*` are compared by the render test;
   after an intended template change, `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/` and review the diff.

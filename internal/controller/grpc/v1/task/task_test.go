@@ -11,7 +11,8 @@ import (
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,9 +34,8 @@ func (noopLogger) Warn(string, ...any) {}
 func (noopLogger) Error(any, ...any)   {}
 func (noopLogger) Fatal(any, ...any)   {}
 
+// fakeTask answers ListAllTasks on real buses, and keeps what it was asked.
 type fakeTask struct {
-	usecase.Task
-
 	listed    []entity.Task
 	err       error
 	gotCaller entity.Principal
@@ -44,22 +44,26 @@ type fakeTask struct {
 	gotOffset int
 }
 
-func (f *fakeTask) ListAll(
-	_ context.Context, caller entity.Principal, taskStatus *entity.TaskStatus, limit, offset int,
-) ([]entity.Task, int, error) {
-	f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = caller, taskStatus, limit, offset
+func (f *fakeTask) buses() cqrs.Buses {
+	qs := cqrs.NewQueries()
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, query.TaskPage](
+		func(_ context.Context, q query.ListAllTasks) (query.TaskPage, error) {
+			f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = q.Principal, q.Status, q.Limit, q.Offset
 
-	return f.listed, len(f.listed), f.err
+			return query.TaskPage{Tasks: f.listed, Total: len(f.listed)}, f.err
+		}))
+
+	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: qs}
 }
 
 // dial serves the task routes behind the auth interceptor over an in-memory listener.
-func dial(t *testing.T, tk usecase.Task) (pb.TaskServiceClient, *jwt.Manager) {
+func dial(t *testing.T, tk *fakeTask) (pb.TaskServiceClient, *jwt.Manager) {
 	t.Helper()
 
 	manager := jwt.New("test-secret", time.Hour)
 	lis := bufconn.Listen(_bufSize)
 	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
-	pb.RegisterTaskServiceServer(srv, task.New(tk, noopLogger{}))
+	pb.RegisterTaskServiceServer(srv, task.New(tk.buses(), noopLogger{}))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
