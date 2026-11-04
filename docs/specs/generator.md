@@ -1,9 +1,9 @@
 # Spec: domain and use-case generator
 
-Module id: `generator` · PR 2 of 2 · Depends on `cqrs` · Status: **draft, awaiting approval**
+Module id: `generator` · PR 2 of 2 · Depends on `cqrs` · Status: **approved; plan in [generator-plan.md](generator-plan.md)**
 
-Paths below follow the `cqrs` spec. They are checked against the merged `cqrs` code before this
-module's plan is written.
+Paths and shapes below are checked against master at `e952512`, where `cqrs` merged (#45). Each
+template copies the `task` domain's file at the same path.
 
 ## Objective
 
@@ -49,9 +49,11 @@ make proto-v1 graphql sqlc mock openapi web-api web-graphql format
 go build ./...
 ```
 
-It stops at the first failure and prints the undo command. `transports` defaults to all three,
-since transports are independent by design. `dry-run=1` prints every file it would create and the
-diff of every edit, and writes nothing.
+It stops at the first failure and prints the undo command. For `new-domain`, `transports`
+defaults to all three, since transports are independent by design. For `new-usecase`, it defaults
+to the transports the domain already has: `user` has no GraphQL. `dry-run=1` prints every file it
+would create and every insertion with its context, then runs every rule and fails if one would;
+it writes nothing.
 
 ## Names
 
@@ -83,35 +85,48 @@ event handlers return `entity.ErrNotImplemented`. The following are real working
 
 | Layer | Created |
 | --- | --- |
-| entity | `invoice.go` (`Invoice`, `InvoiceAggregate`), `invoice_events.go`, `invoice_test.go` |
-| use case | `usecase/invoice/register.go`; `command/` and `query/` with one file per message and its stub handler, plus a test each |
-| repo | `persistent/invoice/` read model, `projector.go`, `tracing.go`, tests; `queries/invoice.sql` |
-| schema | `internal/app/schema/invoices.hcl` (the base columns) |
-| REST | `restapi/v1/invoice/` `controller.go`, `invoice.go`, `request.go`, `response.go`, `invoice_test.go`, `main_test.go` |
-| gRPC | `docs/proto/v1/invoice.proto`; `grpc/v1/invoice/` `controller.go`, `invoice.go`, `request.go`, `response.go`, `invoice_test.go` |
-| GraphQL | `schema/invoice.graphqls`; `graphql/invoice/` `resolver.go`, `query.go`, `mutation.go`, `input.go`, tests |
+| entity | `invoice.go` (`Invoice`, the read shape); `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `Apply`, the behavior methods); `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `invoiceEvents()`); `invoice_aggregate_test.go` |
+| use case | `usecase/invoice/register.go` (`Deps`, `Register`); `command/create_invoice.go`, `update_invoice.go`, `delete_invoice.go`, each with its test against `internal/repo/memstore`; `query/get_invoice.go`, `list_invoices.go` and `query_test.go` against `internal/repo/repomock` |
+| repo | `persistent/invoice/invoice.go` (`NewReadModel`, returning `repo.InvoiceReadModel` wrapped in `newTraced`), `tracing.go`, `projector.go` (`NewProjector`, `Name`, `Tables`, `Handle`, `Project`), `projector_test.go` against a fake sqlc `Querier`; `queries/invoice.sql`. No `importer.go`: a new domain never had rows without events |
+| schema | `internal/app/schema/invoices.hcl` (the base columns, no foreign keys) |
+| REST | `restapi/v1/invoice/` `controller.go` (`NewRoutes`, the `problem` error mapping), `invoice.go`, `request.go`, `response.go`, `fake_test.go`, `invoice_test.go`, `main_test.go` |
+| gRPC | `docs/proto/v1/invoice.proto`; `grpc/v1/invoice/` `controller.go` (`New`, the error mapping), `invoice.go`, `request.go`, `response.go`, `response_test.go`, `invoice_test.go` |
+| GraphQL | `schema/invoice.graphqls`; `graphql/invoice/` `resolver.go` (`Query`, `Mutation`, `New`), `query.go`, `mutation.go`, `fake_test.go`, `query_test.go`, `mutation_test.go` |
 | integration | `integration-test/invoice_test.go` |
 
+**Empty shapes.** Go structs and proto messages may be empty, so the create and update request
+DTOs and messages are generated empty, as the place to add fields. GraphQL forbids empty input
+and object types, so the generated mutations take only `id`, and the domain gets no `input.go`
+until it has a field.
+
 **Generated tests:**
-- They assert today's answer on every transport: REST 501, gRPC `Unimplemented`, GraphQL
-  `NOT_IMPLEMENTED`.
-- They assert real behaviour for the real parts: the aggregate, the projector, the error mapping.
-- Each stub test says, in a comment, that the first real implementation should replace it. That
-  test going red is the intended signal.
+- The use-case tests assert that each stub handler returns `entity.ErrNotImplemented`. Each one
+  says, in a comment, that the first real implementation should replace it. That test going red
+  is the intended signal.
+- The transport tests send through real buses with fake handlers registered (`fake_test.go` for
+  REST and GraphQL, fakes inside the test for gRPC), as every domain's do. They test what is real:
+  decoding, encoding and the error mapping, including "not implemented".
+- The aggregate and projector tests assert real behaviour.
+- The integration test asserts today's answer end to end, against the stub handlers and the
+  running worker: REST 501, gRPC `Unimplemented`, GraphQL `NOT_IMPLEMENTED`.
 
 **Shared files it edits:**
 
 | File | Edit | Found by |
 | --- | --- | --- |
-| `internal/entity/event.go` | the domain's events in `EventTypes()` | the return value's composite literal in that function |
+| `internal/entity/event.go` | `invoiceEvents()` in `EventTypes()` | the `slices.Concat` call in `EventTypes` |
+| `internal/entity/errors.go` | `ErrInvoiceNotFound`, `ErrInvoiceForbidden` | the `var ( … )` block, before its closing paren |
 | `internal/repo/contracts.go` | the `InvoiceReadModel` interface | the `type ( … )` block, before its closing paren |
-| `internal/app/` (where `cqrs` builds the buses) | `invoice.Register(…)` and the import | the function by name |
-| `internal/app/worker.go` | the invoice projector in the subscriber list | the composite literal by name |
-| `restapi/v1/router.go`, `grpc/v1/router.go` | `invoice.NewRoutes(…)` and the import | `NewRoutes` by name |
-| `graphql/resolver.go` | the alias, the embeds in `query` and `mutation`, the constructor | each declaration by name |
+| `internal/app/buses.go` | `invoice.Register(…)` in `registerHandlers`; `persistInvoiceRepo.NewProjector(pg)` in `subscribers`; both imports, the repository one under the `persistInvoiceRepo` alias | each function by name, then the import block |
+| `restapi/v1/router.go` | `invoice.NewRoutes(api, b, l)` and the import | `NewRoutes` by name |
+| `grpc/v1/router.go` | `v1.RegisterInvoiceServiceServer(app, invoice.New(b, l))` and the import | `NewRoutes` by name |
+| `graphql/resolver.go` | the `invoiceQuery` and `invoiceMutation` aliases, the embeds in `query` and `mutation`, and both in `newResolver` | each declaration by name |
+| `graphql/gqlerr/gqlerr.go` | the two sentinels' entries in `Map` | the `[]mapping` literal in `Map`, ahead of the shared entries |
 | `graphql/gqlgen.yml` | the `Invoice` model binding | the `models` map, as a YAML node |
 
-It does not touch `docs/` or `web/`. It prints the docs checklist from CLAUDE.md instead.
+It does not touch `docs/` or `web/`. It prints the docs checklist from CLAUDE.md instead: a
+section in `docs/api.md`, the `What you get` list in `README.md`, and the aggregate and projector
+tables in `docs/cqrs.md`.
 
 ## What `make new-usecase domain=task name=archive-task kind=command` writes
 
@@ -119,13 +134,18 @@ It does not touch `docs/` or `web/`. It prints the docs checklist from CLAUDE.md
 
 | Layer | Created or edited |
 | --- | --- |
-| use case | creates `usecase/task/command/archive_task.go` and its test; edits `register.go` (one handler line) |
-| REST | edits `restapi/v1/task/task.go` (appends the op and its input and output structs), `controller.go` (registers it in `NewRoutes`), and `task_test.go` (appends a test) |
-| gRPC | edits `docs/proto/v1/task.proto` (an rpc in the service, plus its two messages), `grpc/v1/task/task.go` (appends the method), and the test |
-| GraphQL | edits `schema/task.graphqls` (a field on `extend type Mutation`, or `Query` for a query), `graphql/task/mutation.go` or `query.go` (appends the resolver), and the test |
+| use case | creates `usecase/task/command/archive_task.go` and its test; edits `register.go` (one `cqrs.HandleCommand` line, or `cqrs.HandleQuery`, in `Register`) |
+| REST | edits `restapi/v1/task/task.go` (appends the op and its input and output structs), `controller.go` (registers it in `NewRoutes`), `fake_test.go` (a fake handler for the message in `buses`), and `task_test.go` (appends a test) |
+| gRPC | edits `docs/proto/v1/task.proto` (an rpc in the service, plus its two messages), `grpc/v1/task/task.go` (appends the method), and `task_test.go` (its fake and a test) |
+| GraphQL | edits `schema/task.graphqls` (a field on `extend type Mutation`, or `Query` for a query), `graphql/task/mutation.go` or `query.go` (appends the resolver), `fake_test.go`, and the test |
 
 The defaults are POST `/v1/tasks/{id}/archive` for a command and GET `/v1/tasks/count` for a query;
 `method=` and `path=` override them.
+
+A command answers `cqrs.Written`, like every command. A query answers a result struct of its own,
+declared in its file (`query.CountTasksResult`), empty until you add its fields. The command
+records nothing yet: its event and the aggregate's behavior method are yours to write, and the
+printed checklist names the files.
 
 This command edits files you have already changed by hand, so its edits are the riskiest, and the
 safety rules below apply to it in full.
@@ -138,25 +158,25 @@ prints the rule, the file and the reason, then exits non-zero having written not
 
 | Rule | Check |
 | --- | --- |
-| R1 name | Matches the pattern. Not a Go keyword or predeclared name. Not an existing domain: no folder, entity, proto service, GraphQL type or table with that name. |
+| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, entity file, proto service, GraphQL type or table with that name. |
 | R2 targets exist or don't | No file it would create exists. Every file it would edit exists. For `new-usecase`, the domain exists and the message name is free. |
-| R3 clean | No file it would edit has uncommitted changes (`git status --porcelain -- <files>`), so the undo is exact. |
+| R3 clean | No file it would edit has uncommitted changes (`git status --porcelain -- <files>`), and neither do the paths the regenerators write (`docs/proto/v1/`, `docs/openapi/v1.json`, `internal/repo/repomock/`, `internal/repo/persistent/queries/`, `internal/controller/graphql/generated/` and `model/`, `web/src/api/schema.gen.ts`, `web/src/graphql/`), so the undo is exact. |
 | R4 one anchor | Every edit finds its place exactly once, by parsing the file: `go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`. Zero or two matches fail. No markers, no line numbers, no regular expressions on source. |
-| R5 still valid | Every edited and every created file parses after the change, and Go files come out of `go/format` unchanged. |
+| R5 still valid | Every edited and every created file parses after the change. Edited Go files go through `go/format`. A created Go file that `go/format` would change is an error: its template is wrong. |
 | R6 all or nothing on disk | Each file is written to a temporary file and renamed into place. If any write fails, every file already written is restored and every created file is removed. |
 
 Afterwards it prints the undo command. Because R3 held, the undo restores exactly the previous
 state:
 
 ```
-git checkout -- <edited files> && rm -r <created files and folders>
+git checkout -- <edited files> <regenerated paths> && git clean -fd -- <created files and folders> <regenerated paths>
 ```
 
 ## Project structure
 
 ```
 tools/gen/                       its own module: github.com/m7medvision/go-clean-template/tools/gen
-  go.mod                         stdlib, gqlparser, protocompile, yaml.v3; imports nothing from the app
+  go.mod                         stdlib, gqlparser, protocompile, go.yaml.in/yaml/v3, testify; nothing from the app
   main.go                        new-domain, new-usecase
   names/                         name forms and plurals
   plan/                          builds the in-memory plan: files to create, edits to apply
@@ -176,8 +196,17 @@ binaries and the Docker image never include it. `make gen-check` and `make gen-e
 Templates are the real file with placeholders, one per output file:
 
 ```gotemplate
-// Package command holds the {{.Name.Lower}} domain's commands, one file each, with their handlers.
+// Package command holds the {{.Name.Words}} domain's commands, one file each, with their handlers.
 package command
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
 
 // Create{{.Name.Go}} creates a {{.Name.Words}} owned by UserID.
 type Create{{.Name.Go}} struct {
@@ -187,18 +216,32 @@ type Create{{.Name.Go}} struct {
 // CommandName -.
 func (Create{{.Name.Go}}) CommandName() string { return "Create{{.Name.Go}}" }
 
-type create{{.Name.Go}}Handler struct {
-	store repo.EventStore
+// ActorID -.
+func (c Create{{.Name.Go}}) ActorID() string { return c.UserID }
+
+// Create{{.Name.Go}}Handler handles Create{{.Name.Go}}.
+type Create{{.Name.Go}}Handler struct {
+	Store repo.EventStore
 }
 
-func (h create{{.Name.Go}}Handler) Handle(ctx context.Context, cmd Create{{.Name.Go}}) (cqrs.Written, error) {
+// Handle -.
+func (Create{{.Name.Go}}Handler) Handle(_ context.Context, _ Create{{.Name.Go}}) (cqrs.Written, error) {
 	return cqrs.Written{}, fmt.Errorf("Create{{.Name.Go}}: %w", entity.ErrNotImplemented)
 }
 ```
 
-`entity.ErrNotImplemented` is added to `internal/entity/errors.go` in this PR. Each transport
-maps it to its own "not implemented": `huma.Error501NotImplemented`, `codes.Unimplemented`, and
-GraphQL `NOT_IMPLEMENTED`.
+`register.go` registers it as `cqrs.HandleCommand(cmds, command.Create{{.Name.Go}}Handler{Store: d.Store})`.
+The stub's parameters are `_`, so revive's `unused-parameter` passes; you name them when you write
+the body.
+
+`entity.ErrNotImplemented` is added to `internal/entity/errors.go` in this PR. Like
+`ErrReadModelBehind` and `ErrConcurrencyConflict`, any command or query can produce it, so it is
+mapped once per transport, beside them, and never per domain:
+- REST: `apierr.Shared` returns `huma.Error501NotImplemented`.
+- gRPC: `rpcerr.Shared` returns `codes.Unimplemented`.
+- GraphQL: `gqlerr.Map` gets a `NOT_IMPLEMENTED` code among its shared entries.
+
+Each of the three gets a test case in its package's existing test.
 
 The generator's own Go follows the repo's linters and conventions.
 
@@ -243,12 +286,12 @@ The generator's own Go follows the repo's linters and conventions.
    the PR history shows one deliberately broken template.
 7. `go list -deps ./cmd/app ./cmd/worker` shows nothing from `tools/gen`.
 
-## Open questions
+## Decided
 
-1. **A third command, `make new-event-handler domain=user event=UserRegistered name=send-welcome-email`?**
-   The CQRS shape has event handlers, and the .NET template has an `EventHandlers` folder, but its
-   generator doesn't make them. I'd leave it out of PR 2 and add it if you find yourself writing
-   event handlers by hand.
-2. **Should generated domains be user-owned by default?** That means a `user_id`, and every handler
-   gets the caller as task does. Three of the four data domains are user-owned. Removing
-   ownership is deleting lines; adding it is writing them, so I default to owned.
+1. **No third command.** `make new-event-handler` is left out of PR 2. Add it if you find yourself
+   writing event handlers by hand.
+2. **Generated domains are user-owned.** They have a `user_id`, and every handler gets the caller,
+   as `task`'s do. Removing ownership is deleting lines; adding it is writing them.
+3. **A new query's GraphQL result type** starts with one field, `todo: Boolean`, whose description
+   says to replace it; the resolver leaves it null. A GraphQL object type can't be empty, unlike
+   the Go result struct.
