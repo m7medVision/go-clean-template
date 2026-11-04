@@ -1,0 +1,210 @@
+package edit_test
+
+import (
+	"go/format"
+	"go/token"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/tools/gen/edit"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// applyGo applies ins to src and formats the result, the way a plan does with an edited Go file.
+func applyGo(t *testing.T, src string, ins ...edit.Insertion) string {
+	t.Helper()
+
+	out, err := format.Source(edit.Apply([]byte(src), ins))
+	require.NoError(t, err)
+
+	return string(out)
+}
+
+func parseGo(t *testing.T, src string) *edit.Go {
+	t.Helper()
+
+	g, err := edit.ParseGo("x.go", []byte(src))
+	require.NoError(t, err)
+
+	return g
+}
+
+const errorsSrc = `package entity
+
+import "errors"
+
+var (
+	ErrTaskNotFound  = errors.New("task not found")
+	ErrTaskForbidden = errors.New("task does not belong to user")
+	// ErrReadModelBehind is a write that committed late.
+	ErrReadModelBehind = errors.New("write saved but not yet readable")
+)
+
+// After the block.
+func f() {}
+`
+
+func TestBeforeBlockEndAppendsToTheVarBlock(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, errorsSrc).BeforeBlockEnd(token.VAR,
+		"ErrWidgetNotFound  = errors.New(\"widget not found\")\nErrWidgetForbidden = errors.New(\"widget does not belong to user\")")
+	require.NoError(t, err)
+
+	assert.Equal(t, `package entity
+
+import "errors"
+
+var (
+	ErrTaskNotFound  = errors.New("task not found")
+	ErrTaskForbidden = errors.New("task does not belong to user")
+	// ErrReadModelBehind is a write that committed late.
+	ErrReadModelBehind = errors.New("write saved but not yet readable")
+	ErrWidgetNotFound  = errors.New("widget not found")
+	ErrWidgetForbidden = errors.New("widget does not belong to user")
+)
+
+// After the block.
+func f() {}
+`, applyGo(t, errorsSrc, ins))
+}
+
+const contractsSrc = `package repo
+
+//go:generate mockgen -source ./contracts.go -package repomock
+
+type (
+	// TaskReadModel reads the tasks table.
+	TaskReadModel interface {
+		Get(id string) error
+	}
+)
+`
+
+func TestBeforeBlockEndAppendsToTheTypeBlock(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, contractsSrc).BeforeBlockEnd(token.TYPE,
+		"\n// WidgetReadModel reads the widgets table.\nWidgetReadModel interface {\n\tGet(id string) error\n}")
+	require.NoError(t, err)
+
+	assert.Equal(t, `package repo
+
+//go:generate mockgen -source ./contracts.go -package repomock
+
+type (
+	// TaskReadModel reads the tasks table.
+	TaskReadModel interface {
+		Get(id string) error
+	}
+
+	// WidgetReadModel reads the widgets table.
+	WidgetReadModel interface {
+		Get(id string) error
+	}
+)
+`, applyGo(t, contractsSrc, ins))
+}
+
+func TestBeforeBlockEndNeedsExactlyOneBlock(t *testing.T) {
+	t.Parallel()
+
+	for name, src := range map[string]string{
+		"none":         "package p\n\nvar x = 1\n",
+		"two":          "package p\n\nvar (\n\ta = 1\n)\n\nvar (\n\tb = 2\n)\n",
+		"another kind": "package p\n\ntype (\n\tT int\n)\n",
+	} {
+		_, err := parseGo(t, src).BeforeBlockEnd(token.VAR, "c = 3")
+		require.ErrorIs(t, err, edit.ErrAnchor, name)
+	}
+}
+
+const importsSrc = `package app
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task"
+)
+`
+
+func TestImportGoesInPathOrderInTheNonStandardGroup(t *testing.T) {
+	t.Parallel()
+
+	g := parseGo(t, importsSrc)
+
+	aliased, err := g.Import("github.com/m7medvision/go-clean-template/internal/repo/persistent/invoice", "persistInvoiceRepo")
+	require.NoError(t, err)
+
+	plain, err := g.Import("github.com/m7medvision/go-clean-template/internal/usecase/invoice", "")
+	require.NoError(t, err)
+
+	assert.Equal(t, `package app
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	persistInvoiceRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/invoice"
+	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
+	"github.com/m7medvision/go-clean-template/internal/usecase/invoice"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task"
+)
+`, applyGo(t, importsSrc, append(aliased, plain...)...))
+}
+
+func TestImportAddsNothingWhenTheFileHasIt(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, importsSrc).Import("fmt", "")
+	require.NoError(t, err)
+	assert.Empty(t, ins)
+}
+
+func TestImportRefusesTheSamePathUnderAnotherAlias(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseGo(t, importsSrc).Import("github.com/m7medvision/go-clean-template/internal/usecase/task", "taskuc")
+	require.ErrorIs(t, err, edit.ErrAnchor)
+}
+
+func TestImportStartsTheNonStandardGroupAfterTheStandardOne(t *testing.T) {
+	t.Parallel()
+
+	const src = "package p\n\nimport (\n\t\"context\"\n)\n"
+
+	ins, err := parseGo(t, src).Import("github.com/x/y", "")
+	require.NoError(t, err)
+
+	assert.Equal(t, "package p\n\nimport (\n\t\"context\"\n\n\t\"github.com/x/y\"\n)\n", applyGo(t, src, ins...))
+}
+
+func TestImportNeedsAnImportBlock(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseGo(t, "package entity\n\nimport \"errors\"\n").Import("fmt", "")
+	require.ErrorIs(t, err, edit.ErrAnchor)
+}
+
+func TestFuncFindsOneTopLevelFunctionOrMethod(t *testing.T) {
+	t.Parallel()
+
+	g := parseGo(t, "package p\n\nfunc a() {}\n\nfunc (r *c) problem() {}\n\nfunc (r *c) b() {}\n\nfunc (s s) b() {}\n")
+
+	require.NoError(t, g.RequireFunc("a"))
+	require.NoError(t, g.RequireFunc("problem"))
+	require.ErrorIs(t, g.RequireFunc("missing"), edit.ErrAnchor)
+	require.ErrorIs(t, g.RequireFunc("b"), edit.ErrAnchor)
+}
+
+func TestApplyKeepsTheOrderOfInsertionsAtOneOffset(t *testing.T) {
+	t.Parallel()
+
+	got := edit.Apply([]byte("ad"), []edit.Insertion{{Offset: 1, Text: "b"}, {Offset: 1, Text: "c"}, {Offset: 0, Text: ">"}})
+
+	assert.Equal(t, ">abcd", string(got))
+}
