@@ -136,6 +136,26 @@ projection-rebuild: ### rebuild one projection's read model from the event store
 	go run ./cmd/worker -rebuild '$(name)'
 .PHONY: projection-rebuild
 
+# The generator is its own module (tools/gen): nothing in the app imports it, and no binary or image
+# includes it. Optional arguments are passed on only when set.
+GEN = go -C tools/gen run .
+GEN_OPTS = $(if $(transports),--transports '$(transports)') $(if $(dry-run),--dry-run)
+
+new-domain: ### generate a domain with CRUD stubs: make new-domain name=invoice [plural=] [transports=rest,grpc,graphql] [dry-run=1]
+	$(GEN) new-domain --root '$(CURDIR)' --name '$(name)' $(if $(plural),--plural '$(plural)') $(GEN_OPTS)
+.PHONY: new-domain
+
+new-usecase: ### add a command or query stub: make new-usecase domain=task name=archive-task kind=command [method=] [path=] [transports=] [dry-run=1]
+	$(GEN) new-usecase --root '$(CURDIR)' --domain '$(domain)' --name '$(name)' --kind '$(kind)' \
+		$(if $(method),--method '$(method)') $(if $(path),--path '$(path)') $(GEN_OPTS)
+.PHONY: new-usecase
+
+gen-check: ### check the generator: lint and format (the root .golangci.yml), unit and golden tests, tidy module
+	cd tools/gen && golangci-lint run --config ../../.golangci.yml ./...
+	go -C tools/gen test -race ./...
+	go -C tools/gen mod tidy -diff
+.PHONY: gen-check
+
 run-worker: ### run the queue worker (start the app first: it applies the schema)
 	CGO_ENABLED=0 go run ./cmd/worker
 .PHONY: run-worker
