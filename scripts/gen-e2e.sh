@@ -58,6 +58,10 @@ for op in create-widget list-widgets get-widget update-widget delete-widget; do
 	grep -q "\"operationId\": \"$op\"" docs/openapi/v1.json ||
 		{ echo "gen-e2e: docs/openapi/v1.json has no $op operation" >&2; exit 1; }
 done
+# make proto-v1 ran too: the gRPC controller builds on the Go code it generates from widget.proto.
+for f in docs/proto/v1/widget.pb.go docs/proto/v1/widget_grpc.pb.go; do
+	[ -f "$f" ] || { echo "gen-e2e: make proto-v1 wrote no $f" >&2; exit 1; }
+done
 make linter-golangci test
 echo "gen-e2e: go vet ./integration-test/..."
 go vet ./integration-test/...

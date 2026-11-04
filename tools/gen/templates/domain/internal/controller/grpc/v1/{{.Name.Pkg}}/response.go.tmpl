@@ -1,0 +1,35 @@
+package {{.Name.Pkg}}
+
+import (
+	"math"
+
+	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/entity"
+)
+
+// New{{.Name.Go}}Response -.
+func New{{.Name.Go}}Response(row *entity.{{.Name.Go}}) *v1.{{.Name.Go}}Response {
+	return &v1.{{.Name.Go}}Response{
+		Id:        row.ID,
+		UserId:    row.UserID,
+		CreatedAt: row.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt: row.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+}
+
+// NewList{{.Name.Plural.Go}}Response -.
+func NewList{{.Name.Plural.Go}}Response(rows []entity.{{.Name.Go}}, total int) *v1.List{{.Name.Plural.Go}}Response {
+	msgs := make([]*v1.{{.Name.Go}}Response, len(rows))
+	for i := range rows {
+		msgs[i] = New{{.Name.Go}}Response(&rows[i])
+	}
+
+	if total > math.MaxInt32 {
+		total = math.MaxInt32
+	}
+
+	return &v1.List{{.Name.Plural.Go}}Response{
+		{{.Name.Plural.Go}}: msgs,
+		Total:   int32(total),
+	}
+}

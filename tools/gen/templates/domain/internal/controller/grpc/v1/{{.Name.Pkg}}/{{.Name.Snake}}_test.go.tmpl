@@ -1,0 +1,274 @@
+package {{.Name.Pkg}}_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"testing"
+	"time"
+
+	pb "{{.Module}}/docs/proto/v1"
+	grpcmw "{{.Module}}/internal/controller/grpc/middleware"
+	grpc{{.Name.Pkg}} "{{.Module}}/internal/controller/grpc/v1/{{.Name.Pkg}}"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+	"{{.Module}}/pkg/jwt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
+)
+
+const (
+	_bufSize = 1 << 20
+	// _owner is the user the tests sign in as, who owns the stored {{.Name.Words}}.
+	_owner = "user-1"
+	// _storedAt is when the stored {{.Name.Words}} was created and updated, as the service answers with it.
+	_storedAt = "2026-01-02T03:04:05Z"
+)
+
+type noopLogger struct{}
+
+func (noopLogger) Debug(any, ...any)   {}
+func (noopLogger) Info(string, ...any) {}
+func (noopLogger) Warn(string, ...any) {}
+func (noopLogger) Error(any, ...any)   {}
+func (noopLogger) Fatal(any, ...any)   {}
+
+// stored is the {{.Name.Words}} the fake handlers answer with.
+func stored() entity.{{.Name.Go}} {
+	at := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+
+	return entity.{{.Name.Go}}{ID: "{{.Name.Kebab}}-1", UserID: _owner, CreatedAt: at, UpdatedAt: at}
+}
+
+// storedResponse is stored as the service answers with it.
+func storedResponse() *pb.{{.Name.Go}}Response {
+	return &pb.{{.Name.Go}}Response{Id: "{{.Name.Kebab}}-1", UserId: _owner, CreatedAt: _storedAt, UpdatedAt: _storedAt}
+}
+
+// fake{{.Name.Go}} answers every {{.Name.Words}} command and query: commands write stored's ID, queries read
+// stored, and every one of them fails with err when it is set. It keeps every message it is sent.
+type fake{{.Name.Go}} struct {
+	stored entity.{{.Name.Go}}
+	err    error
+
+	sent []any
+}
+
+// buses registers the fake's handlers on real buses whose one step is keep.
+func (f *fake{{.Name.Go}}) buses() cqrs.Buses {
+	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
+	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, cqrs.Written](
+		func(ctx context.Context, _ command.Create{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, cqrs.Written](
+		func(ctx context.Context, _ command.Update{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, cqrs.Written](
+		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.Get{{.Name.Go}}, entity.{{.Name.Go}}](
+		func(context.Context, query.Get{{.Name.Go}}) (entity.{{.Name.Go}}, error) { return f.stored, f.err }))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, query.{{.Name.Go}}Page](
+		func(context.Context, query.List{{.Name.Plural.Go}}) (query.{{.Name.Go}}Page, error) {
+			return query.{{.Name.Go}}Page{ {{- .Name.Plural.Go}}: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
+		}))
+
+	return cqrs.Buses{Commands: cmds, Queries: qs}
+}
+
+// keep is a step that keeps every message the buses carry, in the order they are sent.
+func (f *fake{{.Name.Go}}) keep(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
+	f.sent = append(f.sent, msg.Body)
+
+	return next(ctx)
+}
+
+// dial serves the {{.Name.Words}} service over f's buses, behind the auth interceptor, on an in-memory
+// listener.
+func dial(t *testing.T, f *fake{{.Name.Go}}) (pb.{{.Name.Go}}ServiceClient, *jwt.Manager) {
+	t.Helper()
+
+	manager := jwt.New("test-secret", time.Hour)
+	lis := bufconn.Listen(_bufSize)
+	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
+	pb.Register{{.Name.Go}}ServiceServer(srv, grpc{{.Name.Pkg}}.New(f.buses(), noopLogger{}))
+
+	go func() {
+		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			t.Errorf("grpc serve: %v", err)
+		}
+	}()
+
+	t.Cleanup(srv.Stop)
+
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	return pb.New{{.Name.Go}}ServiceClient(conn), manager
+}
+
+// signedIn is a context whose calls carry _owner's token.
+func signedIn(t *testing.T, manager *jwt.Manager) context.Context {
+	t.Helper()
+
+	token, err := manager.GenerateToken(_owner, nil)
+	require.NoError(t, err)
+
+	return metadata.AppendToOutgoingContext(t.Context(), "authorization", token)
+}
+
+// call is one call to one {{.Name.Words}} RPC, with what it answers when the fake handlers succeed and the
+// commands and queries it sends them.
+type call struct {
+	do   func(ctx context.Context, client pb.{{.Name.Go}}ServiceClient) (proto.Message, error)
+	want proto.Message
+	sent []any
+}
+
+// calls are one call to each {{.Name.Words}} RPC.
+func calls() map[string]call {
+	get := query.Get{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}
+
+	return map[string]call{
+		"create": {
+			do: func(ctx context.Context, client pb.{{.Name.Go}}ServiceClient) (proto.Message, error) {
+				return client.Create{{.Name.Go}}(ctx, &pb.Create{{.Name.Go}}Request{})
+			},
+			want: storedResponse(),
+			sent: []any{command.Create{{.Name.Go}}{UserID: _owner}, get},
+		},
+		"get": {
+			do: func(ctx context.Context, client pb.{{.Name.Go}}ServiceClient) (proto.Message, error) {
+				return client.Get{{.Name.Go}}(ctx, &pb.Get{{.Name.Go}}Request{Id: "{{.Name.Kebab}}-1"})
+			},
+			want: storedResponse(),
+			sent: []any{get},
+		},
+		"list": {
+			do: func(ctx context.Context, client pb.{{.Name.Go}}ServiceClient) (proto.Message, error) {
+				return client.List{{.Name.Plural.Go}}(ctx, &pb.List{{.Name.Plural.Go}}Request{Limit: 5, Offset: 10})
+			},
+			want: &pb.List{{.Name.Plural.Go}}Response{ {{- .Name.Plural.Go}}: []*pb.{{.Name.Go}}Response{storedResponse()}, Total: 1},
+			sent: []any{query.List{{.Name.Plural.Go}}{UserID: _owner, Limit: 5, Offset: 10}},
+		},
+		"update": {
+			do: func(ctx context.Context, client pb.{{.Name.Go}}ServiceClient) (proto.Message, error) {
+				return client.Update{{.Name.Go}}(ctx, &pb.Update{{.Name.Go}}Request{Id: "{{.Name.Kebab}}-1"})
+			},
+			want: storedResponse(),
+			sent: []any{command.Update{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}, get},
+		},
+		"delete": {
+			do: func(ctx context.Context, client pb.{{.Name.Go}}ServiceClient) (proto.Message, error) {
+				return client.Delete{{.Name.Go}}(ctx, &pb.Delete{{.Name.Go}}Request{Id: "{{.Name.Kebab}}-1"})
+			},
+			want: &pb.Delete{{.Name.Go}}Response{},
+			sent: []any{command.Delete{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}},
+		},
+	}
+}
+
+func TestEach{{.Name.Go}}RPCDecodesTheRequestAndEncodesTheAnswer(t *testing.T) {
+	t.Parallel()
+
+	for name, c := range calls() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fake{{.Name.Go}}{stored: stored()}
+			client, manager := dial(t, fake)
+
+			got, err := c.do(signedIn(t, manager), client)
+
+			require.NoError(t, err)
+			assert.True(t, proto.Equal(c.want, got), "got %v, want %v", got, c.want)
+			assert.Equal(t, c.sent, fake.sent)
+		})
+	}
+}
+
+func TestEach{{.Name.Go}}RPCNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	for name, c := range calls() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fake{{.Name.Go}}{stored: stored()}
+			client, _ := dial(t, fake)
+
+			_, err := c.do(t.Context(), client)
+
+			assert.Equal(t, codes.Unauthenticated, status.Code(err))
+			assert.Empty(t, fake.sent, "nothing is sent without a caller")
+		})
+	}
+}
+
+// Every RPC maps what a handler fails with the same way: first the failures any command can
+// produce, then the {{.Name.Words}} errors, then anything else. Until the handlers are written, every RPC
+// answers Unimplemented.
+func TestEach{{.Name.Go}}RPCMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	for failure, tc := range map[string]struct {
+		err  error
+		code codes.Code
+	}{
+		"a stub handler":      {entity.ErrNotImplemented, codes.Unimplemented},
+		"a read model behind": {entity.ErrReadModelBehind, codes.Unavailable},
+		"a concurrent change": {entity.ErrConcurrencyConflict, codes.Aborted},
+		"another user's":      {entity.Err{{.Name.Go}}Forbidden, codes.PermissionDenied},
+		"none with the ID":    {entity.Err{{.Name.Go}}NotFound, codes.NotFound},
+		"anything else":       {io.ErrUnexpectedEOF, codes.Internal},
+	} {
+		for name, c := range calls() {
+			t.Run(name+"/"+failure, func(t *testing.T) {
+				t.Parallel()
+
+				fake := &fake{{.Name.Go}}{stored: stored(), err: fmt.Errorf("handler: %w", tc.err)}
+				client, manager := dial(t, fake)
+
+				_, err := c.do(signedIn(t, manager), client)
+
+				assert.Equal(t, tc.code, status.Code(err), err)
+			})
+		}
+	}
+}
+
+func TestList{{.Name.Plural.Go}}RefusesANegativePage(t *testing.T) {
+	t.Parallel()
+
+	for name, req := range map[string]*pb.List{{.Name.Plural.Go}}Request{
+		"limit":  {Limit: -1},
+		"offset": {Offset: -1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fake{{.Name.Go}}{stored: stored()}
+			client, manager := dial(t, fake)
+
+			_, err := client.List{{.Name.Plural.Go}}(signedIn(t, manager), req)
+
+			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+			assert.Empty(t, fake.sent, "nothing is sent for a page that is not one")
+		})
+	}
+}

@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package grpc.v1;
+
+option go_package = "docs/proto/v1";
+
+service {{.Name.Go}}Service {
+  rpc Create{{.Name.Go}} (Create{{.Name.Go}}Request) returns ({{.Name.Go}}Response);
+  rpc Get{{.Name.Go}} (Get{{.Name.Go}}Request) returns ({{.Name.Go}}Response);
+  rpc List{{.Name.Plural.Go}} (List{{.Name.Plural.Go}}Request) returns (List{{.Name.Plural.Go}}Response);
+  rpc Update{{.Name.Go}} (Update{{.Name.Go}}Request) returns ({{.Name.Go}}Response);
+  rpc Delete{{.Name.Go}} (Delete{{.Name.Go}}Request) returns (Delete{{.Name.Go}}Response);
+}
+
+// The fields the {{.Name.Words}} is created with go here.
+message Create{{.Name.Go}}Request {}
+
+message Get{{.Name.Go}}Request {
+  string id = 1;
+}
+
+// A limit of 0 asks for the default page size.
+message List{{.Name.Plural.Go}}Request {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// The fields an update changes go here, after the id.
+message Update{{.Name.Go}}Request {
+  string id = 1;
+}
+
+message Delete{{.Name.Go}}Request {
+  string id = 1;
+}
+
+// The fields of entity.{{.Name.Go}}: a new one goes here and into New{{.Name.Go}}Response.
+message {{.Name.Go}}Response {
+  string id = 1;
+  string user_id = 2;
+  string created_at = 3;
+  string updated_at = 4;
+}
+
+message List{{.Name.Plural.Go}}Response {
+  repeated {{.Name.Go}}Response {{.Name.Plural.Snake}} = 1;
+  int32 total = 2;
+}
+
+message Delete{{.Name.Go}}Response {}

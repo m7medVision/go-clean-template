@@ -94,6 +94,23 @@ func TestNewDomainRefusesANameWhoseIdentifiersAPackageHas(t *testing.T) {
 	assert.Contains(t, err.Error(), "internal/entity/record.go would declare Record, which internal/entity/aggregate.go")
 }
 
+// Every .proto in docs/proto/v1 is the proto package grpc.v1, so a name free of files can still
+// clash there: login would declare the message LoginResponse, which auth.proto declares. Without
+// gRPC there is no login.proto, and nothing clashes.
+func TestNewDomainRefusesANameWhoseProtoNamesAnotherFileDeclares(t *testing.T) {
+	t.Parallel()
+
+	r := thisRepo()
+	n := parseName(t, "login")
+	require.NoError(t, rules.DomainFree(r, n), "no file, folder or service is called login")
+
+	err := rules.IdentifiersFree(r, n, planDomain(r, templates.FS(), n, rules.Transports()).plan)
+
+	require.ErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "docs/proto/v1/login.proto would declare LoginResponse, which docs/proto/v1/auth.proto declares already")
+	require.NoError(t, rules.IdentifiersFree(r, n, planDomain(r, templates.FS(), n, []string{"rest", "graphql"}).plan))
+}
+
 // sharedRepo holds the shared files and nothing of task's own, so only task's sentinels, already in
 // errors.go, tell new-domain that task is taken.
 func TestNewDomainChecksTheIdentifiersBeforeWritingAnything(t *testing.T) {
@@ -199,16 +216,21 @@ func TestCreatedGoFilesAlignForALongerName(t *testing.T) {
 		"\tLineItemID string    `json:\"line_item_id\"`\n\tUserID     string    `json:\"user_id\"`\n")
 }
 
-// Each transport's layer creates the files under its controller folder and edits its router; a
-// domain without the transport gets neither.
+// Each transport's layer creates the files under its controller folder, and any it has elsewhere,
+// and edits its router; a domain without the transport gets none of them.
 func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
 		transport, dir, router string
 		files                  int
+		elsewhere              []string
 	}{
 		{transport: "rest", dir: "internal/controller/restapi/v1/widget/", router: "internal/controller/restapi/v1/router.go", files: 7},
+		{
+			transport: "grpc", dir: "internal/controller/grpc/v1/widget/", router: "internal/controller/grpc/v1/router.go", files: 6,
+			elsewhere: []string{"docs/proto/v1/widget.proto"},
+		},
 	} {
 		t.Run(tc.transport, func(t *testing.T) {
 			t.Parallel()
@@ -217,6 +239,7 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 				p := planDomain(thisRepo(), templates.FS(), parseName(t, "widget"), transports).plan
 
 				assert.Len(t, underDir(p.Created(), tc.dir), tc.files, "with %v", transports)
+				assert.Subset(t, p.Created(), tc.elsewhere, "with %v", transports)
 				assert.Contains(t, p.Edited(), tc.router, "with %v", transports)
 			}
 
@@ -232,6 +255,10 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 
 			assert.Empty(t, underDir(p.Created(), tc.dir), "with %v", others)
 			assert.NotContains(t, p.Edited(), tc.router, "with %v", others)
+
+			for _, f := range tc.elsewhere {
+				assert.NotContains(t, p.Created(), f, "with %v", others)
+			}
 		})
 	}
 }
@@ -321,7 +348,7 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 
 	var out bytes.Buffer
 	require.NoError(t, newDomain(t.Context(), &domainRequest{root: dir, name: "invoice", transports: rules.Transports()}, &out))
-	assert.Contains(t, out.String(), "created 28, edited 5")
+	assert.Contains(t, out.String(), "created 35, edited 6")
 
 	events, err := os.ReadFile(filepath.Join(dir, "internal", "entity", "event.go"))
 	require.NoError(t, err)
@@ -331,6 +358,12 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(router), "\tinvoice.NewRoutes(api, b, l)\n}", "after the last NewRoutes call")
 	assert.Contains(t, string(router), "\t\"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/invoice\"\n")
+
+	grpcRouter, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "grpc", "v1", "router.go"))
+	require.NoError(t, err)
+	assert.Contains(t, string(grpcRouter), "\tv1.RegisterInvoiceServiceServer(app, invoice.New(b, l))\n}",
+		"after the last Register*ServiceServer call")
+	assert.Contains(t, string(grpcRouter), "\t\"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/invoice\"\n")
 
 	before := fingerprint(t, dir)
 

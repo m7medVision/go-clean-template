@@ -70,34 +70,39 @@ func parsed[T any](r Repo, p string, parse func(string, []byte) (T, error)) (T, 
 	return parse(p, src)
 }
 
-// IdentifiersFree checks the last of R1, on the plan made with the name n: no identifier the plan
-// adds at the top level of a Go package, in a file it creates or by an edit, is declared in that
-// package already. A name can be free of files and still clash: record would declare the type
-// entity.Record, and the entity package has a function of that name. Methods count as
-// Type.Method. Changes that do not format or parse are left to R5.
+// IdentifiersFree checks the last of R1, on the plan made with the name n: no name the plan adds
+// to a package, in a file it creates or by an edit, is declared in that package already. A name
+// can be free of files and still clash. In Go the names are the top-level identifiers, methods as
+// Type.Method: record would declare the type entity.Record, and the entity package has a function
+// of that name. In a .proto file they are its messages and services, and the package is the
+// folder, as docs/proto/v1 is grpc.v1: login would declare LoginResponse, which auth.proto
+// declares, and only make proto-v1 would find it, after the write. Changes that do not format or
+// parse are left to R5.
 func IdentifiersFree(r Repo, n *names.Name, p *plan.Plan) error {
 	changes, err := p.Changes()
 	if err != nil {
 		return nil // R5 reports the change that breaks
 	}
 
-	byDir := map[string]map[string]plan.Change{}
+	// The changes by the package they declare into, as the glob of its files: dir/*.go, dir/*.proto.
+	byPackage := map[string]map[string]plan.Change{}
 
 	for _, c := range changes {
-		if path.Ext(c.Path) != ".go" {
+		ext := path.Ext(c.Path)
+		if declarationsOf(ext) == nil {
 			continue
 		}
 
-		dir := path.Dir(c.Path)
-		if byDir[dir] == nil {
-			byDir[dir] = map[string]plan.Change{}
+		files := path.Join(path.Dir(c.Path), "*"+ext)
+		if byPackage[files] == nil {
+			byPackage[files] = map[string]plan.Change{}
 		}
 
-		byDir[dir][c.Path] = c
+		byPackage[files][c.Path] = c
 	}
 
-	for _, dir := range slices.Sorted(maps.Keys(byDir)) {
-		if err := packageFree(r, n, dir, byDir[dir]); err != nil {
+	for _, files := range slices.Sorted(maps.Keys(byPackage)) {
+		if err := packageFree(r, n, files, byPackage[files]); err != nil {
 			return err
 		}
 	}
@@ -105,25 +110,42 @@ func IdentifiersFree(r Repo, n *names.Name, p *plan.Plan) error {
 	return nil
 }
 
-// declared is one top-level identifier of one package, which several files can share as test
-// packages do.
+// declarations returns the package a file declares into and the names it declares there, in
+// source order; nothing for src that is empty or does not parse.
+type declarations func(p string, src []byte) (pkg string, idents []string)
+
+// declarationsOf returns how to read the names a file with the extension ext declares, or nil for
+// a kind of file that declares none a package shares.
+func declarationsOf(ext string) declarations {
+	switch ext {
+	case ".go":
+		return topLevel
+	case ".proto":
+		return protoTopLevel
+	default:
+		return nil
+	}
+}
+
+// declared is one name of one package, which several files can share as test packages do.
 type declared struct {
 	pkg, name string
 }
 
-// packageFree checks the identifiers that planned, the changes to the Go files in dir, add against
-// every Go file in dir as the plan leaves it.
-func packageFree(r Repo, n *names.Name, dir string, planned map[string]plan.Change) error {
+// packageFree checks the names that planned, the changes to the files matching the glob files, add
+// against every file it matches as the plan leaves it.
+func packageFree(r Repo, n *names.Name, files string, planned map[string]plan.Change) error {
 	var err error
 
-	files := slices.Collect(maps.Keys(planned))
-	files = append(files, r.glob(path.Join(dir, "*.go"))...)
-	slices.Sort(files)
-	files = slices.Compact(files)
+	decls := declarationsOf(path.Ext(files))
+	all := slices.Collect(maps.Keys(planned))
+	all = append(all, r.glob(files)...)
+	slices.Sort(all)
+	all = slices.Compact(all)
 
 	where := map[declared][]string{}
 
-	for _, f := range files {
+	for _, f := range all {
 		src := planned[f].New
 		if _, ok := planned[f]; !ok {
 			// A file that cannot be read declares nothing here; the build would report it anyway.
@@ -132,16 +154,16 @@ func packageFree(r Repo, n *names.Name, dir string, planned map[string]plan.Chan
 			}
 		}
 
-		pkg, idents := topLevel(f, src)
-		for _, id := range idents {
+		pkg, ids := decls(f, src)
+		for _, id := range ids {
 			where[declared{pkg, id}] = append(where[declared{pkg, id}], f)
 		}
 	}
 
 	for _, f := range slices.Sorted(maps.Keys(planned)) {
-		pkg, idents := added(planned[f])
+		pkg, ids := added(planned[f], decls)
 
-		for _, id := range idents {
+		for _, id := range ids {
 			if files := where[declared{pkg, id}]; len(files) > 1 {
 				return taken(n, clash(f, id, files))
 			}
@@ -162,11 +184,11 @@ func clash(f, id string, files []string) string {
 	return fmt.Sprintf("%s would declare %s twice", f, id)
 }
 
-// added returns the package of a changed Go file and the identifiers the change adds to it: every
-// one of a created file, and those an edit declares more often than the file did.
-func added(c plan.Change) (pkg string, adds []string) {
-	pkg, after := topLevel(c.Path, c.New)
-	_, before := topLevel(c.Path, c.Old)
+// added returns the package of a changed file and the names the change adds to it, read with
+// decls: every one of a created file, and those an edit declares more often than the file did.
+func added(c plan.Change, decls declarations) (pkg string, adds []string) {
+	pkg, after := decls(c.Path, c.New)
+	_, before := decls(c.Path, c.Old)
 
 	for _, id := range after {
 		if i := slices.Index(before, id); i >= 0 {
@@ -179,6 +201,22 @@ func added(c plan.Change) (pkg string, adds []string) {
 	}
 
 	return pkg, adds
+}
+
+// protoTopLevel returns the services and top-level messages the .proto file src declares, which
+// share one namespace; nothing for src that is empty or does not parse. The package is the folder,
+// whose files are one proto package, so it is left empty.
+func protoTopLevel(p string, src []byte) (pkg string, idents []string) {
+	if src == nil {
+		return "", nil
+	}
+
+	f, err := edit.ParseProto(p, src)
+	if err != nil {
+		return "", nil
+	}
+
+	return "", slices.Concat(f.Services(), f.Messages())
 }
 
 // topLevel returns the package src declares and its top-level identifiers, methods as

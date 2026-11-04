@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package grpc.v1;
+
+option go_package = "docs/proto/v1";
+
+service WidgetService {
+  rpc CreateWidget (CreateWidgetRequest) returns (WidgetResponse);
+  rpc GetWidget (GetWidgetRequest) returns (WidgetResponse);
+  rpc ListWidgets (ListWidgetsRequest) returns (ListWidgetsResponse);
+  rpc UpdateWidget (UpdateWidgetRequest) returns (WidgetResponse);
+  rpc DeleteWidget (DeleteWidgetRequest) returns (DeleteWidgetResponse);
+}
+
+// The fields the widget is created with go here.
+message CreateWidgetRequest {}
+
+message GetWidgetRequest {
+  string id = 1;
+}
+
+// A limit of 0 asks for the default page size.
+message ListWidgetsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// The fields an update changes go here, after the id.
+message UpdateWidgetRequest {
+  string id = 1;
+}
+
+message DeleteWidgetRequest {
+  string id = 1;
+}
+
+// The fields of entity.Widget: a new one goes here and into NewWidgetResponse.
+message WidgetResponse {
+  string id = 1;
+  string user_id = 2;
+  string created_at = 3;
+  string updated_at = 4;
+}
+
+message ListWidgetsResponse {
+  repeated WidgetResponse widgets = 1;
+  int32 total = 2;
+}
+
+message DeleteWidgetResponse {}

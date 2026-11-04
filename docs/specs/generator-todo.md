@@ -252,7 +252,7 @@ Templates for `docs/proto/v1/{{name}}.proto` and `grpc/v1/{{pkg}}/`: `controller
 error mapping), `{{name}}.go`, `request.go`, `response.go`, `response_test.go`, and
 `{{name}}_test.go` over `bufconn` with fakes in the test. Edit: the `Register<Name>ServiceServer`
 line in `grpc/v1/router.go`, and its import.
-- [ ] `make gen-e2e` now also runs `make proto-v1` and passes.
+- [x] `make gen-e2e` now also runs `make proto-v1` and passes.
 
 **Verify:** GE. **Depends on:** 17. **Files:** 7 templates, `tools/gen/domain.go`, goldens. **Size:** L
 

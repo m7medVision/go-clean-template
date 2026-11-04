@@ -1,0 +1,92 @@
+package widget
+
+import (
+	"context"
+
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+// CreateWidget sends CreateWidget, then reads the widget back. The fields of the request go
+// into the command once they are added: name the request to read them.
+func (c *Controller) CreateWidget(ctx context.Context, _ *v1.CreateWidgetRequest) (*v1.WidgetResponse, error) {
+	userID, ok := grpcmw.UserIDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+
+	written, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.CreateWidget{UserID: userID})
+	if err != nil {
+		return nil, c.fail(err, "CreateWidget")
+	}
+
+	return c.readBack(ctx, userID, written.ID, "CreateWidget")
+}
+
+// GetWidget -.
+func (c *Controller) GetWidget(ctx context.Context, req *v1.GetWidgetRequest) (*v1.WidgetResponse, error) {
+	userID, ok := grpcmw.UserIDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+
+	return c.readBack(ctx, userID, req.GetId(), "GetWidget")
+}
+
+// ListWidgets -.
+func (c *Controller) ListWidgets(ctx context.Context, req *v1.ListWidgetsRequest) (*v1.ListWidgetsResponse, error) {
+	userID, ok := grpcmw.UserIDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+
+	dto, err := c.newListRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	page, err := cqrs.SendQuery[query.WidgetPage](ctx, c.qs, query.ListWidgets{
+		UserID: userID, Limit: dto.Limit, Offset: dto.Offset,
+	})
+	if err != nil {
+		return nil, c.fail(err, "ListWidgets")
+	}
+
+	return NewListWidgetsResponse(page.Widgets, page.Total), nil
+}
+
+// UpdateWidget sends UpdateWidget, then reads the widget back. As in CreateWidget, the fields
+// of the request go into the command once they are added.
+func (c *Controller) UpdateWidget(ctx context.Context, req *v1.UpdateWidgetRequest) (*v1.WidgetResponse, error) {
+	userID, ok := grpcmw.UserIDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+
+	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.UpdateWidget{UserID: userID, WidgetID: req.GetId()})
+	if err != nil {
+		return nil, c.fail(err, "UpdateWidget")
+	}
+
+	return c.readBack(ctx, userID, req.GetId(), "UpdateWidget")
+}
+
+// DeleteWidget -.
+func (c *Controller) DeleteWidget(ctx context.Context, req *v1.DeleteWidgetRequest) (*v1.DeleteWidgetResponse, error) {
+	userID, ok := grpcmw.UserIDFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+	}
+
+	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeleteWidget{UserID: userID, WidgetID: req.GetId()})
+	if err != nil {
+		return nil, c.fail(err, "DeleteWidget")
+	}
+
+	return &v1.DeleteWidgetResponse{}, nil
+}

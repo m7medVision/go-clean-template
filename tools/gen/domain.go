@@ -22,6 +22,7 @@ func domainLayers() []layer {
 		{plan: planProjector},
 		{plan: planUseCase},
 		{transport: "rest", plan: planREST},
+		{transport: "grpc", plan: planGRPC},
 	}
 }
 
