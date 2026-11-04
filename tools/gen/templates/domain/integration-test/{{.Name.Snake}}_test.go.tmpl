@@ -1,0 +1,134 @@
+package integration_test
+
+import (
+{{- if .Has "rest"}}
+	"bytes"
+{{- end}}
+{{- if or (.Has "rest") (.Has "grpc")}}
+	"context"
+{{- end}}
+{{- if .Has "rest"}}
+	"net/http"
+{{- end}}
+	"testing"
+{{- if .Has "grpc"}}
+
+	protov1 "{{.Module}}/docs/proto/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+{{- end}}
+)
+
+// The {{.Name.Words}} handlers are still the stubs make new-domain wrote, so each {{.Name.Words}} operation
+// answers "not implemented" end to end, through the app and the worker. The tests below assert
+// that answer on each transport the domain has, which shows every operation is wired. The first
+// real implementation replaces these assertions with what the operation answers then.
+
+// no{{.Name.Go}}ID is an ID no {{.Name.Words}} has, for the operations on one.
+const no{{.Name.Go}}ID = "00000000-0000-0000-0000-000000000000"
+{{- if .Has "rest"}}
+
+// HTTP: each {{.Name.Words}} operation answers 501 with a problem.
+func TestHTTP{{.Name.Go}}NotImplementedV1(t *testing.T) {
+	token := registerAndLogin(t)
+
+	for name, op := range map[string]struct{ method, path, body string }{
+		"create": {http.MethodPost, "/{{.Name.Plural.Kebab}}", "{}"},
+		"list":   {http.MethodGet, "/{{.Name.Plural.Kebab}}?limit=10&offset=0", ""},
+		"get":    {http.MethodGet, "/{{.Name.Plural.Kebab}}/" + no{{.Name.Go}}ID, ""},
+		"update": {http.MethodPut, "/{{.Name.Plural.Kebab}}/" + no{{.Name.Go}}ID, "{}"},
+		"delete": {http.MethodDelete, "/{{.Name.Plural.Kebab}}/" + no{{.Name.Go}}ID, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
+			defer cancel()
+
+			resp, err := doAuthenticatedRequest(ctx, op.method, basePathV1+op.path, bytes.NewBufferString(op.body), token)
+			if err != nil {
+				t.Fatalf("%s %s: %v", op.method, op.path, err)
+			}
+
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusNotImplemented {
+				t.Errorf("expected 501, got %d", resp.StatusCode)
+			}
+
+			if got := resp.Header.Get("Content-Type"); got != "application/problem+json" {
+				t.Errorf("expected application/problem+json, got %q", got)
+			}
+		})
+	}
+}
+{{- end}}
+{{- if .Has "grpc"}}
+
+// gRPC: each {{.Name.Go}}Service RPC answers Unimplemented with the stub handler's message. A service
+// the server did not register would answer Unimplemented too, with another message.
+func TestGRPC{{.Name.Go}}NotImplementedV1(t *testing.T) {
+	token := registerAndLoginGRPC(t)
+
+	conn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+
+	defer conn.Close()
+
+	client := protov1.New{{.Name.Go}}ServiceClient(conn)
+
+	for name, call := range map[string]func(ctx context.Context) (proto.Message, error){
+		"Create{{.Name.Go}}": func(ctx context.Context) (proto.Message, error) {
+			return client.Create{{.Name.Go}}(ctx, &protov1.Create{{.Name.Go}}Request{})
+		},
+		"Get{{.Name.Go}}": func(ctx context.Context) (proto.Message, error) {
+			return client.Get{{.Name.Go}}(ctx, &protov1.Get{{.Name.Go}}Request{Id: no{{.Name.Go}}ID})
+		},
+		"List{{.Name.Plural.Go}}": func(ctx context.Context) (proto.Message, error) {
+			return client.List{{.Name.Plural.Go}}(ctx, &protov1.List{{.Name.Plural.Go}}Request{})
+		},
+		"Update{{.Name.Go}}": func(ctx context.Context) (proto.Message, error) {
+			return client.Update{{.Name.Go}}(ctx, &protov1.Update{{.Name.Go}}Request{Id: no{{.Name.Go}}ID})
+		},
+		"Delete{{.Name.Go}}": func(ctx context.Context) (proto.Message, error) {
+			return client.Delete{{.Name.Go}}(ctx, &protov1.Delete{{.Name.Go}}Request{Id: no{{.Name.Go}}ID})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := call(grpcAuthCtx(t, token))
+			if got := status.Convert(err); got.Code() != codes.Unimplemented || got.Message() != "not implemented" {
+				t.Errorf("expected Unimplemented: not implemented, got %v", err)
+			}
+		})
+	}
+}
+{{- end}}
+{{- if .Has "graphql"}}
+
+// GraphQL: each {{.Name.Words}} field answers NOT_IMPLEMENTED.
+func TestGraphQL{{.Name.Go}}NotImplemented(t *testing.T) {
+	token := registerAndLogin(t)
+	withID := map[string]any{"id": no{{.Name.Go}}ID}
+
+	for name, op := range map[string]struct {
+		query string
+		vars  map[string]any
+	}{
+		"{{.Name.Lower}}":       {`query($id: ID!) { {{.Name.Lower}}(id: $id) { id } }`, withID},
+		"{{.Name.Plural.Lower}}":      {`query { {{.Name.Plural.Lower}} { total } }`, nil},
+		"create{{.Name.Go}}": {`mutation { create{{.Name.Go}} { id } }`, nil},
+		"update{{.Name.Go}}": {`mutation($id: ID!) { update{{.Name.Go}}(id: $id) { id } }`, withID},
+		"delete{{.Name.Go}}": {`mutation($id: ID!) { delete{{.Name.Go}}(id: $id) }`, withID},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := graphqlDo(t, token, op.query, op.vars)
+			if len(got.Errors) == 0 || got.Errors[0].Extensions["code"] != "NOT_IMPLEMENTED" {
+				t.Errorf("expected NOT_IMPLEMENTED, got %v", got.Errors)
+			}
+		})
+	}
+}
+{{- end}}

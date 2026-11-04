@@ -31,7 +31,10 @@ the e2e job catches a broken template come last.
    them.
 3. **Golden tests cover the files the generator creates. The edits are unit-tested on fixtures,
    and the e2e job covers them against the real shared files.** A golden copy of an edited
-   `buses.go` would break on every unrelated change to that file.
+   `buses.go` would break on every unrelated change to that file. A domain on only some
+   transports (task 22) has goldens only for the files that differ from the every-transport ones,
+   such as its integration test, in `testdata/golden/domain-<transports>/` (`domain-rest`,
+   `domain-grpc-graphql`).
 4. **The e2e job runs against the working tree, not `HEAD`.** `make gen-e2e` adds a throwaway
    worktree and applies the tracked changes and the untracked files under `tools/gen` to it. It
    commits them inside the worktree, so R3 holds. Then it generates there and runs the gates.
@@ -137,11 +140,11 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 - [x] 18. REST
 - [x] 19. gRPC
 - [x] 20. GraphQL
-- [ ] 21. Integration test
-- [ ] 22. `transports=` for `new-domain`
+- [x] 21. Integration test
+- [x] 22. `transports=` for `new-domain`
 
 ### Checkpoint D: `new-domain` complete
-- [ ] Success criteria 1, 2, 5 and 7 on a scratch copy.
+- [x] Success criteria 1, 2, 5 and 7 on a scratch copy.
 - [ ] **Your review** of one generated domain.
 
 ### Phase 5: `new-usecase`

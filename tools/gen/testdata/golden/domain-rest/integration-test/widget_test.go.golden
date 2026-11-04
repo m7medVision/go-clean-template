@@ -1,0 +1,49 @@
+package integration_test
+
+import (
+	"bytes"
+	"context"
+	"net/http"
+	"testing"
+)
+
+// The widget handlers are still the stubs make new-domain wrote, so each widget operation
+// answers "not implemented" end to end, through the app and the worker. The tests below assert
+// that answer on each transport the domain has, which shows every operation is wired. The first
+// real implementation replaces these assertions with what the operation answers then.
+
+// noWidgetID is an ID no widget has, for the operations on one.
+const noWidgetID = "00000000-0000-0000-0000-000000000000"
+
+// HTTP: each widget operation answers 501 with a problem.
+func TestHTTPWidgetNotImplementedV1(t *testing.T) {
+	token := registerAndLogin(t)
+
+	for name, op := range map[string]struct{ method, path, body string }{
+		"create": {http.MethodPost, "/widgets", "{}"},
+		"list":   {http.MethodGet, "/widgets?limit=10&offset=0", ""},
+		"get":    {http.MethodGet, "/widgets/" + noWidgetID, ""},
+		"update": {http.MethodPut, "/widgets/" + noWidgetID, "{}"},
+		"delete": {http.MethodDelete, "/widgets/" + noWidgetID, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
+			defer cancel()
+
+			resp, err := doAuthenticatedRequest(ctx, op.method, basePathV1+op.path, bytes.NewBufferString(op.body), token)
+			if err != nil {
+				t.Fatalf("%s %s: %v", op.method, op.path, err)
+			}
+
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusNotImplemented {
+				t.Errorf("expected 501, got %d", resp.StatusCode)
+			}
+
+			if got := resp.Header.Get("Content-Type"); got != "application/problem+json" {
+				t.Errorf("expected application/problem+json, got %q", got)
+			}
+		})
+	}
+}

@@ -46,7 +46,7 @@ func TestRunDryRunPrintsThePlanAndWritesNothing(t *testing.T) {
 		"new-domain": {
 			dir:  sharedRepo(t),
 			args: []string{"new-domain", "--name", "invoice", "--dry-run"},
-			want: "42 files to create, 9 to edit",
+			want: "43 files to create, 9 to edit",
 		},
 		"new-usecase": {
 			dir:  gitRepo(t),

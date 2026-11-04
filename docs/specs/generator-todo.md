@@ -271,26 +271,26 @@ mutations take only `id`, per decision 7) and `graphql/{{pkg}}/`: `resolver.go`,
 Template for `integration-test/{{name}}_test.go`. It registers a user, then checks every
 operation on every generated transport: REST 501, gRPC `Unimplemented`, GraphQL `NOT_IMPLEMENTED`.
 It uses the existing helpers in `helpers_test.go` and `grpc_helpers_test.go`.
-- [ ] `go vet ./integration-test/...` passes in the e2e copy.
-- [ ] Once, by hand: a scratch copy with `widget` generated passes G2, including
+- [x] `go vet ./integration-test/...` passes in the e2e copy.
+- [x] Once, by hand: a scratch copy with `widget` generated passes G2, including
       `widget_test.go`.
 
 **Verify:** GE, then G2 in the scratch copy. **Depends on:** 18, 19, 20. **Files:** 1 template, `tools/gen/domain.go`, golden. **Size:** S
 
 ### 22. `transports=` for `new-domain`
 Only the named transports' files and edits are planned. The integration test covers only those.
-- [ ] Goldens for `transports=rest` and `transports=grpc,graphql`.
-- [ ] Once, by hand, in a scratch copy: `make new-domain name=widget transports=rest` passes
+- [x] Goldens for `transports=rest` and `transports=grpc,graphql`.
+- [x] Once, by hand, in a scratch copy: `make new-domain name=widget transports=rest` passes
       `make linter-golangci test`.
 
 **Verify:** GG, then the scratch copy. **Depends on:** 21. **Files:** `tools/gen/domain.go`, `main.go`, goldens. **Size:** S
 
 ### Checkpoint D: `new-domain` complete
-- [ ] GE.
-- [ ] Scratch copy: `make new-domain name=invoice`, then `make pre-commit` and G2 pass (success
+- [x] GE.
+- [x] Scratch copy: `make new-domain name=invoice`, then `make pre-commit` and G2 pass (success
       criteria 1 and 2).
-- [ ] The same command run again fails R1 and writes nothing (success criterion 5).
-- [ ] `go list -deps ./cmd/app ./cmd/worker` names nothing under `tools/gen` (success criterion 7).
+- [x] The same command run again fails R1 and writes nothing (success criterion 5).
+- [x] `go list -deps ./cmd/app ./cmd/worker` names nothing under `tools/gen` (success criterion 7).
 - [ ] **Your review** of one generated domain.
 
 ## Phase 5: `new-usecase`

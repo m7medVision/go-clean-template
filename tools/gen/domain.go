@@ -24,6 +24,7 @@ func domainLayers() []layer {
 		{transport: "rest", plan: planREST},
 		{transport: "grpc", plan: planGRPC},
 		{transport: "graphql", plan: planGraphQL},
+		{plan: planIntegration},
 	}
 }
 

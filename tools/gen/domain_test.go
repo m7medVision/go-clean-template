@@ -21,9 +21,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// _goldenDir holds what new-domain creates for widget, each file at its repository path plus
-// .golden. UPDATE_GOLDEN=1 rewrites them.
+// _goldenDir holds what new-domain creates for widget on every transport, each file at its
+// repository path plus .golden. A domain on only some transports has its goldens beside it, in
+// _goldenDir-<transports>, the transports joined by dashes in the order rules.Transports lists
+// them, as testdata/golden/domain-rest and domain-grpc-graphql (someTransports). Each holds only
+// the files whose content differs from those in _goldenDir, such as the integration test, which
+// tests only the transports asked for; a file the same either way is checked once, in _goldenDir.
+// UPDATE_GOLDEN=1 rewrites them all.
 const _goldenDir = "testdata/golden/domain"
+
+// someTransports are the sets of transports, short of every one, that have goldens of their own.
+func someTransports() [][]string {
+	return [][]string{{"rest"}, {"grpc", "graphql"}}
+}
 
 // thisRepo is the repository this module sits in, read from disk, with every path clean: rule R3
 // reads the working tree, and these tests must not depend on it.
@@ -171,11 +181,50 @@ func TestEveryCreatedFileMatchesItsGolden(t *testing.T) {
 		})
 	}
 
-	// A golden no created file matches is left over from a template that moved or went away.
+	staleGoldens(t, _goldenDir, created)
+}
+
+// On only some transports, the files that differ from their every-transport golden match goldens
+// of their own: the integration test among them, since it tests only the transports asked for.
+func TestEveryCreatedFileMatchesItsGoldenOnSomeTransports(t *testing.T) {
+	t.Parallel()
+
+	every := createdFiles(t, planWidget(t).plan)
+
+	for _, transports := range someTransports() {
+		dir := _goldenDir + "-" + strings.Join(transports, "-")
+
+		t.Run(dir, func(t *testing.T) {
+			t.Parallel()
+
+			differs := map[string][]byte{}
+
+			for p, content := range createdFiles(t, planDomain(thisRepo(), templates.FS(), parseName(t, "widget"), transports).plan) {
+				if !bytes.Equal(content, every[p]) {
+					differs[p] = content
+				}
+			}
+
+			require.Contains(t, differs, "integration-test/widget_test.go")
+
+			for p, content := range differs {
+				golden(t, filepath.Join(dir, filepath.FromSlash(p)+".golden"), content)
+			}
+
+			staleGoldens(t, dir, differs)
+		})
+	}
+}
+
+// staleGoldens fails for each golden in dir that matches none of the created files, left over from
+// a template that moved or went away; UPDATE_GOLDEN=1 removes them instead.
+func staleGoldens(t *testing.T, dir string, created map[string][]byte) {
+	t.Helper()
+
 	var stale []string
 
-	require.NoError(t, filepath.WalkDir(_goldenDir, func(p string, d fs.DirEntry, err error) error {
-		if p == _goldenDir && errors.Is(err, fs.ErrNotExist) {
+	require.NoError(t, filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if p == dir && errors.Is(err, fs.ErrNotExist) {
 			return nil // the subtests report every golden missing
 		}
 
@@ -183,7 +232,7 @@ func TestEveryCreatedFileMatchesItsGolden(t *testing.T) {
 			return err
 		}
 
-		rel, err := filepath.Rel(_goldenDir, p)
+		rel, err := filepath.Rel(dir, p)
 		if _, ok := created[strings.TrimSuffix(filepath.ToSlash(rel), ".golden")]; !ok {
 			stale = append(stale, p)
 		}
@@ -202,23 +251,26 @@ func TestEveryCreatedFileMatchesItsGolden(t *testing.T) {
 	}
 }
 
-// The templates are written as their files for widget, so formatting the Go files they render
-// changes nothing for it. For other names it realigns columns, which the plan does.
+// The templates are written as their files for widget, on every transport and on only some, so
+// formatting the Go files they render changes nothing for it. For other names it realigns
+// columns, which the plan does.
 func TestEveryTemplateReadsAsItsFileForWidget(t *testing.T) {
 	t.Parallel()
 
-	pl := planWidget(t)
-	created := createdFiles(t, pl.plan)
+	for _, transports := range append([][]string{rules.Transports()}, someTransports()...) {
+		pl := planDomain(thisRepo(), templates.FS(), parseName(t, "widget"), transports)
+		created := createdFiles(t, pl.plan)
 
-	for tmpl := range pl.used {
-		if strings.HasPrefix(tmpl, path.Join(_domainSet, _editsDir)+"/") {
-			continue
+		for tmpl := range pl.used {
+			if strings.HasPrefix(tmpl, path.Join(_domainSet, _editsDir)+"/") {
+				continue
+			}
+
+			f, err := templates.Render(templates.FS(), tmpl, pl.data)
+			require.NoError(t, err)
+			assert.Equal(t, string(created[f.Path]), string(f.Content),
+				"%s does not render go/format-clean for widget on %v: write it as the file gofmt would", tmpl, transports)
 		}
-
-		f, err := templates.Render(templates.FS(), tmpl, pl.data)
-		require.NoError(t, err)
-		assert.Equal(t, string(created[f.Path]), string(f.Content),
-			"%s does not render go/format-clean for widget: write it as the file gofmt would", tmpl)
 	}
 }
 
@@ -249,6 +301,7 @@ func TestCreatedGoFilesAlignForALongerName(t *testing.T) {
 
 // Each transport's layer creates the files under its controller folder, and any it has elsewhere,
 // and edits its shared files, such as its router; a domain without the transport gets none of them.
+// The integration test, which every domain gets, tests the transport only when the domain has it.
 func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 	t.Parallel()
 
@@ -257,15 +310,18 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 		files          int
 		elsewhere      []string
 		edited         []string
+		test           string
 	}{
 		{
 			transport: "rest", dir: "internal/controller/restapi/v1/widget/", files: 7,
 			edited: []string{"internal/controller/restapi/v1/router.go"},
+			test:   "func TestHTTPWidget",
 		},
 		{
 			transport: "grpc", dir: "internal/controller/grpc/v1/widget/", files: 6,
 			elsewhere: []string{"docs/proto/v1/widget.proto"},
 			edited:    []string{"internal/controller/grpc/v1/router.go"},
+			test:      "func TestGRPCWidget",
 		},
 		{
 			transport: "graphql", dir: "internal/controller/graphql/widget/", files: 6,
@@ -275,10 +331,13 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 				"internal/controller/graphql/gqlerr/gqlerr.go",
 				"internal/controller/graphql/gqlgen.yml",
 			},
+			test: "func TestGraphQLWidget",
 		},
 	} {
 		t.Run(tc.transport, func(t *testing.T) {
 			t.Parallel()
+
+			const integration = "integration-test/widget_test.go"
 
 			for _, transports := range [][]string{{tc.transport}, rules.Transports()} {
 				p := planDomain(thisRepo(), templates.FS(), parseName(t, "widget"), transports).plan
@@ -286,6 +345,7 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 				assert.Len(t, underDir(p.Created(), tc.dir), tc.files, "with %v", transports)
 				assert.Subset(t, p.Created(), tc.elsewhere, "with %v", transports)
 				assert.Subset(t, p.Edited(), tc.edited, "with %v", transports)
+				assert.Contains(t, string(createdFiles(t, p)[integration]), tc.test, "with %v", transports)
 			}
 
 			var others []string
@@ -301,6 +361,8 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 			assert.Empty(t, underDir(p.Created(), tc.dir), "with %v", others)
 			assert.Empty(t, among(tc.elsewhere, p.Created()), "with %v", others)
 			assert.Empty(t, among(tc.edited, p.Edited()), "with %v", others)
+			assert.Contains(t, p.Created(), integration, "with %v", others)
+			assert.NotContains(t, string(createdFiles(t, p)[integration]), tc.test, "with %v", others)
 		})
 	}
 }
@@ -403,7 +465,7 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 
 	var out bytes.Buffer
 	require.NoError(t, newDomain(t.Context(), &domainRequest{root: dir, name: "invoice", transports: rules.Transports()}, &out))
-	assert.Contains(t, out.String(), "created 42, edited 9")
+	assert.Contains(t, out.String(), "created 43, edited 9")
 
 	events, err := os.ReadFile(filepath.Join(dir, "internal", "entity", "event.go"))
 	require.NoError(t, err)

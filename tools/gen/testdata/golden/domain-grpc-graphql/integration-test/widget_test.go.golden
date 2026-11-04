@@ -1,0 +1,85 @@
+package integration_test
+
+import (
+	"context"
+	"testing"
+
+	protov1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+)
+
+// The widget handlers are still the stubs make new-domain wrote, so each widget operation
+// answers "not implemented" end to end, through the app and the worker. The tests below assert
+// that answer on each transport the domain has, which shows every operation is wired. The first
+// real implementation replaces these assertions with what the operation answers then.
+
+// noWidgetID is an ID no widget has, for the operations on one.
+const noWidgetID = "00000000-0000-0000-0000-000000000000"
+
+// gRPC: each WidgetService RPC answers Unimplemented with the stub handler's message. A service
+// the server did not register would answer Unimplemented too, with another message.
+func TestGRPCWidgetNotImplementedV1(t *testing.T) {
+	token := registerAndLoginGRPC(t)
+
+	conn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+
+	defer conn.Close()
+
+	client := protov1.NewWidgetServiceClient(conn)
+
+	for name, call := range map[string]func(ctx context.Context) (proto.Message, error){
+		"CreateWidget": func(ctx context.Context) (proto.Message, error) {
+			return client.CreateWidget(ctx, &protov1.CreateWidgetRequest{})
+		},
+		"GetWidget": func(ctx context.Context) (proto.Message, error) {
+			return client.GetWidget(ctx, &protov1.GetWidgetRequest{Id: noWidgetID})
+		},
+		"ListWidgets": func(ctx context.Context) (proto.Message, error) {
+			return client.ListWidgets(ctx, &protov1.ListWidgetsRequest{})
+		},
+		"UpdateWidget": func(ctx context.Context) (proto.Message, error) {
+			return client.UpdateWidget(ctx, &protov1.UpdateWidgetRequest{Id: noWidgetID})
+		},
+		"DeleteWidget": func(ctx context.Context) (proto.Message, error) {
+			return client.DeleteWidget(ctx, &protov1.DeleteWidgetRequest{Id: noWidgetID})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := call(grpcAuthCtx(t, token))
+			if got := status.Convert(err); got.Code() != codes.Unimplemented || got.Message() != "not implemented" {
+				t.Errorf("expected Unimplemented: not implemented, got %v", err)
+			}
+		})
+	}
+}
+
+// GraphQL: each widget field answers NOT_IMPLEMENTED.
+func TestGraphQLWidgetNotImplemented(t *testing.T) {
+	token := registerAndLogin(t)
+	withID := map[string]any{"id": noWidgetID}
+
+	for name, op := range map[string]struct {
+		query string
+		vars  map[string]any
+	}{
+		"widget":       {`query($id: ID!) { widget(id: $id) { id } }`, withID},
+		"widgets":      {`query { widgets { total } }`, nil},
+		"createWidget": {`mutation { createWidget { id } }`, nil},
+		"updateWidget": {`mutation($id: ID!) { updateWidget(id: $id) { id } }`, withID},
+		"deleteWidget": {`mutation($id: ID!) { deleteWidget(id: $id) }`, withID},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := graphqlDo(t, token, op.query, op.vars)
+			if len(got.Errors) == 0 || got.Errors[0].Extensions["code"] != "NOT_IMPLEMENTED" {
+				t.Errorf("expected NOT_IMPLEMENTED, got %v", got.Errors)
+			}
+		})
+	}
+}

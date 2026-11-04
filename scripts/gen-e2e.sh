@@ -69,5 +69,9 @@ f=internal/controller/graphql/generated/widget.generated.go
 grep -q '^type WidgetList struct' internal/controller/graphql/model/models_gen.go ||
 	{ echo "gen-e2e: make graphql generated no WidgetList model" >&2; exit 1; }
 make linter-golangci test
+# The integration test needs the running stack, so here it is only built and vetted; make
+# compose-up-integration-test runs it.
+f=integration-test/widget_test.go
+[ -f "$f" ] || { echo "gen-e2e: make new-domain wrote no $f" >&2; exit 1; }
 echo "gen-e2e: go vet ./integration-test/..."
 go vet ./integration-test/...
