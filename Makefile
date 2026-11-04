@@ -140,9 +140,15 @@ projection-rebuild: ### rebuild one projection's read model from the event store
 # includes it. Optional arguments are passed on only when set.
 GEN = go -C tools/gen run .
 GEN_OPTS = $(if $(transports),--transports '$(transports)') $(if $(dry-run),--dry-run)
+# After the generator writes, the regenerators its output needs, then a build; a dry run runs none.
+# The first failure stops them. The undo the generator printed restores the tree, regenerated
+# paths included: rule R3 had them clean before the write.
+GEN_REGENERATE = $(if $(dry-run),,$(MAKE) proto-v1 graphql sqlc mock openapi web-api web-graphql format && go build ./... \
+	|| { echo 'gen: a regenerator or the build failed: run the undo printed above to restore the tree' >&2; exit 1; })
 
 new-domain: ### generate a domain with CRUD stubs: make new-domain name=invoice [plural=] [transports=rest,grpc,graphql] [dry-run=1]
 	$(GEN) new-domain --root '$(CURDIR)' --name '$(name)' $(if $(plural),--plural '$(plural)') $(GEN_OPTS)
+	$(GEN_REGENERATE)
 .PHONY: new-domain
 
 new-usecase: ### add a command or query stub: make new-usecase domain=task name=archive-task kind=command [method=] [path=] [transports=] [dry-run=1]
@@ -155,6 +161,10 @@ gen-check: ### check the generator: lint and format (the root .golangci.yml), un
 	go -C tools/gen test -race ./...
 	go -C tools/gen mod tidy -diff
 .PHONY: gen-check
+
+gen-e2e: ### generate a domain into a throwaway worktree of the working tree, then lint and test it there
+	./scripts/gen-e2e.sh
+.PHONY: gen-e2e
 
 run-worker: ### run the queue worker (start the app first: it applies the schema)
 	CGO_ENABLED=0 go run ./cmd/worker

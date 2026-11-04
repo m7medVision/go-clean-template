@@ -1,0 +1,13 @@
+package entity
+
+import "time"
+
+// {{.Name.Go}} is one {{.Name.Words}} as it is read: the shape the {{.Name.Plural.Snake}} table, and the API, hold. Its rules
+// live on {{.Name.Go}}Aggregate. Add a field here, to the events that set it, and to the table and the
+// projector that write it.
+type {{.Name.Go}} struct {
+	ID        string    `json:"id"         example:"550e8400-e29b-41d4-a716-446655440000"`
+	UserID    string    `json:"user_id"    example:"550e8400-e29b-41d4-a716-446655440000"`
+	CreatedAt time.Time `json:"created_at" example:"2026-01-01T00:00:00Z"`
+	UpdatedAt time.Time `json:"updated_at" example:"2026-01-01T00:00:00Z"`
+}

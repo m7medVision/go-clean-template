@@ -171,10 +171,10 @@ Templates for `internal/entity/{{name}}.go`, `_aggregate.go`, `_events.go` and
 `_aggregate_test.go`, copied in shape from `task`. They hold the base fields, `Create`, `Update`
 and `Delete` on the aggregate, and its stream ID. Edits: `invoiceEvents()` in `EventTypes()`,
 and the two sentinels in `errors.go`. `new-domain` runs names → plan → rules → write.
-- [ ] The golden for `widget` matches, and every created Go file is `go/format`-clean.
-- [ ] On the real repo, `make new-domain name=invoice dry-run=1` prints four files and two
+- [x] The golden for `widget` matches, and every created Go file is `go/format`-clean.
+- [x] On the real repo, `make new-domain name=invoice dry-run=1` prints four files and two
       insertions and writes nothing.
-- [ ] In a scratch copy, `make new-domain name=widget` followed by `make test` passes.
+- [x] In a scratch copy, `make new-domain name=widget` followed by `make test` passes.
 
 **Verify:** GG, then the scratch copy. **Depends on:** 5, 12. **Files:** `tools/gen/templates/domain/internal/entity/*.tmpl` (4), `tools/gen/domain.go`, `testdata/golden/domain/*`. **Size:** L
 
@@ -187,8 +187,8 @@ and the two sentinels in `errors.go`. `new-domain` runs names → plan → rules
 
 The `make new-domain` recipe runs the regenerators after a real write. If one fails, it prints
 the undo.
-- [ ] `make gen-e2e` passes on the entity layer.
-- [ ] A deliberately broken entity template makes it fail, and the worktree is still removed
+- [x] `make gen-e2e` passes on the entity layer.
+- [x] A deliberately broken entity template makes it fail, and the worktree is still removed
       (checked locally, not committed).
 
 **Verify:** GE. **Depends on:** 13. **Files:** `scripts/gen-e2e.sh`, `Makefile`. **Size:** S
@@ -199,8 +199,8 @@ Templates for `internal/app/schema/{{plural}}.hcl` (the base columns, no foreign
 `persistent/{{pkg}}/{{name}}.go`. The read model's `NewReadModel` returns
 `repo.<Name>ReadModel` wrapped in `newTraced`, with `tracing.go` beside it. Edit: the
 `<Name>ReadModel` interface in `contracts.go`.
-- [ ] The goldens match.
-- [ ] `make gen-e2e` now also runs `make sqlc` and `make mock` and passes.
+- [x] The goldens match.
+- [x] `make gen-e2e` now also runs `make sqlc` and `make mock` and passes.
 
 **Verify:** GE. **Depends on:** 14. **Files:** 4 templates, `tools/gen/domain.go`, goldens. **Size:** M
 
@@ -208,27 +208,28 @@ Templates for `internal/app/schema/{{plural}}.hcl` (the base columns, no foreign
 Templates for `persistent/{{pkg}}/projector.go` (`NewProjector`, `Name`, `Tables`, `Handle`, and
 `Project` through `queries.Querier`) and `projector_test.go` against a fake `Querier`. The fake
 covers `Created`, `Updated` and `Deleted`, and checks that other domains' events change nothing.
-- [ ] The generated projector test passes in the e2e copy.
+- [x] The generated projector test passes in the e2e copy.
 
 **Verify:** GE. **Depends on:** 15. **Files:** 2 templates, `tools/gen/domain.go`, goldens. **Size:** S
 
 ### 17. Commands, queries and wiring
 Templates for:
 - `usecase/{{pkg}}/register.go` (`Deps{Store, <Plural>}`, `Register`);
-- `command/create_`, `update_` and `delete_{{name}}.go`, each with its test against `memstore`;
+- `command/create_`, `update_` and `delete_{{name}}.go`, each with its test against `memstore`,
+  and `command_test.go` with what the three share (so `dupl` finds no clones);
 - `query/get_{{name}}.go`, `list_{{plural}}.go` and `query_test.go` against `repomock`.
 
 Every handler is a stub returning `entity.ErrNotImplemented`, and each test asserts that, with
 the comment the spec asks for. Edits to `internal/app/buses.go`: the `Register` call after the
 last one in `registerHandlers`, the projector after the last `NewProjector` in `subscribers`, and
 both imports.
-- [ ] The goldens match, and `make gen-e2e` passes.
+- [x] The goldens match, and `make gen-e2e` passes.
 
-**Verify:** GE. **Depends on:** 16. **Files:** 9 templates, `tools/gen/domain.go`, goldens. **Size:** L
+**Verify:** GE. **Depends on:** 16. **Files:** 11 templates, `tools/gen/domain.go`, goldens. **Size:** L
 
 ### Checkpoint C: a domain without transports
-- [ ] GE.
-- [ ] In a scratch copy with `widget` generated, the app starts, and the worker runs the `widget`
+- [x] GE.
+- [x] In a scratch copy with `widget` generated, the app starts, and the worker runs the `widget`
       projector: `projection_lag_events{projector="widget"}` appears on `/metrics`.
 
 ### 18. REST

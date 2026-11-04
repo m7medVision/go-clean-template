@@ -20,8 +20,15 @@ the e2e job catches a broken template come last.
    pass through `go/format`. Because every edit is an insertion, the dry-run shows each one as its
    inserted lines with three lines of context, with no diff library.
 2. **Template paths mirror repo paths,** with the name forms in the path:
-   `templates/domain/internal/entity/{{.Name.File}}_aggregate.go.tmpl`. Golden files end in
-   `.golden`, so `gofumpt`, `gci` and the Go toolchain never touch them.
+   `templates/domain/internal/entity/{{.Name.Snake}}_aggregate.go.tmpl`. The text each edit
+   inserts is a template too, at `templates/domain/edits/<repo path>.<place>.tmpl` (as in
+   `edits/internal/entity/event.go.EventTypes.tmpl`), so every byte the generator writes is
+   reviewable under `templates/`; only the import paths an edit adds are built in code, from the
+   module path in `go.mod`, and a created file writes the app's imports as `{{.Module}}/…`
+   (task 15). Created Go files go through `go/format`, since gofmt's alignment depends on the
+   name's length; each template is written as its file for `widget`, which the golden test
+   checks. Golden files end in `.golden`, so `gofumpt`, `gci` and the Go toolchain never touch
+   them.
 3. **Golden tests cover the files the generator creates. The edits are unit-tested on fixtures,
    and the e2e job covers them against the real shared files.** A golden copy of an edited
    `buses.go` would break on every unrelated change to that file.
@@ -49,7 +56,15 @@ the e2e job catches a broken template come last.
    - `go test -race`;
    - `go mod tidy -diff`.
    The root `make format` already formats `tools/` (it is in `GO_DIRS`).
-10. **Commits, made only when you ask:**
+10. **A command is a list of layers** (task 13). `tools/gen/domain.go` runs `names.Parse`,
+    `rules.DomainFree`, then each layer in `domainLayers()`, then `execute`. A layer is one file,
+    `layer_<name>.go`, holding a `func(*planner)` that adds its created files
+    (`pl.create("<glob under templates/domain>")`) and its edits
+    (`editFile(pl, path, edit.ParseGo, …)` with text from `pl.text("<repo path>.<place>")`), plus
+    one entry in `domainLayers()`; a transport's layer names its transport and runs only when
+    `--transports` asks for it. Read and anchor failures go to the planner's `errs`, never
+    returned early, so `rules.Check` reports the first rule in order.
+11. **Commits, made only when you ask:**
     - the `ErrNotImplemented` mapping (task 1);
     - module and editors (2–8);
     - plan, rules and write (9–12);
@@ -109,14 +124,14 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 - [ ] **Your review** of the plan, editor and rule APIs before the templates build on them.
 
 ### Phase 4: `new-domain`
-- [ ] 13. Entity layer, and `new-domain` wired end to end
-- [ ] 14. The e2e harness
-- [ ] 15. Schema, queries and read model
-- [ ] 16. Projector
-- [ ] 17. Commands, queries and wiring
+- [x] 13. Entity layer, and `new-domain` wired end to end
+- [x] 14. The e2e harness
+- [x] 15. Schema, queries and read model
+- [x] 16. Projector
+- [x] 17. Commands, queries and wiring
 
 ### Checkpoint C: a domain without transports
-- [ ] `make gen-e2e`; in a scratch copy the worker runs the generated projector.
+- [x] `make gen-e2e`; in a scratch copy the worker runs the generated projector.
 
 ### Phase 4 continued
 - [ ] 18. REST

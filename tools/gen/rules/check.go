@@ -9,8 +9,9 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/plan"
 )
 
-// Check runs R2 to R5 on p, in that order, and returns the first rule that fails; R1 ran before
-// the plan was made, since planning needs a valid name. regenerated are the paths the
+// Check runs R2 to R5 on p, in that order, and returns the first rule that fails. R1 ran before:
+// on the name before the plan was made, since planning needs a valid name, then on the identifiers
+// the plan declares (IdentifiersFree). regenerated are the paths the
 // regenerators rewrite after the write. planErrs are what planning ran into: a file to edit that
 // does not exist (R2) and places not found exactly once (R4). Any other error among them is
 // returned before any rule runs.

@@ -1,0 +1,24 @@
+package widget
+
+import (
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+// Deps is what the widget handlers are built from.
+type Deps struct {
+	Store   repo.EventStore
+	Widgets repo.WidgetReadModel
+}
+
+// Register registers every widget command and query handler, one line each.
+func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d Deps) {
+	cqrs.HandleCommand(cmds, command.CreateWidgetHandler{Store: d.Store})
+	cqrs.HandleCommand(cmds, command.UpdateWidgetHandler{Store: d.Store})
+	cqrs.HandleCommand(cmds, command.DeleteWidgetHandler{Store: d.Store})
+
+	cqrs.HandleQuery(qs, query.GetWidgetHandler{Widgets: d.Widgets})
+	cqrs.HandleQuery(qs, query.ListWidgetsHandler{Widgets: d.Widgets})
+}

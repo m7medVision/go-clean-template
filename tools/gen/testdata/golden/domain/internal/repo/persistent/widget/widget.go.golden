@@ -1,0 +1,65 @@
+// Package widget implements the widget read model on Postgres (the widgets table), and the
+// projector that writes it from the widget events.
+package widget
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
+)
+
+// Repo reads the widgets table.
+type Repo struct {
+	q *queries.Queries
+}
+
+// NewReadModel returns the widget read model, instrumented with OpenTelemetry tracing spans.
+func NewReadModel(pg *postgres.Postgres) repo.WidgetReadModel {
+	return newTraced(&Repo{queries.New(pg.Pool)})
+}
+
+// Get -.
+func (r *Repo) Get(ctx context.Context, userID, widgetID string) (entity.Widget, error) {
+	row, err := r.q.GetWidget(ctx, widgetID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Widget{}, entity.ErrWidgetNotFound
+		}
+
+		return entity.Widget{}, fmt.Errorf("WidgetReadModel - Get - r.q.GetWidget: %w", err)
+	}
+
+	if row.UserID != userID {
+		return entity.Widget{}, entity.ErrWidgetForbidden
+	}
+
+	return entity.Widget(row), nil
+}
+
+// List -.
+func (r *Repo) List(ctx context.Context, userID string, filter repo.WidgetFilter) ([]entity.Widget, int, error) {
+	total, err := r.q.CountWidgets(ctx, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("WidgetReadModel - List - r.q.CountWidgets: %w", err)
+	}
+
+	rows, err := r.q.ListWidgets(ctx, queries.ListWidgetsParams{
+		UserID: userID, Limit: filter.Limit, Offset: filter.Offset,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("WidgetReadModel - List - r.q.ListWidgets: %w", err)
+	}
+
+	page := make([]entity.Widget, len(rows))
+	for i := range rows {
+		page[i] = entity.Widget(rows[i])
+	}
+
+	return page, int(total), nil
+}

@@ -1,0 +1,119 @@
+package entity
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+// _widgetSnapshotVersion is the version of widgetSnapshot's shape.
+const _widgetSnapshotVersion = 1
+
+// WidgetStreamID is the stream of the widget with id.
+func WidgetStreamID(id string) string {
+	return "widget-" + id
+}
+
+// WidgetAggregate is one widget on the write side: rebuilt from its events, it checks its rules and
+// records what changed. Reads use Widget, from the table the widget projector writes.
+type WidgetAggregate struct {
+	AggregateBase
+
+	widget  Widget
+	deleted bool
+}
+
+var _ Snapshotter = (*WidgetAggregate)(nil)
+
+// NewWidgetAggregate creates the widget id, owned by userID.
+func NewWidgetAggregate(id, userID string, at time.Time) *WidgetAggregate {
+	a := &WidgetAggregate{}
+	Record(a, WidgetCreated{WidgetID: id, UserID: userID, At: at})
+
+	return a
+}
+
+// StreamID -.
+func (a *WidgetAggregate) StreamID() string {
+	return WidgetStreamID(a.widget.ID)
+}
+
+// State is the widget as its events add up.
+func (a *WidgetAggregate) State() Widget {
+	return a.widget
+}
+
+// ownedBy is nil when userID owns the live widget: a deleted widget is ErrWidgetNotFound and
+// another user's is ErrWidgetForbidden.
+func (a *WidgetAggregate) ownedBy(userID string) error {
+	switch {
+	case a.deleted:
+		return ErrWidgetNotFound
+	case a.widget.UserID != userID:
+		return ErrWidgetForbidden
+	default:
+		return nil
+	}
+}
+
+// Update changes userID's widget. Check the update's rules here, before it is recorded.
+func (a *WidgetAggregate) Update(userID string, at time.Time) error {
+	if err := a.ownedBy(userID); err != nil {
+		return err
+	}
+
+	Record(a, WidgetUpdated{WidgetID: a.widget.ID, At: at})
+
+	return nil
+}
+
+// Delete deletes userID's widget. Another user's widget is ErrWidgetNotFound, not
+// ErrWidgetForbidden, so a delete never tells a stranger the widget exists.
+func (a *WidgetAggregate) Delete(userID string, at time.Time) error {
+	if a.deleted || a.widget.UserID != userID {
+		return ErrWidgetNotFound
+	}
+
+	Record(a, WidgetDeleted{WidgetID: a.widget.ID, At: at})
+
+	return nil
+}
+
+// Apply -.
+func (a *WidgetAggregate) Apply(e Event) {
+	switch ev := e.(type) {
+	case WidgetCreated:
+		a.widget = Widget{ID: ev.WidgetID, UserID: ev.UserID, CreatedAt: ev.At, UpdatedAt: ev.At}
+	case WidgetUpdated:
+		a.widget.UpdatedAt = ev.At
+	case WidgetDeleted:
+		a.deleted = true
+	}
+}
+
+type widgetSnapshot struct {
+	Widget  Widget `json:"widget"`
+	Deleted bool   `json:"deleted"`
+}
+
+// SnapshotVersion -.
+func (*WidgetAggregate) SnapshotVersion() int {
+	return _widgetSnapshotVersion
+}
+
+// Snapshot -.
+func (a *WidgetAggregate) Snapshot() any {
+	return widgetSnapshot{Widget: a.widget, Deleted: a.deleted}
+}
+
+// RestoreSnapshot -.
+func (a *WidgetAggregate) RestoreSnapshot(data json.RawMessage) error {
+	var s widgetSnapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("WidgetAggregate - RestoreSnapshot: %w", err)
+	}
+
+	a.widget, a.deleted = s.Widget, s.Deleted
+
+	return nil
+}

@@ -1,0 +1,20 @@
+package command_test
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"github.com/stretchr/testify/require"
+)
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what Update{{.Name.Go}} records.
+func TestUpdate{{.Name.Go}}IsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	_, err := command.Update{{.Name.Go}}Handler{Store: given{{.Name.Go}}(t)}.Handle(context.Background(), command.Update{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: _{{.Name.Lower}}ID})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

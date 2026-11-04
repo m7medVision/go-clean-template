@@ -1,0 +1,30 @@
+-- name: Get{{.Name.Go}} :one
+SELECT * FROM {{.Name.Plural.Snake}}
+WHERE id = $1;
+
+-- name: Count{{.Name.Plural.Go}} :one
+SELECT count(*) FROM {{.Name.Plural.Snake}}
+WHERE user_id = $1;
+
+-- name: List{{.Name.Plural.Go}} :many
+SELECT * FROM {{.Name.Plural.Snake}}
+WHERE user_id = sqlc.arg('user_id')
+ORDER BY created_at DESC, id
+LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
+
+-- The {{.Name.Words}} projector's writes. Insert{{.Name.Go}}Row leaves an existing row alone, so replaying
+-- one {{.Name.Words}}'s first event (a rebuild) never overwrites it.
+
+-- name: Insert{{.Name.Go}}Row :exec
+INSERT INTO {{.Name.Plural.Snake}} (id, user_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO NOTHING;
+
+-- name: Update{{.Name.Go}}Row :exec
+UPDATE {{.Name.Plural.Snake}}
+SET updated_at = $2
+WHERE id = $1;
+
+-- name: Delete{{.Name.Go}}Row :exec
+DELETE FROM {{.Name.Plural.Snake}}
+WHERE id = $1;

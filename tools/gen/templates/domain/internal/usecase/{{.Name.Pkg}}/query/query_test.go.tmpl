@@ -1,0 +1,43 @@
+package query_test
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo/repomock"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+)
+
+// readModel is one {{.Name.Words}} read model that fails the test on any call it was not told to expect.
+func readModel(t *testing.T) *repomock.Mock{{.Name.Go}}ReadModel {
+	t.Helper()
+
+	return repomock.NewMock{{.Name.Go}}ReadModel(gomock.NewController(t))
+}
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what Get{{.Name.Go}} reads.
+func TestGet{{.Name.Go}}IsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := query.Get{{.Name.Go}}Handler{ {{- .Name.Plural.Go}}: readModel(t)}
+
+	_, err := h.Handle(context.Background(), query.Get{{.Name.Go}}{UserID: "user-1", {{.Name.Go}}ID: "{{.Name.Kebab}}-1"})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what List{{.Name.Plural.Go}} reads.
+func TestList{{.Name.Plural.Go}}IsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := query.List{{.Name.Plural.Go}}Handler{ {{- .Name.Plural.Go}}: readModel(t)}
+
+	_, err := h.Handle(context.Background(), query.List{{.Name.Plural.Go}}{UserID: "user-1"})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

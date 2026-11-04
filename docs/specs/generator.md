@@ -86,7 +86,7 @@ event handlers return `entity.ErrNotImplemented`. The following are real working
 | Layer | Created |
 | --- | --- |
 | entity | `invoice.go` (`Invoice`, the read shape); `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `Apply`, the behavior methods); `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `invoiceEvents()`); `invoice_aggregate_test.go` |
-| use case | `usecase/invoice/register.go` (`Deps`, `Register`); `command/create_invoice.go`, `update_invoice.go`, `delete_invoice.go`, each with its test against `internal/repo/memstore`; `query/get_invoice.go`, `list_invoices.go` and `query_test.go` against `internal/repo/repomock` |
+| use case | `usecase/invoice/register.go` (`Deps`, `Register`); `command/create_invoice.go`, `update_invoice.go`, `delete_invoice.go`, each with its test against `internal/repo/memstore`, and `command_test.go` with what those share (a store holding one invoice, and the commands' `CommandName` and `ActorID`), which keeps `dupl` from finding the update and delete tests to be clones; `query/get_invoice.go`, `list_invoices.go` and `query_test.go` against `internal/repo/repomock` |
 | repo | `persistent/invoice/invoice.go` (`NewReadModel`, returning `repo.InvoiceReadModel` wrapped in `newTraced`), `tracing.go`, `projector.go` (`NewProjector`, `Name`, `Tables`, `Handle`, `Project`), `projector_test.go` against a fake sqlc `Querier`; `queries/invoice.sql`. No `importer.go`: a new domain never had rows without events |
 | schema | `internal/app/schema/invoices.hcl` (the base columns, no foreign keys) |
 | REST | `restapi/v1/invoice/` `controller.go` (`NewRoutes`, the `problem` error mapping), `invoice.go`, `request.go`, `response.go`, `fake_test.go`, `invoice_test.go`, `main_test.go` |
@@ -116,7 +116,7 @@ until it has a field.
 | --- | --- | --- |
 | `internal/entity/event.go` | `invoiceEvents()` in `EventTypes()` | the `slices.Concat` call in `EventTypes` |
 | `internal/entity/errors.go` | `ErrInvoiceNotFound`, `ErrInvoiceForbidden` | the `var ( … )` block, before its closing paren |
-| `internal/repo/contracts.go` | the `InvoiceReadModel` interface | the `type ( … )` block, before its closing paren |
+| `internal/repo/contracts.go` | the `InvoiceReadModel` interface and the `InvoiceFilter` its `List` pages with | the `type ( … )` block, before its closing paren |
 | `internal/app/buses.go` | `invoice.Register(…)` in `registerHandlers`; `persistInvoiceRepo.NewProjector(pg)` in `subscribers`; both imports, the repository one under the `persistInvoiceRepo` alias | each function by name, then the import block |
 | `restapi/v1/router.go` | `invoice.NewRoutes(api, b, l)` and the import | `NewRoutes` by name |
 | `grpc/v1/router.go` | `v1.RegisterInvoiceServiceServer(app, invoice.New(b, l))` and the import | `NewRoutes` by name |
@@ -158,11 +158,11 @@ prints the rule, the file and the reason, then exits non-zero having written not
 
 | Rule | Check |
 | --- | --- |
-| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, entity file, proto service, GraphQL type or table with that name. |
+| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, entity file, proto service, GraphQL type or table with that name. No identifier the plan adds at a package's top level, in a created file or by an edit, is declared in that package already: `record` would declare `entity.Record`, which exists. |
 | R2 targets exist or don't | No file it would create exists. Every file it would edit exists. For `new-usecase`, the domain exists and the message name is free. |
 | R3 clean | No file it would edit has uncommitted changes (`git status --porcelain -- <files>`), and neither do the paths the regenerators write (`docs/proto/v1/`, `docs/openapi/v1.json`, `internal/repo/repomock/`, `internal/repo/persistent/queries/`, `internal/controller/graphql/generated/` and `model/`, `web/src/api/schema.gen.ts`, `web/src/graphql/`), so the undo is exact. |
-| R4 one anchor | Every edit finds its place exactly once, by parsing the file: `go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`. Zero or two matches fail. No markers, no line numbers, no regular expressions on source. |
-| R5 still valid | Every edited and every created file parses after the change. Edited Go files go through `go/format`. A created Go file that `go/format` would change is an error: its template is wrong. |
+| R4 one anchor | Every edit finds its place exactly once, by parsing the file: `go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`. Zero or two matches fail. An import whose name another import in the file binds fails too, as a domain called `config` would in `buses.go`. No markers, no line numbers, no regular expressions on source. |
+| R5 still valid | Every edited and every created file parses after the change. Edited and created Go files go through `go/format`: gofmt aligns columns by the longest name in them, so a created file's alignment depends on the domain's name. A template is written as its file for `widget`, and the golden test fails one whose output for `widget` `go/format` would change: its template is wrong. |
 | R6 all or nothing on disk | Each file is written to a temporary file and renamed into place. If any write fails, every file already written is restored and every created file is removed. |
 
 Afterwards it prints the undo command. Because R3 held, the undo restores exactly the previous
@@ -250,7 +250,7 @@ The generator's own Go follows the repo's linters and conventions.
 | Level | What |
 | --- | --- |
 | Unit | name forms and plurals; each rule passing and failing on fixture files, including two-anchor and zero-anchor files; each inserter |
-| Golden | renders `name=widget` and `domain=widget name=archive-widget` and compares with `testdata/golden/`; `UPDATE_GOLDEN=1` rewrites, as `mailtmpl` does |
+| Golden | renders `name=widget` and `domain=widget name=archive-widget` and compares with `testdata/golden/`; `UPDATE_GOLDEN=1` rewrites, as `mailtmpl` does. The same run checks that every template renders `go/format`-clean for `widget`, that every template is used by a layer, and that `widget` planned against the repository's real shared files passes every rule |
 | All or nothing | a fixture where the last rule fails leaves the tree byte-identical; a write failure injected half-way restores everything |
 | End to end (CI) | `make gen-e2e`: `git worktree add` a throwaway copy, run `make new-domain name=widget` and `make new-usecase domain=widget name=archive-widget kind=command`, then `make linter-golangci test` there. It needs Docker for `make sqlc`, as CI already has. It runs when `tools/gen/**` or any path a template mirrors changes. |
 

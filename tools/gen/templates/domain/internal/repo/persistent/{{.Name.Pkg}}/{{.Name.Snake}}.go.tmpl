@@ -1,0 +1,65 @@
+// Package {{.Name.Pkg}} implements the {{.Name.Words}} read model on Postgres (the {{.Name.Plural.Snake}} table), and the
+// projector that writes it from the {{.Name.Words}} events.
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo"
+	"{{.Module}}/internal/repo/persistent/queries"
+	"{{.Module}}/pkg/postgres"
+)
+
+// Repo reads the {{.Name.Plural.Snake}} table.
+type Repo struct {
+	q *queries.Queries
+}
+
+// NewReadModel returns the {{.Name.Words}} read model, instrumented with OpenTelemetry tracing spans.
+func NewReadModel(pg *postgres.Postgres) repo.{{.Name.Go}}ReadModel {
+	return newTraced(&Repo{queries.New(pg.Pool)})
+}
+
+// Get -.
+func (r *Repo) Get(ctx context.Context, userID, {{.Name.Lower}}ID string) (entity.{{.Name.Go}}, error) {
+	row, err := r.q.Get{{.Name.Go}}(ctx, {{.Name.Lower}}ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.{{.Name.Go}}{}, entity.Err{{.Name.Go}}NotFound
+		}
+
+		return entity.{{.Name.Go}}{}, fmt.Errorf("{{.Name.Go}}ReadModel - Get - r.q.Get{{.Name.Go}}: %w", err)
+	}
+
+	if row.UserID != userID {
+		return entity.{{.Name.Go}}{}, entity.Err{{.Name.Go}}Forbidden
+	}
+
+	return entity.{{.Name.Go}}(row), nil
+}
+
+// List -.
+func (r *Repo) List(ctx context.Context, userID string, filter repo.{{.Name.Go}}Filter) ([]entity.{{.Name.Go}}, int, error) {
+	total, err := r.q.Count{{.Name.Plural.Go}}(ctx, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("{{.Name.Go}}ReadModel - List - r.q.Count{{.Name.Plural.Go}}: %w", err)
+	}
+
+	rows, err := r.q.List{{.Name.Plural.Go}}(ctx, queries.List{{.Name.Plural.Go}}Params{
+		UserID: userID, Limit: filter.Limit, Offset: filter.Offset,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("{{.Name.Go}}ReadModel - List - r.q.List{{.Name.Plural.Go}}: %w", err)
+	}
+
+	page := make([]entity.{{.Name.Go}}, len(rows))
+	for i := range rows {
+		page[i] = entity.{{.Name.Go}}(rows[i])
+	}
+
+	return page, int(total), nil
+}

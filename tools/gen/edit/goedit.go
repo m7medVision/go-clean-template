@@ -102,15 +102,27 @@ func (g *Go) importBlock() (*ast.GenDecl, error) {
 }
 
 // imported reports whether block imports path under alias. Importing it under another alias is
-// an error: the generated code would not compile against it.
+// an error: the generated code would not compile against it. So is another import that binds the
+// name path would be imported as.
 func (g *Go) imported(block *ast.GenDecl, path, alias string) (bool, error) {
+	name := importName(path, alias)
+
 	for _, s := range block.Specs {
 		is, ok := s.(*ast.ImportSpec)
-		if !ok || importPath(is) != path {
+		if !ok {
 			continue
 		}
 
-		if is.Name == nil && alias == "" || is.Name != nil && is.Name.Name == alias {
+		if importPath(is) != path {
+			if bound := importName(importPath(is), aliasOf(is)); bound == name {
+				return false, fmt.Errorf("%w: %s: %s is imported already, from %s, so %s cannot be",
+					ErrAnchor, g.path, name, importPath(is), path)
+			}
+
+			continue
+		}
+
+		if aliasOf(is) == alias {
 			return true, nil
 		}
 
@@ -118,6 +130,45 @@ func (g *Go) imported(block *ast.GenDecl, path, alias string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func aliasOf(is *ast.ImportSpec) string {
+	if is.Name == nil {
+		return ""
+	}
+
+	return is.Name.Name
+}
+
+// importName is the name an import of path under alias binds in the file: the alias, or the last
+// element of the path that is not a major version such as v2, which the package is named after in
+// this repository.
+func importName(path, alias string) string {
+	if alias != "" {
+		return alias
+	}
+
+	elems := strings.Split(path, "/")
+	last := elems[len(elems)-1]
+
+	if len(elems) > 1 && isMajorVersion(last) {
+		last = elems[len(elems)-2]
+	}
+
+	base, _, _ := strings.Cut(last, ".")
+
+	return base
+}
+
+// isMajorVersion reports whether a path element is a major version suffix, as v2 is.
+func isMajorVersion(elem string) bool {
+	if len(elem) < len("v2") || elem[0] != 'v' {
+		return false
+	}
+
+	_, err := strconv.Atoi(elem[1:])
+
+	return err == nil
 }
 
 // importNeighbours returns the first non-standard import that sorts after path, and the last

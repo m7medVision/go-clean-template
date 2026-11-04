@@ -1,0 +1,43 @@
+package query_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+)
+
+// readModel is one widget read model that fails the test on any call it was not told to expect.
+func readModel(t *testing.T) *repomock.MockWidgetReadModel {
+	t.Helper()
+
+	return repomock.NewMockWidgetReadModel(gomock.NewController(t))
+}
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what GetWidget reads.
+func TestGetWidgetIsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := query.GetWidgetHandler{Widgets: readModel(t)}
+
+	_, err := h.Handle(context.Background(), query.GetWidget{UserID: "user-1", WidgetID: "widget-1"})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what ListWidgets reads.
+func TestListWidgetsIsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := query.ListWidgetsHandler{Widgets: readModel(t)}
+
+	_, err := h.Handle(context.Background(), query.ListWidgets{UserID: "user-1"})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

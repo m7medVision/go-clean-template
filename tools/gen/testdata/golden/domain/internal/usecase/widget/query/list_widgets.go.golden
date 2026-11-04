@@ -1,0 +1,36 @@
+package query
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+)
+
+// WidgetPage is one page of widgets, newest first, and how many there are in all.
+type WidgetPage struct {
+	Widgets []entity.Widget
+	Total   int
+}
+
+// ListWidgets lists UserID's widgets, Limit of them from Offset.
+type ListWidgets struct {
+	UserID string
+	Limit  int
+	Offset int
+}
+
+// QueryName -.
+func (ListWidgets) QueryName() string { return "ListWidgets" }
+
+// ListWidgetsHandler handles ListWidgets.
+type ListWidgetsHandler struct {
+	Widgets repo.WidgetReadModel
+}
+
+// Handle is a stub: write it to read the page with h.Widgets.List, defaulting the page size
+// when Limit is 0 or less.
+func (ListWidgetsHandler) Handle(_ context.Context, _ ListWidgets) (WidgetPage, error) {
+	return WidgetPage{}, fmt.Errorf("ListWidgets: %w", entity.ErrNotImplemented)
+}

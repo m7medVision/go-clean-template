@@ -172,6 +172,23 @@ func TestImportRefusesTheSamePathUnderAnotherAlias(t *testing.T) {
 	require.ErrorIs(t, err, edit.ErrAnchor)
 }
 
+// A domain called context or fmt would be imported under a name the file already binds, and the
+// file would no longer compile.
+func TestImportRefusesANameAnotherImportBinds(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct{ path, alias, bound string }{
+		{"github.com/m7medvision/go-clean-template/internal/usecase/fmt", "", "fmt"},
+		{"github.com/m7medvision/go-clean-template/internal/usecase/context", "", "context"},
+		{"github.com/m7medvision/go-clean-template/internal/repo/persistent/thing", "persistTaskRepo", "persistTaskRepo"},
+		{"github.com/m7medvision/go-clean-template/internal/repo/task/v2", "", "task"},
+	} {
+		_, err := parseGo(t, importsSrc).Import(tc.path, tc.alias)
+		require.ErrorIs(t, err, edit.ErrAnchor, tc.path)
+		assert.Contains(t, err.Error(), tc.bound+" is imported already", tc.path)
+	}
+}
+
 func TestImportStartsTheNonStandardGroupAfterTheStandardOne(t *testing.T) {
 	t.Parallel()
 

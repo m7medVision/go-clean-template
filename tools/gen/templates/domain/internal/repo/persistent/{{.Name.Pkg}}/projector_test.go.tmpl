@@ -1,0 +1,117 @@
+package {{.Name.Pkg}}_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo/persistent/queries"
+	"{{.Module}}/internal/repo/persistent/{{.Name.Pkg}}"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+var errWrite = errors.New("write failed")
+
+// fakeQuerier records the {{.Name.Words}} writes; any other query panics on the nil embedded interface.
+type fakeQuerier struct {
+	queries.Querier
+
+	inserted []queries.Insert{{.Name.Go}}RowParams
+	updated  []queries.Update{{.Name.Go}}RowParams
+	deleted  []string
+	err      error
+}
+
+//nolint:gocritic // the signature is sqlc's Querier, which takes its params by value
+func (f *fakeQuerier) Insert{{.Name.Go}}Row(_ context.Context, arg queries.Insert{{.Name.Go}}RowParams) error {
+	f.inserted = append(f.inserted, arg)
+
+	return f.err
+}
+
+func (f *fakeQuerier) Update{{.Name.Go}}Row(_ context.Context, arg queries.Update{{.Name.Go}}RowParams) error {
+	f.updated = append(f.updated, arg)
+
+	return f.err
+}
+
+func (f *fakeQuerier) Delete{{.Name.Go}}Row(_ context.Context, id string) error {
+	f.deleted = append(f.deleted, id)
+
+	return f.err
+}
+
+func at() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
+
+func project(t *testing.T, q *fakeQuerier, e entity.Event) error {
+	t.Helper()
+
+	return {{.Name.Pkg}}.Project(context.Background(), q, &entity.RecordedEvent{Position: 1, StreamID: "{{.Name.Pkg}}-1", Event: e})
+}
+
+func Test{{.Name.Go}}CreatedInsertsTheRow(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+
+	require.NoError(t, project(t, q, entity.{{.Name.Go}}Created{ {{- .Name.Go}}ID: "1", UserID: "u1", At: at()}))
+
+	assert.Equal(t, []queries.Insert{{.Name.Go}}RowParams{ {{- "{"}}ID: "1", UserID: "u1", CreatedAt: at(), UpdatedAt: at()}}, q.inserted)
+}
+
+func Test{{.Name.Go}}UpdatedSetsUpdatedAt(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+	later := at().Add(time.Hour)
+
+	require.NoError(t, project(t, q, entity.{{.Name.Go}}Updated{ {{- .Name.Go}}ID: "1", At: later}))
+
+	assert.Equal(t, []queries.Update{{.Name.Go}}RowParams{ {{- "{"}}ID: "1", UpdatedAt: later}}, q.updated)
+}
+
+func Test{{.Name.Go}}DeletedDeletesTheRow(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+
+	require.NoError(t, project(t, q, entity.{{.Name.Go}}Deleted{ {{- .Name.Go}}ID: "1", At: at()}))
+
+	assert.Equal(t, []string{"1"}, q.deleted)
+}
+
+func TestThe{{.Name.Go}}ProjectorReturnsAWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	require.ErrorIs(t, project(t, &fakeQuerier{err: errWrite}, entity.{{.Name.Go}}Deleted{ {{- .Name.Go}}ID: "1"}), errWrite)
+}
+
+// otherEvent stands for any other domain's event.
+type otherEvent struct{}
+
+func (otherEvent) EventType() string  { return "Other" }
+func (otherEvent) SchemaVersion() int { return 1 }
+
+func TestThe{{.Name.Go}}ProjectorIgnoresOtherDomainsEvents(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+
+	require.NoError(t, project(t, q, otherEvent{}))
+
+	assert.Empty(t, q.inserted)
+	assert.Empty(t, q.updated)
+	assert.Empty(t, q.deleted)
+}
+
+func TestThe{{.Name.Go}}ProjectorIsNamedAndOwnsThe{{.Name.Plural.Go}}Table(t *testing.T) {
+	t.Parallel()
+
+	p := {{.Name.Pkg}}.NewProjector(nil)
+
+	assert.Equal(t, "{{.Name.Pkg}}", p.Name())
+	assert.Equal(t, []string{"{{.Name.Plural.Snake}}"}, p.Tables())
+}

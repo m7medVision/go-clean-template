@@ -1,0 +1,20 @@
+package command_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/stretchr/testify/require"
+)
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what DeleteWidget records.
+func TestDeleteWidgetIsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	_, err := command.DeleteWidgetHandler{Store: givenWidget(t)}.Handle(context.Background(), command.DeleteWidget{UserID: _owner, WidgetID: _widgetID})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

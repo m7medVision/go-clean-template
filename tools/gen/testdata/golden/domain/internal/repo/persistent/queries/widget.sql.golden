@@ -1,0 +1,30 @@
+-- name: GetWidget :one
+SELECT * FROM widgets
+WHERE id = $1;
+
+-- name: CountWidgets :one
+SELECT count(*) FROM widgets
+WHERE user_id = $1;
+
+-- name: ListWidgets :many
+SELECT * FROM widgets
+WHERE user_id = sqlc.arg('user_id')
+ORDER BY created_at DESC, id
+LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
+
+-- The widget projector's writes. InsertWidgetRow leaves an existing row alone, so replaying
+-- one widget's first event (a rebuild) never overwrites it.
+
+-- name: InsertWidgetRow :exec
+INSERT INTO widgets (id, user_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO NOTHING;
+
+-- name: UpdateWidgetRow :exec
+UPDATE widgets
+SET updated_at = $2
+WHERE id = $1;
+
+-- name: DeleteWidgetRow :exec
+DELETE FROM widgets
+WHERE id = $1;

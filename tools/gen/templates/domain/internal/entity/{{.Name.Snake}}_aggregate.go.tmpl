@@ -1,0 +1,119 @@
+package entity
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+// _{{.Name.Lower}}SnapshotVersion is the version of {{.Name.Lower}}Snapshot's shape.
+const _{{.Name.Lower}}SnapshotVersion = 1
+
+// {{.Name.Go}}StreamID is the stream of the {{.Name.Words}} with id.
+func {{.Name.Go}}StreamID(id string) string {
+	return "{{.Name.Pkg}}-" + id
+}
+
+// {{.Name.Go}}Aggregate is one {{.Name.Words}} on the write side: rebuilt from its events, it checks its rules and
+// records what changed. Reads use {{.Name.Go}}, from the table the {{.Name.Words}} projector writes.
+type {{.Name.Go}}Aggregate struct {
+	AggregateBase
+
+	{{.Name.Lower}}  {{.Name.Go}}
+	deleted bool
+}
+
+var _ Snapshotter = (*{{.Name.Go}}Aggregate)(nil)
+
+// New{{.Name.Go}}Aggregate creates the {{.Name.Words}} id, owned by userID.
+func New{{.Name.Go}}Aggregate(id, userID string, at time.Time) *{{.Name.Go}}Aggregate {
+	a := &{{.Name.Go}}Aggregate{}
+	Record(a, {{.Name.Go}}Created{ {{- .Name.Go}}ID: id, UserID: userID, At: at})
+
+	return a
+}
+
+// StreamID -.
+func (a *{{.Name.Go}}Aggregate) StreamID() string {
+	return {{.Name.Go}}StreamID(a.{{.Name.Lower}}.ID)
+}
+
+// State is the {{.Name.Words}} as its events add up.
+func (a *{{.Name.Go}}Aggregate) State() {{.Name.Go}} {
+	return a.{{.Name.Lower}}
+}
+
+// ownedBy is nil when userID owns the live {{.Name.Words}}: a deleted {{.Name.Words}} is Err{{.Name.Go}}NotFound and
+// another user's is Err{{.Name.Go}}Forbidden.
+func (a *{{.Name.Go}}Aggregate) ownedBy(userID string) error {
+	switch {
+	case a.deleted:
+		return Err{{.Name.Go}}NotFound
+	case a.{{.Name.Lower}}.UserID != userID:
+		return Err{{.Name.Go}}Forbidden
+	default:
+		return nil
+	}
+}
+
+// Update changes userID's {{.Name.Words}}. Check the update's rules here, before it is recorded.
+func (a *{{.Name.Go}}Aggregate) Update(userID string, at time.Time) error {
+	if err := a.ownedBy(userID); err != nil {
+		return err
+	}
+
+	Record(a, {{.Name.Go}}Updated{ {{- .Name.Go}}ID: a.{{.Name.Lower}}.ID, At: at})
+
+	return nil
+}
+
+// Delete deletes userID's {{.Name.Words}}. Another user's {{.Name.Words}} is Err{{.Name.Go}}NotFound, not
+// Err{{.Name.Go}}Forbidden, so a delete never tells a stranger the {{.Name.Words}} exists.
+func (a *{{.Name.Go}}Aggregate) Delete(userID string, at time.Time) error {
+	if a.deleted || a.{{.Name.Lower}}.UserID != userID {
+		return Err{{.Name.Go}}NotFound
+	}
+
+	Record(a, {{.Name.Go}}Deleted{ {{- .Name.Go}}ID: a.{{.Name.Lower}}.ID, At: at})
+
+	return nil
+}
+
+// Apply -.
+func (a *{{.Name.Go}}Aggregate) Apply(e Event) {
+	switch ev := e.(type) {
+	case {{.Name.Go}}Created:
+		a.{{.Name.Lower}} = {{.Name.Go}}{ID: ev.{{.Name.Go}}ID, UserID: ev.UserID, CreatedAt: ev.At, UpdatedAt: ev.At}
+	case {{.Name.Go}}Updated:
+		a.{{.Name.Lower}}.UpdatedAt = ev.At
+	case {{.Name.Go}}Deleted:
+		a.deleted = true
+	}
+}
+
+type {{.Name.Lower}}Snapshot struct {
+	{{.Name.Go}}  {{.Name.Go}} `json:"{{.Name.Snake}}"`
+	Deleted bool   `json:"deleted"`
+}
+
+// SnapshotVersion -.
+func (*{{.Name.Go}}Aggregate) SnapshotVersion() int {
+	return _{{.Name.Lower}}SnapshotVersion
+}
+
+// Snapshot -.
+func (a *{{.Name.Go}}Aggregate) Snapshot() any {
+	return {{.Name.Lower}}Snapshot{ {{- .Name.Go}}: a.{{.Name.Lower}}, Deleted: a.deleted}
+}
+
+// RestoreSnapshot -.
+func (a *{{.Name.Go}}Aggregate) RestoreSnapshot(data json.RawMessage) error {
+	var s {{.Name.Lower}}Snapshot
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("{{.Name.Go}}Aggregate - RestoreSnapshot: %w", err)
+	}
+
+	a.{{.Name.Lower}}, a.deleted = s.{{.Name.Go}}, s.Deleted
+
+	return nil
+}

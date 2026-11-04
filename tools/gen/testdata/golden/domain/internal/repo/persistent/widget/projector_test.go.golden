@@ -1,0 +1,117 @@
+package widget_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/widget"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+var errWrite = errors.New("write failed")
+
+// fakeQuerier records the widget writes; any other query panics on the nil embedded interface.
+type fakeQuerier struct {
+	queries.Querier
+
+	inserted []queries.InsertWidgetRowParams
+	updated  []queries.UpdateWidgetRowParams
+	deleted  []string
+	err      error
+}
+
+//nolint:gocritic // the signature is sqlc's Querier, which takes its params by value
+func (f *fakeQuerier) InsertWidgetRow(_ context.Context, arg queries.InsertWidgetRowParams) error {
+	f.inserted = append(f.inserted, arg)
+
+	return f.err
+}
+
+func (f *fakeQuerier) UpdateWidgetRow(_ context.Context, arg queries.UpdateWidgetRowParams) error {
+	f.updated = append(f.updated, arg)
+
+	return f.err
+}
+
+func (f *fakeQuerier) DeleteWidgetRow(_ context.Context, id string) error {
+	f.deleted = append(f.deleted, id)
+
+	return f.err
+}
+
+func at() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
+
+func project(t *testing.T, q *fakeQuerier, e entity.Event) error {
+	t.Helper()
+
+	return widget.Project(context.Background(), q, &entity.RecordedEvent{Position: 1, StreamID: "widget-1", Event: e})
+}
+
+func TestWidgetCreatedInsertsTheRow(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+
+	require.NoError(t, project(t, q, entity.WidgetCreated{WidgetID: "1", UserID: "u1", At: at()}))
+
+	assert.Equal(t, []queries.InsertWidgetRowParams{{ID: "1", UserID: "u1", CreatedAt: at(), UpdatedAt: at()}}, q.inserted)
+}
+
+func TestWidgetUpdatedSetsUpdatedAt(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+	later := at().Add(time.Hour)
+
+	require.NoError(t, project(t, q, entity.WidgetUpdated{WidgetID: "1", At: later}))
+
+	assert.Equal(t, []queries.UpdateWidgetRowParams{{ID: "1", UpdatedAt: later}}, q.updated)
+}
+
+func TestWidgetDeletedDeletesTheRow(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+
+	require.NoError(t, project(t, q, entity.WidgetDeleted{WidgetID: "1", At: at()}))
+
+	assert.Equal(t, []string{"1"}, q.deleted)
+}
+
+func TestTheWidgetProjectorReturnsAWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	require.ErrorIs(t, project(t, &fakeQuerier{err: errWrite}, entity.WidgetDeleted{WidgetID: "1"}), errWrite)
+}
+
+// otherEvent stands for any other domain's event.
+type otherEvent struct{}
+
+func (otherEvent) EventType() string  { return "Other" }
+func (otherEvent) SchemaVersion() int { return 1 }
+
+func TestTheWidgetProjectorIgnoresOtherDomainsEvents(t *testing.T) {
+	t.Parallel()
+
+	q := &fakeQuerier{}
+
+	require.NoError(t, project(t, q, otherEvent{}))
+
+	assert.Empty(t, q.inserted)
+	assert.Empty(t, q.updated)
+	assert.Empty(t, q.deleted)
+}
+
+func TestTheWidgetProjectorIsNamedAndOwnsTheWidgetsTable(t *testing.T) {
+	t.Parallel()
+
+	p := widget.NewProjector(nil)
+
+	assert.Equal(t, "widget", p.Name())
+	assert.Equal(t, []string{"widgets"}, p.Tables())
+}

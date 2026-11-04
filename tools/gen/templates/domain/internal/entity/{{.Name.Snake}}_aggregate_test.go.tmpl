@@ -1,0 +1,125 @@
+package entity_test
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+
+	"{{.Module}}/internal/entity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	_{{.Name.Lower}}ID       = "{{.Name.Kebab}}-1"
+	_{{.Name.Lower}}Owner    = "{{.Name.Kebab}}-owner"
+	_{{.Name.Lower}}Stranger = "{{.Name.Kebab}}-stranger"
+)
+
+// {{.Name.Lower}}CreatedAt and {{.Name.Lower}}LaterAt are when the tests' {{.Name.Words}} is created and next changes.
+func {{.Name.Lower}}CreatedAt() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
+func {{.Name.Lower}}LaterAt() time.Time   { return {{.Name.Lower}}CreatedAt().Add(time.Hour) }
+
+// given{{.Name.Go}} is one {{.Name.Words}} rebuilt from events, the way the store loads it.
+func given{{.Name.Go}}(events ...entity.Event) *entity.{{.Name.Go}}Aggregate {
+	a := &entity.{{.Name.Go}}Aggregate{}
+	entity.Replay(a, len(events), events...)
+
+	return a
+}
+
+func {{.Name.Lower}}Created() entity.{{.Name.Go}}Created {
+	return entity.{{.Name.Go}}Created{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, UserID: _{{.Name.Lower}}Owner, At: {{.Name.Lower}}CreatedAt()}
+}
+
+func TestNew{{.Name.Go}}AggregateRecords{{.Name.Go}}Created(t *testing.T) {
+	t.Parallel()
+
+	a := entity.New{{.Name.Go}}Aggregate(_{{.Name.Lower}}ID, _{{.Name.Lower}}Owner, {{.Name.Lower}}CreatedAt())
+
+	assert.Equal(t, []entity.Event{ {{- .Name.Lower}}Created()}, a.Pending())
+	assert.Equal(t, "{{.Name.Pkg}}-"+_{{.Name.Lower}}ID, a.StreamID())
+	assert.Equal(t, entity.{{.Name.Go}}{
+		ID: _{{.Name.Lower}}ID, UserID: _{{.Name.Lower}}Owner, CreatedAt: {{.Name.Lower}}CreatedAt(), UpdatedAt: {{.Name.Lower}}CreatedAt(),
+	}, a.State())
+}
+
+func Test{{.Name.Go}}AggregateUpdateByItsOwner(t *testing.T) {
+	t.Parallel()
+
+	a := given{{.Name.Go}}({{.Name.Lower}}Created())
+
+	require.NoError(t, a.Update(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()))
+
+	assert.Equal(t, []entity.Event{
+		entity.{{.Name.Go}}Updated{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, At: {{.Name.Lower}}LaterAt()},
+	}, a.Pending())
+	assert.Equal(t, {{.Name.Lower}}LaterAt(), a.State().UpdatedAt)
+	assert.Equal(t, {{.Name.Lower}}CreatedAt(), a.State().CreatedAt)
+}
+
+func Test{{.Name.Go}}AggregateRefusesAnotherUser(t *testing.T) {
+	t.Parallel()
+
+	a := given{{.Name.Go}}({{.Name.Lower}}Created())
+
+	require.ErrorIs(t, a.Update(_{{.Name.Lower}}Stranger, {{.Name.Lower}}LaterAt()), entity.Err{{.Name.Go}}Forbidden)
+	require.ErrorIs(t, a.Delete(_{{.Name.Lower}}Stranger, {{.Name.Lower}}LaterAt()), entity.Err{{.Name.Go}}NotFound,
+		"a delete never tells a stranger the {{.Name.Words}} exists")
+	assert.Empty(t, a.Pending())
+}
+
+func Test{{.Name.Go}}AggregateDelete(t *testing.T) {
+	t.Parallel()
+
+	a := given{{.Name.Go}}({{.Name.Lower}}Created())
+
+	require.NoError(t, a.Delete(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()))
+	assert.Equal(t, []entity.Event{
+		entity.{{.Name.Go}}Deleted{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, At: {{.Name.Lower}}LaterAt()},
+	}, a.Pending())
+}
+
+func TestADeleted{{.Name.Go}}IsNotFound(t *testing.T) {
+	t.Parallel()
+
+	a := given{{.Name.Go}}({{.Name.Lower}}Created(), entity.{{.Name.Go}}Deleted{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, At: {{.Name.Lower}}LaterAt()})
+
+	require.ErrorIs(t, a.Update(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()), entity.Err{{.Name.Go}}NotFound)
+	require.ErrorIs(t, a.Delete(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()), entity.Err{{.Name.Go}}NotFound)
+	assert.Empty(t, a.Pending())
+}
+
+func Test{{.Name.Go}}AggregateSnapshotRestoresTheSame{{.Name.Go}}(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		last   entity.Event
+		update error
+	}{
+		"live":    {entity.{{.Name.Go}}Updated{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, At: {{.Name.Lower}}LaterAt()}, nil},
+		"deleted": {entity.{{.Name.Go}}Deleted{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, At: {{.Name.Lower}}LaterAt()}, entity.Err{{.Name.Go}}NotFound},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			a := given{{.Name.Go}}({{.Name.Lower}}Created(), tc.last)
+
+			data, err := json.Marshal(a.Snapshot())
+			require.NoError(t, err)
+
+			restored := &entity.{{.Name.Go}}Aggregate{}
+			require.NoError(t, restored.RestoreSnapshot(data))
+			assert.Equal(t, a.State(), restored.State())
+			assert.ErrorIs(t, restored.Update(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()), tc.update, "deleted or not, as snapshotted")
+		})
+	}
+}
+
+func TestThe{{.Name.Go}}EventsAreRegistered(t *testing.T) {
+	t.Parallel()
+
+	assert.Subset(t, entity.EventTypes(), []entity.Event{
+		entity.{{.Name.Go}}Created{}, entity.{{.Name.Go}}Updated{}, entity.{{.Name.Go}}Deleted{},
+	})
+}

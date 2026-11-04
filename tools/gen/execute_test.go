@@ -28,12 +28,19 @@ var errInjected = errors.New("injected failure")
 func gitRepo(t *testing.T) string {
 	t.Helper()
 
-	dir := t.TempDir()
-
-	for p, content := range map[string]string{
+	return gitRepoWith(t, map[string]string{
 		"internal/app/buses.go":             "package app\n",
 		"internal/usecase/task/register.go": "package task\n",
-	} {
+	})
+}
+
+// gitRepoWith is a repository holding files, by path, committed.
+func gitRepoWith(t *testing.T, files map[string]string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	for p, content := range files {
 		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, p), []byte(content), 0o600))
 	}
@@ -142,12 +149,12 @@ func ruleFailures() map[string]ruleFailure {
 		"R1 name pattern": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
-			return newDomain(t.Context(), domainRequest{root: dir, name: "type"}, &bytes.Buffer{})
+			return newDomain(t.Context(), &domainRequest{root: dir, name: "type"}, &bytes.Buffer{})
 		}, names.ErrInvalid},
 		"R1 existing domain": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
-			return newDomain(t.Context(), domainRequest{root: dir, name: "task"}, &bytes.Buffer{})
+			return newDomain(t.Context(), &domainRequest{root: dir, name: "task"}, &bytes.Buffer{})
 		}, names.ErrInvalid},
 		"R2 file to create exists": {nil, func(t *testing.T, dir string) error {
 			t.Helper()

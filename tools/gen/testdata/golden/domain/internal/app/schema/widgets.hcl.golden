@@ -1,0 +1,32 @@
+# The widget read model: written only by the widget projector, from the widget events. It has no
+# foreign key to users, because each projector advances on its own and the widget one can be ahead.
+# Its columns are in the order of entity.Widget's fields, so a row converts to one as it is.
+table "widgets" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "user_id" {
+    null = false
+    type = uuid
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamp
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamp
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  index "idx_widgets_user_id" {
+    on {
+      column = column.user_id
+    }
+  }
+}

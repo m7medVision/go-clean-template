@@ -15,6 +15,8 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 )
 
 const (
@@ -33,10 +35,11 @@ var errUsage = errors.New("usage")
 
 // domainRequest is what make new-domain asks for.
 type domainRequest struct {
-	root       string
-	name       string
-	plural     string
-	transports string
+	root   string
+	name   string
+	plural string
+	// transports are the transports the domain gets, in the order rules.Transports lists them.
+	transports []string
 	dryRun     bool
 }
 
@@ -87,7 +90,7 @@ func dispatch(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 			return err
 		}
 
-		return newDomain(ctx, req, stdout)
+		return newDomain(ctx, &req, stdout)
 	case "new-usecase":
 		req, err := parseUsecase(args[1:], stderr)
 		if err != nil {
@@ -103,13 +106,16 @@ func dispatch(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 }
 
 func parseDomain(args []string, stderr io.Writer) (domainRequest, error) {
-	var req domainRequest
+	var (
+		req        domainRequest
+		transports string
+	)
 
 	fs := newFlagSet("new-domain", stderr)
 	fs.StringVar(&req.root, "root", ".", "the repository root")
 	fs.StringVar(&req.name, "name", "", "the domain name, kebab-case and singular")
 	fs.StringVar(&req.plural, "plural", "", "the plural, when English rules get it wrong")
-	fs.StringVar(&req.transports, "transports", "", "comma-separated, default rest,grpc,graphql")
+	fs.StringVar(&transports, "transports", "", "comma-separated, default rest,grpc,graphql")
 	fs.BoolVar(&req.dryRun, "dry-run", false, "print the plan and write nothing")
 
 	if err := parseFlags(fs, args); err != nil {
@@ -122,7 +128,34 @@ func parseDomain(args []string, stderr io.Writer) (domainRequest, error) {
 		return req, errUsage
 	}
 
-	return req, nil
+	var err error
+
+	req.transports, err = parseTransports(transports, stderr)
+
+	return req, err
+}
+
+// parseTransports reads a --transports value: a comma-separated list drawn from rules.Transports,
+// or every one of them when it is empty. It returns them in that order, once each; a transport it
+// does not know is a usage error.
+func parseTransports(value string, stderr io.Writer) ([]string, error) {
+	known := rules.Transports()
+	if value == "" {
+		return known, nil
+	}
+
+	asked := strings.Split(value, ",")
+	for i, t := range asked {
+		asked[i] = strings.TrimSpace(t)
+
+		if !slices.Contains(known, asked[i]) {
+			fmt.Fprintf(stderr, "gen: unknown transport %q: --transports takes %s\n", asked[i], strings.Join(known, ","))
+
+			return nil, errUsage
+		}
+	}
+
+	return slices.DeleteFunc(known, func(t string) bool { return !slices.Contains(asked, t) }), nil
 }
 
 func parseUsecase(args []string, stderr io.Writer) (usecaseRequest, error) {
