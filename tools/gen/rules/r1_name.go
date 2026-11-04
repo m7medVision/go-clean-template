@@ -76,15 +76,18 @@ func parsed[T any](r Repo, p string, parse func(string, []byte) (T, error)) (T, 
 // Type.Method: record would declare the type entity.Record, and the entity package has a function
 // of that name. In a .proto file they are its messages and services, and the package is the
 // folder, as docs/proto/v1 is grpc.v1: login would declare LoginResponse, which auth.proto
-// declares, and only make proto-v1 would find it, after the write. Changes that do not format or
-// parse are left to R5.
+// declares, and only make proto-v1 would find it, after the write. In a .graphqls file they are
+// the types it defines and the fields it gives any type, as Type.field, and the schema is the
+// folder, which gqlgen reads as one: all-task would add Query.allTasks, which task.graphqls has,
+// and only make graphql would find it. Changes that do not format or parse are left to R5.
 func IdentifiersFree(r Repo, n *names.Name, p *plan.Plan) error {
 	changes, err := p.Changes()
 	if err != nil {
 		return nil // R5 reports the change that breaks
 	}
 
-	// The changes by the package they declare into, as the glob of its files: dir/*.go, dir/*.proto.
+	// The changes by the package they declare into, as the glob of its files: dir/*.go, dir/*.proto,
+	// dir/*.graphqls.
 	byPackage := map[string]map[string]plan.Change{}
 
 	for _, c := range changes {
@@ -122,6 +125,8 @@ func declarationsOf(ext string) declarations {
 		return topLevel
 	case ".proto":
 		return protoTopLevel
+	case ".graphqls":
+		return graphqlTopLevel
 	default:
 		return nil
 	}
@@ -217,6 +222,23 @@ func protoTopLevel(p string, src []byte) (pkg string, idents []string) {
 	}
 
 	return "", slices.Concat(f.Services(), f.Messages())
+}
+
+// graphqlTopLevel returns the types the .graphqls file src defines and the fields it gives every
+// type it defines or extends, as Type.field; nothing for src that is empty or does not parse. A
+// type's fields are unique across the files of a schema, which is its folder, so the package is
+// left empty.
+func graphqlTopLevel(p string, src []byte) (pkg string, idents []string) {
+	if src == nil {
+		return "", nil
+	}
+
+	q, err := edit.ParseGraphQL(p, src)
+	if err != nil {
+		return "", nil
+	}
+
+	return "", slices.Concat(q.Types(), q.Fields())
 }
 
 // topLevel returns the package src declares and its top-level identifiers, methods as

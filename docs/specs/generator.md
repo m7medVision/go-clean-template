@@ -158,7 +158,7 @@ prints the rule, the file and the reason, then exits non-zero having written not
 
 | Rule | Check |
 | --- | --- |
-| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, controller folder on any transport, entity file, proto service, GraphQL type or table with that name. A controller folder can be a package the domains share, such as REST's `response` or GraphQL's `paging`, which the domain's controllers would otherwise join. No identifier the plan adds at a package's top level, in a created file or by an edit, is declared in that package already: `record` would declare `entity.Record`, which exists. For a `.proto` file the identifiers are its messages and services, and the package is its folder, since every file in `docs/proto/v1` is `grpc.v1`: `login` would declare `LoginResponse`, which `auth.proto` declares. |
+| R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Not an existing domain: no use-case or read-model folder, controller folder on any transport, entity file, proto service, GraphQL type or table with that name. A controller folder can be a package the domains share, such as REST's `response` or GraphQL's `paging`, which the domain's controllers would otherwise join. No identifier the plan adds at a package's top level, in a created file or by an edit, is declared in that package already: `record` would declare `entity.Record`, which exists. For a `.proto` file the identifiers are its messages and services, and the package is its folder, since every file in `docs/proto/v1` is `grpc.v1`: `login` would declare `LoginResponse`, which `auth.proto` declares. For a `.graphqls` file they are the types it defines and the fields it gives any type, and the package is its folder, which gqlgen reads as one schema: `all-task` would add the field `allTasks` to `Query`, which `task.graphqls` has. |
 | R2 targets exist or don't | No file it would create exists. Every file it would edit exists. For `new-usecase`, the domain exists and the message name is free. |
 | R3 clean | No file it would edit has uncommitted changes (`git status --porcelain -- <files>`), and neither do the paths the regenerators write (`docs/proto/v1/`, `docs/openapi/v1.json`, `internal/repo/repomock/`, `internal/repo/persistent/queries/`, `internal/controller/graphql/generated/` and `model/`, `web/src/api/schema.gen.ts`, `web/src/graphql/`), so the undo is exact. |
 | R4 one anchor | Every edit finds its place exactly once, by parsing the file: `go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`. Zero or two matches fail. An import whose name another import in the file binds fails too, as a domain called `config` would in `buses.go`. No markers, no line numbers, no regular expressions on source. |
@@ -301,6 +301,11 @@ The generator's own Go follows the repo's linters and conventions.
   gives the message `Mp3playerResponse`, whose Go type is `Mp3PlayerResponse`, and the controller,
   written with the name's Go form, does not build. A dash after the digit (`mp3-player`) avoids it.
   When it happens, the build at the end of `make new-domain` fails and prints the undo.
+- **The GraphQL resolvers rely on how gqlgen names a field's Go method and a type's Go model**:
+  it writes a word it knows as an initialism in capitals. A name with one, such as `api-key` or
+  `url-link`, gives the field `apiKey`, whose method gqlgen expects as `APIKey`, and the resolver,
+  written with the name's Go form `ApiKey`, does not build. When it happens, the build at the end
+  of `make new-domain` fails and prints the undo.
 
 ## Decided
 

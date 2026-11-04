@@ -1,0 +1,52 @@
+package {{.Name.Pkg}}_test
+
+import (
+	"testing"
+
+	"{{.Module}}/internal/controller/graphql/graphqltest"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+)
+
+// mutations are one request for each {{.Name.Words}} field of Mutation, keyed by the field. Each sends its
+// command, and create and update then read the {{.Name.Words}} back.
+func mutations() map[string]field {
+	get := query.Get{{.Name.Go}}{UserID: graphqltest.UserID, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}
+
+	return map[string]field{
+		"create{{.Name.Go}}": {
+			gql:  `mutation { create{{.Name.Go}} { ` + _selection + ` } }`,
+			want: _storedJSON,
+			sent: []any{command.Create{{.Name.Go}}{UserID: graphqltest.UserID}, get},
+		},
+		"update{{.Name.Go}}": {
+			gql:  `mutation { update{{.Name.Go}}(id: "{{.Name.Kebab}}-1") { ` + _selection + ` } }`,
+			want: _storedJSON,
+			sent: []any{command.Update{{.Name.Go}}{UserID: graphqltest.UserID, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}, get},
+		},
+		"delete{{.Name.Go}}": {
+			gql:  `mutation { delete{{.Name.Go}}(id: "{{.Name.Kebab}}-1") }`,
+			want: `true`,
+			sent: []any{command.Delete{{.Name.Go}}{UserID: graphqltest.UserID, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}},
+		},
+	}
+}
+
+func TestEach{{.Name.Go}}MutationEncodesItsAnswer(t *testing.T) {
+	t.Parallel()
+
+	checkAnswers(t, mutations())
+}
+
+func TestEach{{.Name.Go}}MutationNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	checkCaller(t, mutations())
+}
+
+// Until the command handlers are written, each mutation answers NOT_IMPLEMENTED.
+func TestEach{{.Name.Go}}MutationMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	checkFailures(t, mutations())
+}

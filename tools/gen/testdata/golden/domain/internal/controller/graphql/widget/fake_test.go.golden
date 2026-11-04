@@ -1,0 +1,160 @@
+package widget_test
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"testing"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	// _selection selects every field of the widget.
+	_selection = "id userId createdAt updatedAt"
+	// _storedJSON is the stored widget as the schema answers with it, every field selected.
+	_storedJSON = `{"id":"widget-1","userId":"user-1","createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-01-02T03:04:05Z"}`
+)
+
+// stored is the widget the fake handlers answer with, which graphqltest.UserID owns.
+func stored() entity.Widget {
+	at := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+
+	return entity.Widget{ID: "widget-1", UserID: graphqltest.UserID, CreatedAt: at, UpdatedAt: at}
+}
+
+// fakeWidget answers every widget command and query: commands write stored's ID, queries read
+// stored, and every one of them fails with err when it is set. It keeps every message it is sent.
+type fakeWidget struct {
+	stored entity.Widget
+	err    error
+
+	sent []any
+}
+
+// buses registers the fake's handlers on real buses whose one step is keep.
+func (f *fakeWidget) buses() cqrs.Buses {
+	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
+	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.CreateWidget, cqrs.Written](
+		func(ctx context.Context, _ command.CreateWidget) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateWidget, cqrs.Written](
+		func(ctx context.Context, _ command.UpdateWidget) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeleteWidget, cqrs.Written](
+		func(ctx context.Context, _ command.DeleteWidget) (cqrs.Written, error) { return write(ctx) }))
+
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetWidget, entity.Widget](
+		func(context.Context, query.GetWidget) (entity.Widget, error) { return f.stored, f.err }))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListWidgets, query.WidgetPage](
+		func(context.Context, query.ListWidgets) (query.WidgetPage, error) {
+			return query.WidgetPage{Widgets: []entity.Widget{f.stored}, Total: 1}, f.err
+		}))
+
+	return cqrs.Buses{Commands: cmds, Queries: qs}
+}
+
+// keep is a step that keeps every message the buses carry, in the order they are sent.
+func (f *fakeWidget) keep(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
+	f.sent = append(f.sent, msg.Body)
+
+	return next(ctx)
+}
+
+// do sends gql to the GraphQL handler over f's buses, signed in as graphqltest.UserID when
+// authenticated.
+func do(t *testing.T, f *fakeWidget, authenticated bool, gql string) graphqltest.Response {
+	t.Helper()
+
+	token := ""
+	if authenticated {
+		token = graphqltest.Token(t)
+	}
+
+	return graphqltest.Post(t, f.buses(), token, gql, nil)
+}
+
+// field is one request for one widget field of Query or Mutation, with what the field answers when
+// the fake handlers succeed and the commands and queries it sends them. A map of fields is keyed
+// by the field's name, which keys its answer in the response's data too.
+type field struct {
+	gql  string
+	want string // the field's answer as JSON
+	sent []any
+}
+
+// checkAnswers checks that each of fields, asked by graphqltest.UserID, sends what it should and
+// encodes the answer.
+func checkAnswers(t *testing.T, fields map[string]field) {
+	t.Helper()
+
+	for name, f := range fields {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeWidget{stored: stored()}
+
+			resp := do(t, fake, true, f.gql)
+
+			require.Empty(t, resp.Errors, resp.Body)
+			assert.JSONEq(t, f.want, string(resp.Data[name]))
+			assert.Equal(t, f.sent, fake.sent)
+		})
+	}
+}
+
+// checkCaller checks that each of fields, asked without a token, answers UNAUTHENTICATED and
+// sends nothing.
+func checkCaller(t *testing.T, fields map[string]field) {
+	t.Helper()
+
+	for name, f := range fields {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeWidget{stored: stored()}
+
+			resp := do(t, fake, false, f.gql)
+
+			assert.Equal(t, "UNAUTHENTICATED", resp.Code(t))
+			assert.Empty(t, fake.sent, "nothing is sent without a caller")
+		})
+	}
+}
+
+// checkFailures checks that each of fields maps what a handler fails with the same way: first the
+// failures any command can produce, then the widget errors, then anything else.
+func checkFailures(t *testing.T, fields map[string]field) {
+	t.Helper()
+
+	for failure, tc := range map[string]struct {
+		err  error
+		code string
+	}{
+		"a stub handler":      {entity.ErrNotImplemented, "NOT_IMPLEMENTED"},
+		"a read model behind": {entity.ErrReadModelBehind, "UNAVAILABLE"},
+		"a concurrent change": {entity.ErrConcurrencyConflict, "CONFLICT"},
+		"another user's":      {entity.ErrWidgetForbidden, "FORBIDDEN"},
+		"none with the ID":    {entity.ErrWidgetNotFound, "NOT_FOUND"},
+		"anything else":       {io.ErrUnexpectedEOF, "INTERNAL"},
+	} {
+		for name, f := range fields {
+			t.Run(name+"/"+failure, func(t *testing.T) {
+				t.Parallel()
+
+				fake := &fakeWidget{stored: stored(), err: fmt.Errorf("handler: %w", tc.err)}
+
+				resp := do(t, fake, true, f.gql)
+
+				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
+			})
+		}
+	}
+}

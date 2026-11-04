@@ -263,7 +263,7 @@ mutations take only `id`, per decision 7) and `graphql/{{pkg}}/`: `resolver.go`,
 - the aliases, embeds and `newResolver` fields in `graphql/resolver.go`;
 - the two sentinels in `gqlerr.Map`;
 - the model binding in `gqlgen.yml`.
-- [ ] `make gen-e2e` now also runs `make graphql` and `make web-graphql` and passes.
+- [x] `make gen-e2e` now also runs `make graphql` and `make web-graphql` and passes.
 
 **Verify:** GE. **Depends on:** 17. **Files:** 7 templates, `tools/gen/domain.go`, goldens. **Size:** L
 

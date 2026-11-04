@@ -62,6 +62,12 @@ done
 for f in docs/proto/v1/widget.pb.go docs/proto/v1/widget_grpc.pb.go; do
 	[ -f "$f" ] || { echo "gen-e2e: make proto-v1 wrote no $f" >&2; exit 1; }
 done
+# So did make graphql: the resolvers build on what gqlgen generates from widget.graphqls, in the
+# file its follow-schema layout names after it, and on the WidgetList model it generates.
+f=internal/controller/graphql/generated/widget.generated.go
+[ -f "$f" ] || { echo "gen-e2e: make graphql wrote no $f" >&2; exit 1; }
+grep -q '^type WidgetList struct' internal/controller/graphql/model/models_gen.go ||
+	{ echo "gen-e2e: make graphql generated no WidgetList model" >&2; exit 1; }
 make linter-golangci test
 echo "gen-e2e: go vet ./integration-test/..."
 go vet ./integration-test/...

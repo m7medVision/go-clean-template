@@ -1,0 +1,40 @@
+// Package widget resolves the widget fields of the GraphQL schema (schema/widget.graphqls).
+package widget
+
+import (
+	"context"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/logger"
+)
+
+// Query resolves the widget fields of Query.
+type Query struct {
+	qs *cqrs.Queries
+	l  logger.Interface
+}
+
+// Mutation resolves the widget fields of Mutation.
+type Mutation struct {
+	cmds *cqrs.Commands
+	qs   *cqrs.Queries
+	l    logger.Interface
+}
+
+// New returns the widget resolvers for Query and Mutation.
+func New(b cqrs.Buses, l logger.Interface) (Query, Mutation) {
+	return Query{qs: b.Queries, l: l}, Mutation{cmds: b.Commands, qs: b.Queries, l: l}
+}
+
+// readBack reads the widget a command just wrote, as the result of the mutation op.
+func (m Mutation) readBack(ctx context.Context, userID, id, op string) (*entity.Widget, error) {
+	row, err := cqrs.SendQuery[entity.Widget](ctx, m.qs, query.GetWidget{UserID: userID, WidgetID: id})
+	if err != nil {
+		return nil, gqlerr.Map(m.l, err, op)
+	}
+
+	return &row, nil
+}

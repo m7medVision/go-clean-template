@@ -155,3 +155,82 @@ func TestIdentifiersFreeAcceptsProtoNamesThatAreNewToTheirFolder(t *testing.T) {
 	require.NoError(t, rules.IdentifiersFree(repoOf(fsys), name(t, "invoice"), p),
 		"names new to docs/proto/v1 are free, and docs/proto/v2 is a package of its own")
 }
+
+// taskSchema is one file of the GraphQL schema: a type, and the root types with a field each.
+const taskSchema = "type Task { id: ID! }\n\ntype TaskList { total: Int! }\n\ntype Query {\n  task(id: ID!): Task!\n}\n\n" +
+	"type Mutation {\n  deleteTask(id: ID!): Boolean!\n}\n"
+
+// Every .graphqls in one folder is one schema, as gqlgen.yml reads schema/*.graphqls, so a type is
+// taken when another file there defines one of that name, and a field when another file gives its
+// type one of that name, as an extension of Query does.
+func TestIdentifiersFreeRejectsAGraphQLNameAnotherFileInTheSchemaHas(t *testing.T) {
+	t.Parallel()
+
+	for what, tc := range map[string]struct {
+		src, clash string
+	}{
+		"a type":           {"type TaskList { tasks: Int! }\n", "TaskList"},
+		"an input as type": {"input TaskList { title: String! }\n", "TaskList"},
+		"a Query field":    {"extend type Query {\n  task: Int\n}\n", "Query.task"},
+		"a Mutation field": {"extend type Mutation {\n  deleteTask(id: ID!): Boolean!\n}\n", "Mutation.deleteTask"},
+	} {
+		t.Run(what, func(t *testing.T) {
+			t.Parallel()
+
+			p := plan.New("x")
+			p.Create("internal/controller/graphql/schema/all_task.graphqls", []byte("type AllTask { id: ID! }\n\n"+tc.src))
+
+			fsys := fstest.MapFS{"internal/controller/graphql/schema/task.graphqls": {Data: []byte(taskSchema)}}
+			err := rules.IdentifiersFree(repoOf(fsys), name(t, "all-task"), p)
+
+			require.ErrorIs(t, err, names.ErrInvalid)
+			assert.Contains(t, err.Error(), "internal/controller/graphql/schema/all_task.graphqls would declare "+tc.clash+
+				", which internal/controller/graphql/schema/task.graphqls declares already")
+		})
+	}
+}
+
+func TestIdentifiersFreeLooksAtWhatAGraphQLEditAdds(t *testing.T) {
+	t.Parallel()
+
+	const p = "internal/controller/graphql/schema/task.graphqls"
+
+	src := []byte(taskSchema)
+
+	q, err := edit.ParseGraphQL(p, src)
+	require.NoError(t, err)
+
+	ins, err := q.InType("Mutation", "deleteTask(id: ID!): Boolean!")
+	require.NoError(t, err)
+
+	pl := plan.New("x")
+	pl.Edit(p, src, ins)
+
+	err = rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "task"), pl)
+
+	require.ErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), p+" would declare Mutation.deleteTask twice")
+}
+
+func TestIdentifiersFreeAcceptsGraphQLNamesThatAreNewToTheirSchema(t *testing.T) {
+	t.Parallel()
+
+	const p = "internal/controller/graphql/schema/task.graphqls"
+
+	src := []byte(taskSchema)
+
+	q, err := edit.ParseGraphQL(p, src)
+	require.NoError(t, err)
+
+	ins, err := q.InType("Mutation", "archiveTask(id: ID!): Task!")
+	require.NoError(t, err)
+
+	pl := plan.New("x")
+	pl.Edit(p, src, ins)
+	pl.Create("internal/controller/graphql/schema/invoice.graphqls", []byte("type Invoice { id: ID! }\n\n"+
+		"type InvoiceList { total: Int! }\n\nextend type Query {\n  invoice(id: ID!): Invoice!\n}\n"))
+	pl.Create("internal/controller/v2/schema/task.graphqls", []byte(taskSchema))
+
+	require.NoError(t, rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "invoice"), pl),
+		"a field of one name on another type is free, and another folder is a schema of its own")
+}

@@ -1,0 +1,49 @@
+package widget
+
+import (
+	"context"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/paging"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+// Widget resolves Query.widget.
+func (q Query) Widget(ctx context.Context, id string) (*entity.Widget, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := cqrs.SendQuery[entity.Widget](ctx, q.qs, query.GetWidget{UserID: caller.UserID, WidgetID: id})
+	if err != nil {
+		return nil, gqlerr.Map(q.l, err, "widget")
+	}
+
+	return &row, nil
+}
+
+// Widgets resolves Query.widgets.
+func (q Query) Widgets(ctx context.Context, limit, offset int) (*model.WidgetList, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !paging.Valid(limit, offset) {
+		return nil, gqlerr.InvalidInput()
+	}
+
+	page, err := cqrs.SendQuery[query.WidgetPage](ctx, q.qs, query.ListWidgets{
+		UserID: caller.UserID, Limit: limit, Offset: offset,
+	})
+	if err != nil {
+		return nil, gqlerr.Map(q.l, err, "widgets")
+	}
+
+	return &model.WidgetList{Widgets: page.Widgets, Total: page.Total}, nil
+}

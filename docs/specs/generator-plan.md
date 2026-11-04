@@ -136,7 +136,7 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 ### Phase 4 continued
 - [x] 18. REST
 - [x] 19. gRPC
-- [ ] 20. GraphQL
+- [x] 20. GraphQL
 - [ ] 21. Integration test
 - [ ] 22. `transports=` for `new-domain`
 

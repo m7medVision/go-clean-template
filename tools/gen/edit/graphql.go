@@ -2,6 +2,7 @@ package edit
 
 import (
 	"fmt"
+	"slices"
 	"unicode/utf8"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -140,6 +141,23 @@ func (q *GraphQL) Types() []string {
 	names := make([]string, 0, len(q.doc.Definitions))
 	for _, d := range q.doc.Definitions {
 		names = append(names, d.Name)
+	}
+
+	return names
+}
+
+// Fields returns the fields of every type the file defines or extends, each as Type.field, in
+// file order. Only object, interface and input types have fields.
+func (q *GraphQL) Fields() []string {
+	defs := slices.Concat(q.doc.Definitions, q.doc.Extensions)
+	slices.SortStableFunc(defs, func(a, b *ast.Definition) int { return a.Position.Start - b.Position.Start })
+
+	var names []string
+
+	for _, d := range defs {
+		for _, f := range d.Fields {
+			names = append(names, d.Name+"."+f.Name)
+		}
 	}
 
 	return names
