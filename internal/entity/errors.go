@@ -48,4 +48,7 @@ var (
 	// ErrReadModelBehind is a write that committed but whose projections had not caught up within
 	// the consistency timeout, so a read straight after it could still miss it.
 	ErrReadModelBehind = errors.New("write saved but not yet readable")
+	// ErrNotImplemented is a command or query whose handler is still the stub the generator wrote
+	// (tools/gen). Like the two above, any message can produce it, so each transport maps it once.
+	ErrNotImplemented = errors.New("not implemented")
 )

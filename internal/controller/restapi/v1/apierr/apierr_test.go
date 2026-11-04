@@ -27,6 +27,7 @@ func TestSharedMapsTheFailuresAnyCommandCanProduce(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, status(t, apierr.Shared(fmt.Errorf("w: %w", entity.ErrReadModelBehind))))
 	assert.Equal(t, http.StatusConflict, status(t, apierr.Shared(fmt.Errorf("w: %w", entity.ErrConcurrencyConflict))))
+	assert.Equal(t, http.StatusNotImplemented, status(t, apierr.Shared(fmt.Errorf("w: %w", entity.ErrNotImplemented))))
 }
 
 func TestSharedLeavesOtherErrorsToTheOperation(t *testing.T) {
