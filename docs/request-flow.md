@@ -161,9 +161,10 @@ return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → r
   it is cancelled if the client disconnects, which cancels the outbound HTTP call and the event
   store's transaction below.
 - **`problem`, in the folder's [`controller.go`](../internal/controller/restapi/v1/exchange/controller.go),
-  maps errors.** First come the two failures any command can produce, from the shared
+  maps errors.** First come the failures any command can produce, from the shared
   [`apierr`](../internal/controller/restapi/v1/apierr/apierr.go) package: 503 when the read model
-  is behind, 409 when a concurrent write won. Then the domain sentinels: 400 for an invalid
+  is behind, 409 when a concurrent write won, and 501 while a handler is still a
+  [generated](generator.md) stub. Then the domain sentinels: 400 for an invalid
   conversion or an unknown currency. Anything else is logged and becomes a 500.
 - **The DTO and the entity never cross the boundary.** The handler never passes the `Convert` DTO to
   a command, and never returns `entity.Conversion` as the body. `NewConversion` (the folder's

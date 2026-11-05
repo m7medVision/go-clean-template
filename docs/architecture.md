@@ -170,6 +170,7 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`pkg/tracing`](../pkg/tracing) | OpenTelemetry setup; a no-op provider when tracing is off. See [configuration.md](configuration.md#tracing). |
 | [`pkg/worker`](../pkg/worker) | The queue consumer. See [worker.md](worker.md). |
 | [`pkg/smtp`](../pkg/smtp) | The SMTP client. See [worker.md](worker.md#smtp). |
+| [`tools/gen`](../tools/gen) | The domain and use-case generator behind `make new-domain` and `make new-usecase`. Its own Go module: it imports nothing from the app, and no binary, image or `make test` includes it. See [generator.md](generator.md). |
 
 ### Schema
 

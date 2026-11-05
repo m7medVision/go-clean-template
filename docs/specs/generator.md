@@ -1,6 +1,6 @@
 # Spec: domain and use-case generator
 
-Module id: `generator` · PR 2 of 2 · Depends on `cqrs` · Status: **approved; plan in [generator-plan.md](generator-plan.md)**
+Module id: `generator` · PR 2 of 2 · Depends on `cqrs` · Status: **implemented; plan in [generator-plan.md](generator-plan.md), user docs in [docs/generator.md](../generator.md)**
 
 Paths and shapes below are checked against master at `e952512`, where `cqrs` merged (#45). Each
 template copies the `task` domain's file at the same path.
@@ -34,7 +34,7 @@ transport from the first run; you write the bodies.
 ## Commands
 
 ```
-make new-domain  name=invoice                                     [transports=rest,grpc,graphql] [dry-run=1]
+make new-domain  name=invoice                                     [plural=] [transports=rest,grpc,graphql] [dry-run=1]
 make new-usecase domain=task name=archive-task kind=command       [method=] [path=] [transports=rest,grpc,graphql] [plural=] [dry-run=1]
 make new-usecase domain=task name=count-tasks  kind=query
 make gen-check      # tools/gen: format check, lint, unit and golden tests
@@ -125,8 +125,10 @@ until it has a field.
 | `graphql/gqlerr/gqlerr.go` | the two sentinels' entries in `Map` | the `[]mapping` literal in `Map`, ahead of the shared entries |
 | `graphql/gqlgen.yml` | the `Invoice` model binding | the `models` map, as a YAML node |
 
-It does not touch `docs/` or `web/`. Once it has written, and after a dry run that passes, it
-prints a checklist instead (`templates/domain/next.tmpl`): the handler files to write, the docs
+It writes no `docs/*.md` file and nothing under `web/`: its only files under `docs/` are the `.proto`
+files in `docs/proto/v1`, and the regenerators refresh `docs/openapi/v1.json` and the web client's
+generated types. The docs are yours: once it has written, and after a dry run that passes, it
+prints a checklist (`templates/domain/next.tmpl`): the handler files to write, the docs
 from CLAUDE.md (a section in `docs/api.md`, the `What you get` list in `README.md`, the aggregate
 and projector tables in `docs/cqrs.md`), and to write this domain before generating another (Known
 limitations). `new-usecase` prints its own (`templates/usecase/next.tmpl`): the handler file; for a
@@ -219,8 +221,9 @@ tools/gen/                       its own module: github.com/m7medvision/go-clean
   go.mod                         stdlib, gqlparser, protocompile, go.yaml.in/yaml/v3, testify; nothing from the app
   main.go                        new-domain, new-usecase
   names/                         name forms and plurals
-  plan/                          builds the in-memory plan: files to create, edits to apply
-  rules/                         R1–R6, one file each
+  plan/                          builds the in-memory plan: files to create, edits to apply; the dry
+                                 run, the undo, and the all-or-nothing write (R6)
+  rules/                         R1–R5, one file each (R2's route check in a second), and Check
   edit/                          the anchor finders and inserters, one file per file kind
   templates/domain/…             .tmpl files laid out as the repo paths they render to
   templates/usecase/…

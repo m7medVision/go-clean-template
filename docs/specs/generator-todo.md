@@ -391,22 +391,31 @@ Each is followed by the regenerators and the gates.
 Both run when backend paths change (the `changes` filter) and are listed in `ci-ok`.
 `make pre-commit` runs `make gen-check`. `.github/dependabot.yml` gets a `gomod` entry for
 `/tools/gen`.
+
+*Added while building it:*
+- **No `make bin-deps` in the jobs**: its `go install tool` cannot build golangci-lint (nor air)
+  from the root module, where the `gobwas/glob` v1.1.0 that svu needs breaks their dependencies.
+  Both jobs take golangci-lint from `golangci-lint-action` with `install-only` (the release go.mod
+  pins, as the lint job runs), and the e2e job `go install`s the other tools it calls by package.
+- **The "Done" line**: after the regenerators and the build pass, `make new-domain` and
+  `make new-usecase` print one line pointing back to the checklist and the undo, which the
+  regenerators' output has scrolled away.
 - [ ] Both jobs pass on the PR.
 - [ ] A change limited to `web/**` skips both, and `ci-ok` still passes.
 
 **Verify:** CI. **Depends on:** 27. **Files:** `.github/workflows/ci.yml`, `.github/dependabot.yml`, `Makefile`. **Size:** S
 
 ### 29. Docs
-- [ ] `docs/generator.md`: both commands, every flag, the safety rules, the undo, and what you
+- [x] `docs/generator.md`: both commands, every flag, the safety rules, the undo, and what you
       write after generating.
-- [ ] `CLAUDE.md`:
+- [x] `CLAUDE.md`:
   - rows in the commands table;
   - the two "Adding…" recipes start with the generator;
   - a "Keep the docs current" row: a change to a file a template mirrors updates its template
     under `tools/gen/templates`.
-- [ ] `README.md`: a `What you get` bullet and a link.
-- [ ] `docs/api.md`: the 501 / `Unimplemented` / `NOT_IMPLEMENTED` answer beside 503 and 409.
-- [ ] The spec's status reads "implemented".
+- [x] `README.md`: a `What you get` bullet and a link.
+- [x] `docs/api.md`: the 501 / `Unimplemented` / `NOT_IMPLEMENTED` answer beside 503 and 409.
+- [x] The spec's status reads "implemented".
 
 **Verify:** the links resolve. **Depends on:** D. **Files:** `docs/generator.md`, `CLAUDE.md`, `README.md`, `docs/api.md`, `docs/specs/generator.md`. **Size:** M
 

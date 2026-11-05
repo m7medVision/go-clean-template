@@ -49,6 +49,10 @@ different settings than CI. Use the target, not the tool.
 | Rebuild one projection's read model | `make projection-rebuild name=<projector>` | `go run ./cmd/worker -rebuild ...` |
 | Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
 | Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
+| Add a domain (CRUD stubs on every layer and transport) | `make new-domain name=<name>` (`dry-run=1` first) | copying the `task` domain — the target checks every rule before it writes, then runs the regenerators and prints the undo; see `docs/generator.md` |
+| Add a command or query to a domain | `make new-usecase domain=<domain> name=<name> kind=command\|query` (`dry-run=1` first) | writing the message, its registration and each transport's operation by hand, or `go -C tools/gen run .` — the target runs the regenerators after the write |
+| Check the generator (lint, format, unit and golden tests, tidy) | `make gen-check` | `go test` in `tools/gen` — the target uses the root `.golangci.yml`, `-race` and `go mod tidy -diff` |
+| Prove what the generator writes still builds, lints and tests | `make gen-e2e` | generating into your checkout — the target works in a throwaway worktree of the working tree and removes it |
 | Full check before pushing | `make pre-commit` | running the steps by hand |
 | See what master would be released as | `make release-version` (svu); the notes: `gh workflow run release.yml` (GoReleaser dry run) | tagging by hand — `release.yml` tags and releases on its own; see `docs/releasing.md` |
 
@@ -63,10 +67,16 @@ Traps in these targets:
   Run `make bin-deps` first (`protoc` itself is not installed by it).
 - **`make pre-commit` also runs the frontend targets**, so it needs the `vp` CLI (Vite+) on `PATH`;
   `vp` provisions the Node version in `web/.node-version` and bun itself.
+- **`make new-domain`, `make new-usecase` and `make gen-e2e` run the regenerators** (`proto-v1`,
+  `graphql`, `sqlc`, `mock`, `openapi`, `web-api`, `web-graphql`, `format`), so they need `protoc`,
+  Docker, Atlas, `vp` and `make web-deps`, as those do. The generator refuses to edit a file with
+  uncommitted changes (rule R3): commit first.
 
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
 For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too.
 For changes to a GraphQL schema file or to an operation in `web/src/`, `make web-graphql` too.
+For changes under `tools/gen`, `make gen-check` too; for those, and for changes to a file a generator
+template mirrors (see **Keep the docs current**), `make gen-e2e` too.
 Commit subjects are Conventional Commits, and they name the release: a `feat`, `fix` or
 breaking (`!`) commit merged to master is released as the next version (`docs/releasing.md`);
 `perf`, `docs`, `ci`, `chore`, `test`, `build` and `refactor` release nothing. Never move or delete a `v*` tag.
@@ -99,6 +109,10 @@ internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → intern
   import each other; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (buses, servers, logger, jwt, postgres, tracing). Must
   not import `internal/`.
+- `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
+  module (`github.com/m7medvision/go-clean-template/tools/gen`). It imports nothing from the app, and
+  nothing in the app imports it: `go build ./...`, `make test`, the binaries and the image never
+  include it, so `make gen-check` is what lints and tests it. See `docs/generator.md`.
 
 Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: `buses.go`
 (`newBuses`, `registerHandlers`, `subscribers`), `backfill.go` (`importers`) and `app.go`
@@ -208,7 +222,8 @@ shape from a neighbouring handler in the same transport.
    `context.Context` is the first parameter of every method that crosses a layer.
 5. **Map the error.** First the failures any command can produce, through the transport's shared
    package (`apierr.Shared`, `rpcerr.Shared`, `gqlerr`): `entity.ErrReadModelBehind` → 503 /
-   `Unavailable` / `UNAVAILABLE`, `entity.ErrConcurrencyConflict` → 409 / `Aborted` / `CONFLICT`.
+   `Unavailable` / `UNAVAILABLE`, `entity.ErrConcurrencyConflict` → 409 / `Aborted` / `CONFLICT`,
+   `entity.ErrNotImplemented` (a generated stub handler) → 501 / `Unimplemented` / `NOT_IMPLEMENTED`.
    Then `errors.Is` against the domain's `entity.Err*` sentinels → a transport status. On REST
    the sentinel maps to a `huma.Error*` constructor, which renders the standard RFC 9457
    `application/problem+json` model — no custom error type. Log the
@@ -432,11 +447,37 @@ the matching page whenever a change touches what it documents:
 | Release rules, `release.yml` or `.goreleaser.yaml` | `docs/releasing.md` |
 | The exchange `Convert` path (handler, `ConvertCurrency` command, aggregate, webapi, event store, projector, query) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
+| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path), or a shared file the generator edits (`entity/event.go`, `entity/errors.go`, `repo/contracts.go`, `app/buses.go`, the REST and gRPC `v1/router.go`, `graphql/resolver.go`, `gqlerr/gqlerr.go`, `gqlgen.yml`; for `new-usecase`, a domain's `register.go`, `.proto`, schema and transport files) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
+| The generator's commands, flags, rules, output or template conventions | `docs/generator.md` |
 
 ## Adding a use case to an existing domain
 
-A use case is a command (it changes state) or a query (it reads it). Read the neighbouring one in
-the same domain before writing.
+A use case is a command (it changes state) or a query (it reads it). Start with the generator
+(`docs/generator.md`), then read the neighbouring use case in the same domain before writing its
+body:
+
+```sh
+make new-usecase domain=task name=archive-task kind=command dry-run=1  # the plan; writes nothing
+make new-usecase domain=task name=archive-task kind=command            # or kind=query
+```
+
+It writes the message type and a stub handler returning `entity.ErrNotImplemented`, with a test that
+asserts so (steps 1 and 2); its line in `register.go` (step 3); and, on each of the domain's
+transports, its operation and a test (step 5): the REST op and its registration, the rpc with its
+messages and the gRPC method, the GraphQL field and its resolver. The REST route defaults to
+`POST /v1/<plural>/{id}/<verb>` for a command and `GET /v1/<plural>/<verb>` for a query; `method=`,
+`path=` and `transports=` change the defaults. Then it runs the regenerators. What it leaves to you:
+
+- the handler's body, and tests of what it does in place of the stub's test;
+- for a command, the event it records, the aggregate's behavior method with its `Apply` case, and the
+  projector's case; `RequiredRole()` or `Validate()` if it needs them;
+- for a query, the read-model method with its SQL, `make sqlc` and `make mock`, and the fields of its
+  result on each transport;
+- its row in `docs/api.md`.
+
+The steps below are what the generated files hold, and the recipe by hand when a rule refuses the
+generator. Its transport tests are self-contained, a fake on buses of their own, so it leaves
+`fake_test.go` alone.
 
 1. **A command:**
    - If it records something new, add the event to `internal/entity/<domain>_events.go`
@@ -476,8 +517,29 @@ oversight — but say which ones you covered.
 
 ## Adding a whole domain
 
-Work outward from the entity. Every step has a counterpart in the existing `task` domain — read it
-before writing.
+Start with the generator (`docs/generator.md`):
+
+```sh
+make new-domain name=invoice dry-run=1  # the plan; writes nothing
+make new-domain name=invoice            # plural= when English gets it wrong, transports= for fewer than three
+```
+
+It writes steps 1 to 7 and 9 for a user-owned domain with create, update, delete, get and list on
+the base fields (`id`, `user_id`, `created_at`, `updated_at`): 43 files on all three transports, and
+the edits to the shared files those steps name. The command and query handlers are stubs returning
+`entity.ErrNotImplemented`, so every operation answers 501 / `Unimplemented` / `NOT_IMPLEMENTED`;
+everything they sit on (aggregate, events, read model, projector, wiring, transport handlers, tests)
+is real. Then it runs the regenerators, `make openapi` among them. What it leaves to you:
+
+- the five handlers' bodies, and tests of what they do in place of the stubs' tests;
+- the domain's fields, where the generated comments say: the read shape, the events and `Apply`, the
+  HCL table and its SQL, the projector, the request DTOs and messages, and the GraphQL type;
+- the docs of step 8;
+- writing this domain before generating another: two untouched generated domains are clones to
+  `dupl`, and `make linter-golangci` fails.
+
+Work outward from the entity. Every step has a counterpart in the existing `task` domain, which the
+generated files copy — read it before writing. The steps are what the generated files hold.
 
 1. **Entity** — `internal/entity/<domain>.go` with the read shape the API returns;
    `<domain>_aggregate.go` with the aggregate (embedding `entity.AggregateBase`, its stream ID
@@ -557,3 +619,7 @@ plain conversion. A schema change that breaks that alignment fails to compile.
   the projections.
 - Mail templates: `internal/repo/mailtmpl/testdata/*.golden.*` are compared by the render test;
   after an intended template change, `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/` and review the diff.
+- Generator: `make test` does not reach `tools/gen`, its own module; `make gen-check` runs its unit
+  and golden tests, and `make gen-e2e` generates a domain and three use cases in a throwaway worktree
+  and lints and tests them. `tools/gen/testdata/golden/` holds what it creates for `widget`; after an
+  intended template change, `UPDATE_GOLDEN=1 go -C tools/gen test ./...` and review the diff.
