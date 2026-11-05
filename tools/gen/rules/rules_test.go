@@ -148,3 +148,96 @@ func TestUsecaseTargetsCheckTheDomainTheMessageAndTheTransports(t *testing.T) {
 		require.ErrorIs(t, err, rules.ErrTargets, what)
 	}
 }
+
+// A command on a domain whose GraphQL schema has no Mutation, as exchange's has only Query, gets no
+// GraphQL field by default: the field would have no type to go on. Asked for, it fails R4.
+func TestUsecaseTransportsLeaveOutGraphQLWithoutTheRootType(t *testing.T) {
+	t.Parallel()
+
+	fsys := fixtureRoot()
+	fsys["internal/controller/graphql/schema/task.graphqls"] = &fstest.MapFile{
+		Data: []byte("type Task { id: ID! }\n\ntype Query { task: Task }\n\ntype Mutation { deleteTask: Boolean }\n"),
+	}
+	fsys["internal/controller/graphql/schema/exchange.graphqls"] = &fstest.MapFile{
+		Data: []byte("type Conversion { rate: String! }\n\nextend type Query { exchangeHistory: [Conversion!]! }\n"),
+	}
+	r := repoOf(fsys)
+
+	for _, tc := range []struct {
+		domain, kind string
+		want         []string
+	}{
+		{"task", "command", []string{"rest", "grpc", "graphql"}},
+		{"task", "query", []string{"rest", "grpc", "graphql"}},
+		{"exchange", "command", []string{"rest", "grpc"}},
+		{"exchange", "query", []string{"rest", "grpc", "graphql"}},
+		{"user", "query", []string{"rest", "grpc"}},
+	} {
+		assert.Equal(t, tc.want, rules.UsecaseTransports(r, name(t, tc.domain), tc.kind), tc.domain+" "+tc.kind)
+	}
+}
+
+// restOperations is a REST package with two operations, registered the way every domain does, and
+// a test file whose operations the router never serves.
+func restOperations() fstest.MapFS {
+	file := func(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
+	op := func(id, method, path string) string {
+		return "\thuma.Register(api, huma.Operation{\n\t\tOperationID: \"" + id + "\",\n\t\tMethod: " + method +
+			",\n\t\tPath: \"" + path + "\",\n\t}, nil)\n"
+	}
+
+	return fstest.MapFS{
+		"internal/controller/restapi/v1/task/task.go": file("package task\n\nfunc ops(api huma.API) {\n" +
+			op("count-tasks", "http.MethodGet", "/v1/tasks/count") + op("get-task", `"GET"`, "/v1/tasks/{id}") + "}\n"),
+		"internal/controller/restapi/v1/user/user.go":      file("package user\n\nfunc ops(api huma.API) {\n" + op("register", "http.MethodPost", "/v1/auth/register") + "}\n"),
+		"internal/controller/restapi/v1/task/task_test.go": file("package task_test\n\nfunc ops(api huma.API) {\n" + op("seed-tasks", "http.MethodPost", "/v1/tasks/seed") + "}\n"),
+	}
+}
+
+func TestRouteFreeRefusesARouteOrAnOperationIDTheAPIHas(t *testing.T) {
+	t.Parallel()
+
+	r := repoOf(restOperations())
+
+	for what, tc := range map[string]struct {
+		method, path, id string
+		says             string
+	}{
+		"the same route": {
+			"GET", "/v1/tasks/count", "count-done-tasks",
+			"GET /v1/tasks/count is served already, by the operation count-tasks in internal/controller/restapi/v1/task/task.go: " +
+				"give the use case its own path=",
+		},
+		"a parameter named otherwise": {"GET", "/v1/tasks/{taskId}", "get-task-status", "by the operation get-task"},
+		"the same operation ID": {
+			"POST", "/v1/tasks/{id}/register", "register",
+			"internal/controller/restapi/v1/user/user.go registers the operation ID register already",
+		},
+	} {
+		err := rules.RouteFree(r, tc.method, tc.path, tc.id)
+
+		require.ErrorIs(t, err, rules.ErrTargets, what)
+		assert.Contains(t, err.Error(), tc.says, what)
+	}
+
+	for what, tc := range map[string]struct{ method, path, id string }{
+		"another method":         {"POST", "/v1/tasks/count", "recount-tasks"},
+		"another path":           {"GET", "/v1/tasks/stats", "count-done-tasks"},
+		"a route only tests use": {"POST", "/v1/tasks/seed", "seed-many-tasks"},
+	} {
+		require.NoError(t, rules.RouteFree(r, tc.method, tc.path, tc.id), what)
+	}
+}
+
+// A message carries the caller as UserID and the record it acts on as <Domain>ID, so on user the
+// two would be one field.
+func TestRecordFieldFreeRefusesARecordIDNamedAsTheCallers(t *testing.T) {
+	t.Parallel()
+
+	err := rules.RecordFieldFree(name(t, "user"), "/v1/users/{id}/lock")
+	require.ErrorIs(t, err, rules.ErrTargets)
+	assert.Contains(t, err.Error(), "give it a path without {id}")
+
+	require.NoError(t, rules.RecordFieldFree(name(t, "user"), "/v1/user/lock"), "acts on no record")
+	require.NoError(t, rules.RecordFieldFree(name(t, "task"), "/v1/tasks/{id}/archive"), "carries TaskID")
+}

@@ -51,7 +51,7 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 	}
 	defer root.Close()
 
-	return execute(ctx, r, root, pl.plan, pl.errs, req.dryRun, stdout)
+	return execute(ctx, r, root, pl, req.dryRun, stdout)
 }
 
 // planDomain plans every layer of the domain n that runs for transports, against the repository r,
@@ -70,6 +70,8 @@ func planDomain(r rules.Repo, tmpl fs.FS, n *names.Name, transports []string) *p
 	for _, l := range selectLayers(domainLayers(), transports) {
 		l.plan(pl)
 	}
+
+	pl.checklist()
 
 	return pl
 }

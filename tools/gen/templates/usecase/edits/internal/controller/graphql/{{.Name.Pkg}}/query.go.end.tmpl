@@ -1,0 +1,16 @@
+// {{.Usecase.Name.Go}} resolves Query.{{.Usecase.Name.Lower}}: it sends {{.Usecase.Name.Go}} and answers with its result, whose
+// placeholder field stays null. Once query.{{.Usecase.Name.Go}}Result has fields, give {{.Usecase.Name.Go}}Result in
+// the schema the same, and set them from the result here.
+func (q Query) {{.Usecase.Name.Go}}(ctx context.Context{{if .Usecase.ByID}}, id string{{end}}) (*model.{{.Usecase.Name.Go}}Result, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cqrs.SendQuery[query.{{.Usecase.Name.Go}}Result](ctx, q.qs, query.{{.Usecase.Name.Go}}{UserID: caller.UserID{{if .Usecase.ByID}}, {{.Name.Go}}ID: id{{end}}})
+	if err != nil {
+		return nil, gqlerr.Map(q.l, err, "{{.Usecase.Name.Lower}}")
+	}
+
+	return &model.{{.Usecase.Name.Go}}Result{}, nil
+}

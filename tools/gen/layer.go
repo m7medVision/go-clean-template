@@ -23,6 +23,9 @@ const (
 	_usecaseSet = "usecase"
 	// _editsDir holds, inside a set, the text of the insertions into existing files.
 	_editsDir = "edits"
+	// _nextTemplate is, inside a set, the checklist the command prints once it has written: what you
+	// write next.
+	_nextTemplate = "next.tmpl"
 )
 
 // layer is one part of what a command generates, such as the entity layer of a domain. Each lives
@@ -65,6 +68,10 @@ type planner struct {
 	errs []error
 	// used holds every template rendered, so a test can find any that no layer uses.
 	used map[string]bool
+	// next is the checklist the command prints once the plan is written, or once a dry run passes:
+	// the files you write next and the docs you update. The command renders it last, once every
+	// layer has read what it names.
+	next string
 }
 
 func newPlanner(r rules.Repo, tmpl fs.FS, set, title string, data *templates.Data) *planner {
@@ -117,6 +124,26 @@ func (pl *planner) text(name string) string {
 	}
 
 	return text
+}
+
+// exists reports whether the repository has a file or folder at p.
+func (pl *planner) exists(p string) bool {
+	_, err := fs.Stat(pl.repo.FS, p)
+
+	return err == nil
+}
+
+// checklist renders the set's checklist, <set>/next.tmpl, into pl.next.
+func (pl *planner) checklist() {
+	tmpl := path.Join(pl.set, _nextTemplate)
+	pl.used[tmpl] = true
+
+	text, err := templates.Text(pl.tmpl, tmpl, pl.data)
+	if err != nil {
+		pl.fail(err)
+	}
+
+	pl.next = text + "\n"
 }
 
 // editFile plans the insertions that edits return into the existing file at p, parsed with parse

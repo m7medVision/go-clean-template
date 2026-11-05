@@ -125,6 +125,16 @@ func TestGraphQLListsTheFieldsOfEveryTypeItDefinesOrExtends(t *testing.T) {
 	}
 }
 
+func TestGraphQLDeclaresTheTypesItDefinesAndThoseItExtends(t *testing.T) {
+	t.Parallel()
+
+	task, exchange := parseGraphQL(t, taskSchema), parseGraphQL(t, exchangeSchema)
+
+	assert.True(t, task.Declares("Mutation"), "defined")
+	assert.True(t, exchange.Declares("Query"), "extended")
+	assert.False(t, exchange.Declares("Mutation"))
+}
+
 func TestAtEndAppendsADefinition(t *testing.T) {
 	t.Parallel()
 

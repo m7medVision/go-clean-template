@@ -189,6 +189,35 @@ func TestImportRefusesANameAnotherImportBinds(t *testing.T) {
 	}
 }
 
+// A test file imports the package under test under a name of its own choosing: task's gRPC test
+// as task, a generated domain's as grpcwidget. What a test appended to it calls must use that name.
+func TestImportNameIsTheNameTheFileBindsAPathTo(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		path, alias, want string
+		inserts           bool
+	}{
+		"imported plainly":     {"github.com/m7medvision/go-clean-template/internal/usecase/task", "uc", "task", false},
+		"imported as an alias": {"github.com/m7medvision/go-clean-template/internal/repo/persistent/task", "", "persistTaskRepo", false},
+		"not imported":         {"github.com/m7medvision/go-clean-template/docs/proto/v1", "pb", "pb", true},
+		"not imported, plain":  {"github.com/m7medvision/go-clean-template/internal/entity", "", "entity", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ins, err := parseGo(t, importsSrc).ImportName(tc.path, tc.alias)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.inserts, len(ins) == 1, "imports it only when the file does not")
+		})
+	}
+
+	_, _, err := parseGo(t, importsSrc).ImportName("github.com/m7medvision/go-clean-template/internal/usecase/fmt", "")
+	require.ErrorIs(t, err, edit.ErrAnchor, "a name another import binds")
+}
+
 func TestImportStartsTheNonStandardGroupAfterTheStandardOne(t *testing.T) {
 	t.Parallel()
 

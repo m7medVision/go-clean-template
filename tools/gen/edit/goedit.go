@@ -90,6 +90,31 @@ func (g *Go) Import(path, alias string) ([]Insertion, error) {
 	}
 }
 
+// ImportName returns the name the file binds path to. A file that imports path already, under any
+// alias, needs nothing inserted; one that does not gets the insertion that imports it under alias,
+// as Import does, and binds the alias, or the package's own name when alias is empty. Code inserted
+// into a file that chose its own alias, as a test file may for the package it tests, calls the
+// package by the name this returns.
+func (g *Go) ImportName(path, alias string) (string, []Insertion, error) {
+	block, err := g.importBlock()
+	if err != nil {
+		return "", nil, err
+	}
+
+	for _, s := range block.Specs {
+		if is, ok := s.(*ast.ImportSpec); ok && importPath(is) == path {
+			return importName(path, aliasOf(is)), nil, nil
+		}
+	}
+
+	ins, err := g.Import(path, alias)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return importName(path, alias), ins, nil
+}
+
 func (g *Go) importBlock() (*ast.GenDecl, error) {
 	var found []*ast.GenDecl
 

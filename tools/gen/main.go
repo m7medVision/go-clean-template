@@ -198,7 +198,7 @@ func parseUsecase(args []string, stderr io.Writer) (usecaseRequest, error) {
 		return req, errUsage
 	}
 
-	if req.kind != "command" && req.kind != "query" {
+	if req.kind != _kindCommand && req.kind != _kindQuery {
 		fmt.Fprintf(stderr, "gen: --kind is command or query, not %q\n", req.kind)
 
 		return req, errUsage

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
 )
 
@@ -53,13 +55,19 @@ func planOperation(pl *planner) {
 	)...)
 }
 
-// imports returns edits followed by one edit for each of paths, which imports it unless the
-// file does already: the imports what edits inserts needs.
-func imports(edits func(*edit.Go) ([]edit.Insertion, error), paths ...string) []func(*edit.Go) ([]edit.Insertion, error) {
+// imports returns edits followed by one edit for each of specs, each a path or "alias path" as an
+// import line reads it, which imports it unless the file does already: the imports what edits
+// inserts needs.
+func imports(edits func(*edit.Go) ([]edit.Insertion, error), specs ...string) []func(*edit.Go) ([]edit.Insertion, error) {
 	all := []func(*edit.Go) ([]edit.Insertion, error){edits}
 
-	for _, p := range paths {
-		all = append(all, func(g *edit.Go) ([]edit.Insertion, error) { return g.Import(p, "") })
+	for _, spec := range specs {
+		alias, p, ok := strings.Cut(spec, " ")
+		if !ok {
+			alias, p = "", spec
+		}
+
+		all = append(all, func(g *edit.Go) ([]edit.Insertion, error) { return g.Import(p, alias) })
 	}
 
 	return all

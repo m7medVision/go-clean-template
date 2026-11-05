@@ -146,6 +146,13 @@ func (q *GraphQL) Types() []string {
 	return names
 }
 
+// Declares reports whether the file defines or extends the type called name, as a domain's schema
+// file extends Query and Mutation with its fields.
+func (q *GraphQL) Declares(name string) bool {
+	return slices.ContainsFunc(slices.Concat(q.doc.Definitions, q.doc.Extensions),
+		func(d *ast.Definition) bool { return d.Name == name })
+}
+
 // Fields returns the fields of every type the file defines or extends, each as Type.field, in
 // file order. Only object, interface and input types have fields.
 func (q *GraphQL) Fields() []string {

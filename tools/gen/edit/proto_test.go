@@ -87,6 +87,7 @@ func TestProtoListsItsServicesAndMessages(t *testing.T) {
 
 	assert.Equal(t, []string{"TaskService"}, p.Services())
 	assert.Equal(t, []string{"CreateTaskRequest"}, p.Messages())
+	assert.Equal(t, []string{"TaskService.CreateTask", "TaskService.ListAllTasks"}, p.RPCs())
 }
 
 func TestParseProtoRejectsBrokenSource(t *testing.T) {

@@ -170,8 +170,11 @@ func TestNewDomainRefusesANameWhoseGraphQLFieldsTheSchemaHas(t *testing.T) {
 func TestEveryCreatedFileMatchesItsGolden(t *testing.T) {
 	t.Parallel()
 
-	created := createdFiles(t, planWidget(t).plan)
+	pl := planWidget(t)
+	created := createdFiles(t, pl.plan)
 	require.NotEmpty(t, created)
+
+	golden(t, filepath.Join(_goldenDir, _nextGolden+".golden"), []byte(pl.next))
 
 	for p, content := range created {
 		t.Run(p, func(t *testing.T) {
@@ -181,6 +184,7 @@ func TestEveryCreatedFileMatchesItsGolden(t *testing.T) {
 		})
 	}
 
+	created[_nextGolden] = []byte(pl.next)
 	staleGoldens(t, _goldenDir, created)
 }
 
@@ -262,7 +266,7 @@ func TestEveryTemplateReadsAsItsFileForWidget(t *testing.T) {
 		created := createdFiles(t, pl.plan)
 
 		for tmpl := range pl.used {
-			if strings.HasPrefix(tmpl, path.Join(_domainSet, _editsDir)+"/") {
+			if strings.HasPrefix(tmpl, path.Join(_domainSet, _editsDir)+"/") || tmpl == path.Join(_domainSet, _nextTemplate) {
 				continue
 			}
 

@@ -1,0 +1,27 @@
+{{- $u := .Usecase -}}
+Next:
+{{- if eq $u.Kind "command"}}
+  - Write the handler, internal/usecase/{{.Name.Pkg}}/command/{{$u.Name.Snake}}.go, which returns
+    entity.ErrNotImplemented until you do: change the {{.Name.Words}} through aggregate.Change. Its
+    test says so, and goes red once you have: replace it with tests of what the command records.
+  - Add the event it records to internal/entity/{{.Name.Snake}}_events.go and to EventTypes() in
+    internal/entity/event.go; the behavior method that records it, with its case in Apply, to
+    internal/entity/{{.Name.Snake}}_aggregate.go; and its case to the projector,
+    internal/repo/persistent/{{.Name.Pkg}}/projector.go.
+{{- else}}
+  - Write the handler, internal/usecase/{{.Name.Pkg}}/query/{{$u.Name.Snake}}.go, which returns
+    entity.ErrNotImplemented until you do: read the answer from h.{{$u.Dep}}. Its test says so, and
+    goes red once you have: replace it with tests of what the query reads.
+  - Add the read-model method it calls to {{$u.DepType}} in internal/repo/contracts.go, to
+    internal/repo/persistent/{{.Name.Pkg}}/{{.Name.Snake}}.go and to
+    internal/repo/persistent/{{.Name.Pkg}}/tracing.go, with its SQL in
+    internal/repo/persistent/queries/{{.Name.Snake}}.sql; then make sqlc and make mock.
+  - Add the fields of the answer to {{$u.Name.Go}}Result in the handler's file
+{{- if or (.Has "grpc") (.Has "graphql")}}, then to{{end}}
+{{- if .Has "grpc"}}
+    {{$u.Name.Go}}Response in {{$u.ProtoFile}}{{if .Has "graphql"}} and to{{end}}{{end}}
+{{- if .Has "graphql"}}
+    {{$u.Name.Go}}Result in internal/controller/graphql/schema/{{.Name.Snake}}.graphqls, in place of
+    its todo field{{end}}.
+{{- end}}
+  - Add a row for {{$u.Name.Kebab}} to the {{.Name.Words}} table in docs/api.md.

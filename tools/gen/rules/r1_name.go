@@ -74,12 +74,13 @@ func parsed[T any](r Repo, p string, parse func(string, []byte) (T, error)) (T, 
 // to a package, in a file it creates or by an edit, is declared in that package already. A name
 // can be free of files and still clash. In Go the names are the top-level identifiers, methods as
 // Type.Method: record would declare the type entity.Record, and the entity package has a function
-// of that name. In a .proto file they are its messages and services, and the package is the
-// folder, as docs/proto/v1 is grpc.v1: login would declare LoginResponse, which auth.proto
-// declares, and only make proto-v1 would find it, after the write. In a .graphqls file they are
-// the types it defines and the fields it gives any type, as Type.field, and the schema is the
-// folder, which gqlgen reads as one: all-task would add Query.allTasks, which task.graphqls has,
-// and only make graphql would find it. Changes that do not format or parse are left to R5.
+// of that name. In a .proto file they are its messages and services, and its services' methods as
+// Service.Method, and the package is the folder, as docs/proto/v1 is grpc.v1: login would declare
+// LoginResponse, which auth.proto declares, and only make proto-v1 would find it, after the write.
+// In a .graphqls file they are the types it defines and the fields it gives any type, as
+// Type.field, and the schema is the folder, which gqlgen reads as one: all-task would add
+// Query.allTasks, which task.graphqls has, and only make graphql would find it. Changes that do not
+// format or parse are left to R5.
 func IdentifiersFree(r Repo, n *names.Name, p *plan.Plan) error {
 	changes, err := p.Changes()
 	if err != nil {
@@ -209,8 +210,9 @@ func added(c plan.Change, decls declarations) (pkg string, adds []string) {
 }
 
 // protoTopLevel returns the services and top-level messages the .proto file src declares, which
-// share one namespace; nothing for src that is empty or does not parse. The package is the folder,
-// whose files are one proto package, so it is left empty.
+// share one namespace, and the methods of its services, as Service.Method; nothing for src that is
+// empty or does not parse. The package is the folder, whose files are one proto package, so it is
+// left empty.
 func protoTopLevel(p string, src []byte) (pkg string, idents []string) {
 	if src == nil {
 		return "", nil
@@ -221,7 +223,7 @@ func protoTopLevel(p string, src []byte) (pkg string, idents []string) {
 		return "", nil
 	}
 
-	return "", slices.Concat(f.Services(), f.Messages())
+	return "", slices.Concat(f.Services(), f.Messages(), f.RPCs())
 }
 
 // graphqlTopLevel returns the types the .graphqls file src defines and the fields it gives every

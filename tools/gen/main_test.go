@@ -56,7 +56,7 @@ func TestRunDryRunPrintsThePlanAndWritesNothing(t *testing.T) {
 		"new-usecase": {
 			dir:  widgetRepo(t),
 			args: []string{"new-usecase", "--domain", "widget", "--name", "archive-widget", "--kind", "command", "--dry-run"},
-			want: "2 files to create, 4 to edit",
+			want: "2 files to create, 10 to edit",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -68,6 +68,8 @@ func TestRunDryRunPrintsThePlanAndWritesNothing(t *testing.T) {
 
 			assert.Equal(t, _exitOK, run(t.Context(), append(tc.args, "--root", tc.dir), &stdout, &stderr), stderr.String())
 			assert.Contains(t, stdout.String(), tc.want)
+			assert.Contains(t, stdout.String(), "Every rule passes. Run it again without dry-run=1 to write it.\n\nNext:\n",
+				"the checklist, once the rules pass")
 			assert.Equal(t, before, fingerprint(t, tc.dir))
 		})
 	}

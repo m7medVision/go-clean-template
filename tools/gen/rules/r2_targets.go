@@ -7,7 +7,9 @@ import (
 	"go/token"
 	"path"
 	"slices"
+	"strings"
 
+	"github.com/m7medvision/go-clean-template/tools/gen/edit"
 	"github.com/m7medvision/go-clean-template/tools/gen/names"
 )
 
@@ -51,6 +53,41 @@ func DomainTransports(r Repo, domain string) []string {
 	}
 
 	return have
+}
+
+// UsecaseTransports returns the transports a use case of kind (command or query) gets on domain
+// when none are asked for: those DomainTransports lists, less GraphQL when the domain's schema file,
+// schema/<name>.graphqls, neither defines nor extends the root type the use case's field goes on,
+// Mutation for a command and Query for a query. Exchange resolves no mutations, so a command on it
+// gets no GraphQL field unless it is asked for, and then fails R4, naming Mutation.
+func UsecaseTransports(r Repo, domain *names.Name, kind string) []string {
+	have := DomainTransports(r, domain.Pkg)
+
+	root := "Query"
+	if kind == "command" {
+		root = "Mutation"
+	}
+
+	schema, err := parsed(r, "internal/controller/graphql/schema/"+domain.Snake+".graphqls", edit.ParseGraphQL)
+	if err != nil || schema.Declares(root) {
+		return have // a schema file that is missing or broken fails the rules once the plan reads it
+	}
+
+	return slices.DeleteFunc(have, func(t string) bool { return t == "graphql" })
+}
+
+// RecordFieldFree checks R2 for a use case on domain whose REST path is route: when the path holds
+// {id}, the use case acts on one record, and its message carries the record's ID as <Domain>ID
+// beside the caller's UserID. On user the two would be one field, so a use case there acts on no
+// record, which a path without {id} says, and its message gets the fields it needs by hand.
+func RecordFieldFree(domain *names.Name, route string) error {
+	if !strings.Contains(route, "{id}") || domain.Go+"ID" != "UserID" {
+		return nil
+	}
+
+	return fmt.Errorf("%w: a use case that acts on one %s, as {id} in its path %s says, would carry its ID as UserID, "+
+		"which holds the caller's: give it a path without {id} (path=), and its message the fields it needs",
+		ErrTargets, domain.Words, route)
 }
 
 // UsecaseTargets checks R2 for a new use case: the domain exists, it has every one of

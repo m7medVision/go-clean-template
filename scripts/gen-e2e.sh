@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Generator end to end: proves that what make new-domain writes builds, lints and passes its tests.
+# Generator end to end: proves that what make new-domain and make new-usecase write builds, lints
+# and passes its tests.
 # It runs against the working tree as it is on disk, not HEAD, so template work is tested before it
 # is committed: a throwaway git worktree gets HEAD, then the tracked changes and the untracked
 # files under tools/gen, committed there so the generator's rule R3 (no uncommitted changes) holds.
@@ -43,9 +44,30 @@ fi
 git -C "$repo" ls-files -z --others --exclude-standard -- tools/gen |
 	tar -C "$repo" --null -T - -cf - | tar -C "$wt" -xf -
 
-git -C "$wt" add --all
-git -C "$wt" -c user.name=gen-e2e -c user.email=gen-e2e@localhost -c commit.gpgsign=false \
-	commit --quiet --allow-empty --no-verify -m "gen-e2e: the working tree"
+# commit commits everything in the worktree under a throwaway identity, so the next run of the
+# generator finds the files it edits clean (rule R3).
+commit() {
+	git -C "$wt" add --all
+	git -C "$wt" -c user.name=gen-e2e -c user.email=gen-e2e@localhost -c commit.gpgsign=false \
+		commit --quiet --allow-empty --no-verify -m "gen-e2e: $1"
+}
+
+# operations fails unless docs/openapi/v1.json, which make openapi exported among the regenerators,
+# has each operation ID given.
+operations() {
+	for op in "$@"; do
+		grep -q "\"operationId\": \"$op\"" docs/openapi/v1.json ||
+			{ echo "gen-e2e: docs/openapi/v1.json has no $op operation" >&2; exit 1; }
+	done
+}
+
+# has fails unless the file or folder $1 holds the text $2, which a regenerator wrote: $3 says
+# which.
+has() {
+	grep -rqF -- "$2" "$1" || { echo "gen-e2e: $3 wrote no $2 in $1" >&2; exit 1; }
+}
+
+commit "the working tree"
 
 cd "$wt"
 make web-deps
@@ -54,10 +76,7 @@ echo "gen-e2e: what generating changed:"
 git status --short
 # make openapi ran among the regenerators: the REST operations must be in the exported document,
 # which make web-api then typed for the web client.
-for op in create-widget list-widgets get-widget update-widget delete-widget; do
-	grep -q "\"operationId\": \"$op\"" docs/openapi/v1.json ||
-		{ echo "gen-e2e: docs/openapi/v1.json has no $op operation" >&2; exit 1; }
-done
+operations create-widget list-widgets get-widget update-widget delete-widget
 # make proto-v1 ran too: the gRPC controller builds on the Go code it generates from widget.proto.
 for f in docs/proto/v1/widget.pb.go docs/proto/v1/widget_grpc.pb.go; do
 	[ -f "$f" ] || { echo "gen-e2e: make proto-v1 wrote no $f" >&2; exit 1; }
@@ -75,3 +94,32 @@ f=integration-test/widget_test.go
 [ -f "$f" ] || { echo "gen-e2e: make new-domain wrote no $f" >&2; exit 1; }
 echo "gen-e2e: go vet ./integration-test/..."
 go vet ./integration-test/...
+commit "new-domain widget"
+
+# A command and a query on the generated domain, then a command on task, which is hand-written:
+# each gets its REST operation, its gRPC method and its GraphQL field, and the regenerators that
+# make new-usecase runs must have made each of them into code.
+make new-usecase domain=widget name=archive-widget kind=command
+git status --short
+operations archive-widget
+has docs/proto/v1/widget_grpc.pb.go 'WidgetService_ArchiveWidget_FullMethodName' 'make proto-v1'
+# gqlgen puts a root type's fields in the file of the schema file that defines it, task's for
+# Mutation, which the other schema files extend.
+has internal/controller/graphql/generated '_Mutation_archiveWidget(' 'make graphql'
+make linter-golangci test
+commit "new-usecase widget archive-widget"
+
+make new-usecase domain=widget name=count-widgets kind=query
+git status --short
+operations count-widgets
+has docs/proto/v1/widget_grpc.pb.go 'WidgetService_CountWidgets_FullMethodName' 'make proto-v1'
+has internal/controller/graphql/model/models_gen.go 'type CountWidgetsResult struct' 'make graphql'
+make linter-golangci test
+commit "new-usecase widget count-widgets"
+
+make new-usecase domain=task name=archive-task kind=command
+git status --short
+operations archive-task
+has docs/proto/v1/task_grpc.pb.go 'TaskService_ArchiveTask_FullMethodName' 'make proto-v1'
+has internal/controller/graphql/generated '_Mutation_archiveTask(' 'make graphql'
+make linter-golangci test

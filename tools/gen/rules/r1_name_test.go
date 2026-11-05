@@ -2,6 +2,7 @@ package rules_test
 
 import (
 	"go/token"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -127,18 +128,31 @@ func TestIdentifiersFreeRejectsAProtoNameAnotherFileInTheFolderDeclares(t *testi
 	}
 }
 
+// A method's name is unique within its service, so an rpc the service has already is taken too:
+// only make proto-v1 would find it, after the write.
 func TestIdentifiersFreeLooksAtWhatAProtoEditAdds(t *testing.T) {
 	t.Parallel()
 
+	const p = "docs/proto/v1/auth.proto"
+
 	src := []byte(authProto)
+	rpc := strings.Index(authProto, "}\n")
 
-	p := plan.New("x")
-	p.Edit("docs/proto/v1/auth.proto", src, edit.Insertion{Path: "docs/proto/v1/auth.proto", Offset: len(src), Text: "\nmessage LoginRequest {}\n"})
+	for what, tc := range map[string]struct {
+		at          int
+		text, clash string
+	}{
+		"a message": {len(src), "\nmessage LoginRequest {}\n", "LoginRequest"},
+		"an rpc":    {rpc, "  rpc Login (LogoutRequest) returns (LogoutResponse);\n", "AuthService.Login"},
+	} {
+		pl := plan.New("x")
+		pl.Edit(p, src, edit.Insertion{Path: p, Offset: tc.at, Text: tc.text})
 
-	err := rules.IdentifiersFree(repoOf(fstest.MapFS{"docs/proto/v1/auth.proto": {Data: src}}), name(t, "login"), p)
+		err := rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "login"), pl)
 
-	require.ErrorIs(t, err, names.ErrInvalid)
-	assert.Contains(t, err.Error(), "docs/proto/v1/auth.proto would declare LoginRequest twice")
+		require.ErrorIs(t, err, names.ErrInvalid, what)
+		assert.Contains(t, err.Error(), p+" would declare "+tc.clash+" twice", what)
+	}
 }
 
 func TestIdentifiersFreeAcceptsProtoNamesThatAreNewToTheirFolder(t *testing.T) {

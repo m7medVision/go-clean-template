@@ -75,3 +75,24 @@ func (p *Proto) Messages() []string {
 
 	return names
 }
+
+// RPCs returns the methods of the file's services, each as Service.Method, in order: a method's
+// name is unique only within its service.
+func (p *Proto) RPCs() []string {
+	var names []string
+
+	for _, d := range p.file.Decls {
+		s, ok := d.(*ast.ServiceNode)
+		if !ok {
+			continue
+		}
+
+		for _, e := range s.Decls {
+			if rpc, ok := e.(*ast.RPCNode); ok {
+				names = append(names, string(s.Name.AsIdentifier())+"."+string(rpc.Name.AsIdentifier()))
+			}
+		}
+	}
+
+	return names
+}

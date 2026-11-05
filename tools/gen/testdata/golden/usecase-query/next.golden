@@ -1,0 +1,13 @@
+Next:
+  - Write the handler, internal/usecase/widget/query/count_widgets.go, which returns
+    entity.ErrNotImplemented until you do: read the answer from h.Widgets. Its test says so, and
+    goes red once you have: replace it with tests of what the query reads.
+  - Add the read-model method it calls to WidgetReadModel in internal/repo/contracts.go, to
+    internal/repo/persistent/widget/widget.go and to
+    internal/repo/persistent/widget/tracing.go, with its SQL in
+    internal/repo/persistent/queries/widget.sql; then make sqlc and make mock.
+  - Add the fields of the answer to CountWidgetsResult in the handler's file, then to
+    CountWidgetsResponse in docs/proto/v1/widget.proto and to
+    CountWidgetsResult in internal/controller/graphql/schema/widget.graphqls, in place of
+    its todo field.
+  - Add a row for count-widgets to the widget table in docs/api.md.

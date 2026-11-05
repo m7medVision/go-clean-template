@@ -1,0 +1,12 @@
+{{if .Usecase.ByID -}}
+// The fields {{.Usecase.Name.Kebab}} needs go here, after the id of the {{.Name.Words}} it asks about.
+message {{.Usecase.Name.Go}}Request {
+  string id = 1;
+}
+{{- else -}}
+// The fields {{.Usecase.Name.Kebab}} needs go here.
+message {{.Usecase.Name.Go}}Request {}
+{{- end}}
+
+// The fields of query.{{.Usecase.Name.Go}}Result go here, and into the response {{.Usecase.Name.Go}} answers.
+message {{.Usecase.Name.Go}}Response {}

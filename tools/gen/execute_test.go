@@ -137,13 +137,19 @@ func TestExecuteWritesAPlanThatPassesEveryRule(t *testing.T) {
 	dir := gitRepo(t)
 
 	var out bytes.Buffer
-	require.NoError(t, execute(t.Context(), rules.Open(dir), openRoot(t, dir), widgetPlan(), nil, false, &out))
+	require.NoError(t, execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(), nil), false, &out))
 
 	got, err := os.ReadFile(filepath.Join(dir, "internal", "app", "buses.go"))
 	require.NoError(t, err)
 	assert.Equal(t, "package app\n\n// widget\n", string(got))
 	assert.Contains(t, out.String(), "git checkout -- internal/app/buses.go docs/openapi/v1.json")
 	assert.Contains(t, out.String(), "git clean -fd -- internal/usecase/widget docs/openapi/v1.json")
+	assert.True(t, strings.HasSuffix(out.String(), "web/src/graphql\n\nNext:\n  - write it\n"), "the checklist, after the undo: %s", out.String())
+}
+
+// planned is the planner that made p, running into errs, with a checklist of one line.
+func planned(p *plan.Plan, errs []error) *planner {
+	return &planner{plan: p, errs: errs, next: "Next:\n  - write it\n"}
 }
 
 // ruleFailure sets up one rule's failure. arrange runs before the tree is fingerprinted: it is
@@ -172,7 +178,7 @@ func ruleFailures() map[string]ruleFailure {
 			p := widgetPlan()
 			p.Create("internal/usecase/task/register.go", []byte("package task\n"))
 
-			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), p, nil, false, &bytes.Buffer{})
+			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
 		}, rules.ErrTargets},
 		"R3 file to edit is dirty": {func(t *testing.T, dir string) {
 			t.Helper()
@@ -183,13 +189,13 @@ func ruleFailures() map[string]ruleFailure {
 
 			p := widgetPlan()
 
-			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), p, nil, false, &bytes.Buffer{})
+			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
 		}, rules.ErrClean},
 		"R4 anchor not found": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
-			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), widgetPlan(),
-				[]error{fmt.Errorf("%w: buses.go: found func subscribers 0 times", edit.ErrAnchor)}, false, &bytes.Buffer{})
+			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(),
+				[]error{fmt.Errorf("%w: buses.go: found func subscribers 0 times", edit.ErrAnchor)}), false, &bytes.Buffer{})
 		}, edit.ErrAnchor},
 		"R5 edit breaks a file": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
@@ -197,14 +203,14 @@ func ruleFailures() map[string]ruleFailure {
 			p := widgetPlan()
 			p.Edit("internal/app/buses.go", nil, edit.Insertion{Offset: 0, Text: "}"})
 
-			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), p, nil, false, &bytes.Buffer{})
+			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
 		}, plan.ErrInvalid},
 		"R6 write fails part-way": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			root := &failingRename{FS: openRoot(t, dir)}
 
-			return execute(t.Context(), rules.Open(dir), root, widgetPlan(), nil, false, &bytes.Buffer{})
+			return execute(t.Context(), rules.Open(dir), root, planned(widgetPlan(), nil), false, &bytes.Buffer{})
 		}, plan.ErrWrite},
 	}
 }

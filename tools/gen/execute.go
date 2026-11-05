@@ -25,24 +25,25 @@ func regenerated() []string {
 	}
 }
 
-// execute checks p against R2 to R5 and, unless it is a dry run, writes it (R6) and prints the
-// undo. A dry run prints the plan, then fails if a rule would. planErrs are what planning ran
-// into.
-func execute(ctx context.Context, r rules.Repo, root plan.FS, p *plan.Plan, planErrs []error, dryRun bool, stdout io.Writer) error {
-	checked := rules.Check(ctx, r, p, regenerated(), planErrs)
+// execute checks the plan pl made against R2 to R5 and, unless it is a dry run, writes it (R6) and
+// prints the undo. A dry run prints the plan, then fails if a rule would. Once the plan is written,
+// or a dry run passes, it prints the planner's checklist: what you write next.
+func execute(ctx context.Context, r rules.Repo, root plan.FS, pl *planner, dryRun bool, stdout io.Writer) error {
+	p := pl.plan
+	checked := rules.Check(ctx, r, p, regenerated(), pl.errs)
 
 	if dryRun {
 		if err := p.DryRun(stdout); err != nil {
 			return err
 		}
 
-		if checked == nil {
-			_, err := fmt.Fprintln(stdout, "\nEvery rule passes. Run it again without dry-run=1 to write it.")
-
-			return err
+		if checked != nil {
+			return checked
 		}
 
-		return checked
+		_, err := fmt.Fprintf(stdout, "\nEvery rule passes. Run it again without dry-run=1 to write it.\n\n%s", pl.next)
+
+		return err
 	}
 
 	if checked != nil {
@@ -59,8 +60,8 @@ func execute(ctx context.Context, r rules.Repo, root plan.FS, p *plan.Plan, plan
 		return err
 	}
 
-	_, err = fmt.Fprintf(stdout, "%s: created %d, edited %d.\nTo undo it, and what the regenerators do next:\n  %s\n",
-		p.Title(), len(p.Created()), len(written.Edited), plan.Undo(written.Edited, regenerated(), written.Removable))
+	_, err = fmt.Fprintf(stdout, "%s: created %d, edited %d.\nTo undo it, and what the regenerators do next:\n  %s\n\n%s",
+		p.Title(), len(p.Created()), len(written.Edited), plan.Undo(written.Edited, regenerated(), written.Removable), pl.next)
 
 	return err
 }

@@ -327,7 +327,14 @@ for a query; `method=` and `path=` override them.
 In the domain's `.proto`, the rpc goes in the service, and its two messages go at the end of the
 file. In `grpc/v1/{{domain}}/{{domain}}.go`, the method goes at the end. In `{{domain}}_test.go`,
 a test with its own fake goes at the end.
-- [ ] Goldens for both kinds.
+
+*Changed while building it:* the service is read from the `Unimplemented<Service>Server` the
+domain's `Controller` embeds, and the `.proto` file is the one that declares it, since `user`
+serves `AuthService` from `auth.proto`; `controller.go` must declare `fail` (R4). `user` and
+`exchange` have no gRPC test file, so a domain without one gets it, created with the test's
+imports. The test serves the controller over `bufconn` on buses holding only its fake, and calls
+the proto and controller packages by the names the test file imports them under (`ImportName`).
+- [x] Goldens for both kinds.
 
 **Verify:** GG. **Depends on:** 23. **Files:** 3 templates, `tools/gen/usecase.go`, goldens. **Size:** S
 
@@ -335,8 +342,14 @@ a test with its own fake goes at the end.
 A field on the domain file's `Mutation` or `Query`. The resolver goes at the end of `mutation.go`
 or `query.go`, the fake in `fake_test.go`, and a test at the end of the test file. A query's
 result type starts with the `todo: Boolean` placeholder (spec, Decided 3).
-- [ ] Goldens for both kinds.
-- [ ] `exchange` with `kind=command` and an explicit `transports=graphql` fails, naming the
+
+*Changed while building it:* no `fake_test.go` edit, as in task 24: the test is self-contained,
+through `graphqltest` on buses holding only its fake. A schema without the root type fails R4,
+naming it, and nothing more is planned for the field, so a missing `mutation.go` (R2) cannot hide
+why. The default transports leave GraphQL out for a command on such a domain
+(`rules.UsecaseTransports`): exchange has no `Mutation`.
+- [x] Goldens for both kinds.
+- [x] `exchange` with `kind=command` and an explicit `transports=graphql` fails, naming the
       missing `Mutation`.
 
 **Verify:** GG. **Depends on:** 23. **Files:** 3 templates, `tools/gen/usecase.go`, goldens. **Size:** S
@@ -348,13 +361,23 @@ result type starts with the `todo: Boolean` placeholder (spec, Decided 3).
 - `make new-usecase domain=task name=archive-task kind=command`, a hand-written domain.
 
 Each is followed by the regenerators and the gates.
-- [ ] `make gen-e2e` passes.
+
+*Added while building it:*
+- **R2 on the REST route** (`rules.RouteFree`): a use case whose operation ID, or method and path,
+  an operation of the app already has is refused before the write, suggesting `path=`. It used to
+  be a known limitation that only `make test` caught.
+- **R2 on the record field** (`rules.RecordFieldFree`): a use case that acts on one `user` would
+  carry its ID as `UserID`, the caller's field, and failed the build after the write; it now takes
+  a path without `{id}`.
+- **The printed checklist**: both commands print "Next:" after the write and after a passing dry
+  run, from `templates/<set>/next.tmpl`, with a golden for each.
+- [x] `make gen-e2e` passes.
 
 **Verify:** GE. **Depends on:** 24, 25, 26. **Files:** `scripts/gen-e2e.sh`. **Size:** S
 
 ### Checkpoint E: `new-usecase` complete
-- [ ] GE.
-- [ ] Scratch copy: `make new-usecase domain=task name=archive-task kind=command`, then
+- [x] GE.
+- [x] Scratch copy: `make new-usecase domain=task name=archive-task kind=command`, then
       `make pre-commit` and G2 pass (success criterion 3). Run again, it fails R2.
 
 ## Phase 6: Ship

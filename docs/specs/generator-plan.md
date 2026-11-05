@@ -45,8 +45,9 @@ the e2e job catches a broken template come last.
    requires those output paths to be clean too. The printed undo restores them and removes what
    they added, so it stays exact.
 6. **`new-usecase` defaults `transports` to the ones the domain already has** (spec updated).
-   `user` has no GraphQL and `exchange` has no `Mutation`. An explicit `transports=` naming one
-   the domain lacks fails R2.
+   `user` has no GraphQL and `exchange` has no `Mutation`, so a command on `exchange` gets no
+   GraphQL field by default (task 26). An explicit `transports=` naming one the domain lacks fails
+   R2; naming GraphQL for a command on `exchange` fails R4, naming `Mutation`.
 7. **Empty shapes** (spec updated). Go structs and proto messages may be empty, so the generated
    request DTOs and messages are empty, as the place to add fields. GraphQL forbids empty input
    and object types. Generated mutations therefore take only `id`, and the domain gets no
@@ -154,12 +155,12 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 ### Phase 5: `new-usecase`
 - [x] 23. Use-case layer for both kinds
 - [x] 24. REST operation
-- [ ] 25. gRPC method
-- [ ] 26. GraphQL field
-- [ ] 27. `new-usecase` in the e2e job
+- [x] 25. gRPC method
+- [x] 26. GraphQL field
+- [x] 27. `new-usecase` in the e2e job
 
 ### Checkpoint E: `new-usecase` complete
-- [ ] Success criterion 3 on `task` in a scratch copy.
+- [x] Success criterion 3 on `task` in a scratch copy.
 
 ### Phase 6: Ship
 - [ ] 28. CI jobs and `make pre-commit`

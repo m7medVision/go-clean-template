@@ -14,6 +14,9 @@
 // the import paths an edit adds are built in code, from Data.Module. A created file writes the app's
 // imports as {{.Module}}/internal/…, so it follows the module go.mod declares.
 //
+// <set>/next.tmpl is the checklist the command prints once it has written: the files you write next
+// and the docs you update.
+//
 // Three habits keep templates parsing and reading well. In Go, a brace right before an action is
 // written "{ {{- .Name.Go}}", since "{{{" does not parse. Two braces that open nested composite
 // literals, as in []map[string][]string{{…}}, are written {{"{{"}}, which renders them. Comments
@@ -82,6 +85,14 @@ type Usecase struct {
 	Dep, DepType string
 	// RESTTag is the constant the domain's REST operations are tagged with, as in _tasksTag.
 	RESTTag string
+	// GRPCService is the service the domain's gRPC controller serves, as in TaskService, and
+	// ProtoFile the .proto file that declares it, as in docs/proto/v1/task.proto: user's controller
+	// serves AuthService, from auth.proto.
+	GRPCService, ProtoFile string
+	// ProtoPkg and ControllerPkg are the names the domain's gRPC test file imports the proto package
+	// and the controller package under, as in pb and task: a generated domain's test imports its
+	// controller as grpcwidget.
+	ProtoPkg, ControllerPkg string
 }
 
 // ByID reports whether the use case acts on one record, named by its ID: its REST path holds

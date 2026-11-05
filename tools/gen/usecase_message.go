@@ -17,7 +17,7 @@ func planMessage(pl *planner) {
 	register := "internal/usecase/" + pl.data.Name.Pkg + "/register.go"
 
 	depType, handle := "repo.EventStore", "cqrs.HandleCommand"
-	if u.Kind == "query" {
+	if u.Kind == _kindQuery {
 		depType, handle = "repo.*ReadModel", "cqrs.HandleQuery"
 	}
 
