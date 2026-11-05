@@ -160,7 +160,7 @@ printed after a successful write.
 ### Checkpoint B: machinery
 - [x] GG.
 - [x] A failure of each rule from R1 to R6 leaves the tree byte-identical (success criterion 4).
-- [ ] **Your review** of the plan, editor and rule APIs before the templates build on them.
+- [x] **Your review** of the plan, editor and rule APIs before the templates build on them.
 
 ## Phase 4: `new-domain`
 
@@ -291,7 +291,7 @@ Only the named transports' files and edits are planned. The integration test cov
       criteria 1 and 2).
 - [x] The same command run again fails R1 and writes nothing (success criterion 5).
 - [x] `go list -deps ./cmd/app ./cmd/worker` names nothing under `tools/gen` (success criterion 7).
-- [ ] **Your review** of one generated domain.
+- [x] **Your review** of one generated domain.
 
 ## Phase 5: `new-usecase`
 

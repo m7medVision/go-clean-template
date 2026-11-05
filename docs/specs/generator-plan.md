@@ -129,7 +129,7 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 ### Checkpoint B: machinery
 - [x] `make gen-check`; a failure of each rule from R1 to R6 leaves the tree byte-identical
       (success criterion 4).
-- [ ] **Your review** of the plan, editor and rule APIs before the templates build on them.
+- [x] **Your review** of the plan, editor and rule APIs before the templates build on them.
 
 ### Phase 4: `new-domain`
 - [x] 13. Entity layer, and `new-domain` wired end to end
@@ -150,7 +150,7 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 
 ### Checkpoint D: `new-domain` complete
 - [x] Success criteria 1, 2, 5 and 7 on a scratch copy.
-- [ ] **Your review** of one generated domain.
+- [x] **Your review** of one generated domain.
 
 ### Phase 5: `new-usecase`
 - [x] 23. Use-case layer for both kinds
