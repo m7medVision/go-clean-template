@@ -165,10 +165,10 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 ### Phase 6: Ship
 - [x] 28. CI jobs and `make pre-commit`
 - [x] 29. Docs
-- [ ] 30. Proof that the e2e job catches a broken template
+- [x] 30. Proof that the e2e job catches a broken template
 
 ### Checkpoint F: complete
-- [ ] Every success criterion in the spec; CI green on the PR.
+- [x] Every success criterion in the spec; CI green on the PR.
 
 ## Risks and mitigations
 

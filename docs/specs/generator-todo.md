@@ -427,10 +427,20 @@ Confirmed on GitHub: run 41945297265 on PR #47 passed both jobs (gen / check 1m0
 Success criterion 6: one commit on the PR breaks a template on purpose, its CI run fails in
 `runner / gen / e2e`, and the next commit restores it. This pushes a red commit, so it waits for
 your go-ahead.
-- [ ] The failing run is linked in the PR description.
+- [x] The failing run is linked in the PR description.
 
 **Verify:** CI red, then green. **Depends on:** 28. **Files:** one template. **Size:** XS
 
+Shown on GitHub. Commit 5c7e14b made the entity aggregate template
+(`templates/domain/internal/entity/{{.Name.Snake}}_aggregate.go.tmpl`) embed `AggregateCore`, which
+the app does not have, in place of `AggregateBase`, and updated its golden, so `gen / check`
+passed. Its run failed in `gen / e2e` and `ci-ok`, every other job passing or skipped:
+https://github.com/m7medVision/go-clean-template/actions/runs/41946725011. It stopped in
+`make new-domain`, whose `make graphql` could not compile the generated entity:
+`../../entity/widget_aggregate.go:20:2: undefined: AggregateCore`. Commit 7d94acf restored the
+template; its run passed every job that ran, and `ci-ok`:
+https://github.com/m7medVision/go-clean-template/actions/runs/41947302375.
+
 ### Checkpoint F: complete
-- [ ] Every success criterion in the spec.
-- [ ] CI green on the PR.
+- [x] Every success criterion in the spec.
+- [x] CI green on the PR.
