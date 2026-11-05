@@ -1,0 +1,12 @@
+Next:
+  - Write the handlers, which return entity.ErrNotImplemented until you do. Each has a test that
+    says so, which goes red once you have: replace it with tests of what the handler does.
+      internal/usecase/{{.Name.Pkg}}/command/create_{{.Name.Snake}}.go
+      internal/usecase/{{.Name.Pkg}}/command/update_{{.Name.Snake}}.go
+      internal/usecase/{{.Name.Pkg}}/command/delete_{{.Name.Snake}}.go
+      internal/usecase/{{.Name.Pkg}}/query/get_{{.Name.Snake}}.go
+      internal/usecase/{{.Name.Pkg}}/query/list_{{.Name.Plural.Snake}}.go
+  - Add the {{.Name.Words}} section to docs/api.md, and a bullet for it to What you get in README.md.
+  - Add the {{.Name.Words}} aggregate and projector rows to docs/cqrs.md.
+  - Write {{.Name.Words}} before you generate another domain: until one of them has fields and bodies
+    of its own, dupl finds two generated domains to be clones, and make linter-golangci fails.

@@ -1,0 +1,12 @@
+Next:
+  - Write the handlers, which return entity.ErrNotImplemented until you do. Each has a test that
+    says so, which goes red once you have: replace it with tests of what the handler does.
+      internal/usecase/widget/command/create_widget.go
+      internal/usecase/widget/command/update_widget.go
+      internal/usecase/widget/command/delete_widget.go
+      internal/usecase/widget/query/get_widget.go
+      internal/usecase/widget/query/list_widgets.go
+  - Add the widget section to docs/api.md, and a bullet for it to What you get in README.md.
+  - Add the widget aggregate and projector rows to docs/cqrs.md.
+  - Write widget before you generate another domain: until one of them has fields and bodies
+    of its own, dupl finds two generated domains to be clones, and make linter-golangci fails.

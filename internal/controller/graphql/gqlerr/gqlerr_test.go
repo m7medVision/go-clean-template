@@ -36,6 +36,7 @@ func TestMapGivesEachSentinelItsCode(t *testing.T) {
 		entity.ErrInvalidTransition:   "BAD_USER_INPUT",
 		entity.ErrReadModelBehind:     "UNAVAILABLE",
 		entity.ErrConcurrencyConflict: "CONFLICT",
+		entity.ErrNotImplemented:      "NOT_IMPLEMENTED",
 		errBroken:                     "INTERNAL",
 	} {
 		assert.Equal(t, want, code(t, gqlerr.Map(l, fmt.Errorf("wrapped: %w", sentinel), "op")), sentinel.Error())

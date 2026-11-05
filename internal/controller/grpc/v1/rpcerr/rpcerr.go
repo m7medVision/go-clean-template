@@ -11,14 +11,17 @@ import (
 )
 
 // Shared returns the status for a failure every command can produce, and nil for any other:
-// entity.ErrReadModelBehind is Unavailable (saved, read again shortly), and
-// entity.ErrConcurrencyConflict is Aborted (the record changed meanwhile, even after retries).
+// entity.ErrReadModelBehind is Unavailable (saved, read again shortly),
+// entity.ErrConcurrencyConflict is Aborted (the record changed meanwhile, even after retries), and
+// entity.ErrNotImplemented is Unimplemented (the handler is still a generated stub).
 func Shared(err error) error {
 	switch {
 	case errors.Is(err, entity.ErrReadModelBehind):
 		return status.Error(codes.Unavailable, "saved, but not yet readable: read it again shortly")
 	case errors.Is(err, entity.ErrConcurrencyConflict):
 		return status.Error(codes.Aborted, "the record changed while this request ran: try again")
+	case errors.Is(err, entity.ErrNotImplemented):
+		return status.Error(codes.Unimplemented, "not implemented")
 	default:
 		return nil
 	}

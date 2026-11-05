@@ -1,0 +1,24 @@
+package query_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+)
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what CountWidgets reads.
+func TestCountWidgetsIsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := query.CountWidgetsHandler{Widgets: repomock.NewMockWidgetReadModel(gomock.NewController(t))}
+
+	_, err := h.Handle(context.Background(), query.CountWidgets{UserID: "user-1"})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

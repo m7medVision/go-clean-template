@@ -1,0 +1,33 @@
+package command
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+// UpdateWidget changes UserID's widget. Another user's widget is entity.ErrWidgetForbidden.
+// The fields it changes go here.
+type UpdateWidget struct {
+	UserID   string
+	WidgetID string
+}
+
+// CommandName -.
+func (UpdateWidget) CommandName() string { return "UpdateWidget" }
+
+// ActorID -.
+func (c UpdateWidget) ActorID() string { return c.UserID }
+
+// UpdateWidgetHandler handles UpdateWidget.
+type UpdateWidgetHandler struct {
+	Store repo.EventStore
+}
+
+// Handle is a stub: write it to load the widget through aggregate.Change and call its Update.
+func (UpdateWidgetHandler) Handle(_ context.Context, _ UpdateWidget) (cqrs.Written, error) {
+	return cqrs.Written{}, fmt.Errorf("UpdateWidget: %w", entity.ErrNotImplemented)
+}

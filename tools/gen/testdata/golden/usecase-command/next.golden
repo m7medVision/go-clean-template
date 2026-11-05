@@ -1,0 +1,9 @@
+Next:
+  - Write the handler, internal/usecase/widget/command/archive_widget.go, which returns
+    entity.ErrNotImplemented until you do: change the widget through aggregate.Change. Its
+    test says so, and goes red once you have: replace it with tests of what the command records.
+  - Add the event it records to internal/entity/widget_events.go and to EventTypes() in
+    internal/entity/event.go; the behavior method that records it, with its case in Apply, to
+    internal/entity/widget_aggregate.go; and its case to the projector,
+    internal/repo/persistent/widget/projector.go.
+  - Add a row for archive-widget to the widget table in docs/api.md.

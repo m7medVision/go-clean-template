@@ -1,0 +1,21 @@
+package command_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/stretchr/testify/require"
+)
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what CreateWidget records.
+func TestCreateWidgetIsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	_, err := command.CreateWidgetHandler{Store: memstore.New(entity.EventTypes())}.Handle(context.Background(), command.CreateWidget{UserID: _owner})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

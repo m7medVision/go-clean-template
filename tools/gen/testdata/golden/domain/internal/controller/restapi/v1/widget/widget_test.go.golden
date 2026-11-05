@@ -1,0 +1,152 @@
+package widget_test
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	// _owner is the user resttest.Token signs for, who owns the stored widget.
+	_owner = "user-1"
+	// _storedJSON is the stored widget as the API answers with it.
+	_storedJSON = `{"id":"widget-1","user_id":"user-1","created_at":"2026-01-02T03:04:05Z","updated_at":"2026-01-02T03:04:05Z"}`
+)
+
+// stored is the widget the fake handlers answer with.
+func stored() entity.Widget {
+	at := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+
+	return entity.Widget{ID: "widget-1", UserID: _owner, CreatedAt: at, UpdatedAt: at}
+}
+
+// operation is one request to one widget operation, with what it answers when the fake handlers
+// succeed and the commands and queries it sends them.
+type operation struct {
+	method, target, body string
+	status               int
+	want                 string // the response body as JSON, empty for none
+	sent                 []any
+}
+
+// operations are one request to each widget operation, as _owner.
+func operations() map[string]operation {
+	get := query.GetWidget{UserID: _owner, WidgetID: "widget-1"}
+
+	return map[string]operation{
+		"create": {
+			method: http.MethodPost, target: "/v1/widgets", body: "{}",
+			status: http.StatusCreated, want: _storedJSON,
+			sent: []any{command.CreateWidget{UserID: _owner}, get},
+		},
+		"list": {
+			method: http.MethodGet, target: "/v1/widgets?limit=5&offset=10",
+			status: http.StatusOK, want: `{"widgets":[` + _storedJSON + `],"total":1}`,
+			sent: []any{query.ListWidgets{UserID: _owner, Limit: 5, Offset: 10}},
+		},
+		"get": {
+			method: http.MethodGet, target: "/v1/widgets/widget-1",
+			status: http.StatusOK, want: _storedJSON,
+			sent: []any{get},
+		},
+		"update": {
+			method: http.MethodPut, target: "/v1/widgets/widget-1", body: "{}",
+			status: http.StatusOK, want: _storedJSON,
+			sent: []any{command.UpdateWidget{UserID: _owner, WidgetID: "widget-1"}, get},
+		},
+		"delete": {
+			method: http.MethodDelete, target: "/v1/widgets/widget-1",
+			status: http.StatusNoContent,
+			sent:   []any{command.DeleteWidget{UserID: _owner, WidgetID: "widget-1"}},
+		},
+	}
+}
+
+func TestEachWidgetOperationDecodesTheRequestAndEncodesTheAnswer(t *testing.T) {
+	t.Parallel()
+
+	cfg := resttest.Config(t)
+
+	for name, op := range operations() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeWidget{stored: stored()}
+
+			resp := resttest.Do(t.Context(), newRouter(cfg, fake), op.method, op.target, resttest.Token(t), op.body)
+
+			require.Equal(t, op.status, resp.Code, resp.Body.String())
+			assert.Equal(t, op.sent, fake.sent)
+
+			if op.want == "" {
+				assert.Empty(t, resp.Body.String())
+
+				return
+			}
+
+			assert.JSONEq(t, op.want, resp.Body.String())
+		})
+	}
+}
+
+func TestEachWidgetOperationNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	cfg := resttest.Config(t)
+
+	for name, op := range operations() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeWidget{stored: stored()}
+
+			resp := resttest.Do(t.Context(), newRouter(cfg, fake), op.method, op.target, "", op.body)
+
+			assert.Equal(t, http.StatusUnauthorized, resp.Code)
+			assert.Empty(t, fake.sent, "nothing is sent without a caller")
+		})
+	}
+}
+
+// Every operation maps what a handler fails with the same way: first the failures any command can
+// produce, then the widget errors, then anything else. Until the handlers are written, every
+// operation answers 501.
+func TestEachWidgetOperationMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	cfg := resttest.Config(t)
+
+	for failure, tc := range map[string]struct {
+		err    error
+		status int
+	}{
+		"a stub handler":      {entity.ErrNotImplemented, http.StatusNotImplemented},
+		"a read model behind": {entity.ErrReadModelBehind, http.StatusServiceUnavailable},
+		"a concurrent change": {entity.ErrConcurrencyConflict, http.StatusConflict},
+		"another user's":      {entity.ErrWidgetForbidden, http.StatusForbidden},
+		"none with the ID":    {entity.ErrWidgetNotFound, http.StatusNotFound},
+		"anything else":       {io.ErrUnexpectedEOF, http.StatusInternalServerError},
+	} {
+		for name, op := range operations() {
+			t.Run(name+"/"+failure, func(t *testing.T) {
+				t.Parallel()
+
+				fake := &fakeWidget{stored: stored(), err: fmt.Errorf("handler: %w", tc.err)}
+
+				resp := resttest.Do(t.Context(), newRouter(cfg, fake), op.method, op.target, resttest.Token(t), op.body)
+
+				assert.Equal(t, tc.status, resp.Code, resp.Body.String())
+				assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+			})
+		}
+	}
+}

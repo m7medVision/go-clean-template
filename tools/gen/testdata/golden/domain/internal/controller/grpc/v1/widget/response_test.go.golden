@@ -1,0 +1,57 @@
+package widget_test
+
+import (
+	"math"
+	"testing"
+
+	grpcwidget "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/widget"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewWidgetResponse(t *testing.T) {
+	t.Parallel()
+
+	row := stored()
+
+	resp := grpcwidget.NewWidgetResponse(&row)
+
+	require.NotNil(t, resp)
+	assert.Equal(t, row.ID, resp.GetId())
+	assert.Equal(t, row.UserID, resp.GetUserId())
+	assert.Equal(t, _storedAt, resp.GetCreatedAt())
+	assert.Equal(t, _storedAt, resp.GetUpdatedAt())
+}
+
+func TestNewListWidgetsResponse(t *testing.T) {
+	t.Parallel()
+
+	second := stored()
+	second.ID = "widget-2"
+
+	for name, tc := range map[string]struct {
+		rows  []entity.Widget
+		total int
+		want  int32
+	}{
+		"one page":                {rows: []entity.Widget{stored(), second}, total: 7, want: 7},
+		"none":                    {rows: []entity.Widget{}, total: 0, want: 0},
+		"more than int32 can say": {total: math.MaxInt, want: math.MaxInt32},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			resp := grpcwidget.NewListWidgetsResponse(tc.rows, tc.total)
+
+			require.NotNil(t, resp)
+			require.Len(t, resp.GetWidgets(), len(tc.rows))
+
+			for i := range tc.rows {
+				assert.Equal(t, tc.rows[i].ID, resp.GetWidgets()[i].GetId())
+			}
+
+			assert.Equal(t, tc.want, resp.GetTotal())
+		})
+	}
+}

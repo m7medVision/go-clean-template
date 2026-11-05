@@ -12,6 +12,11 @@ updates:
     directory: "/"
     patterns: ["*"]
     multi-ecosystem-group: all
+  # The generator is its own module, which nothing in the app imports.
+  - package-ecosystem: gomod
+    directory: "/tools/gen"
+    patterns: ["*"]
+    multi-ecosystem-group: all
   - package-ecosystem: github-actions
     directory: "/"
     patterns: ["*"]

@@ -1,0 +1,49 @@
+{{- $id := print .Name.Kebab "-1" -}}
+// Test{{.Usecase.Name.Go}}Mutation asks for Mutation.{{.Usecase.Name.Lower}} through real buses whose one handler is a
+// fake {{.Usecase.Name.Go}} handler, so it holds once the handler is written: it checks what the field sends
+// and answers, and that the stub's entity.ErrNotImplemented answers NOT_IMPLEMENTED.
+func Test{{.Usecase.Name.Go}}Mutation(t *testing.T) {
+	t.Parallel()
+
+	token := graphqltest.Token(t)
+	sent := []command.{{.Usecase.Name.Go}}{{"{{"}}UserID: graphqltest.UserID{{if .Usecase.ByID}}, {{.Name.Go}}ID: "{{$id}}"{{end}}}}
+
+	for name, tc := range map[string]struct {
+		token string
+		err   error
+		code  string
+		want  string
+		sent  []command.{{.Usecase.Name.Go}}
+	}{
+		"answers the ID it wrote":                {token: token, want: `"{{$id}}"`, sent: sent},
+		"a stub handler answers NOT_IMPLEMENTED": {token: token, err: entity.ErrNotImplemented, code: "NOT_IMPLEMENTED", sent: sent},
+		"needs the caller":                       {code: "UNAUTHENTICATED"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []command.{{.Usecase.Name.Go}}
+
+			cmds := cqrs.NewCommands()
+			cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.{{.Usecase.Name.Go}}, cqrs.Written](
+				func(_ context.Context, cmd command.{{.Usecase.Name.Go}}) (cqrs.Written, error) {
+					got = append(got, cmd)
+
+					return cqrs.Written{ID: "{{$id}}"}, tc.err
+				}))
+
+			resp := graphqltest.Post(t, cqrs.Buses{Commands: cmds}, tc.token, `mutation { {{.Usecase.Name.Lower}}{{if .Usecase.ByID}}(id: "{{$id}}"){{end}} }`, nil)
+
+			assert.Equal(t, tc.sent, got)
+
+			if tc.code != "" {
+				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
+
+				return
+			}
+
+			require.Empty(t, resp.Errors, resp.Body)
+			assert.JSONEq(t, tc.want, string(resp.Data["{{.Usecase.Name.Lower}}"]))
+		})
+	}
+}

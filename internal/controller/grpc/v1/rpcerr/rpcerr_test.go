@@ -17,6 +17,7 @@ func TestSharedMapsTheFailuresAnyCommandCanProduce(t *testing.T) {
 
 	assert.Equal(t, codes.Unavailable, status.Code(rpcerr.Shared(fmt.Errorf("w: %w", entity.ErrReadModelBehind))))
 	assert.Equal(t, codes.Aborted, status.Code(rpcerr.Shared(fmt.Errorf("w: %w", entity.ErrConcurrencyConflict))))
+	assert.Equal(t, codes.Unimplemented, status.Code(rpcerr.Shared(fmt.Errorf("w: %w", entity.ErrNotImplemented))))
 }
 
 func TestSharedLeavesOtherErrorsToTheRPC(t *testing.T) {

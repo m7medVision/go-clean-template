@@ -104,6 +104,9 @@ uses that database instead of a container, and refuses one that is not empty. In
 that change the schema, against the PR's base branch (the parent branch, for a stacked PR), on the
 Postgres `bmizerany/setup-postgres` starts, like every other job that needs one.
 
+The domain and use-case generator, `tools/gen`, is its own module, so `make test` does not reach it:
+`make gen-check` and `make gen-e2e` test it ([generator.md](generator.md#goldens-and-checks)).
+
 Before pushing, `make pre-commit` runs the generators, format, lint and the tests.
 
 ## CI
@@ -116,7 +119,9 @@ Before pushing, `make pre-commit` runs the generators, format, lint and the test
 | 2 | `lint`: yamllint, hadolint, dotenv-linter (PRs only, on added lines), golangci-lint and govulncheck (backend) | always |
 | 3 | `unit-tests` (backend, also the OpenAPI drift check), `sqlc-generated` (sqlc), `schema-roundtrip` (schema, PRs only), side by side | after `lint` passes |
 | 3 | `web` (web): regenerates the client's types (failing on drift), checks and builds it, beside the other stage 3 jobs | after `lint` passes |
+| 3 | `gen-check` (backend): `make gen-check`, the generator's lint and tests | after `lint` passes |
 | 4 | `integration-tests` | backend, after `unit-tests` passes |
+| 4 | `gen-e2e` (backend): `make gen-e2e`, which generates a domain and use cases and lints and tests them | after `gen-check` passes |
 | 5 | `ci-ok` | always; fails if any job failed or was cancelled |
 
 `ci-ok` is the check to require in branch protection: a job skipped because its paths did not change

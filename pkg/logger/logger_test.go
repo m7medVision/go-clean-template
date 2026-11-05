@@ -20,13 +20,13 @@ func newBufferedLogger(level string) (*Logger, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	// Recreate the zerolog.Logger to write into buffer while keeping similar options
 	// We keep the same skip frame count so caller field exists, but we don't assert its value
-	zl := zerolog.New(buf).With().Timestamp().Logger()
+	zl := zerolog.New(buf).With().Timestamp().Logger().Level(parseLevel(level))
 	l.logger = new(zl)
 
 	return l, buf
 }
 
-func TestNewSetsGlobalLevel(t *testing.T) {
+func TestNewSetsLoggerLevel(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -47,8 +47,8 @@ func TestNewSetsGlobalLevel(t *testing.T) {
 			t.Fatalf("New(%q) returned nil logger", tc.in)
 		}
 
-		if got := zerolog.GlobalLevel(); got != tc.want {
-			t.Fatalf("New(%q) global level = %v, want %v", tc.in, got, tc.want)
+		if got := l.logger.GetLevel(); got != tc.want {
+			t.Fatalf("New(%q) level = %v, want %v", tc.in, got, tc.want)
 		}
 	}
 }
@@ -86,10 +86,7 @@ func TestDebug_RespectsLevel(t *testing.T) {
 	l.Debug("dbg %d", 1)
 
 	if got := buf.String(); got != "" {
-		// zerolog may still emit entries depending on global level, ensure global level is info
-		if zerolog.GlobalLevel() == zerolog.InfoLevel && strings.Contains(got, "\"level\":\"debug\"") {
-			t.Fatalf("debug should be suppressed at info level, got: %s", got)
-		}
+		t.Fatalf("debug should be suppressed at info level, got: %s", got)
 	}
 
 	// when level is debug, debug should emit

@@ -1,0 +1,125 @@
+package entity_test
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	_widgetID       = "widget-1"
+	_widgetOwner    = "widget-owner"
+	_widgetStranger = "widget-stranger"
+)
+
+// widgetCreatedAt and widgetLaterAt are when the tests' widget is created and next changes.
+func widgetCreatedAt() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
+func widgetLaterAt() time.Time   { return widgetCreatedAt().Add(time.Hour) }
+
+// givenWidget is one widget rebuilt from events, the way the store loads it.
+func givenWidget(events ...entity.Event) *entity.WidgetAggregate {
+	a := &entity.WidgetAggregate{}
+	entity.Replay(a, len(events), events...)
+
+	return a
+}
+
+func widgetCreated() entity.WidgetCreated {
+	return entity.WidgetCreated{WidgetID: _widgetID, UserID: _widgetOwner, At: widgetCreatedAt()}
+}
+
+func TestNewWidgetAggregateRecordsWidgetCreated(t *testing.T) {
+	t.Parallel()
+
+	a := entity.NewWidgetAggregate(_widgetID, _widgetOwner, widgetCreatedAt())
+
+	assert.Equal(t, []entity.Event{widgetCreated()}, a.Pending())
+	assert.Equal(t, "widget-"+_widgetID, a.StreamID())
+	assert.Equal(t, entity.Widget{
+		ID: _widgetID, UserID: _widgetOwner, CreatedAt: widgetCreatedAt(), UpdatedAt: widgetCreatedAt(),
+	}, a.State())
+}
+
+func TestWidgetAggregateUpdateByItsOwner(t *testing.T) {
+	t.Parallel()
+
+	a := givenWidget(widgetCreated())
+
+	require.NoError(t, a.Update(_widgetOwner, widgetLaterAt()))
+
+	assert.Equal(t, []entity.Event{
+		entity.WidgetUpdated{WidgetID: _widgetID, At: widgetLaterAt()},
+	}, a.Pending())
+	assert.Equal(t, widgetLaterAt(), a.State().UpdatedAt)
+	assert.Equal(t, widgetCreatedAt(), a.State().CreatedAt)
+}
+
+func TestWidgetAggregateRefusesAnotherUser(t *testing.T) {
+	t.Parallel()
+
+	a := givenWidget(widgetCreated())
+
+	require.ErrorIs(t, a.Update(_widgetStranger, widgetLaterAt()), entity.ErrWidgetForbidden)
+	require.ErrorIs(t, a.Delete(_widgetStranger, widgetLaterAt()), entity.ErrWidgetNotFound,
+		"a delete never tells a stranger the widget exists")
+	assert.Empty(t, a.Pending())
+}
+
+func TestWidgetAggregateDelete(t *testing.T) {
+	t.Parallel()
+
+	a := givenWidget(widgetCreated())
+
+	require.NoError(t, a.Delete(_widgetOwner, widgetLaterAt()))
+	assert.Equal(t, []entity.Event{
+		entity.WidgetDeleted{WidgetID: _widgetID, At: widgetLaterAt()},
+	}, a.Pending())
+}
+
+func TestADeletedWidgetIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	a := givenWidget(widgetCreated(), entity.WidgetDeleted{WidgetID: _widgetID, At: widgetLaterAt()})
+
+	require.ErrorIs(t, a.Update(_widgetOwner, widgetLaterAt()), entity.ErrWidgetNotFound)
+	require.ErrorIs(t, a.Delete(_widgetOwner, widgetLaterAt()), entity.ErrWidgetNotFound)
+	assert.Empty(t, a.Pending())
+}
+
+func TestWidgetAggregateSnapshotRestoresTheSameWidget(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		last   entity.Event
+		update error
+	}{
+		"live":    {entity.WidgetUpdated{WidgetID: _widgetID, At: widgetLaterAt()}, nil},
+		"deleted": {entity.WidgetDeleted{WidgetID: _widgetID, At: widgetLaterAt()}, entity.ErrWidgetNotFound},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			a := givenWidget(widgetCreated(), tc.last)
+
+			data, err := json.Marshal(a.Snapshot())
+			require.NoError(t, err)
+
+			restored := &entity.WidgetAggregate{}
+			require.NoError(t, restored.RestoreSnapshot(data))
+			assert.Equal(t, a.State(), restored.State())
+			assert.ErrorIs(t, restored.Update(_widgetOwner, widgetLaterAt()), tc.update, "deleted or not, as snapshotted")
+		})
+	}
+}
+
+func TestTheWidgetEventsAreRegistered(t *testing.T) {
+	t.Parallel()
+
+	assert.Subset(t, entity.EventTypes(), []entity.Event{
+		entity.WidgetCreated{}, entity.WidgetUpdated{}, entity.WidgetDeleted{},
+	})
+}

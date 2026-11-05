@@ -1,0 +1,32 @@
+package command
+
+import (
+	"context"
+	"fmt"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// Delete{{.Name.Go}} deletes UserID's {{.Name.Words}}. Another user's {{.Name.Words}} is entity.Err{{.Name.Go}}NotFound.
+type Delete{{.Name.Go}} struct {
+	UserID   string
+	{{.Name.Go}}ID string
+}
+
+// CommandName -.
+func (Delete{{.Name.Go}}) CommandName() string { return "Delete{{.Name.Go}}" }
+
+// ActorID -.
+func (c Delete{{.Name.Go}}) ActorID() string { return c.UserID }
+
+// Delete{{.Name.Go}}Handler handles Delete{{.Name.Go}}.
+type Delete{{.Name.Go}}Handler struct {
+	Store repo.EventStore
+}
+
+// Handle is a stub: write it to load the {{.Name.Words}} through aggregate.Change and call its Delete.
+func (Delete{{.Name.Go}}Handler) Handle(_ context.Context, _ Delete{{.Name.Go}}) (cqrs.Written, error) {
+	return cqrs.Written{}, fmt.Errorf("Delete{{.Name.Go}}: %w", entity.ErrNotImplemented)
+}

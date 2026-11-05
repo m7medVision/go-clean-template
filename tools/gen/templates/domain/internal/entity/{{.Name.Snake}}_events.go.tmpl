@@ -1,0 +1,49 @@
+package entity
+
+import "time"
+
+// The {{.Name.Words}} events, all at schema version 1. Each carries the {{.Name.Words}}'s ID, so a projector needs no
+// other context. A stored event is never rewritten: changing one's shape means raising its version
+// and adding an upcast (docs/cqrs.md).
+const _{{.Name.Lower}}EventsVersion = 1
+
+// {{.Name.Go}}Created is the first event of every {{.Name.Words}}.
+type {{.Name.Go}}Created struct {
+	{{.Name.Go}}ID string    `json:"{{.Name.Snake}}_id"`
+	UserID   string    `json:"user_id"`
+	At       time.Time `json:"at"`
+}
+
+// {{.Name.Go}}Updated changes one {{.Name.Words}}. For now it carries only the time: add what an update sets.
+type {{.Name.Go}}Updated struct {
+	{{.Name.Go}}ID string    `json:"{{.Name.Snake}}_id"`
+	At       time.Time `json:"at"`
+}
+
+// {{.Name.Go}}Deleted ends one {{.Name.Words}}: its stream stays, and loads as not found.
+type {{.Name.Go}}Deleted struct {
+	{{.Name.Go}}ID string    `json:"{{.Name.Snake}}_id"`
+	At       time.Time `json:"at"`
+}
+
+// EventType -.
+func ({{.Name.Go}}Created) EventType() string { return "{{.Name.Go}}Created" }
+
+// SchemaVersion -.
+func ({{.Name.Go}}Created) SchemaVersion() int { return _{{.Name.Lower}}EventsVersion }
+
+// EventType -.
+func ({{.Name.Go}}Updated) EventType() string { return "{{.Name.Go}}Updated" }
+
+// SchemaVersion -.
+func ({{.Name.Go}}Updated) SchemaVersion() int { return _{{.Name.Lower}}EventsVersion }
+
+// EventType -.
+func ({{.Name.Go}}Deleted) EventType() string { return "{{.Name.Go}}Deleted" }
+
+// SchemaVersion -.
+func ({{.Name.Go}}Deleted) SchemaVersion() int { return _{{.Name.Lower}}EventsVersion }
+
+func {{.Name.Lower}}Events() []Event {
+	return []Event{ {{- .Name.Go}}Created{}, {{.Name.Go}}Updated{}, {{.Name.Go}}Deleted{}}
+}

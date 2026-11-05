@@ -1,0 +1,380 @@
+new-usecase widget count-widgets (dry run): 2 files to create, 10 to edit
+
+create internal/usecase/widget/query/count_widgets.go
+create internal/usecase/widget/query/count_widgets_test.go
+
+edit   docs/proto/v1/widget.proto
+  @@ line 13
+      rpc ListWidgets (ListWidgetsRequest) returns (ListWidgetsResponse);
+      rpc UpdateWidget (UpdateWidgetRequest) returns (WidgetResponse);
+      rpc DeleteWidget (DeleteWidgetRequest) returns (DeleteWidgetResponse);
+  +   rpc CountWidgets (CountWidgetsRequest) returns (CountWidgetsResponse);
+    }
+    
+    // The fields the widget is created with go here.
+  @@ line 51
+    }
+    
+    message DeleteWidgetResponse {}
+  + 
+  + // The fields count-widgets needs go here.
+  + message CountWidgetsRequest {}
+  + 
+  + // The fields of query.CountWidgetsResult go here, and into the response CountWidgets answers.
+  + message CountWidgetsResponse {}
+
+edit   internal/controller/graphql/schema/widget.graphqls
+  @@ line 17
+    extend type Query {
+      widget(id: ID!): Widget!
+      widgets(limit: Int! = 10, offset: Int! = 0): WidgetList!
+  +   "Count widgets."
+  +   countWidgets: CountWidgetsResult!
+    }
+    
+    extend type Mutation {
+  @@ line 24
+      updateWidget(id: ID!): Widget!
+      deleteWidget(id: ID!): Boolean!
+    }
+  + 
+  + "What countWidgets answers: the fields of query.CountWidgetsResult, once it has them."
+  + type CountWidgetsResult {
+  +   "A placeholder, always null, since a GraphQL type cannot be empty: replace it with the result's first field."
+  +   todo: Boolean
+  + }
+
+edit   internal/controller/graphql/widget/query.go
+  @@ line 50
+    
+    	return &model.WidgetList{Widgets: page.Widgets, Total: page.Total}, nil
+    }
+  + 
+  + // CountWidgets resolves Query.countWidgets: it sends CountWidgets and answers with its result, whose
+  + // placeholder field stays null. Once query.CountWidgetsResult has fields, give CountWidgetsResult in
+  + // the schema the same, and set them from the result here.
+  + func (q Query) CountWidgets(ctx context.Context) (*model.CountWidgetsResult, error) {
+  + 	caller, err := middleware.Caller(ctx)
+  + 	if err != nil {
+  + 		return nil, err
+  + 	}
+  + 
+  + 	_, err = cqrs.SendQuery[query.CountWidgetsResult](ctx, q.qs, query.CountWidgets{UserID: caller.UserID})
+  + 	if err != nil {
+  + 		return nil, gqlerr.Map(q.l, err, "countWidgets")
+  + 	}
+  + 
+  + 	return &model.CountWidgetsResult{}, nil
+  + }
+
+edit   internal/controller/graphql/widget/query_test.go
+  @@ line 4
+    package widget_test
+    
+    import (
+  + 	"context"
+    	"testing"
+    
+    	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+  @@ line 7
+    	"testing"
+    
+    	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+  + 	"github.com/m7medvision/go-clean-template/internal/entity"
+    	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+    	"github.com/stretchr/testify/assert"
+    )
+  @@ line 8
+    
+    	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+    	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+  + 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+    	"github.com/stretchr/testify/assert"
+    )
+    
+  @@ line 9
+    	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+    	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+    	"github.com/stretchr/testify/assert"
+  + 	"github.com/stretchr/testify/require"
+    )
+    
+    // queries are one request for each widget field of Query, keyed by the field.
+  @@ line 65
+    		})
+    	}
+    }
+  + 
+  + // TestCountWidgetsQuery asks for Query.countWidgets through real buses whose one handler is a fake
+  + // CountWidgets handler, so it holds once the handler is written: it checks what the field sends and
+  + // answers, and that the stub's entity.ErrNotImplemented answers NOT_IMPLEMENTED.
+  + func TestCountWidgetsQuery(t *testing.T) {
+  + 	t.Parallel()
+  + 
+  + 	token := graphqltest.Token(t)
+  + 	sent := []query.CountWidgets{{UserID: graphqltest.UserID}}
+  + 
+  + 	for name, tc := range map[string]struct {
+  + 		token string
+  + 		err   error
+  + 		code  string
+  + 		want  string
+  + 		sent  []query.CountWidgets
+  + 	}{
+  + 		"answers the result":                     {token: token, want: `{"todo":null}`, sent: sent},
+  + 		"a stub handler answers NOT_IMPLEMENTED": {token: token, err: entity.ErrNotImplemented, code: "NOT_IMPLEMENTED", sent: sent},
+  + 		"needs the caller":                       {code: "UNAUTHENTICATED"},
+  + 	} {
+  + 		t.Run(name, func(t *testing.T) {
+  + 			t.Parallel()
+  + 
+  + 			var got []query.CountWidgets
+  + 
+  + 			qs := cqrs.NewQueries()
+  + 			cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.CountWidgets, query.CountWidgetsResult](
+  + 				func(_ context.Context, q query.CountWidgets) (query.CountWidgetsResult, error) {
+  + 					got = append(got, q)
+  + 
+  + 					return query.CountWidgetsResult{}, tc.err
+  + 				}))
+  + 
+  + 			resp := graphqltest.Post(t, cqrs.Buses{Queries: qs}, tc.token, `query { countWidgets { todo } }`, nil)
+  + 
+  + 			assert.Equal(t, tc.sent, got)
+  + 
+  + 			if tc.code != "" {
+  + 				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
+  + 
+  + 				return
+  + 			}
+  + 
+  + 			require.Empty(t, resp.Errors, resp.Body)
+  + 			assert.JSONEq(t, tc.want, string(resp.Data["countWidgets"]))
+  + 		})
+  + 	}
+  + }
+
+edit   internal/controller/grpc/v1/widget/widget.go
+  @@ line 93
+    
+    	return &v1.DeleteWidgetResponse{}, nil
+    }
+  + 
+  + // CountWidgets sends CountWidgets and answers with its result. The fields of
+  + // query.CountWidgetsResult go into CountWidgetsResponse: set them from the result here. Those of
+  + // the query come from the request once they are added: put them in CountWidgetsRequest, and
+  + // name the request to read them.
+  + func (c *Controller) CountWidgets(ctx context.Context, _ *v1.CountWidgetsRequest) (*v1.CountWidgetsResponse, error) {
+  + 	userID, ok := grpcmw.UserIDFromContext(ctx)
+  + 	if !ok {
+  + 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
+  + 	}
+  + 
+  + 	_, err := cqrs.SendQuery[query.CountWidgetsResult](ctx, c.qs, query.CountWidgets{UserID: userID})
+  + 	if err != nil {
+  + 		return nil, c.fail(err, "CountWidgets")
+  + 	}
+  + 
+  + 	return &v1.CountWidgetsResponse{}, nil
+  + }
+
+edit   internal/controller/grpc/v1/widget/widget_test.go
+  @@ line 20
+    	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+    	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+    	"github.com/m7medvision/go-clean-template/pkg/jwt"
+  + 	"github.com/m7medvision/go-clean-template/pkg/logger"
+    	"github.com/stretchr/testify/assert"
+    	"github.com/stretchr/testify/require"
+    	"google.golang.org/grpc"
+  @@ line 275
+    		})
+    	}
+    }
+  + 
+  + // TestCountWidgetsRPC calls CountWidgets on a gRPC server over bufconn whose buses hold one handler, a
+  + // fake CountWidgets handler, so it holds once the handler is written: it checks what the method sends
+  + // and that it answers, and that the stub's entity.ErrNotImplemented answers Unimplemented.
+  + func TestCountWidgetsRPC(t *testing.T) {
+  + 	t.Parallel()
+  + 
+  + 	const bufSize = 1 << 20
+  + 
+  + 	manager := jwt.New("test-secret", time.Hour)
+  + 	token, err := manager.GenerateToken("user-1", nil)
+  + 	require.NoError(t, err)
+  + 
+  + 	sent := []query.CountWidgets{{UserID: "user-1"}}
+  + 
+  + 	for name, tc := range map[string]struct {
+  + 		token string
+  + 		err   error
+  + 		code  codes.Code
+  + 		sent  []query.CountWidgets
+  + 	}{
+  + 		"answers the result":                   {token: token, sent: sent},
+  + 		"a stub handler answers Unimplemented": {token: token, err: entity.ErrNotImplemented, code: codes.Unimplemented, sent: sent},
+  + 		"needs the caller":                     {code: codes.Unauthenticated},
+  + 	} {
+  + 		t.Run(name, func(t *testing.T) {
+  + 			t.Parallel()
+  + 
+  + 			var got []query.CountWidgets
+  + 
+  + 			b := cqrs.Buses{Commands: cqrs.NewCommands(), Queries: cqrs.NewQueries()}
+  + 			cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.CountWidgets, query.CountWidgetsResult](
+  + 				func(_ context.Context, q query.CountWidgets) (query.CountWidgetsResult, error) {
+  + 					got = append(got, q)
+  + 
+  + 					return query.CountWidgetsResult{}, tc.err
+  + 				}))
+  + 
+  + 			lis := bufconn.Listen(bufSize)
+  + 			srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
+  + 			pb.RegisterWidgetServiceServer(srv, grpcwidget.New(b, logger.New("error")))
+  + 
+  + 			go func() {
+  + 				if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+  + 					t.Errorf("grpc serve: %v", err)
+  + 				}
+  + 			}()
+  + 
+  + 			t.Cleanup(srv.Stop)
+  + 
+  + 			conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithTransportCredentials(insecure.NewCredentials()),
+  + 				grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+  + 			require.NoError(t, err)
+  + 			t.Cleanup(func() { _ = conn.Close() })
+  + 
+  + 			ctx := metadata.AppendToOutgoingContext(t.Context(), "authorization", tc.token)
+  + 			_, err = pb.NewWidgetServiceClient(conn).CountWidgets(ctx, &pb.CountWidgetsRequest{})
+  + 
+  + 			assert.Equal(t, tc.code, status.Code(err), err)
+  + 			assert.Equal(t, tc.sent, got)
+  + 		})
+  + 	}
+  + }
+
+edit   internal/controller/restapi/v1/widget/controller.go
+  @@ line 33
+    	r.getWidget(api)
+    	r.updateWidget(api)
+    	r.deleteWidget(api)
+  + 	r.countWidgets(api)
+    }
+    
+    // readBack reads the widget a command just wrote, for the response body.
+
+edit   internal/controller/restapi/v1/widget/widget.go
+  @@ line 195
+    		return &deleteWidgetOutput{Status: http.StatusNoContent}, nil
+    	})
+    }
+  + 
+  + type countWidgetsInput struct{}
+  + 
+  + type countWidgetsOutput struct {
+  + 	Body query.CountWidgetsResult
+  + }
+  + 
+  + // countWidgets sends CountWidgets and answers with its result. The fields of the query come
+  + // from the request once they are added: put them in countWidgetsInput, as parameters.
+  + func (r *controller) countWidgets(api huma.API) {
+  + 	huma.Register(api, huma.Operation{
+  + 		OperationID: "count-widgets",
+  + 		Summary:     "Count widgets",
+  + 		Description: "Count widgets for the current user",
+  + 		Method:      http.MethodGet,
+  + 		Path:        "/v1/widgets/count",
+  + 		Tags:        []string{_widgetsTag},
+  + 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+  + 		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError, http.StatusNotImplemented},
+  + 	}, func(ctx context.Context, _ *countWidgetsInput) (*countWidgetsOutput, error) {
+  + 		userID, ok := middleware.UserID(ctx)
+  + 		if !ok {
+  + 			return nil, huma.Error401Unauthorized("unauthorized")
+  + 		}
+  + 
+  + 		result, err := cqrs.SendQuery[query.CountWidgetsResult](ctx, r.qs, query.CountWidgets{UserID: userID})
+  + 		if err != nil {
+  + 			return nil, r.problem(err, "countWidgets")
+  + 		}
+  + 
+  + 		return &countWidgetsOutput{Body: result}, nil
+  + 	})
+  + }
+
+edit   internal/controller/restapi/v1/widget/widget_test.go
+  @@ line 4
+    package widget_test
+    
+    import (
+  + 	"context"
+    	"fmt"
+    	"io"
+    	"net/http"
+  @@ line 14
+    	"github.com/m7medvision/go-clean-template/internal/entity"
+    	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+    	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+  + 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+    	"github.com/stretchr/testify/assert"
+    	"github.com/stretchr/testify/require"
+    )
+  @@ line 153
+    		}
+    	}
+    }
+  + 
+  + // TestCountWidgetsOperation sends count-widgets through real buses whose one handler is a
+  + // fake CountWidgets handler, so it holds once the handler is written: it checks what the operation
+  + // sends and answers, and that the stub's entity.ErrNotImplemented answers 501.
+  + func TestCountWidgetsOperation(t *testing.T) {
+  + 	t.Parallel()
+  + 
+  + 	token := resttest.Token(t)
+  + 	sent := []query.CountWidgets{{UserID: "user-1"}}
+  + 
+  + 	for name, tc := range map[string]struct {
+  + 		token  string
+  + 		err    error
+  + 		status int
+  + 		want   string
+  + 		sent   []query.CountWidgets
+  + 	}{
+  + 		"answers the result":         {token: token, status: http.StatusOK, want: `{}`, sent: sent},
+  + 		"a stub handler answers 501": {token: token, err: entity.ErrNotImplemented, status: http.StatusNotImplemented, sent: sent},
+  + 		"needs the caller":           {status: http.StatusUnauthorized},
+  + 	} {
+  + 		t.Run(name, func(t *testing.T) {
+  + 			t.Parallel()
+  + 
+  + 			var got []query.CountWidgets
+  + 
+  + 			b := resttest.NewBuses()
+  + 			cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.CountWidgets, query.CountWidgetsResult](
+  + 				func(_ context.Context, q query.CountWidgets) (query.CountWidgetsResult, error) {
+  + 					got = append(got, q)
+  + 
+  + 					return query.CountWidgetsResult{}, tc.err
+  + 				}))
+  + 
+  + 			resp := resttest.Do(t.Context(), resttest.NewRouter(resttest.Config(t), b), http.MethodGet, "/v1/widgets/count", tc.token, "")
+  + 
+  + 			require.Equal(t, tc.status, resp.Code, resp.Body.String())
+  + 			assert.Equal(t, tc.sent, got)
+  + 
+  + 			if tc.want != "" {
+  + 				assert.JSONEq(t, tc.want, resp.Body.String())
+  + 			}
+  + 		})
+  + 	}
+  + }
+
+edit   internal/usecase/widget/register.go
+  @@ line 24
+    
+    	cqrs.HandleQuery(qs, query.GetWidgetHandler{Widgets: d.Widgets})
+    	cqrs.HandleQuery(qs, query.ListWidgetsHandler{Widgets: d.Widgets})
+  + 	cqrs.HandleQuery(qs, query.CountWidgetsHandler{Widgets: d.Widgets})
+    }

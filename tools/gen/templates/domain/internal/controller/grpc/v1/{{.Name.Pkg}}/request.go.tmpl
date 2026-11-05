@@ -1,0 +1,25 @@
+package {{.Name.Pkg}}
+
+import (
+	v1 "{{.Module}}/docs/proto/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+// listRequest is the page a list asks for: Limit {{.Name.Plural.Words}} from Offset, where a Limit of 0 asks
+// for the default page size. What a list filters by goes here too, with the tags that validate it.
+type listRequest struct {
+	Limit  int `validate:"gte=0"`
+	Offset int `validate:"gte=0"`
+}
+
+// newListRequest decodes req and validates it with the controller's validator: a negative limit or
+// offset is InvalidArgument.
+func (c *Controller) newListRequest(req *v1.List{{.Name.Plural.Go}}Request) (listRequest, error) {
+	dto := listRequest{Limit: int(req.GetLimit()), Offset: int(req.GetOffset())}
+	if err := c.v.Struct(dto); err != nil {
+		return listRequest{}, status.Error(codes.InvalidArgument, "limit and offset must not be negative")
+	}
+
+	return dto, nil
+}

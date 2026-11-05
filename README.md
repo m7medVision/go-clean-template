@@ -39,6 +39,9 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 - **OpenTelemetry tracing** through every layer, Prometheus metrics, and a Caddy front end with a WAF.
 - **Generated code wherever it can be:** SQL, mocks, protobuf, GraphQL, frontend types, and the
   OpenAPI document.
+- **A domain and use-case generator.** `make new-domain` and `make new-usecase` write every layer and
+  every transport's handlers and tests, with stub bodies for you to fill in, and check every edit
+  before writing anything.
 
 ## Clean Architecture
 
@@ -78,6 +81,7 @@ If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` f
 
 - [Architecture](docs/architecture.md): the rules, where code goes, packages, Clean Architecture
 - [A request, end to end](docs/request-flow.md): one request through every layer, file by file
+- [Generator](docs/generator.md): new domains and use cases, the safety rules, changing the templates
 - [API](docs/api.md): every endpoint on every transport, errors, versioning
 - [Development](docs/development.md): dev mode, tests, the full stack behind Caddy
 - [Configuration](docs/configuration.md): every environment variable, tracing

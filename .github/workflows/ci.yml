@@ -327,6 +327,71 @@ jobs:
         if: failure()
         run: docker logs keycloak
 
+  # The generator (tools/gen) is its own module, which the lint job and
+  # make test do not reach. Its templates mirror backend files, so any
+  # backend change can break them: both gen jobs run on the backend filter,
+  # which covers tools/gen and scripts/gen-e2e.sh.
+  gen-check:
+    name: runner / gen / check
+    needs: [changes, lint]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27'
+      # The lint job's golangci-lint: the release go.mod pins.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          install-only: true
+      - name: Lint, test and tidy the generator
+        run: make gen-check
+
+  # Generates a domain and three use cases in a throwaway worktree, then runs
+  # the regenerators, the linters and the tests there (scripts/gen-e2e.sh),
+  # so it needs every tool they call.
+  gen-e2e:
+    name: runner / gen / e2e
+    needs: [changes, gen-check]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27'
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      # make sqlc renders the schema against a docker:// dev database, which
+      # the runner's Docker starts.
+      - name: Install Atlas
+        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
+      # The lint job's golangci-lint: the release go.mod pins.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          install-only: true
+      # The rest of what the regenerators call from make bin-deps, at the
+      # versions go.mod pins. Not make bin-deps itself: its go install tool
+      # fails on golangci-lint, which does not build with the gobwas/glob
+      # v1.1.0 that svu needs.
+      - name: Install the Go tools
+        run: >-
+          go install mvdan.cc/gofumpt github.com/daixiang0/gci
+          go.uber.org/mock/mockgen google.golang.org/protobuf/cmd/protoc-gen-go
+          google.golang.org/grpc/cmd/protoc-gen-go-grpc
+      # Installs Vite+, the Node version in web/.node-version and bun, then
+      # runs `vp install`. The script installs the worktree's own web/ with
+      # make web-deps.
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          working-directory: web
+          # Resolved relative to working-directory.
+          node-version-file: .node-version
+          cache: true
+      - name: Generate, then regenerate, lint and test
+        run: make gen-e2e
+
   ci-ok:
     name: runner / ci-ok
     needs:
@@ -337,6 +402,8 @@ jobs:
       - schema-roundtrip
       - web
       - integration-tests
+      - gen-check
+      - gen-e2e
     if: always()
     runs-on: ubuntu-latest
     steps:

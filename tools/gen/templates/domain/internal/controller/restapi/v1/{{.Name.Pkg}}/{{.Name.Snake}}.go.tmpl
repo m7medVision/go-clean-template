@@ -1,0 +1,194 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/restapi/middleware"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+type create{{.Name.Go}}Input struct {
+	Body Create{{.Name.Go}}
+}
+
+type list{{.Name.Plural.Go}}Input struct {
+	Limit  int `query:"limit" default:"10" minimum:"1"`
+	Offset int `query:"offset" default:"0" minimum:"0"`
+}
+
+type list{{.Name.Plural.Go}}Output struct {
+	Body {{.Name.Go}}List
+}
+
+type {{.Name.Lower}}PathInput struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+type update{{.Name.Go}}Input struct {
+	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Body Update{{.Name.Go}}
+}
+
+// {{.Name.Lower}}Output is one {{.Name.Words}}, the answer of create, get and update.
+type {{.Name.Lower}}Output struct {
+	Body entity.{{.Name.Go}}
+}
+
+type delete{{.Name.Go}}Output struct {
+	Status int
+}
+
+// create{{.Name.Go}} sends Create{{.Name.Go}}, then reads the {{.Name.Words}} back. The fields of the request body
+// go into the command once they are added: name the input to read them.
+func (r *controller) create{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-{{.Name.Kebab}}",
+		Summary:       "Create {{.Name.Words}}",
+		Description:   "Create one {{.Name.Words}} for the current user",
+		Method:        http.MethodPost,
+		Path:          "/v1/{{.Name.Plural.Kebab}}",
+		Tags:          []string{_{{.Name.Plural.Lower}}Tag},
+		Security:      []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		DefaultStatus: http.StatusCreated,
+		Errors:        []int{http.StatusUnauthorized, http.StatusInternalServerError, http.StatusNotImplemented},
+	}, func(ctx context.Context, _ *create{{.Name.Go}}Input) (*{{.Name.Lower}}Output, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.Create{{.Name.Go}}{UserID: userID})
+		if err != nil {
+			return nil, r.problem(err, "create{{.Name.Go}}")
+		}
+
+		row, err := r.readBack(ctx, userID, written.ID)
+		if err != nil {
+			return nil, r.problem(err, "create{{.Name.Go}}")
+		}
+
+		return &{{.Name.Lower}}Output{Body: row}, nil
+	})
+}
+
+func (r *controller) list{{.Name.Plural.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-{{.Name.Plural.Kebab}}",
+		Summary:     "List {{.Name.Plural.Words}}",
+		Description: "List the current user's {{.Name.Plural.Words}}, newest first",
+		Method:      http.MethodGet,
+		Path:        "/v1/{{.Name.Plural.Kebab}}",
+		Tags:        []string{_{{.Name.Plural.Lower}}Tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError, http.StatusNotImplemented},
+	}, func(ctx context.Context, input *list{{.Name.Plural.Go}}Input) (*list{{.Name.Plural.Go}}Output, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		page, err := cqrs.SendQuery[query.{{.Name.Go}}Page](ctx, r.qs, query.List{{.Name.Plural.Go}}{
+			UserID: userID, Limit: input.Limit, Offset: input.Offset,
+		})
+		if err != nil {
+			return nil, r.problem(err, "list{{.Name.Plural.Go}}")
+		}
+
+		return &list{{.Name.Plural.Go}}Output{Body: {{.Name.Go}}List{ {{- .Name.Plural.Go}}: page.{{.Name.Plural.Go}}, Total: page.Total}}, nil
+	})
+}
+
+func (r *controller) get{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-{{.Name.Kebab}}",
+		Summary:     "Get {{.Name.Words}}",
+		Description: "Get one of the current user's {{.Name.Plural.Words}} by ID",
+		Method:      http.MethodGet,
+		Path:        "/v1/{{.Name.Plural.Kebab}}/{id}",
+		Tags:        []string{_{{.Name.Plural.Lower}}Tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		Errors: []int{
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound,
+			http.StatusInternalServerError, http.StatusNotImplemented,
+		},
+	}, func(ctx context.Context, input *{{.Name.Lower}}PathInput) (*{{.Name.Lower}}Output, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		row, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, r.problem(err, "get{{.Name.Go}}")
+		}
+
+		return &{{.Name.Lower}}Output{Body: row}, nil
+	})
+}
+
+// update{{.Name.Go}} sends Update{{.Name.Go}}, then reads the {{.Name.Words}} back. As in create{{.Name.Go}}, the fields
+// of the request body go into the command once they are added.
+func (r *controller) update{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-{{.Name.Kebab}}",
+		Summary:     "Update {{.Name.Words}}",
+		Description: "Update one of the current user's {{.Name.Plural.Words}} by ID",
+		Method:      http.MethodPut,
+		Path:        "/v1/{{.Name.Plural.Kebab}}/{id}",
+		Tags:        []string{_{{.Name.Plural.Lower}}Tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		Errors: []int{
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound,
+			http.StatusInternalServerError, http.StatusNotImplemented,
+		},
+	}, func(ctx context.Context, input *update{{.Name.Go}}Input) (*{{.Name.Lower}}Output, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.Update{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: input.ID})
+		if err != nil {
+			return nil, r.problem(err, "update{{.Name.Go}}")
+		}
+
+		row, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, r.problem(err, "update{{.Name.Go}}")
+		}
+
+		return &{{.Name.Lower}}Output{Body: row}, nil
+	})
+}
+
+func (r *controller) delete{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-{{.Name.Kebab}}",
+		Summary:       "Delete {{.Name.Words}}",
+		Description:   "Delete one of the current user's {{.Name.Plural.Words}} by ID",
+		Method:        http.MethodDelete,
+		Path:          "/v1/{{.Name.Plural.Kebab}}/{id}",
+		Tags:          []string{_{{.Name.Plural.Lower}}Tag},
+		Security:      []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		DefaultStatus: http.StatusNoContent,
+		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError, http.StatusNotImplemented},
+	}, func(ctx context.Context, input *{{.Name.Lower}}PathInput) (*delete{{.Name.Go}}Output, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.Delete{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: input.ID})
+		if err != nil {
+			return nil, r.problem(err, "delete{{.Name.Go}}")
+		}
+
+		return &delete{{.Name.Go}}Output{Status: http.StatusNoContent}, nil
+	})
+}

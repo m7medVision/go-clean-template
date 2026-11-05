@@ -1,0 +1,12 @@
+package {{.Name.Pkg}}
+
+// Create{{.Name.Go}} is the body of a create, empty until the {{.Name.Words}} has fields. Add each one here,
+// with the Huma tags that validate it, and pass it to command.Create{{.Name.Go}} in create{{.Name.Go}}.
+type Create{{.Name.Go}} struct {
+	_ struct{} `additionalProperties:"true"`
+}
+
+// Update{{.Name.Go}} is the body of an update, empty until the {{.Name.Words}} has fields, as Create{{.Name.Go}} is.
+type Update{{.Name.Go}} struct {
+	_ struct{} `additionalProperties:"true"`
+}

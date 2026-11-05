@@ -1,0 +1,49 @@
+{{- $id := print .Name.Kebab "-1" -}}
+// Test{{.Usecase.Name.Go}}Query asks for Query.{{.Usecase.Name.Lower}} through real buses whose one handler is a fake
+// {{.Usecase.Name.Go}} handler, so it holds once the handler is written: it checks what the field sends and
+// answers, and that the stub's entity.ErrNotImplemented answers NOT_IMPLEMENTED.
+func Test{{.Usecase.Name.Go}}Query(t *testing.T) {
+	t.Parallel()
+
+	token := graphqltest.Token(t)
+	sent := []query.{{.Usecase.Name.Go}}{{"{{"}}UserID: graphqltest.UserID{{if .Usecase.ByID}}, {{.Name.Go}}ID: "{{$id}}"{{end}}}}
+
+	for name, tc := range map[string]struct {
+		token string
+		err   error
+		code  string
+		want  string
+		sent  []query.{{.Usecase.Name.Go}}
+	}{
+		"answers the result":                     {token: token, want: `{"todo":null}`, sent: sent},
+		"a stub handler answers NOT_IMPLEMENTED": {token: token, err: entity.ErrNotImplemented, code: "NOT_IMPLEMENTED", sent: sent},
+		"needs the caller":                       {code: "UNAUTHENTICATED"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []query.{{.Usecase.Name.Go}}
+
+			qs := cqrs.NewQueries()
+			cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.{{.Usecase.Name.Go}}, query.{{.Usecase.Name.Go}}Result](
+				func(_ context.Context, q query.{{.Usecase.Name.Go}}) (query.{{.Usecase.Name.Go}}Result, error) {
+					got = append(got, q)
+
+					return query.{{.Usecase.Name.Go}}Result{}, tc.err
+				}))
+
+			resp := graphqltest.Post(t, cqrs.Buses{Queries: qs}, tc.token, `query { {{.Usecase.Name.Lower}}{{if .Usecase.ByID}}(id: "{{$id}}"){{end}} { todo } }`, nil)
+
+			assert.Equal(t, tc.sent, got)
+
+			if tc.code != "" {
+				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
+
+				return
+			}
+
+			require.Empty(t, resp.Errors, resp.Body)
+			assert.JSONEq(t, tc.want, string(resp.Data["{{.Usecase.Name.Lower}}"]))
+		})
+	}
+}

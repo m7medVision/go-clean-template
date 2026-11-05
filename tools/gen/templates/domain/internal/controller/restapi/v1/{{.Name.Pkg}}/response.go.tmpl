@@ -1,0 +1,9 @@
+package {{.Name.Pkg}}
+
+import "{{.Module}}/internal/entity"
+
+// {{.Name.Go}}List is one page of the current user's {{.Name.Plural.Words}}, newest first, and how many there are in all.
+type {{.Name.Go}}List struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
+	{{.Name.Plural.Go}} []entity.{{.Name.Go}} `json:"{{.Name.Plural.Snake}}"`
+	Total   int             `json:"total" example:"42"`
+}

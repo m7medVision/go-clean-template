@@ -1,0 +1,28 @@
+new-domain widget (dry run): 2 files to create, 2 to edit
+
+create internal/entity/widget.go
+create internal/usecase/widget/register.go
+
+edit   internal/app/buses.go
+  @@ line 6
+    func registerHandlers() {
+    	task.Register(cmds, qs)
+    	mail.Register(cmds)
+  + 	widget.Register(cmds, qs)
+    
+    	return nil
+    }
+  @@ line 11
+    }
+    
+    func subscribers() []repo.Subscriber {
+  - 	return []repo.Subscriber{task.NewProjector(pg)}
+  + 	return []repo.Subscriber{task.NewProjector(pg), widget.NewProjector(pg)}
+    }
+
+edit   internal/controller/graphql/schema/task.graphqls
+  @@ line 3
+    type Query {
+      task: Int
+  +   widget: Int
+    }

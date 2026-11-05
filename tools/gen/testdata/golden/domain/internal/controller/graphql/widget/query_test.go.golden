@@ -1,0 +1,64 @@
+package widget_test
+
+import (
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/stretchr/testify/assert"
+)
+
+// queries are one request for each widget field of Query, keyed by the field.
+func queries() map[string]field {
+	return map[string]field{
+		"widget": {
+			gql:  `query { widget(id: "widget-1") { ` + _selection + ` } }`,
+			want: _storedJSON,
+			sent: []any{query.GetWidget{UserID: graphqltest.UserID, WidgetID: "widget-1"}},
+		},
+		"widgets": {
+			gql:  `query { widgets(limit: 5, offset: 10) { total widgets { ` + _selection + ` } } }`,
+			want: `{"total":1,"widgets":[` + _storedJSON + `]}`,
+			sent: []any{query.ListWidgets{UserID: graphqltest.UserID, Limit: 5, Offset: 10}},
+		},
+	}
+}
+
+func TestEachWidgetQueryEncodesItsAnswer(t *testing.T) {
+	t.Parallel()
+
+	checkAnswers(t, queries())
+}
+
+func TestEachWidgetQueryNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	checkCaller(t, queries())
+}
+
+// Until the query handlers are written, each query answers NOT_IMPLEMENTED.
+func TestEachWidgetQueryMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	checkFailures(t, queries())
+}
+
+func TestWidgetsRefusesAPageThatIsNotOne(t *testing.T) {
+	t.Parallel()
+
+	for name, gql := range map[string]string{
+		"limit":  `query { widgets(limit: 0) { total } }`,
+		"offset": `query { widgets(offset: -1) { total } }`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fakeWidget{stored: stored()}
+
+			resp := do(t, fake, true, gql)
+
+			assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
+			assert.Empty(t, fake.sent, "nothing is sent for a page that is not one")
+		})
+	}
+}

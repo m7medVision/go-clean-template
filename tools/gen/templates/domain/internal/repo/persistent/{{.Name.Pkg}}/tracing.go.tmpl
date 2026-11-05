@@ -1,0 +1,64 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+)
+
+const _tracerName = "{{.Module}}/internal/repo/persistent/{{.Name.Pkg}}"
+
+// tracedRepo wraps the {{.Name.Words}} read model with OpenTelemetry spans on top of the
+// low-level pgx query spans, giving a semantic "{{.Name.Go}}ReadModel.<Method>" view.
+type tracedRepo struct {
+	next repo.{{.Name.Go}}ReadModel
+}
+
+func newTraced(next repo.{{.Name.Go}}ReadModel) repo.{{.Name.Go}}ReadModel {
+	return &tracedRepo{next: next}
+}
+
+func startSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+	return otel.Tracer(_tracerName).Start(ctx, name, trace.WithAttributes(attrs...))
+}
+
+func endSpan(span trace.Span, err error) {
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	span.End()
+}
+
+func (r *tracedRepo) Get(ctx context.Context, userID, {{.Name.Lower}}ID string) (entity.{{.Name.Go}}, error) {
+	ctx, span := startSpan(
+		ctx, "{{.Name.Go}}ReadModel.Get",
+		attribute.String("user.id", userID),
+		attribute.String("{{.Name.Snake}}.id", {{.Name.Lower}}ID),
+	)
+
+	result, err := r.next.Get(ctx, userID, {{.Name.Lower}}ID)
+	endSpan(span, err)
+
+	return result, err
+}
+
+func (r *tracedRepo) List(ctx context.Context, userID string, filter repo.{{.Name.Go}}Filter) ([]entity.{{.Name.Go}}, int, error) {
+	ctx, span := startSpan(
+		ctx, "{{.Name.Go}}ReadModel.List",
+		attribute.String("user.id", userID),
+		attribute.Int64("{{.Name.Snake}}.limit", filter.Limit),
+		attribute.Int64("{{.Name.Snake}}.offset", filter.Offset),
+	)
+
+	page, total, err := r.next.List(ctx, userID, filter)
+	endSpan(span, err)
+
+	return page, total, err
+}

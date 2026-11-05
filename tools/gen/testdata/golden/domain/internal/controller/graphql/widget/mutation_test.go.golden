@@ -1,0 +1,52 @@
+package widget_test
+
+import (
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+)
+
+// mutations are one request for each widget field of Mutation, keyed by the field. Each sends its
+// command, and create and update then read the widget back.
+func mutations() map[string]field {
+	get := query.GetWidget{UserID: graphqltest.UserID, WidgetID: "widget-1"}
+
+	return map[string]field{
+		"createWidget": {
+			gql:  `mutation { createWidget { ` + _selection + ` } }`,
+			want: _storedJSON,
+			sent: []any{command.CreateWidget{UserID: graphqltest.UserID}, get},
+		},
+		"updateWidget": {
+			gql:  `mutation { updateWidget(id: "widget-1") { ` + _selection + ` } }`,
+			want: _storedJSON,
+			sent: []any{command.UpdateWidget{UserID: graphqltest.UserID, WidgetID: "widget-1"}, get},
+		},
+		"deleteWidget": {
+			gql:  `mutation { deleteWidget(id: "widget-1") }`,
+			want: `true`,
+			sent: []any{command.DeleteWidget{UserID: graphqltest.UserID, WidgetID: "widget-1"}},
+		},
+	}
+}
+
+func TestEachWidgetMutationEncodesItsAnswer(t *testing.T) {
+	t.Parallel()
+
+	checkAnswers(t, mutations())
+}
+
+func TestEachWidgetMutationNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	checkCaller(t, mutations())
+}
+
+// Until the command handlers are written, each mutation answers NOT_IMPLEMENTED.
+func TestEachWidgetMutationMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	checkFailures(t, mutations())
+}

@@ -26,33 +26,31 @@ var _ Interface = (*Logger)(nil)
 
 // New -.
 func New(level string) *Logger {
-	var l zerolog.Level
-
-	switch strings.ToLower(level) {
-	case "error":
-		l = zerolog.ErrorLevel
-	case "warn":
-		l = zerolog.WarnLevel
-	case "info":
-		l = zerolog.InfoLevel
-	case "debug":
-		l = zerolog.DebugLevel
-	default:
-		l = zerolog.InfoLevel
-	}
-
-	zerolog.SetGlobalLevel(l)
-
 	skipFrameCount := 3
 	logger := zerolog.
 		New(os.Stdout).
 		With().
 		Timestamp().
 		CallerWithSkipFrameCount(zerolog.CallerSkipFrameCount + skipFrameCount).
-		Logger()
+		Logger().
+		Level(parseLevel(level))
 
 	return &Logger{
 		logger: new(logger),
+	}
+}
+
+// parseLevel maps a level name to a zerolog level, defaulting to info.
+func parseLevel(level string) zerolog.Level {
+	switch strings.ToLower(level) {
+	case "error":
+		return zerolog.ErrorLevel
+	case "warn":
+		return zerolog.WarnLevel
+	case "debug":
+		return zerolog.DebugLevel
+	default:
+		return zerolog.InfoLevel
 	}
 }
 

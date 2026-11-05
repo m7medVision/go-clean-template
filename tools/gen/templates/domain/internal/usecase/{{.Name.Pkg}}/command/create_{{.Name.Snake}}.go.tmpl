@@ -1,0 +1,32 @@
+// Package command holds the {{.Name.Words}} domain's commands, one file each, with their handlers.
+package command
+
+import (
+	"context"
+	"fmt"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// Create{{.Name.Go}} creates one {{.Name.Words}} owned by UserID. The fields it is created with go here.
+type Create{{.Name.Go}} struct {
+	UserID string
+}
+
+// CommandName -.
+func (Create{{.Name.Go}}) CommandName() string { return "Create{{.Name.Go}}" }
+
+// ActorID -.
+func (c Create{{.Name.Go}}) ActorID() string { return c.UserID }
+
+// Create{{.Name.Go}}Handler handles Create{{.Name.Go}}.
+type Create{{.Name.Go}}Handler struct {
+	Store repo.EventStore
+}
+
+// Handle is a stub: write it to save entity.New{{.Name.Go}}Aggregate through aggregate.Create.
+func (Create{{.Name.Go}}Handler) Handle(_ context.Context, _ Create{{.Name.Go}}) (cqrs.Written, error) {
+	return cqrs.Written{}, fmt.Errorf("Create{{.Name.Go}}: %w", entity.ErrNotImplemented)
+}

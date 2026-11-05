@@ -1,0 +1,14 @@
+{{if .Usecase.ByID -}}
+// The fields {{.Usecase.Name.Kebab}} needs go here, after the id of the {{.Name.Words}} it acts on.
+message {{.Usecase.Name.Go}}Request {
+  string id = 1;
+}
+{{- else -}}
+// The fields {{.Usecase.Name.Kebab}} needs go here.
+message {{.Usecase.Name.Go}}Request {}
+{{- end}}
+
+// What {{.Usecase.Name.Kebab}} answers: the ID of the {{.Name.Words}} it wrote.
+message {{.Usecase.Name.Go}}Response {
+  string id = 1;
+}

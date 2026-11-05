@@ -1,0 +1,64 @@
+{{- $id := print .Name.Kebab "-1" -}}
+{{- $pb := .Usecase.ProtoPkg -}}
+// Test{{.Usecase.Name.Go}}RPC calls {{.Usecase.Name.Go}} on a gRPC server over bufconn whose buses hold one handler, a
+// fake {{.Usecase.Name.Go}} handler, so it holds once the handler is written: it checks what the method sends
+// and that it answers, and that the stub's entity.ErrNotImplemented answers Unimplemented.
+func Test{{.Usecase.Name.Go}}RPC(t *testing.T) {
+	t.Parallel()
+
+	const bufSize = 1 << 20
+
+	manager := jwt.New("test-secret", time.Hour)
+	token, err := manager.GenerateToken("user-1", nil)
+	require.NoError(t, err)
+
+	sent := []query.{{.Usecase.Name.Go}}{{"{{"}}UserID: "user-1"{{if .Usecase.ByID}}, {{.Name.Go}}ID: "{{$id}}"{{end}}}}
+
+	for name, tc := range map[string]struct {
+		token string
+		err   error
+		code  codes.Code
+		sent  []query.{{.Usecase.Name.Go}}
+	}{
+		"answers the result":                   {token: token, sent: sent},
+		"a stub handler answers Unimplemented": {token: token, err: entity.ErrNotImplemented, code: codes.Unimplemented, sent: sent},
+		"needs the caller":                     {code: codes.Unauthenticated},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []query.{{.Usecase.Name.Go}}
+
+			b := cqrs.Buses{Commands: cqrs.NewCommands(), Queries: cqrs.NewQueries()}
+			cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.{{.Usecase.Name.Go}}, query.{{.Usecase.Name.Go}}Result](
+				func(_ context.Context, q query.{{.Usecase.Name.Go}}) (query.{{.Usecase.Name.Go}}Result, error) {
+					got = append(got, q)
+
+					return query.{{.Usecase.Name.Go}}Result{}, tc.err
+				}))
+
+			lis := bufconn.Listen(bufSize)
+			srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
+			{{$pb}}.Register{{.Usecase.GRPCService}}Server(srv, {{.Usecase.ControllerPkg}}.New(b, logger.New("error")))
+
+			go func() {
+				if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+					t.Errorf("grpc serve: %v", err)
+				}
+			}()
+
+			t.Cleanup(srv.Stop)
+
+			conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = conn.Close() })
+
+			ctx := metadata.AppendToOutgoingContext(t.Context(), "authorization", tc.token)
+			_, err = {{$pb}}.New{{.Usecase.GRPCService}}Client(conn).{{.Usecase.Name.Go}}(ctx, &{{$pb}}.{{.Usecase.Name.Go}}Request{ {{- if .Usecase.ByID}}Id: "{{$id}}"{{end}}})
+
+			assert.Equal(t, tc.code, status.Code(err), err)
+			assert.Equal(t, tc.sent, got)
+		})
+	}
+}

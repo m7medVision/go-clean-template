@@ -1,0 +1,40 @@
+// Package {{.Name.Pkg}} resolves the {{.Name.Words}} fields of the GraphQL schema (schema/{{.Name.Snake}}.graphqls).
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/controller/graphql/gqlerr"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+	"{{.Module}}/pkg/logger"
+)
+
+// Query resolves the {{.Name.Words}} fields of Query.
+type Query struct {
+	qs *cqrs.Queries
+	l  logger.Interface
+}
+
+// Mutation resolves the {{.Name.Words}} fields of Mutation.
+type Mutation struct {
+	cmds *cqrs.Commands
+	qs   *cqrs.Queries
+	l    logger.Interface
+}
+
+// New returns the {{.Name.Words}} resolvers for Query and Mutation.
+func New(b cqrs.Buses, l logger.Interface) (Query, Mutation) {
+	return Query{qs: b.Queries, l: l}, Mutation{cmds: b.Commands, qs: b.Queries, l: l}
+}
+
+// readBack reads the {{.Name.Words}} a command just wrote, as the result of the mutation op.
+func (m Mutation) readBack(ctx context.Context, userID, id, op string) (*entity.{{.Name.Go}}, error) {
+	row, err := cqrs.SendQuery[entity.{{.Name.Go}}](ctx, m.qs, query.Get{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: id})
+	if err != nil {
+		return nil, gqlerr.Map(m.l, err, op)
+	}
+
+	return &row, nil
+}

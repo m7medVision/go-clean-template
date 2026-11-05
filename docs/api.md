@@ -121,6 +121,8 @@ changes show up in review and clients can generate types without a running serve
 - **Any write** can also answer `503` when it is saved but the read models have not caught up within
   `CQRS_CONSISTENCY_TIMEOUT` (read again shortly, don't write again), or `409` when the record changed
   while the request ran, after retries ([cqrs.md](cqrs.md#reads-after-writes)).
+- **Any operation** whose handler is still the stub the generator wrote answers `501`
+  (`entity.ErrNotImplemented`) until the handler is written ([generator.md](generator.md)).
 - **Validation** failures answer `422`. That includes query parameters: on `GET /v1/tasks`, `limit`
   must be at least 1, `offset` at least 0, and `status` one of `todo`, `in_progress`, `done`.
   Unknown fields in a request body are ignored.
@@ -151,8 +153,8 @@ history. The schemas are [task.graphqls](../internal/controller/graphql/schema/t
 - Resolvers check the bearer token themselves, so introspection works without one.
 - Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`
   (the admin list without the `admin` role), `UNAVAILABLE` and `CONFLICT` (a write's `503` and `409`
-on REST), `INTERNAL`. An expired token is `UNAUTHENTICATED` in a
-  200 response.
+  on REST), `NOT_IMPLEMENTED` (a generated stub handler's `501`), `INTERNAL`. An expired token is
+  `UNAUTHENTICATED` in a 200 response.
 
 ## gRPC
 
@@ -180,7 +182,8 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 - Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
   user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
   list without the `admin` role `PermissionDenied`, a write the read models have not caught up with
-`Unavailable`, a write that lost to a concurrent one `Aborted`, and anything else `Internal`.
+  `Unavailable`, a write that lost to a concurrent one `Aborted`, a generated stub handler
+  `Unimplemented`, and anything else `Internal`.
 
 ## Versioning
 

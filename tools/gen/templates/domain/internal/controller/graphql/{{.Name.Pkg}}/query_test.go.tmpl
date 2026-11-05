@@ -1,0 +1,64 @@
+package {{.Name.Pkg}}_test
+
+import (
+	"testing"
+
+	"{{.Module}}/internal/controller/graphql/graphqltest"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"github.com/stretchr/testify/assert"
+)
+
+// queries are one request for each {{.Name.Words}} field of Query, keyed by the field.
+func queries() map[string]field {
+	return map[string]field{
+		"{{.Name.Lower}}": {
+			gql:  `query { {{.Name.Lower}}(id: "{{.Name.Kebab}}-1") { ` + _selection + ` } }`,
+			want: _storedJSON,
+			sent: []any{query.Get{{.Name.Go}}{UserID: graphqltest.UserID, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"}},
+		},
+		"{{.Name.Plural.Lower}}": {
+			gql:  `query { {{.Name.Plural.Lower}}(limit: 5, offset: 10) { total {{.Name.Plural.Lower}} { ` + _selection + ` } } }`,
+			want: `{"total":1,"{{.Name.Plural.Lower}}":[` + _storedJSON + `]}`,
+			sent: []any{query.List{{.Name.Plural.Go}}{UserID: graphqltest.UserID, Limit: 5, Offset: 10}},
+		},
+	}
+}
+
+func TestEach{{.Name.Go}}QueryEncodesItsAnswer(t *testing.T) {
+	t.Parallel()
+
+	checkAnswers(t, queries())
+}
+
+func TestEach{{.Name.Go}}QueryNeedsTheCaller(t *testing.T) {
+	t.Parallel()
+
+	checkCaller(t, queries())
+}
+
+// Until the query handlers are written, each query answers NOT_IMPLEMENTED.
+func TestEach{{.Name.Go}}QueryMapsEachFailure(t *testing.T) {
+	t.Parallel()
+
+	checkFailures(t, queries())
+}
+
+func Test{{.Name.Plural.Go}}RefusesAPageThatIsNotOne(t *testing.T) {
+	t.Parallel()
+
+	for name, gql := range map[string]string{
+		"limit":  `query { {{.Name.Plural.Lower}}(limit: 0) { total } }`,
+		"offset": `query { {{.Name.Plural.Lower}}(offset: -1) { total } }`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			fake := &fake{{.Name.Go}}{stored: stored()}
+
+			resp := do(t, fake, true, gql)
+
+			assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
+			assert.Empty(t, fake.sent, "nothing is sent for a page that is not one")
+		})
+	}
+}
