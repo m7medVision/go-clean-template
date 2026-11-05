@@ -300,8 +300,8 @@ Only the named transports' files and edits are planned. The integration test cov
 `query/{{name}}.go`, with its `<Name>Result` struct, and a test. Both add one line to
 `register.go`, after the last `HandleCommand` or `HandleQuery`. The domain is detected from its
 use-case folder. `transports` defaults to the ones the domain has (decision 6).
-- [ ] Goldens for `domain=widget name=archive-widget kind=command` and `name=count-widgets kind=query`.
-- [ ] A domain that does not exist, a message name already taken and a transport the domain lacks
+- [x] Goldens for `domain=widget name=archive-widget kind=command` and `name=count-widgets kind=query`.
+- [x] A domain that does not exist, a message name already taken and a transport the domain lacks
       each fail with the rule that caught it.
 
 **Verify:** GG. **Depends on:** 22. **Files:** 4 templates, `tools/gen/usecase.go`, `main.go`, goldens. **Size:** M
@@ -310,13 +310,16 @@ use-case folder. `transports` defaults to the ones the domain has (decision 6).
 Appends to the domain's REST folder:
 - in `{{domain}}.go`, the op and its input and output structs, at the end of the file;
 - in `controller.go`, its registration, after the last `r.<op>(api)` call in `NewRoutes`;
-- in `fake_test.go`, its fake, after the last `HandleCommand` or `HandleQuery` in `buses`;
 - a test, at the end of `{{domain}}_test.go`.
+
+*Changed while building it:* no `fake_test.go` edit. `task`'s fakes and helpers are named
+differently from a generated domain's, so the appended test is self-contained: it builds buses
+holding only a fake for the new message and serves them with `resttest` (spec updated).
 
 The defaults are POST `/v1/{{plural}}/{id}/<verb>` for a command and GET `/v1/{{plural}}/<noun>`
 for a query; `method=` and `path=` override them.
-- [ ] Goldens for the inserted text of both kinds.
-- [ ] A fixture domain without `problem` or `NewRoutes` fails R4 by name.
+- [x] Goldens for the inserted text of both kinds.
+- [x] A fixture domain without `problem` or `NewRoutes` fails R4 by name.
 
 **Verify:** GG. **Depends on:** 23. **Files:** 2 templates, `tools/gen/usecase.go`, goldens, fixtures. **Size:** M
 

@@ -1,0 +1,45 @@
+{{if .Usecase.ByID -}}
+type {{.Usecase.Name.Lower}}Input struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+{{- else -}}
+type {{.Usecase.Name.Lower}}Input struct{}
+{{- end}}
+
+type {{.Usecase.Name.Lower}}Output struct {
+	Body query.{{.Usecase.Name.Go}}Result
+}
+
+// {{.Usecase.Name.Lower}} sends {{.Usecase.Name.Go}} and answers with its result. The fields of the query come
+// from the request once they are added: put them in {{.Usecase.Name.Lower}}Input, as parameters.
+func (r *controller) {{.Usecase.Name.Lower}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "{{.Usecase.Name.Kebab}}",
+		Summary:     "{{.Usecase.Summary}}",
+		Description: "{{.Usecase.Summary}} for the current user",
+		Method:      {{.Usecase.HTTPMethod}},
+		Path:        "{{.Usecase.Path}}",
+		Tags:        []string{ {{- .Usecase.RESTTag}}},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+{{- if .Usecase.ByID}}
+		Errors: []int{
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound,
+			http.StatusInternalServerError, http.StatusNotImplemented,
+		},
+{{- else}}
+		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError, http.StatusNotImplemented},
+{{- end}}
+	}, func(ctx context.Context, {{if .Usecase.ByID}}input{{else}}_{{end}} *{{.Usecase.Name.Lower}}Input) (*{{.Usecase.Name.Lower}}Output, error) {
+		userID, ok := middleware.UserID(ctx)
+		if !ok {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+
+		result, err := cqrs.SendQuery[query.{{.Usecase.Name.Go}}Result](ctx, r.qs, query.{{.Usecase.Name.Go}}{UserID: userID{{if .Usecase.ByID}}, {{.Name.Go}}ID: input.ID{{end}}})
+		if err != nil {
+			return nil, r.problem(err, "{{.Usecase.Name.Lower}}")
+		}
+
+		return &{{.Usecase.Name.Lower}}Output{Body: result}, nil
+	})
+}

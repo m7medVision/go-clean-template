@@ -151,9 +151,10 @@ new-domain: ### generate a domain with CRUD stubs: make new-domain name=invoice 
 	$(GEN_REGENERATE)
 .PHONY: new-domain
 
-new-usecase: ### add a command or query stub: make new-usecase domain=task name=archive-task kind=command [method=] [path=] [transports=] [dry-run=1]
-	$(GEN) new-usecase --root '$(CURDIR)' --domain '$(domain)' --name '$(name)' --kind '$(kind)' \
+new-usecase: ### add a command or query stub: make new-usecase domain=task name=archive-task kind=command [plural=] [method=] [path=] [transports=] [dry-run=1]
+	$(GEN) new-usecase --root '$(CURDIR)' --domain '$(domain)' --name '$(name)' --kind '$(kind)' $(if $(plural),--plural '$(plural)') \
 		$(if $(method),--method '$(method)') $(if $(path),--path '$(path)') $(GEN_OPTS)
+	$(GEN_REGENERATE)
 .PHONY: new-usecase
 
 gen-check: ### check the generator: lint and format (the root .golangci.yml), unit and golden tests, tidy module

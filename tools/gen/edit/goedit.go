@@ -56,8 +56,9 @@ func (g *Go) BeforeBlockEnd(tok token.Token, text string) (Insertion, error) {
 }
 
 // Import returns the insertion that imports path, under alias when it is set, or none when the
-// file already does. It goes into the group of non-standard imports in path order, the way gci
-// sorts them, starting that group when the file has none.
+// file already does. It goes into its group, the standard library's or the other imports', in
+// path order, the way gci sorts them. A file with no standard import starts that group ahead of
+// the others, and one with no other import starts theirs after it.
 func (g *Go) Import(path, alias string) ([]Insertion, error) {
 	block, err := g.importBlock()
 	if err != nil {
@@ -80,8 +81,12 @@ func (g *Go) Import(path, alias string) ([]Insertion, error) {
 		return []Insertion{g.at(lineStart(g.src, g.offset(before.Pos())), indent(spec, "\t"))}, nil
 	case last != nil:
 		return []Insertion{g.at(nextLineStart(g.src, g.offset(last.End())), indent(spec, "\t"))}, nil
-	default:
+	case !isStandard(path):
 		return []Insertion{g.at(lineStart(g.src, g.offset(block.Rparen)), "\n"+indent(spec, "\t"))}, nil
+	case len(block.Specs) > 0:
+		return []Insertion{g.at(lineStart(g.src, g.offset(block.Specs[0].Pos())), indent(spec, "\t")+"\n")}, nil
+	default:
+		return []Insertion{g.at(lineStart(g.src, g.offset(block.Rparen)), indent(spec, "\t"))}, nil
 	}
 }
 
@@ -171,12 +176,12 @@ func isMajorVersion(elem string) bool {
 	return err == nil
 }
 
-// importNeighbours returns the first non-standard import that sorts after path, and the last
-// non-standard import.
+// importNeighbours returns, among the imports in path's group (the standard library's or the
+// others'), the first that sorts after path and the last.
 func importNeighbours(block *ast.GenDecl, path string) (before, last *ast.ImportSpec) {
 	for _, s := range block.Specs {
 		is, ok := s.(*ast.ImportSpec)
-		if !ok || isStandard(importPath(is)) {
+		if !ok || isStandard(importPath(is)) != isStandard(path) {
 			continue
 		}
 
@@ -203,6 +208,46 @@ func isStandard(path string) bool {
 	first, _, _ := strings.Cut(path, "/")
 
 	return !strings.Contains(first, ".")
+}
+
+// Const returns the name of the file's one top-level constant whose name matches the path.Match
+// pattern, as _*Tag matches _tasksTag.
+func (g *Go) Const(pattern string) (string, error) {
+	var found []string
+
+	for _, name := range g.constNames() {
+		if glob(pattern, name) {
+			found = append(found, name)
+		}
+	}
+
+	if len(found) != 1 {
+		return "", anchorError(g.path, "a constant "+pattern, len(found))
+	}
+
+	return found[0], nil
+}
+
+// constNames returns the names of the file's top-level constants, in source order.
+func (g *Go) constNames() []string {
+	var names []string
+
+	for _, d := range g.file.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.CONST {
+			continue
+		}
+
+		for _, s := range gd.Specs {
+			if vs, ok := s.(*ast.ValueSpec); ok {
+				for _, id := range vs.Names {
+					names = append(names, id.Name)
+				}
+			}
+		}
+	}
+
+	return names
 }
 
 // RequireFunc checks that the file declares exactly one function or method called name.

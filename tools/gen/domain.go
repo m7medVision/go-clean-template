@@ -58,7 +58,7 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 // rendering the templates in tmpl. What it runs into is in the planner's errs, for the rules.
 func planDomain(r rules.Repo, tmpl fs.FS, n *names.Name, transports []string) *planner {
 	data := &templates.Data{Name: *n, Transports: transports}
-	pl := newPlanner(r, tmpl, "new-domain "+n.Kebab, data)
+	pl := newPlanner(r, tmpl, _domainSet, "new-domain "+n.Kebab, data)
 
 	module, err := modulePath(r)
 	if err != nil {

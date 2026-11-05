@@ -108,14 +108,75 @@ func TestTextDropsTheFinalNewline(t *testing.T) {
 func TestEveryEmbeddedFileIsATemplateOfASet(t *testing.T) {
 	t.Parallel()
 
+	sets := map[string]int{}
+
 	require.NoError(t, fs.WalkDir(templates.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 
+		set, _, _ := strings.Cut(p, "/")
+		sets[set]++
+
 		assert.True(t, strings.HasSuffix(p, ".tmpl"), "%s does not end in .tmpl", p)
-		assert.True(t, strings.HasPrefix(p, "domain/"), "%s is in no set", p)
+		assert.Contains(t, []string{"domain", "usecase"}, set, "%s is in no set", p)
 
 		return nil
 	}))
+
+	assert.Len(t, sets, 2, "both sets have templates")
+}
+
+func usecase(t *testing.T, kebab, path string) *templates.Usecase {
+	t.Helper()
+
+	n, err := names.Parse(kebab, "")
+	require.NoError(t, err)
+
+	return &templates.Usecase{Name: n, Kind: "command", Method: "POST", Path: path}
+}
+
+func TestAUsecaseRendersWithItsDomain(t *testing.T) {
+	t.Parallel()
+
+	d := data(t)
+	d.Usecase = usecase(t, "archive-line-item", "/v1/line-items/{id}/archive")
+
+	fsys := fstest.MapFS{
+		"usecase/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl": file(
+			"{{.Usecase.Name.Go}} {{.Name.Go}}ID {{.Usecase.Summary}}: {{.Usecase.HTTPMethod}} {{.Usecase.Target \"line-item-1\"}}\n"),
+	}
+
+	got, err := templates.Render(fsys, "usecase/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl", d)
+	require.NoError(t, err)
+	assert.Equal(t, "lineitem/archive_line_item.go", got.Path)
+	assert.Equal(t, "ArchiveLineItem LineItemID Archive line item: http.MethodPost /v1/line-items/line-item-1/archive\n",
+		string(got.Content))
+}
+
+func TestAUsecaseActsOnOneRecordWhenItsPathHoldsTheID(t *testing.T) {
+	t.Parallel()
+
+	for path, want := range map[string]bool{
+		"/v1/tasks/{id}/archive": true,
+		"/v1/tasks/{id}":         true,
+		"/v1/tasks/count":        false,
+		"/v1/tasks":              false,
+	} {
+		assert.Equal(t, want, usecase(t, "archive-task", path).ByID(), path)
+	}
+}
+
+func TestHTTPMethodIsTheNetHTTPConstant(t *testing.T) {
+	t.Parallel()
+
+	for method, want := range map[string]string{
+		"GET": "http.MethodGet", "POST": "http.MethodPost", "PUT": "http.MethodPut",
+		"PATCH": "http.MethodPatch", "DELETE": "http.MethodDelete",
+	} {
+		u := usecase(t, "archive-task", "/v1/tasks")
+		u.Method = method
+
+		assert.Equal(t, want, u.HTTPMethod(), method)
+	}
 }

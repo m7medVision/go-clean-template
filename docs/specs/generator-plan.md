@@ -66,7 +66,11 @@ the e2e job catches a broken template come last.
     (`editFile(pl, path, edit.ParseGo, …)` with text from `pl.text("<repo path>.<place>")`), plus
     one entry in `domainLayers()`; a transport's layer names its transport and runs only when
     `--transports` asks for it. Read and anchor failures go to the planner's `errs`, never
-    returned early, so `rules.Check` reports the first rule in order.
+    returned early, so `rules.Check` reports the first rule in order. `new-usecase` (task 23) has
+    the same shape: `usecaseLayers()` in `usecase.go`, one `usecase_<name>.go` per layer, templates
+    under `templates/usecase`, where `.Name` is still the domain and `.Usecase` the use case. What a
+    hand-written domain names its own way (the `Deps` field, the REST tag) a layer reads from the
+    domain's files into `.Usecase` before it renders, as an anchor.
 11. **Commits, made only when you ask:**
     - the `ErrNotImplemented` mapping (task 1);
     - module and editors (2–8);
@@ -148,8 +152,8 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 - [ ] **Your review** of one generated domain.
 
 ### Phase 5: `new-usecase`
-- [ ] 23. Use-case layer for both kinds
-- [ ] 24. REST operation
+- [x] 23. Use-case layer for both kinds
+- [x] 24. REST operation
 - [ ] 25. gRPC method
 - [ ] 26. GraphQL field
 - [ ] 27. `new-usecase` in the e2e job

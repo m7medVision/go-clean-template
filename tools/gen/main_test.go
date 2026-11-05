@@ -19,6 +19,11 @@ func TestRunAnswersUsageForABadCommandLine(t *testing.T) {
 		"new-usecase without a kind": {"new-usecase", "--domain", "task", "--name", "archive-task"},
 		"new-usecase without domain": {"new-usecase", "--name", "archive-task", "--kind", "command"},
 		"new-usecase unknown kind":   {"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "event"},
+		"new-usecase unknown method": {"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "command", "--method", "FETCH"},
+		"new-usecase relative path":  {"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "command", "--path", "v1/tasks"},
+		"new-usecase other param":    {"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "command", "--path", "/v1/tasks/{taskId}"},
+		"new-usecase two ids":        {"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "command", "--path", "/v1/{id}/{id}"},
+		"new-usecase bad transport":  {"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "command", "--transports", "soap"},
 		"stray argument":             {"new-domain", "--name", "invoice", "extra"},
 		"unknown transport":          {"new-domain", "--name", "invoice", "--transports", "rest,soap"},
 		"empty transport":            {"new-domain", "--name", "invoice", "--transports", "rest,"},
@@ -49,9 +54,9 @@ func TestRunDryRunPrintsThePlanAndWritesNothing(t *testing.T) {
 			want: "43 files to create, 9 to edit",
 		},
 		"new-usecase": {
-			dir:  gitRepo(t),
-			args: []string{"new-usecase", "--domain", "task", "--name", "archive-task", "--kind", "command", "--dry-run"},
-			want: "dry run",
+			dir:  widgetRepo(t),
+			args: []string{"new-usecase", "--domain", "widget", "--name", "archive-widget", "--kind", "command", "--dry-run"},
+			want: "2 files to create, 4 to edit",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -81,4 +86,21 @@ func TestParseTransportsKeepsTheirOrderOnceEach(t *testing.T) {
 		require.NoError(t, err, value)
 		assert.Equal(t, want, got, value)
 	}
+}
+
+func TestParseUsecaseKeepsTheDomainsTransportsUnlessGiven(t *testing.T) {
+	t.Parallel()
+
+	base := []string{"--domain", "line-item", "--plural", "line-items", "--name", "split-line-item", "--kind", "command"}
+
+	req, err := parseUsecase(base, &bytes.Buffer{})
+	require.NoError(t, err)
+	assert.Nil(t, req.transports, "nil: the domain's own, which only the repository knows")
+	assert.Equal(t, "line-items", req.plural)
+
+	req, err = parseUsecase(append(base, "--transports", "graphql,rest", "--method", "patch", "--path", "/v1/line-items/{id}"), &bytes.Buffer{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rest", "graphql"}, req.transports)
+	assert.Equal(t, "PATCH", req.method, "kept in capitals")
+	assert.Equal(t, "/v1/line-items/{id}", req.path)
 }

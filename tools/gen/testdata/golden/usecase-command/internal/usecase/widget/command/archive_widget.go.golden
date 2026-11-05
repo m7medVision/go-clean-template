@@ -1,0 +1,34 @@
+package command
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+// ArchiveWidget is the command archive-widget, sent by UserID for the widget WidgetID.
+// Add the fields it needs.
+type ArchiveWidget struct {
+	UserID   string
+	WidgetID string
+}
+
+// CommandName -.
+func (ArchiveWidget) CommandName() string { return "ArchiveWidget" }
+
+// ActorID -.
+func (c ArchiveWidget) ActorID() string { return c.UserID }
+
+// ArchiveWidgetHandler handles ArchiveWidget.
+type ArchiveWidgetHandler struct {
+	Store repo.EventStore
+}
+
+// Handle is a stub: write it to change the widget through aggregate.Change, calling the
+// behavior method you add to its aggregate, which records the event you add for it.
+func (ArchiveWidgetHandler) Handle(_ context.Context, _ ArchiveWidget) (cqrs.Written, error) {
+	return cqrs.Written{}, fmt.Errorf("ArchiveWidget: %w", entity.ErrNotImplemented)
+}

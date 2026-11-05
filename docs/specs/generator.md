@@ -35,14 +35,15 @@ transport from the first run; you write the bodies.
 
 ```
 make new-domain  name=invoice                                     [transports=rest,grpc,graphql] [dry-run=1]
-make new-usecase domain=task name=archive-task kind=command       [transports=rest,grpc,graphql] [dry-run=1]
+make new-usecase domain=task name=archive-task kind=command       [method=] [path=] [transports=rest,grpc,graphql] [plural=] [dry-run=1]
 make new-usecase domain=task name=count-tasks  kind=query
 make gen-check      # tools/gen: format check, lint, unit and golden tests
 make gen-e2e        # generate into a throwaway worktree, then build, lint and test it (CI)
 ```
 
-`make new-domain` runs `go -C tools/gen run . new-domain --root $(CURDIR) …`. If the generator
-wrote anything, it then runs the regenerators the output needs:
+`make new-domain` runs `go -C tools/gen run . new-domain --root $(CURDIR) …`, and `make new-usecase`
+runs `… new-usecase …`. If the generator wrote anything, either then runs the regenerators the
+output needs:
 
 ```
 make proto-v1 graphql sqlc mock openapi web-api web-graphql format
@@ -134,18 +135,33 @@ tables in `docs/cqrs.md`.
 
 | Layer | Created or edited |
 | --- | --- |
-| use case | creates `usecase/task/command/archive_task.go` and its test; edits `register.go` (one `cqrs.HandleCommand` line, or `cqrs.HandleQuery`, in `Register`) |
-| REST | edits `restapi/v1/task/task.go` (appends the op and its input and output structs), `controller.go` (registers it in `NewRoutes`), `fake_test.go` (a fake handler for the message in `buses`), and `task_test.go` (appends a test) |
+| use case | creates `usecase/task/command/archive_task.go` and its test; edits `register.go` (one `cqrs.HandleCommand` line, or `cqrs.HandleQuery`, after the last of its kind in `Register`) |
+| REST | edits `restapi/v1/task/task.go` (appends the op and its input and output structs), `controller.go` (registers it after the last `r.<op>(api)` in `NewRoutes`), and `task_test.go` (appends a test, with its own fake) |
 | gRPC | edits `docs/proto/v1/task.proto` (an rpc in the service, plus its two messages), `grpc/v1/task/task.go` (appends the method), and `task_test.go` (its fake and a test) |
 | GraphQL | edits `schema/task.graphqls` (a field on `extend type Mutation`, or `Query` for a query), `graphql/task/mutation.go` or `query.go` (appends the resolver), `fake_test.go`, and the test |
 
-The defaults are POST `/v1/tasks/{id}/archive` for a command and GET `/v1/tasks/count` for a query;
-`method=` and `path=` override them.
+`domain` is the domain's name as `make new-domain` was given it (`line-item`, not `lineitem`), and
+`plural=` its plural when `make new-domain` was given one. The defaults are POST
+`/v1/tasks/{id}/archive` for a command and GET `/v1/tasks/count` for a query: the domain's plural,
+then the first word of the name. `method=` (GET, POST, PUT, PATCH or DELETE) and `path=` override
+them. A path holds no parameter but `{id}`, and whether it holds `{id}` decides whether the use
+case acts on one record: its message then carries the record's `TaskID`, which the operation fills
+from the path. So by default a command has `UserID` and `TaskID`, and a query only `UserID`.
 
-A command answers `cqrs.Written`, like every command. A query answers a result struct of its own,
-declared in its file (`query.CountTasksResult`), empty until you add its fields. The command
-records nothing yet: its event and the aggregate's behavior method are yours to write, and the
-printed checklist names the files.
+A command answers `cqrs.Written`, like every command, and its REST operation answers the written
+ID (`{"id": …}`, the `ArchiveTaskResponse` it declares). A query answers a result struct of its
+own, declared in its file (`query.CountTasksResult`), empty until you add its fields, and its REST
+operation answers with that struct as it is. The command records nothing yet: its event and the
+aggregate's behavior method are yours to write, and the printed checklist names the files.
+
+A hand-written domain chose its own names, so what the templates cannot derive from the domain's
+name is read from its files, and each is an anchor (R4): the handler's dependency is the one field
+of `Deps` in `register.go` whose type is `repo.EventStore` (a command) or `repo.*ReadModel` (a
+query; exchange's is `History`), and the operation's tag is the one `_*Tag` constant in the REST
+`controller.go` (exchange's is `_exchangeTag`). That file must also declare `problem` and
+`NewRoutes`. The REST test is self-contained: it builds buses holding only a fake for the new
+message and serves them with `resttest`, so it needs none of the folder's own test helpers, which
+`task` and a generated domain name differently, and `fake_test.go` is left alone.
 
 This command edits files you have already changed by hand, so its edits are the riskiest, and the
 safety rules below apply to it in full.
@@ -159,7 +175,7 @@ prints the rule, the file and the reason, then exits non-zero having written not
 | Rule | Check |
 | --- | --- |
 | R1 name | Matches the pattern. Not a Go keyword, a predeclared name, or a package the generated files import (`command`, `query`, `entity`, `repo`, `cqrs`, `v1`, …). Spelled alike by every tool that names Go code after it, so the build and the lint after the write cannot fail on it: no word, in the name or its plural, that gqlgen or revive writes as an initialism (`api-key` is `APIKey` to them and `ApiKey` to the generator; their lists in the versions `go.mod` pins, a word checked by its letters, so `http2` fails and `utf8` passes); no letter right after a digit (`mp3player`, the plural `mp3s`), which protoc-gen-go capitalizes; and no word of the plural that starts with a digit (`plural=items-2`), which protoc-gen-go writes after an underscore. Not an existing domain: no use-case or read-model folder, controller folder on any transport, entity file, proto service, GraphQL type or table with that name. A controller folder can be a package the domains share, such as REST's `response` or GraphQL's `paging`, which the domain's controllers would otherwise join. No identifier the plan adds at a package's top level, in a created file or by an edit, is declared in that package already: `record` would declare `entity.Record`, which exists. For a `.proto` file the identifiers are its messages and services, and the package is its folder, since every file in `docs/proto/v1` is `grpc.v1`: `login` would declare `LoginResponse`, which `auth.proto` declares. For a `.graphqls` file they are the types it defines and the fields it gives any type, and the package is its folder, which gqlgen reads as one schema: `all-task` would add the field `allTasks` to `Query`, which `task.graphqls` has. |
-| R2 targets exist or don't | No file it would create exists. Every file it would edit exists. For `new-usecase`, the domain exists and the message name is free. |
+| R2 targets exist or don't | No file it would create exists. Every file it would edit exists. For `new-usecase`, the domain exists, it has every transport the use case gets, and no message of its kind has the name. |
 | R3 clean | No file it would edit has uncommitted changes (`git status --porcelain -- <files>`), and neither do the paths the regenerators write (`docs/proto/v1/`, `docs/openapi/v1.json`, `internal/repo/repomock/`, `internal/repo/persistent/queries/`, `internal/controller/graphql/generated/` and `model/`, `web/src/api/schema.gen.ts`, `web/src/graphql/`), so the undo is exact. |
 | R4 one anchor | Every edit finds its place exactly once, by parsing the file: `go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`. Zero or two matches fail. An import whose name another import in the file binds fails too, as a domain called `config` would in `buses.go`. No markers, no line numbers, no regular expressions on source. |
 | R5 still valid | Every edited and every created file parses after the change. Edited and created Go files go through `go/format`: gofmt aligns columns by the longest name in them, so a created file's alignment depends on the domain's name. A template is written as its file for `widget`, and the golden test fails one whose output for `widget` `go/format` would change: its template is wrong. |
@@ -293,6 +309,13 @@ The generator's own Go follows the repo's linters and conventions.
   structural copies. Write one domain before generating the next. A file-level `//nolint:dupl` in
   the templates can't solve this: while only one domain exists the directive suppresses nothing,
   and `nolintlint` rejects it.
+- **Two untouched use cases of one kind on one domain are clones too**, for the same reason:
+  `dupl` finds their REST operations, their REST tests and their handler tests alike (checked with
+  `archive-task` and `restore-task`). Write the first one's body before generating the second. A
+  command and a query on one domain are not clones.
+- **Two use cases whose names start with the same word get the same default path** (`count-tasks`
+  and `count-done-tasks` are both GET `/v1/tasks/count`), and the router keeps the last. The
+  first one's REST test then fails in `make test`; give the second its own `path=`.
 - **The read model relies on how sqlc names a table's row struct**: after the singular of the
   table, which holds for the plurals the generator forms. An unusual `plural=` override can break
   that. When it does, the build at the end of `make new-domain` fails and prints the undo.

@@ -27,7 +27,7 @@ const (
 
 const _usage = `usage:
   gen new-domain  --name <name> [--plural <plural>] [--transports rest,grpc,graphql] [--root <dir>] [--dry-run]
-  gen new-usecase --domain <domain> --name <name> --kind command|query
+  gen new-usecase --domain <domain> --name <name> --kind command|query [--plural <domain plural>]
                   [--method <method>] [--path <path>] [--transports rest,grpc,graphql] [--root <dir>] [--dry-run]
 `
 
@@ -45,13 +45,17 @@ type domainRequest struct {
 
 // usecaseRequest is what make new-usecase asks for.
 type usecaseRequest struct {
-	root       string
-	domain     string
-	name       string
-	kind       string
-	method     string
-	path       string
-	transports string
+	root string
+	// domain is the domain's name, as make new-domain was given it, and plural its plural when
+	// make new-domain was given that too.
+	domain, plural string
+	name           string
+	kind           string
+	// method and path are the REST operation's, or empty for the defaults.
+	method, path string
+	// transports are the transports the use case gets, in the order rules.Transports lists them;
+	// nil for the domain's own.
+	transports []string
 	dryRun     bool
 }
 
@@ -159,16 +163,20 @@ func parseTransports(value string, stderr io.Writer) ([]string, error) {
 }
 
 func parseUsecase(args []string, stderr io.Writer) (usecaseRequest, error) {
-	var req usecaseRequest
+	var (
+		req        usecaseRequest
+		transports string
+	)
 
 	fs := newFlagSet("new-usecase", stderr)
 	fs.StringVar(&req.root, "root", ".", "the repository root")
-	fs.StringVar(&req.domain, "domain", "", "the existing domain")
+	fs.StringVar(&req.domain, "domain", "", "the existing domain, as make new-domain was given it")
+	fs.StringVar(&req.plural, "plural", "", "the domain's plural, when make new-domain was given one")
 	fs.StringVar(&req.name, "name", "", "the use case, kebab-case: archive-task")
 	fs.StringVar(&req.kind, "kind", "", "command or query")
 	fs.StringVar(&req.method, "method", "", "the REST method, default POST for a command and GET for a query")
 	fs.StringVar(&req.path, "path", "", "the REST path, default derived from the name")
-	fs.StringVar(&req.transports, "transports", "", "comma-separated, default the domain's own")
+	fs.StringVar(&transports, "transports", "", "comma-separated, default the domain's own")
 	fs.BoolVar(&req.dryRun, "dry-run", false, "print the plan and write nothing")
 
 	if err := parseFlags(fs, args); err != nil {
@@ -196,7 +204,47 @@ func parseUsecase(args []string, stderr io.Writer) (usecaseRequest, error) {
 		return req, errUsage
 	}
 
-	return req, nil
+	if err := parseRoute(&req, stderr); err != nil {
+		return req, err
+	}
+
+	if transports == "" {
+		return req, nil
+	}
+
+	var err error
+
+	req.transports, err = parseTransports(transports, stderr)
+
+	return req, err
+}
+
+// parseRoute checks the REST method and path a use case was given, if any. The method is one of
+// GET, POST, PUT, PATCH and DELETE, in any case; it is kept in capitals. The path starts with a
+// slash and has no parameter but {id}, which names the record the use case acts on.
+func parseRoute(req *usecaseRequest, stderr io.Writer) error {
+	if req.method != "" {
+		req.method = strings.ToUpper(req.method)
+
+		if !slices.Contains([]string{"GET", "POST", "PUT", "PATCH", "DELETE"}, req.method) {
+			fmt.Fprintf(stderr, "gen: --method is GET, POST, PUT, PATCH or DELETE, not %q\n", req.method)
+
+			return errUsage
+		}
+	}
+
+	if req.path == "" {
+		return nil
+	}
+
+	rest := strings.ReplaceAll(req.path, "{id}", "")
+	if !strings.HasPrefix(req.path, "/") || strings.ContainsAny(rest, "{} ") || strings.Count(req.path, "{id}") > 1 {
+		fmt.Fprintf(stderr, "gen: --path starts with / and has no parameter but one {id}, not %q\n", req.path)
+
+		return errUsage
+	}
+
+	return nil
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {

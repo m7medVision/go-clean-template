@@ -1,5 +1,6 @@
 // Package templates holds every byte the generator writes, as text/template files laid out like the
-// repository they render into. domain/ is the set make new-domain renders.
+// repository they render into. domain/ is the set make new-domain renders, and usecase/ the set
+// make new-usecase renders. In both, .Name is the domain; a use case's own name is .Usecase.Name.
 //
 // A file the generator creates is <set>/<repo path>.tmpl. Its path is a template too, rendered with
 // the same Data as its content, so domain/internal/entity/{{.Name.Snake}}.go.tmpl creates
@@ -17,6 +18,9 @@
 // written "{ {{- .Name.Go}}", since "{{{" does not parse. Two braces that open nested composite
 // literals, as in []map[string][]string{{…}}, are written {{"{{"}}, which renders them. Comments
 // say "the" or "one" before a name, never "a" or "an", which would depend on how the name sounds.
+//
+// A use case's templates are written as their files for the widget domain's archive-widget, the
+// command, and count-widgets, the query: the names of their golden files.
 package templates
 
 import (
@@ -32,7 +36,7 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/names"
 )
 
-//go:embed domain
+//go:embed domain usecase
 var _templates embed.FS
 
 const _suffix = ".tmpl"
@@ -51,8 +55,56 @@ type Data struct {
 	Module string
 	// Name is the domain's name in each of its forms.
 	Name names.Name
-	// Transports are the transports the domain gets, such as rest, grpc and graphql.
+	// Transports are the transports the domain gets, such as rest, grpc and graphql; for a use
+	// case, the transports it gets.
 	Transports []string
+	// Usecase is the command or query make new-usecase adds to the domain; nil for new-domain.
+	Usecase *Usecase
+}
+
+// Usecase is one command or query that make new-usecase adds to an existing domain.
+type Usecase struct {
+	// Name is the use case's name in each of its forms, as in archive-task.
+	Name names.Name
+	// Kind is command or query, which is also the package its message goes in.
+	Kind string
+	// Method and Path are the REST operation's HTTP method and path, as in POST and
+	// /v1/tasks/{id}/archive.
+	Method, Path string
+
+	// The fields below are what the layers read from the domain's own files: a hand-written
+	// domain chose these names, so no name form gives them. Each layer fills in what it reads
+	// before it renders.
+
+	// Dep is the field of the domain's Deps, in register.go, that the handler is built from, and
+	// DepType its type in package repo: the event store for a command, as in Store and EventStore,
+	// and the read model for a query, as in Tasks and TaskReadModel.
+	Dep, DepType string
+	// RESTTag is the constant the domain's REST operations are tagged with, as in _tasksTag.
+	RESTTag string
+}
+
+// ByID reports whether the use case acts on one record, named by its ID: its REST path holds
+// {id}, and its message carries the record's <Domain>ID.
+func (u *Usecase) ByID() bool {
+	return strings.Contains(u.Path, "{id}")
+}
+
+// HTTPMethod is the net/http constant for Method, as in http.MethodPost.
+func (u *Usecase) HTTPMethod() string {
+	lower := strings.ToLower(u.Method)
+
+	return "http.Method" + strings.ToUpper(lower[:1]) + lower[1:]
+}
+
+// Summary is the use case's words as a sentence, as in "Archive task".
+func (u *Usecase) Summary() string {
+	return strings.ToUpper(u.Name.Words[:1]) + u.Name.Words[1:]
+}
+
+// Target is Path with id in place of {id}: the URL a test sends the request to.
+func (u *Usecase) Target(id string) string {
+	return strings.ReplaceAll(u.Path, "{id}", id)
 }
 
 // Has reports whether the domain gets transport, as in {{if .Has "rest"}}.

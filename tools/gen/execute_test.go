@@ -45,17 +45,27 @@ func gitRepoWith(t *testing.T, files map[string]string) string {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, p), []byte(content), 0o600))
 	}
 
-	for _, args := range [][]string{
-		{"init", "-q"},
-		{"add", "."},
-		{"-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "base"},
-	} {
-		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // fixed git commands on a temp dir
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, string(out))
-	}
+	git(t, dir, "init", "-q")
+	commitAll(t, dir, "base")
 
 	return dir
+}
+
+// commitAll commits everything in the working tree of the repository at dir.
+func commitAll(t *testing.T, dir, message string) {
+	t.Helper()
+
+	git(t, dir, "add", "--all")
+	git(t, dir, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", message)
+}
+
+// git runs git with args in the repository at dir.
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+
+	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...) //nolint:gosec // fixed git commands on a temp dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
 }
 
 // fingerprint hashes every path, mode and content in the working tree under dir. .git is left

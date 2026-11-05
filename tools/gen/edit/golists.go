@@ -255,6 +255,52 @@ func (g *Go) AppendField(name, text string) (Insertion, error) {
 	return g.at(lineStart(g.src, closing), indent(text, lineIndent(g.src, closing)+"\t")), nil
 }
 
+// Field is one field of a struct type: its name and its type as source, as in Tasks and
+// repo.TaskReadModel.
+type Field struct {
+	Name, Type string
+}
+
+// FieldOfType returns the one field of the struct type named name whose type, written as pkg.Type
+// or Type, matches the path.Match pattern, as repo.*ReadModel matches repo.TaskReadModel. An
+// embedded field is named after its type.
+func (g *Go) FieldOfType(name, pattern string) (Field, error) {
+	var structs []*ast.StructType
+
+	for _, ts := range g.typeSpecs() {
+		if st, ok := ts.Type.(*ast.StructType); ok && ts.Name.Name == name {
+			structs = append(structs, st)
+		}
+	}
+
+	if len(structs) != 1 {
+		return Field{}, anchorError(g.path, "a struct type "+name, len(structs))
+	}
+
+	var found []Field
+
+	for _, f := range structs[0].Fields.List {
+		typ := render(f.Type)
+		if !glob(pattern, typ) {
+			continue
+		}
+
+		if len(f.Names) == 0 {
+			found = append(found, Field{Name: typ[strings.LastIndexByte(typ, '.')+1:], Type: typ})
+		}
+
+		for _, id := range f.Names {
+			found = append(found, Field{Name: id.Name, Type: typ})
+		}
+	}
+
+	if len(found) != 1 {
+		return Field{}, anchorError(g.path, "a field of "+name+" of type "+pattern, len(found))
+	}
+
+	return found[0], nil
+}
+
 // typeSpecs returns the file's top-level type declarations.
 func (g *Go) typeSpecs() []*ast.TypeSpec {
 	var specs []*ast.TypeSpec

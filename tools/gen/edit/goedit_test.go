@@ -200,6 +200,98 @@ func TestImportStartsTheNonStandardGroupAfterTheStandardOne(t *testing.T) {
 	assert.Equal(t, "package p\n\nimport (\n\t\"context\"\n\n\t\"github.com/x/y\"\n)\n", applyGo(t, src, ins...))
 }
 
+// A standard path goes into the standard group, in path order, the way gci sorts it; a file with
+// none starts that group ahead of the others.
+func TestImportPutsAStandardPathInTheStandardGroup(t *testing.T) {
+	t.Parallel()
+
+	const nonStandardOnly = "package p\n\nimport (\n\t\"github.com/x/y\"\n)\n"
+
+	for name, tc := range map[string]struct{ src, path, want string }{
+		"among the standard ones": {
+			src: importsSrc, path: "errors",
+			want: "import (\n\t\"context\"\n\t\"errors\"\n\t\"fmt\"\n\n\t\"github.com/m7medvision/",
+		},
+		"after the last standard one": {
+			src: importsSrc, path: "net/http",
+			want: "\t\"fmt\"\n\t\"net/http\"\n\n\t\"github.com/m7medvision/",
+		},
+		"starting the standard group": {
+			src: nonStandardOnly, path: "context",
+			want: "import (\n\t\"context\"\n\n\t\"github.com/x/y\"\n)\n",
+		},
+		"in an empty block": {
+			src: "package p\n\nimport (\n)\n", path: "context",
+			want: "import (\n\t\"context\"\n)\n",
+		},
+	} {
+		ins, err := parseGo(t, tc.src).Import(tc.path, "")
+		require.NoError(t, err, name)
+		assert.Contains(t, applyGo(t, tc.src, ins...), tc.want, name)
+	}
+}
+
+func TestConstFindsOneTopLevelConstantByPattern(t *testing.T) {
+	t.Parallel()
+
+	g := parseGo(t, "package p\n\nconst _tasksTag = \"tasks\"\n\nconst (\n\t_a, _bTag = 1, 2\n\tc = 3\n)\n\nvar _vTag = 4\n")
+
+	got, err := g.Const("_task*Tag")
+	require.NoError(t, err)
+	assert.Equal(t, "_tasksTag", got)
+
+	_, err = g.Const("_*Tag")
+	require.ErrorIs(t, err, edit.ErrAnchor, "_tasksTag and _bTag")
+	assert.Contains(t, err.Error(), "a constant _*Tag")
+
+	_, err = g.Const("_v*")
+	require.ErrorIs(t, err, edit.ErrAnchor, "a var is no constant")
+}
+
+func TestFieldOfTypeFindsOneFieldOfAStructByItsType(t *testing.T) {
+	t.Parallel()
+
+	g := parseGo(t, `package p
+
+type Deps struct {
+	Store         repo.EventStore
+	History       repo.ExchangeReadModel
+	Rates, Backup repo.ExchangeWebAPI
+	Now           func() time.Time
+}
+
+type Embeds struct {
+	repo.TaskReadModel
+}
+`)
+
+	got, err := g.FieldOfType("Deps", "repo.*ReadModel")
+	require.NoError(t, err)
+	assert.Equal(t, edit.Field{Name: "History", Type: "repo.ExchangeReadModel"}, got)
+
+	got, err = g.FieldOfType("Deps", "repo.EventStore")
+	require.NoError(t, err)
+	assert.Equal(t, edit.Field{Name: "Store", Type: "repo.EventStore"}, got)
+
+	for pattern, why := range map[string]string{
+		"repo.*WebAPI":  "two fields share the type",
+		"repo.Missing":  "no field has the type",
+		"time.Duration": "no field has the type",
+	} {
+		_, err := g.FieldOfType("Deps", pattern)
+		require.ErrorIs(t, err, edit.ErrAnchor, why)
+		assert.Contains(t, err.Error(), "a field of Deps of type "+pattern, why)
+	}
+
+	got, err = g.FieldOfType("Embeds", "repo.*ReadModel")
+	require.NoError(t, err)
+	assert.Equal(t, edit.Field{Name: "TaskReadModel", Type: "repo.TaskReadModel"}, got, "named after its type")
+
+	_, err = g.FieldOfType("Missing", "repo.EventStore")
+	require.ErrorIs(t, err, edit.ErrAnchor)
+	assert.Contains(t, err.Error(), "a struct type Missing")
+}
+
 func TestImportNeedsAnImportBlock(t *testing.T) {
 	t.Parallel()
 

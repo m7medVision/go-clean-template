@@ -1,0 +1,24 @@
+package query_test
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo/repomock"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+)
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what {{.Usecase.Name.Go}} reads.
+func Test{{.Usecase.Name.Go}}IsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := query.{{.Usecase.Name.Go}}Handler{ {{- .Usecase.Dep}}: repomock.NewMock{{.Usecase.DepType}}(gomock.NewController(t))}
+
+	_, err := h.Handle(context.Background(), query.{{.Usecase.Name.Go}}{UserID: "user-1"{{if .Usecase.ByID}}, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"{{end}}})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}
