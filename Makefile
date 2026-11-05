@@ -142,9 +142,11 @@ GEN = go -C tools/gen run .
 GEN_OPTS = $(if $(transports),--transports '$(transports)') $(if $(dry-run),--dry-run)
 # After the generator writes, the regenerators its output needs, then a build; a dry run runs none.
 # The first failure stops them. The undo the generator printed restores the tree, regenerated
-# paths included: rule R3 had them clean before the write.
+# paths included: rule R3 had them clean before the write. Their output scrolls the generator's
+# checklist and undo out of view, so the last line points back to them.
 GEN_REGENERATE = $(if $(dry-run),,$(MAKE) proto-v1 graphql sqlc mock openapi web-api web-graphql format && go build ./... \
-	|| { echo 'gen: a regenerator or the build failed: run the undo printed above to restore the tree' >&2; exit 1; })
+	|| { echo 'gen: a regenerator or the build failed: run the undo printed above to restore the tree' >&2; exit 1; }; \
+	echo 'gen: done. The next steps and the undo are printed above the output of the regenerators.')
 
 new-domain: ### generate a domain with CRUD stubs: make new-domain name=invoice [plural=] [transports=rest,grpc,graphql] [dry-run=1]
 	$(GEN) new-domain --root '$(CURDIR)' --name '$(name)' $(if $(plural),--plural '$(plural)') $(GEN_OPTS)
@@ -236,6 +238,6 @@ release-version: ### print the next release version from the commits since the l
 	fi
 .PHONY: release-version
 
-pre-commit: deps mock format linter-golangci test ### run pre-commit
+pre-commit: deps mock format linter-golangci test gen-check ### run pre-commit
 pre-commit: web-api web-graphql web-format web-check
 .PHONY: pre-commit
