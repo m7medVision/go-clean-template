@@ -17,7 +17,7 @@ func WidgetStreamID(id string) string {
 // WidgetAggregate is one widget on the write side: rebuilt from its events, it checks its rules and
 // records what changed. Reads use Widget, from the table the widget projector writes.
 type WidgetAggregate struct {
-	AggregateBase
+	AggregateCore
 
 	widget  Widget
 	deleted bool
