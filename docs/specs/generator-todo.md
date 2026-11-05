@@ -400,10 +400,14 @@ Both run when backend paths change (the `changes` filter) and are listed in `ci-
 - **The "Done" line**: after the regenerators and the build pass, `make new-domain` and
   `make new-usecase` print one line pointing back to the checklist and the undo, which the
   regenerators' output has scrolled away.
-- [ ] Both jobs pass on the PR.
-- [ ] A change limited to `web/**` skips both, and `ci-ok` still passes.
+- [x] Both jobs pass on the PR.
+- [x] A change limited to `web/**` skips both, and `ci-ok` still passes.
 
 **Verify:** CI. **Depends on:** 27. **Files:** `.github/workflows/ci.yml`, `.github/dependabot.yml`, `Makefile`. **Size:** S
+
+Confirmed on GitHub: run 41945297265 on PR #47 passed both jobs (gen / check 1m08s, gen / e2e
+6m27s) and ci-ok. A change limited to `web/**` skips them: they share the `backend` filter with
+`tests / unit`, which PR #43 (only `web/bun.lock`, `web/package.json`) skipped while ci-ok passed.
 
 ### 29. Docs
 - [x] `docs/generator.md`: both commands, every flag, the safety rules, the undo, and what you

@@ -163,7 +163,7 @@ ErrNotImplemented (1)       module + make (2) ─ names (3)
 - [x] Success criterion 3 on `task` in a scratch copy.
 
 ### Phase 6: Ship
-- [ ] 28. CI jobs and `make pre-commit`
+- [x] 28. CI jobs and `make pre-commit`
 - [x] 29. Docs
 - [ ] 30. Proof that the e2e job catches a broken template
 
