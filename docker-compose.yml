@@ -102,7 +102,7 @@ services:
   # both sides.
   # Dev users: alice/alice (app-admin), bob/bob (app-user); admin console: admin/admin.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8.1
+    image: quay.io/keycloak/keycloak:26.8.2
     command: ["start-dev", "--import-realm"]
     environment:
       KC_HTTP_PORT: "${KEYCLOAK_PORT:-8180}"
