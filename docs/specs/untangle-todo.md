@@ -278,4 +278,5 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G4. **Depends on:** 34.
 
 ### Checkpoint 7 (done)
-- [ ] G4 green; docs current; decision log updated with what changed during the work.
+- [x] G4 green at ecf7da7 (format, lint, test, vet, build -tags migrate, openapi/web-api/web-graphql
+      unchanged, gen-check, gen-e2e, integration); docs current; decision log updated.
