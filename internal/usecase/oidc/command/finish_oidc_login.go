@@ -11,7 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
@@ -32,7 +31,7 @@ type FinishOIDCLogin struct {
 
 // FinishOIDCLoginHandler handles FinishOIDCLogin. Now is the clock (time.Now when nil).
 type FinishOIDCLoginHandler struct {
-	SSO      *sso.SSO
+	SSO      repo.SSOProvider
 	Store    repo.EventStore
 	Sessions repo.SessionIssuer
 	Now      func() time.Time
@@ -59,7 +58,7 @@ func (h FinishOIDCLoginHandler) Handle(ctx context.Context, cmd FinishOIDCLogin)
 }
 
 // user returns the user the identity's claim names, or creates one.
-func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *sso.Identity) (entity.Written, error) {
+func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *entity.SSOIdentity) (entity.Written, error) {
 	claim := entity.OIDCIdentity(identity.Issuer, identity.Subject)
 
 	owner, err := h.Store.ClaimOwner(ctx, entity.ClaimOIDCIdentity, claim)

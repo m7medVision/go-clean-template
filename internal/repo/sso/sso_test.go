@@ -7,35 +7,32 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/oidctest"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/internal/repo/sso"
+	"github.com/m7medvision/go-clean-template/internal/repo/sso/ssotest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const _stateTTL = 10 * time.Minute
-
-func newSSO(t *testing.T, idp *oidctest.IDP, configure ...func(*sso.Config)) *sso.SSO {
+func newSSO(t *testing.T, idp *ssotest.IDP, configure ...func(*sso.Config)) *sso.SSO {
 	t.Helper()
 
-	state, err := jwt.NewScoped("test-secret", "oidc-state", _stateTTL)
-	require.NoError(t, err)
-
 	cfg := &sso.Config{
-		Issuer: idp.Issuer(), ClientID: oidctest.ClientID, ClientSecret: oidctest.ClientSecret,
-		RedirectURL: oidctest.RedirectURL, RolesClaim: "realm_access.roles",
+		Issuer: idp.Issuer(), ClientID: ssotest.ClientID, ClientSecret: ssotest.ClientSecret,
+		BaseURL: ssotest.BaseURL, RolesClaim: "realm_access.roles",
 		RoleMap: map[string]string{"app-admin": "admin", "app-user": "user"},
 	}
 	for _, c := range configure {
 		c(cfg)
 	}
 
-	return sso.New(state, cfg)
+	s, err := sso.New("test-secret", cfg)
+	require.NoError(t, err)
+
+	return s
 }
 
 // signIn runs Begin, the provider sign-in with claims, and Verify.
-func signIn(t *testing.T, s *sso.SSO, idp *oidctest.IDP, claims map[string]any) (sso.Identity, error) {
+func signIn(t *testing.T, s *sso.SSO, idp *ssotest.IDP, claims map[string]any) (entity.SSOIdentity, error) {
 	t.Helper()
 
 	authURL, token, err := s.Begin(t.Context())
@@ -49,7 +46,7 @@ func signIn(t *testing.T, s *sso.SSO, idp *oidctest.IDP, claims map[string]any) 
 func TestDisabledSSO(t *testing.T) {
 	t.Parallel()
 
-	s := newSSO(t, oidctest.New(t), func(c *sso.Config) { c.Issuer = "" })
+	s := newSSO(t, ssotest.New(t), func(c *sso.Config) { c.Issuer = "" })
 
 	assert.False(t, s.Enabled())
 
@@ -63,7 +60,7 @@ func TestDisabledSSO(t *testing.T) {
 func TestBeginSendsTheBrowserToTheProvider(t *testing.T) {
 	t.Parallel()
 
-	idp := oidctest.New(t)
+	idp := ssotest.New(t)
 	s := newSSO(t, idp)
 	assert.True(t, s.Enabled())
 
@@ -76,8 +73,8 @@ func TestBeginSendsTheBrowserToTheProvider(t *testing.T) {
 	assert.Equal(t, idp.Issuer()+"/auth", u.Scheme+"://"+u.Host+u.Path)
 
 	q := u.Query()
-	assert.Equal(t, oidctest.ClientID, q.Get("client_id"))
-	assert.Equal(t, oidctest.RedirectURL, q.Get("redirect_uri"))
+	assert.Equal(t, ssotest.ClientID, q.Get("client_id"))
+	assert.Equal(t, ssotest.RedirectURL, q.Get("redirect_uri"))
 	assert.Equal(t, "code", q.Get("response_type"))
 	assert.Contains(t, strings.Fields(q.Get("scope")), "openid")
 	assert.Contains(t, strings.Fields(q.Get("scope")), "email")
@@ -98,7 +95,7 @@ func TestBeginSendsTheBrowserToTheProvider(t *testing.T) {
 func TestBeginRetriesDiscovery(t *testing.T) {
 	t.Parallel()
 
-	idp := oidctest.New(t)
+	idp := ssotest.New(t)
 	s := newSSO(t, idp)
 
 	// The provider may still be starting when the first sign-in arrives.
@@ -116,13 +113,13 @@ func TestBeginRetriesDiscovery(t *testing.T) {
 func TestVerifyReturnsTheIdentityThatSignedIn(t *testing.T) {
 	t.Parallel()
 
-	idp := oidctest.New(t)
+	idp := ssotest.New(t)
 
 	identity, err := signIn(t, newSSO(t, idp), idp, nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, sso.Identity{
-		Issuer: idp.Issuer(), Subject: oidctest.Subject, Email: oidctest.Email, Username: oidctest.Username,
+	assert.Equal(t, entity.SSOIdentity{
+		Issuer: idp.Issuer(), Subject: ssotest.Subject, Email: ssotest.Email, Username: ssotest.Username,
 		Roles: []entity.Role{entity.RoleUser},
 	}, identity)
 }
@@ -130,12 +127,12 @@ func TestVerifyReturnsTheIdentityThatSignedIn(t *testing.T) {
 func TestAnIdentityWithoutAUsernameIsNamedByItsEmail(t *testing.T) {
 	t.Parallel()
 
-	idp := oidctest.New(t)
+	idp := ssotest.New(t)
 
 	identity, err := signIn(t, newSSO(t, idp), idp, map[string]any{"preferred_username": nil})
 	require.NoError(t, err)
 
-	assert.Equal(t, oidctest.Email, identity.Username)
+	assert.Equal(t, ssotest.Email, identity.Username)
 }
 
 func TestVerifyMapsTheProvidersRoles(t *testing.T) {
@@ -186,7 +183,7 @@ func TestVerifyMapsTheProvidersRoles(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			idp := oidctest.New(t)
+			idp := ssotest.New(t)
 
 			identity, err := signIn(t, newSSO(t, idp, tt.configure), idp, tt.claims)
 			require.NoError(t, err)
@@ -217,7 +214,7 @@ func TestVerifyRefusesAnInvalidCeremony(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			idp := oidctest.New(t)
+			idp := ssotest.New(t)
 			s := newSSO(t, idp)
 
 			authURL, token, err := s.Begin(t.Context())
@@ -237,7 +234,7 @@ func TestVerifyRefusesAnInvalidCeremony(t *testing.T) {
 func TestACodeWorksOnce(t *testing.T) {
 	t.Parallel()
 
-	idp := oidctest.New(t)
+	idp := ssotest.New(t)
 	s := newSSO(t, idp)
 
 	authURL, token, err := s.Begin(t.Context())

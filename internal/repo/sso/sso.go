@@ -14,11 +14,22 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"golang.org/x/oauth2"
+)
+
+const (
+	// _stateScope scopes the sign-in state token's key and audience, so no other token passes for it.
+	_stateScope = "oidc-state"
+	// _stateTimeout is how long a user has to sign in at the provider.
+	_stateTimeout = 10 * time.Minute
+	// _callbackPath is the web client's route the provider redirects the browser back to.
+	_callbackPath = "/sso/callback"
 )
 
 // Config -.
@@ -27,22 +38,12 @@ type Config struct {
 	Issuer       string
 	ClientID     string
 	ClientSecret string
-	// RedirectURL is where the provider sends the browser back: the web client's callback route.
-	RedirectURL string
+	// BaseURL is the app's public origin; the provider redirects back to its /sso/callback.
+	BaseURL string
 	// RolesClaim is the dotted path to the ID-token claim holding the provider's role names.
 	RolesClaim string
 	// RoleMap maps provider role names to app role names.
 	RoleMap map[string]string
-}
-
-// Identity is who signed in at the provider: the identity (issuer and subject), the email and
-// username a first sign-in creates the user with, and the app roles the provider's claims map to.
-type Identity struct {
-	Issuer   string
-	Subject  string
-	Email    string
-	Username string
-	Roles    []entity.Role
 }
 
 // ceremony is the state a sign-in carries from Begin to Verify inside the signed token.
@@ -63,10 +64,17 @@ type SSO struct {
 	provider *gooidc.Provider
 }
 
-// New returns the sign-in for cfg's provider. state signs the ceremony token; its lifetime bounds
-// how long a sign-in may take at the provider.
-func New(state *jwt.Scoped, cfg *Config) *SSO {
-	return &SSO{state: state, cfg: *cfg}
+var _ repo.SSOProvider = (*SSO)(nil)
+
+// New returns the sign-in at cfg's provider. Its state token is signed with a key derived from
+// secret. The provider is discovered on the first sign-in, so New never fails on it.
+func New(secret string, cfg *Config) (*SSO, error) {
+	state, err := jwt.NewScoped(secret, _stateScope, _stateTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("sso - New - jwt.NewScoped: %w", err)
+	}
+
+	return &SSO{state: state, cfg: *cfg}, nil
 }
 
 // Enabled reports whether a provider is configured.
@@ -107,34 +115,34 @@ func (s *SSO) Begin(ctx context.Context) (authURL, token string, err error) {
 // Verify checks the provider's redirect (code and state) against the ceremony in token, exchanges
 // the code, verifies the ID token, and returns who signed in. A bad, expired or replayed state token,
 // code or ID token, or an ID token without an email, is entity.ErrOIDCCeremonyInvalid.
-func (s *SSO) Verify(ctx context.Context, code, state, token string) (Identity, error) {
+func (s *SSO) Verify(ctx context.Context, code, state, token string) (entity.SSOIdentity, error) {
 	if !s.Enabled() {
-		return Identity{}, entity.ErrOIDCDisabled
+		return entity.SSOIdentity{}, entity.ErrOIDCDisabled
 	}
 
 	c, err := s.verifyCeremony(token, state)
 	if err != nil {
-		return Identity{}, err
+		return entity.SSOIdentity{}, err
 	}
 
 	provider, err := s.discover(ctx)
 	if err != nil {
-		return Identity{}, err
+		return entity.SSOIdentity{}, err
 	}
 
 	idToken, err := s.exchange(ctx, provider, code, c)
 	if err != nil {
-		return Identity{}, err
+		return entity.SSOIdentity{}, err
 	}
 
 	var claims map[string]any
 	if err = idToken.Claims(&claims); err != nil {
-		return Identity{}, fmt.Errorf("sso - Verify - idToken.Claims: %w", err)
+		return entity.SSOIdentity{}, fmt.Errorf("sso - Verify - idToken.Claims: %w", err)
 	}
 
 	email, ok := claims["email"].(string)
 	if !ok || email == "" {
-		return Identity{}, entity.ErrOIDCCeremonyInvalid
+		return entity.SSOIdentity{}, entity.ErrOIDCCeremonyInvalid
 	}
 
 	username, ok := claims["preferred_username"].(string)
@@ -142,7 +150,7 @@ func (s *SSO) Verify(ctx context.Context, code, state, token string) (Identity, 
 		username = email
 	}
 
-	return Identity{
+	return entity.SSOIdentity{
 		Issuer: idToken.Issuer, Subject: idToken.Subject, Email: email, Username: username, Roles: s.roles(claims),
 	}, nil
 }
@@ -170,7 +178,7 @@ func (s *SSO) oauth(provider *gooidc.Provider) *oauth2.Config {
 		ClientID:     s.cfg.ClientID,
 		ClientSecret: s.cfg.ClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  s.cfg.RedirectURL,
+		RedirectURL:  strings.TrimSuffix(s.cfg.BaseURL, "/") + _callbackPath,
 		Scopes:       []string{gooidc.ScopeOpenID, "email", "profile"},
 	}
 }

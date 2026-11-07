@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
@@ -24,7 +24,7 @@ type Started struct {
 
 // BeginOIDCLoginHandler handles BeginOIDCLogin.
 type BeginOIDCLoginHandler struct {
-	SSO *sso.SSO
+	SSO repo.SSOProvider
 }
 
 // Handle -.

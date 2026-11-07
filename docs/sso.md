@@ -16,7 +16,8 @@ The code, layer by layer:
 | --- | --- |
 | Entity | [`internal/entity/role.go`](../internal/entity/role.go) (`Role`, `Principal`), sentinels in [`errors.go`](../internal/entity/errors.go) |
 | Events | [`internal/entity/user_aggregate.go`](../internal/entity/user_aggregate.go): `NewOIDCUserAggregate` records `UserRegisteredViaOIDC` and claims the identity, the email and the username |
-| Use case | [`internal/usecase/oidc`](../internal/usecase/oidc): the queries `BeginOIDCLogin` and `GetOIDCStatus`, the command `FinishOIDCLogin`; [`sso/`](../internal/usecase/oidc/sso/sso.go) is the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2` |
+| Use case | [`internal/usecase/oidc`](../internal/usecase/oidc): the queries `BeginOIDCLogin` and `GetOIDCStatus`, the command `FinishOIDCLogin`, against the `repo.SSOProvider` port |
+| Adapter | [`internal/repo/sso`](../internal/repo/sso/sso.go), the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2`; it owns the state token's scope and lifetime and the `/sso/callback` redirect. `ssotest/` is a provider on httptest for its tests |
 | Read model | the `user` projector in [`internal/repo/persistent/user`](../internal/repo/persistent/user/projector.go) writes `users` and [`user_identities`](../internal/app/schema/user_identities.hcl) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/oidc/`](../internal/controller/restapi/v1/oidc) |

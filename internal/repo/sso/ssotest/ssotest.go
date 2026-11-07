@@ -1,7 +1,7 @@
-// Package oidctest is an OpenID Connect provider on httptest for the SSO tests: discovery, JWKS, and
+// Package ssotest is an OpenID Connect provider on httptest for the SSO tests: discovery, JWKS, and
 // a token endpoint that checks the client secret, the code and its PKCE verifier, and signs a real
 // RS256 ID token.
-package oidctest
+package ssotest
 
 import (
 	"crypto/rand"
@@ -26,7 +26,8 @@ import (
 const (
 	ClientID     = "go-clean-template"
 	ClientSecret = "client-secret"
-	RedirectURL  = "http://localhost/sso/callback"
+	BaseURL      = "http://localhost"
+	RedirectURL  = BaseURL + "/sso/callback"
 	Subject      = "idp-subject-1"
 	Email        = "alice@example.com"
 	Username     = "alice"

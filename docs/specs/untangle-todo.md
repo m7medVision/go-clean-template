@@ -107,7 +107,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 5. **Size:** L
 
 ### 14. OIDC adapter behind a port  (F)
-- [ ] `usecase/oidc/sso` moves under `internal/repo`; use cases depend on a port; its scope label and
+- [x] `usecase/oidc/sso` moves under `internal/repo`; use cases depend on a port; its scope label and
       lifetime live in the adapter; handler tests use the port's mock.
 
 **Verify:** G1. **Depends on:** 13. **Size:** L

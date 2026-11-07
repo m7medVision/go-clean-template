@@ -45,6 +45,17 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"  example:"2026-01-01T00:00:00Z"`
 }
 
+// SSOIdentity is who signed in at an OpenID Connect provider: the identity (issuer and subject),
+// the email and username a first sign-in creates the user with, and the app roles the provider's
+// claims map to.
+type SSOIdentity struct {
+	Issuer   string
+	Subject  string
+	Email    string
+	Username string
+	Roles    []Role
+}
+
 // HashPassword is the bcrypt hash a user's password is stored as.
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

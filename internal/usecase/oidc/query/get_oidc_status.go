@@ -3,7 +3,7 @@ package query
 import (
 	"context"
 
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
@@ -14,7 +14,7 @@ type GetOIDCStatus struct {
 
 // GetOIDCStatusHandler handles GetOIDCStatus.
 type GetOIDCStatusHandler struct {
-	SSO *sso.SSO
+	SSO repo.SSOProvider
 }
 
 // Handle -.
