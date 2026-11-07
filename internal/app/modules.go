@@ -23,7 +23,7 @@ type module struct {
 	// handlers registers the domain's command and query handlers on the app's buses.
 	handlers func(d *deps, b cqrs.Buses) error
 	// importer turns the rows the domain wrote before it stored events into events.
-	importer func(d *deps) eventstore.Importer
+	importer func(pg *postgres.Postgres) eventstore.Importer
 	// rest registers its REST operations, grpc its gRPC services. A v2 registers next to v1.
 	rest func(api huma.API, b cqrs.Buses, l *slog.Logger)
 	grpc func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger)

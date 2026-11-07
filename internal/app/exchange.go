@@ -11,6 +11,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
 )
 
@@ -25,7 +26,7 @@ func exchangeModule() module {
 
 			return nil
 		},
-		importer: func(d *deps) eventstore.Importer { return persistExchangeRepo.NewImporter(d.pg) },
+		importer: func(pg *postgres.Postgres) eventstore.Importer { return persistExchangeRepo.NewImporter(pg) },
 		rest:     restexchange.NewRoutes,
 		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 			pb.RegisterExchangeServiceServer(s, grpcexchange.New(b, l))

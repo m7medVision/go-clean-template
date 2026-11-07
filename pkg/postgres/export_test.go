@@ -15,3 +15,8 @@ func InTxWith(ctx context.Context, begin func(context.Context) (pgx.Tx, error), 
 func PoolSize(size int) int32 {
 	return safeIntToInt32(size)
 }
+
+// Retryable reports whether New tries again after err.
+func Retryable(err error) bool {
+	return retryable(err)
+}

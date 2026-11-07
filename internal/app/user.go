@@ -15,6 +15,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
 	userevent "github.com/m7medvision/go-clean-template/internal/usecase/user/event"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
 )
 
@@ -29,7 +30,7 @@ func userModule() module {
 
 			return nil
 		},
-		importer: func(d *deps) eventstore.Importer { return persistUserRepo.NewImporter(d.pg) },
+		importer: func(pg *postgres.Postgres) eventstore.Importer { return persistUserRepo.NewImporter(pg) },
 		rest:     restuser.NewRoutes,
 		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 			pb.RegisterAuthServiceServer(s, grpcuser.New(b, l))

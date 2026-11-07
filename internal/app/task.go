@@ -10,6 +10,7 @@ import (
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
 )
 
@@ -22,7 +23,7 @@ func taskModule() module {
 
 			return nil
 		},
-		importer: func(d *deps) eventstore.Importer { return persistTaskRepo.NewImporter(d.pg) },
+		importer: func(pg *postgres.Postgres) eventstore.Importer { return persistTaskRepo.NewImporter(pg) },
 		rest:     resttask.NewRoutes,
 		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 			pb.RegisterTaskServiceServer(s, grpctask.New(b, l))

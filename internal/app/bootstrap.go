@@ -32,13 +32,13 @@ func newBootstrap(ctx context.Context, cfg *config.Config, service string) (*boo
 		return nil, fmt.Errorf("tracing.New: %w", err)
 	}
 
-	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
+	pg, err := openPool(ctx, cfg.PG)
 	if err != nil {
 		if stopErr := stopTracing(context.WithoutCancel(ctx)); stopErr != nil {
 			l.Error("app - stop tracing", "error", stopErr)
 		}
 
-		return nil, fmt.Errorf("postgres.New: %w", err)
+		return nil, err
 	}
 
 	cmds, qs := newBuses(pg, projectors(pg), cfg.CQRS.ConsistencyTimeout, l)
@@ -50,6 +50,17 @@ func newBootstrap(ctx context.Context, cfg *config.Config, service string) (*boo
 		buses:       cqrs.Buses{Commands: cmds, Queries: qs},
 		stopTracing: stopTracing,
 	}, nil
+}
+
+// openPool connects to the database, waiting for it until ctx ends: both binaries and the rebuild
+// command open their pool here.
+func openPool(ctx context.Context, cfg config.PG) (*postgres.Postgres, error) {
+	pg, err := postgres.New(ctx, cfg.URL, cfg.PoolMax)
+	if err != nil {
+		return nil, fmt.Errorf("postgres.New: %w", err)
+	}
+
+	return pg, nil
 }
 
 // close closes the pool, then flushes the spans still buffered. Call it once everything that uses

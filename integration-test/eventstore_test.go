@@ -21,6 +21,8 @@ import (
 
 const (
 	storePoolSize = 10
+	// connectWait bounds how long a test waits for the stack's database, which is up by then.
+	connectWait = 30 * time.Second
 
 	lockWait = 10 * time.Second
 	lockPoll = 10 * time.Millisecond
@@ -35,7 +37,10 @@ func newPostgres(t *testing.T) *postgres.Postgres {
 	pgURL := os.Getenv("PG_URL")
 	require.NotEmpty(t, pgURL, "PG_URL is not set")
 
-	pg, err := postgres.New(pgURL, postgres.MaxPoolSize(storePoolSize))
+	ctx, cancel := context.WithTimeout(t.Context(), connectWait)
+	defer cancel()
+
+	pg, err := postgres.New(ctx, pgURL, storePoolSize)
 	require.NoError(t, err)
 	t.Cleanup(pg.Close)
 

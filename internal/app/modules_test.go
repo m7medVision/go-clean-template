@@ -108,7 +108,7 @@ func TestTheStoredNamesStayTheSame(t *testing.T) {
 		subscribers = append(subscribers, h.Name())
 	}
 
-	for _, imp := range importers(d) {
+	for _, imp := range importers(d.pg) {
 		domains = append(domains, imp.Domain())
 	}
 

@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
-	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,13 +70,13 @@ func newRunner(d *deps) (*projection.Runner, error) {
 // RebuildProjection empties the read model of the projector called name and resets its checkpoint,
 // for the worker that runs it to replay every event into it (make projection-rebuild).
 func RebuildProjection(ctx context.Context, cfg *config.Config, name string) error {
-	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
+	pg, err := openPool(ctx, cfg.PG)
 	if err != nil {
-		return fmt.Errorf("app - RebuildProjection - postgres.New: %w", err)
+		return fmt.Errorf("app - RebuildProjection: %w", err)
 	}
 	defer pg.Close()
 
-	if err = projection.Rebuild(ctx, pg, name, projectors(pg), importers(&deps{cfg: cfg, pg: pg})); err != nil {
+	if err = projection.Rebuild(ctx, pg, name, projectors(pg), importers(pg)); err != nil {
 		return fmt.Errorf("app - RebuildProjection: %w", err)
 	}
 

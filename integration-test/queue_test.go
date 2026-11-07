@@ -31,7 +31,10 @@ func newQueuePostgres(t *testing.T) *postgres.Postgres {
 	pgURL := os.Getenv("PG_URL")
 	require.NotEmpty(t, pgURL, "PG_URL is not set")
 
-	pg, err := postgres.New(pgURL)
+	ctx, cancel := context.WithTimeout(t.Context(), connectWait)
+	defer cancel()
+
+	pg, err := postgres.New(ctx, pgURL, 1)
 	require.NoError(t, err)
 	t.Cleanup(pg.Close)
 
