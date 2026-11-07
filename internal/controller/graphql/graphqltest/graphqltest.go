@@ -54,7 +54,8 @@ func Token(t *testing.T, roles ...string) string {
 }
 
 // Post sends query and vars to a GraphQL handler over the buses b, with token as the bearer token
-// unless it is empty. A bus the query never reaches may be nil.
+// unless it is empty. A bus the query never reaches may be nil. The handler serves no docs, as the
+// app does by default, so it refuses introspection.
 func Post(t *testing.T, b cqrs.Buses, token, query string, vars map[string]any) Response {
 	t.Helper()
 
@@ -69,7 +70,7 @@ func Post(t *testing.T, b cqrs.Buses, token, query string, vars map[string]any) 
 	}
 
 	rec := httptest.NewRecorder()
-	graphql.NewHandler(b, jwt.New(_signingKey, time.Hour), slog.New(slog.DiscardHandler)).ServeHTTP(rec, req)
+	graphql.NewHandler(b, jwt.New(_signingKey, time.Hour), false, slog.New(slog.DiscardHandler)).ServeHTTP(rec, req)
 
 	var resp Response
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp), rec.Body.String())

@@ -39,7 +39,7 @@ func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, metri
 
 	r.Get(_healthzPath, healthz)
 
-	r.Handle("/graphql", graphql.NewHandler(b, tokens, l))
+	r.Handle("/graphql", graphql.NewHandler(b, tokens, cfg.Docs.Enabled, l))
 
 	if cfg.Docs.Enabled {
 		r.Handle("/graphql/playground", graphql.NewPlayground("/graphql"))

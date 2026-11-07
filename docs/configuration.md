@@ -28,7 +28,7 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `JWT_SECRET` | required by the app | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
 | `METRICS_ENABLED` | `true` | serves Prometheus at `/metrics`: HTTP and gRPC request counts and latencies, commands and queries, projection lag ([api.md](api.md)). It decides only whether `/metrics` is served: the collectors count either way |
-| `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)) |
+| `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)): REST's `/docs`, its OpenAPI document and schemas, and GraphQL's playground and introspection. gRPC server reflection does not follow it |
 
 Two variables are read by tooling, not by the app:
 

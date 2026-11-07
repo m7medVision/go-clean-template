@@ -23,13 +23,19 @@ import (
 
 const _playgroundTitle = "Go Clean Template GraphQL"
 
-func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, l *slog.Logger) http.Handler {
+// NewHandler serves the GraphQL API over b. Introspection, which hands a client the whole schema, is
+// part of the docs: it answers only when docs is on (DOCS_ENABLED), as the playground does.
+func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, docs bool, l *slog.Logger) http.Handler {
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
 		Resolvers: newResolver(b, l),
 	}))
 
 	srv.AddTransport(transport.POST{})
-	srv.Use(extension.Introspection{})
+
+	if docs {
+		srv.Use(extension.Introspection{})
+	}
+
 	srv.SetRecoverFunc(func(ctx context.Context, p any) error {
 		attrs := []any{"panic", fmt.Sprint(p), "stack", string(debug.Stack())}
 		if fc := gqlgen.GetFieldContext(ctx); fc != nil {

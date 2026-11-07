@@ -32,13 +32,33 @@ func panicBuses() cqrs.Buses {
 	return cqrs.Buses{Queries: qs}
 }
 
-func TestIntrospectionWithoutToken(t *testing.T) {
+// Introspection is part of the docs: with them on it answers, token or not; with them off it is
+// refused, as the playground is not served.
+func TestIntrospectionFollowsTheDocs(t *testing.T) {
 	t.Parallel()
 
-	resp := graphqltest.Post(t, cqrs.Buses{}, "", `{ __schema { queryType { name } } }`, nil)
+	for _, docs := range []bool{true, false} {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql",
+			strings.NewReader(`{"query":"{ __schema { queryType { name } } }"}`))
+		req.Header.Set("Content-Type", "application/json")
 
-	require.Empty(t, resp.Errors)
-	assert.JSONEq(t, `{"queryType":{"name":"Query"}}`, string(resp.Data["__schema"]))
+		rec := httptest.NewRecorder()
+		graphql.NewHandler(cqrs.Buses{}, jwt.New("test-secret", time.Hour), docs, slog.New(slog.DiscardHandler)).ServeHTTP(rec, req)
+
+		var resp graphqltest.Response
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp), rec.Body.String())
+
+		if docs {
+			require.Empty(t, resp.Errors)
+			assert.JSONEq(t, `{"queryType":{"name":"Query"}}`, string(resp.Data["__schema"]))
+
+			continue
+		}
+
+		require.NotEmpty(t, resp.Errors, "docs off")
+		assert.Equal(t, "introspection disabled", resp.Errors[0].Message)
+		assert.Empty(t, resp.Data["__schema"])
+	}
 }
 
 func TestPanicIsHidden(t *testing.T) {
@@ -67,7 +87,7 @@ func TestPanicIsLoggedWithItsStack(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	graphql.NewHandler(panicBuses(), tokens, slog.New(slog.NewJSONHandler(&logs, nil))).ServeHTTP(httptest.NewRecorder(), req)
+	graphql.NewHandler(panicBuses(), tokens, false, slog.New(slog.NewJSONHandler(&logs, nil))).ServeHTTP(httptest.NewRecorder(), req)
 
 	var record map[string]any
 	require.NoError(t, json.Unmarshal(logs.Bytes(), &record), logs.String())

@@ -160,7 +160,9 @@ in `<domain>_types.graphqls`, and each field in its own file, named after it
 
 - With `DOCS_ENABLED=true`, a playground is at `/graphql/playground`. Put
   `{"Authorization": "Bearer <token>"}` in its headers pane.
-- Resolvers check the bearer token themselves, so introspection works without one.
+- Introspection (`__schema`, `__type`) is part of the docs: it answers only with `DOCS_ENABLED=true`,
+  and is refused (`introspection disabled`) otherwise. Resolvers check the bearer token themselves,
+  so it needs no token. The web client's types come from the schema files, not from introspection.
 - Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`
   (the admin list without the `admin` role), `UNAVAILABLE` and `CONFLICT` (a write's `503` and `409`
   on REST), `NOT_IMPLEMENTED` (a generated stub handler's `501`), `INTERNAL`. An expired token is
