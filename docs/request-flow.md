@@ -86,8 +86,8 @@ whose Huma middleware `Auth` runs once the request has matched an operation, bef
 | --- | --- |
 | `StripSlashes` | `/v1/exchange/convert/` and `/v1/exchange/convert` are the same route |
 | `Logger` | logs client address, method, path, status and response size when the request ends |
-| `Tracing` (when `TRACING_ENABLED`) | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here. Every request is traced but `/healthz` and `/metrics` |
-| `Metrics` (when `METRICS_ENABLED`) | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern |
+| `Tracing` | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here. Every request is traced but `/healthz` and `/metrics`; with `TRACING_ENABLED` off the span goes nowhere, but the trace ID still reaches the events' correlation ID |
+| `Metrics` | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern, on the registry `/metrics` serves when `METRICS_ENABLED` |
 | `Recovery` | turns a panic in any later layer into a 500 instead of a dropped connection |
 | `Auth` | the operation declares `Security`, the same declaration the OpenAPI document shows, so it needs `Authorization: Bearer <token>`. `Auth` turns the token into the caller with `authn.ReadToken` and stores it in the request context, or answers 401. An operation that declares none is public |
 

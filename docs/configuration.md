@@ -27,7 +27,7 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `PG_POOL_MAX` | required | |
 | `JWT_SECRET` | required by the app | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
-| `METRICS_ENABLED` | `true` | Prometheus at `/metrics`, with HTTP and gRPC request counts and latencies ([api.md](api.md)) |
+| `METRICS_ENABLED` | `true` | serves Prometheus at `/metrics`: HTTP and gRPC request counts and latencies, commands and queries, projection lag ([api.md](api.md)). It decides only whether `/metrics` is served: the collectors count either way |
 | `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)) |
 
 Two variables are read by tooling, not by the app:
@@ -126,7 +126,8 @@ http://127.0.0.1:16686.
 - **Every layer has spans.** A trace shows the request, then a span per command or query (the
   buses' trace step), then one per SQL statement (otelpgx) and per outbound HTTP call (otelhttp).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the
-  instrumentation runs unconditionally with no overhead.
+  instrumentation, HTTP's included, runs unconditionally with no overhead. An incoming `traceparent`
+  still propagates, so every transport records the caller's trace ID as its events' correlation ID.
 - **The APIs are traced, whatever their version.** Every HTTP request but the health check
   (`/healthz`) and the metrics scrape (`/metrics`) is traced: REST operations under any version,
   GraphQL and the docs. So is every gRPC call.

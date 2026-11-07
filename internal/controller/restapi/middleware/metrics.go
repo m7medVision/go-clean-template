@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,46 +15,26 @@ type Metrics struct {
 	durations *prometheus.HistogramVec
 }
 
-// NewMetrics registers the collectors on the given registerer. Registering
-// again for an already used set reuses the existing collector, so building
-// several handlers in one process (tests) stays safe.
+// NewMetrics registers the request counter and latency histogram on reg. It panics when reg already
+// holds them: one registry per handler, as the app builds it and as each test does.
 func NewMetrics(reg prometheus.Registerer) *Metrics {
-	requests := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "http_requests_total",
-		Help: "Total number of HTTP requests served.",
-	}, []string{"method", "route", "code"})
+	labels := []string{"method", "route", "code"}
 
-	durations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_request_duration_seconds",
-		Help:    "HTTP request latencies in seconds.",
-		Buckets: prometheus.DefBuckets,
-	}, []string{"method", "route", "code"})
-
-	requests = registerMetric(reg, requests)
-	durations = registerMetric(reg, durations)
-
-	return &Metrics{
-		requests:  requests,
-		durations: durations,
-	}
-}
-
-func registerMetric[T prometheus.Collector](reg prometheus.Registerer, c T) T {
-	err := reg.Register(c)
-	if err == nil {
-		return c
+	m := &Metrics{
+		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests served.",
+		}, labels),
+		durations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request latencies in seconds.",
+			Buckets: prometheus.DefBuckets,
+		}, labels),
 	}
 
-	if already, ok := errors.AsType[prometheus.AlreadyRegisteredError](err); ok {
-		existing, isType := already.ExistingCollector.(T)
-		if !isType {
-			panic(err)
-		}
+	reg.MustRegister(m.requests, m.durations)
 
-		return existing
-	}
-
-	panic(err)
+	return m
 }
 
 func (m *Metrics) Middleware(next http.Handler) http.Handler {

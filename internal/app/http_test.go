@@ -26,14 +26,22 @@ const _version = "1.0.0"
 func newTestHandler(t *testing.T, b cqrs.Buses, docs bool) (handler http.Handler, token string) {
 	t.Helper()
 
+	return newTestHandlerWith(t, b, &config.Config{
+		App: config.App{Version: _version}, Metrics: config.Metrics{Enabled: true}, Docs: config.Docs{Enabled: docs},
+	})
+}
+
+// newTestHandlerWith serves the app's HTTP mux over b as cfg says, with a registry of its own, and
+// returns a token it accepts.
+func newTestHandlerWith(t *testing.T, b cqrs.Buses, cfg *config.Config) (handler http.Handler, token string) {
+	t.Helper()
+
 	tokens := jwt.New("test-secret", time.Hour)
 
 	token, err := tokens.GenerateToken("user-1", nil)
 	require.NoError(t, err)
 
-	cfg := &config.Config{App: config.App{Version: _version}, Metrics: config.Metrics{Enabled: true}, Docs: config.Docs{Enabled: docs}}
-
-	return newHTTPHandler(cfg, b, tokens, slog.New(slog.DiscardHandler)), token
+	return newHTTPHandler(cfg, b, tokens, newMetrics(), slog.New(slog.DiscardHandler)), token
 }
 
 func get(t *testing.T, h http.Handler, target, token string) *httptest.ResponseRecorder {
@@ -67,6 +75,32 @@ func TestATrailingSlashIsStripped(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, get(t, h, "/healthz/", "").Code)
 	assert.Equal(t, http.StatusUnauthorized, get(t, h, "/v1/tasks/", "").Code, "the operation answers, not a 404")
+}
+
+// With metrics off, /metrics is no route at all: REST answers it with a 404.
+func TestMetricsOffServesNoMetrics(t *testing.T) {
+	t.Parallel()
+
+	h, _ := newTestHandlerWith(t, newTestBuses(), &config.Config{App: config.App{Version: _version}})
+
+	assert.Equal(t, http.StatusNotFound, get(t, h, "/metrics", "").Code)
+}
+
+// /metrics serves what Prometheus's default handler would: the Go runtime and process collectors,
+// the scrape's own counter, and the app's collectors.
+func TestMetricsServesTheRuntimeAndTheRequests(t *testing.T) {
+	t.Parallel()
+
+	h, _ := newTestHandler(t, newTestBuses(), false)
+
+	get(t, h, "/healthz", "")
+
+	metrics := get(t, h, "/metrics", "").Body.String()
+	for _, family := range []string{
+		"go_goroutines", "process_start_time_seconds", "promhttp_metric_handler_requests_total", "http_requests_total",
+	} {
+		assert.Contains(t, metrics, family)
+	}
 }
 
 func TestDocsOffServesNoDocs(t *testing.T) {

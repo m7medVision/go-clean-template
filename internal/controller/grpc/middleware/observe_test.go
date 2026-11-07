@@ -141,13 +141,10 @@ func TestMetricsCountAndTimeEveryCall(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	m := grpcmw.NewMetrics(reg)
 
-	_, err := m.Interceptor(t.Context(), nil, unaryInfo(), notFound)
-	assert.Equal(t, codes.NotFound, status.Code(err))
-
-	// Registering again, as a second server in the same process does, reuses the collectors.
-	again := grpcmw.NewMetrics(reg)
-	_, err = again.Interceptor(t.Context(), nil, unaryInfo(), notFound)
-	assert.Equal(t, codes.NotFound, status.Code(err))
+	for range 2 {
+		_, err := m.Interceptor(t.Context(), nil, unaryInfo(), notFound)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	}
 
 	assert.Equal(t, 2.0, callCount(t, reg, _method, codes.NotFound.String()))
 

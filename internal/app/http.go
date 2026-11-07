@@ -21,24 +21,20 @@ const (
 	_metricsPath = "/metrics"
 )
 
-func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, l *slog.Logger) http.Handler {
+// newHTTPHandler serves REST and GraphQL side by side. Every request is logged, traced (the global
+// provider is a no-op when tracing is off), counted on metrics and recovered from a panic;
+// METRICS_ENABLED decides only whether /metrics serves the registry.
+func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, metrics *prometheus.Registry, l *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.StripSlashes)
 	r.Use(middleware.Logger(l))
-
-	if cfg.Tracing.Enabled {
-		r.Use(middleware.Tracing(_healthzPath, _metricsPath))
-	}
-
-	if cfg.Metrics.Enabled {
-		r.Use(middleware.NewMetrics(prometheus.DefaultRegisterer).Middleware)
-	}
-
+	r.Use(middleware.Tracing(_healthzPath, _metricsPath))
+	r.Use(middleware.NewMetrics(metrics).Middleware)
 	r.Use(middleware.Recovery(l))
 
 	if cfg.Metrics.Enabled {
-		r.Get(_metricsPath, promhttp.Handler().ServeHTTP)
+		r.Get(_metricsPath, promhttp.InstrumentMetricHandler(metrics, promhttp.HandlerFor(metrics, promhttp.HandlerOpts{})).ServeHTTP)
 	}
 
 	r.Get(_healthzPath, healthz)

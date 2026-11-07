@@ -27,14 +27,16 @@ const (
 // newBuses builds the command and query buses with their pipelines, outermost step first:
 // trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
 // concurrent write; then authorize and validate on both, right before the handler.
-// A write waits consistencyTimeout at most for the projectors of what it wrote to pass it.
-func newBuses(pg *postgres.Postgres, projectors []projection.Projector, consistencyTimeout time.Duration, l *slog.Logger) (
-	*cqrs.Commands, *cqrs.Queries,
-) {
+// A write waits consistencyTimeout at most for the projectors of what it wrote to pass it. The
+// metrics step registers its collectors on metrics.
+func newBuses(
+	pg *postgres.Postgres, projectors []projection.Projector, consistencyTimeout time.Duration,
+	metrics prometheus.Registerer, l *slog.Logger,
+) (*cqrs.Commands, *cqrs.Queries) {
 	outer := []cqrs.Step{
 		cqrs.Trace(otel.GetTracerProvider()),
 		cqrs.Log(l),
-		cqrs.Metrics(prometheus.DefaultRegisterer),
+		cqrs.Metrics(metrics),
 		behavior.Stamp(),
 	}
 	inner := []cqrs.Step{behavior.Authorize(), behavior.Validate()}

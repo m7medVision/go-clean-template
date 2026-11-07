@@ -3,7 +3,6 @@ package app
 import (
 	"log/slog"
 
-	"github.com/m7medvision/go-clean-template/config"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -13,20 +12,17 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// newGRPCServer only traces and recovers streaming calls: server reflection, the one streaming
-// service, needs no token.
-func newGRPCServer(cfg *config.Config, b cqrs.Buses, jwtManager *jwt.Manager, l *slog.Logger) *grpc.Server {
-	unary := []grpc.UnaryServerInterceptor{grpcmw.Logger(l)}
-
-	if cfg.Metrics.Enabled {
-		unary = append(unary, grpcmw.NewMetrics(prometheus.DefaultRegisterer).Interceptor)
-	}
-
-	unary = append(unary, grpcmw.Recovery(l), grpcmw.Auth(jwtManager, publicGRPCMethods()...))
-
+// newGRPCServer counts and times every unary call on metrics. It only traces and recovers
+// streaming calls: server reflection, the one streaming service, needs no token.
+func newGRPCServer(b cqrs.Buses, jwtManager *jwt.Manager, metrics prometheus.Registerer, l *slog.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(unary...),
+		grpc.ChainUnaryInterceptor(
+			grpcmw.Logger(l),
+			grpcmw.NewMetrics(metrics).Interceptor,
+			grpcmw.Recovery(l),
+			grpcmw.Auth(jwtManager, publicGRPCMethods()...),
+		),
 		grpc.ChainStreamInterceptor(grpcmw.StreamRecovery(l)),
 	)
 

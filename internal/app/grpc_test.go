@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/m7medvision/go-clean-template/config"
 	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -26,13 +25,13 @@ import (
 
 const _bufSize = 1 << 20
 
-// dialGRPC serves the app's gRPC server over b, with metrics on, on an in-memory listener, and
-// returns a connection to it.
+// dialGRPC serves the app's gRPC server over b, with a registry of its own, on an in-memory
+// listener, and returns a connection to it.
 func dialGRPC(t *testing.T, b cqrs.Buses, tokens *jwt.Manager) *grpc.ClientConn {
 	t.Helper()
 
 	lis := bufconn.Listen(_bufSize)
-	srv := newGRPCServer(&config.Config{Metrics: config.Metrics{Enabled: true}}, b, tokens, slog.New(slog.DiscardHandler))
+	srv := newGRPCServer(b, tokens, newMetrics(), slog.New(slog.DiscardHandler))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {

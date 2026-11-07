@@ -11,15 +11,18 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/tracing"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
-// bootstrap is what both binaries start from: the logger, tracing, the database, the event store
-// and the buses, with no handler registered yet.
+// bootstrap is what both binaries start from: the logger, tracing, the metrics registry, the
+// database, the event store and the buses, with no handler registered yet.
 type bootstrap struct {
 	l           *slog.Logger
 	pg          *postgres.Postgres
 	store       repo.EventStore
 	buses       cqrs.Buses
+	metrics     *prometheus.Registry
 	stopTracing tracing.ShutdownFunc
 }
 
@@ -41,13 +44,15 @@ func newBootstrap(ctx context.Context, cfg *config.Config, service string) (*boo
 		return nil, err
 	}
 
-	cmds, qs := newBuses(pg, projectors(pg), cfg.CQRS.ConsistencyTimeout, l)
+	metrics := newMetrics()
+	cmds, qs := newBuses(pg, projectors(pg), cfg.CQRS.ConsistencyTimeout, metrics, l)
 
 	return &bootstrap{
 		l:           l,
 		pg:          pg,
 		store:       newEventStore(pg, cfg.CQRS.SnapshotEvery),
 		buses:       cqrs.Buses{Commands: cmds, Queries: qs},
+		metrics:     metrics,
 		stopTracing: stopTracing,
 	}, nil
 }
@@ -61,6 +66,17 @@ func openPool(ctx context.Context, cfg config.PG) (*postgres.Postgres, error) {
 	}
 
 	return pg, nil
+}
+
+// newMetrics is the registry every collector registers on: the buses, both transports and the
+// projection lag. It starts with the Go runtime and process collectors Prometheus's default registry
+// holds, so /metrics serves what promhttp.Handler would. Whether anything serves it is /metrics'
+// choice alone (METRICS_ENABLED): the collectors count either way.
+func newMetrics() *prometheus.Registry {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}), collectors.NewGoCollector())
+
+	return reg
 }
 
 // close closes the pool, then flushes the spans still buffered. Call it once everything that uses

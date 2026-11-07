@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -50,14 +49,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// The worker runs the projections; the app serves /metrics, so it reports how far behind they are.
-	if cfg.Metrics.Enabled {
-		if err = prometheus.DefaultRegisterer.Register(projection.NewLagCollector(b.pg)); err != nil {
-			return fmt.Errorf("app - Run - register the projection lag collector: %w", err)
-		}
+	if err = b.metrics.Register(projection.NewLagCollector(b.pg)); err != nil {
+		return fmt.Errorf("app - Run - register the projection lag collector: %w", err)
 	}
 
-	httpServer := newHTTPServer(cfg.HTTP.Port, newHTTPHandler(cfg, b.buses, d.tokens, b.l), cfg.CQRS.ConsistencyTimeout)
-	grpcServer := newGRPCServer(cfg, b.buses, d.tokens, b.l)
+	httpServer := newHTTPServer(cfg.HTTP.Port, newHTTPHandler(cfg, b.buses, d.tokens, b.metrics, b.l), cfg.CQRS.ConsistencyTimeout)
+	grpcServer := newGRPCServer(b.buses, d.tokens, b.metrics, b.l)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return serveHTTP(ctx, httpServer, b.l) })
