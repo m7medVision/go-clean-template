@@ -61,22 +61,23 @@ A user-owned domain with five use cases: `CreateInvoice`, `UpdateInvoice`, `Dele
 the projector and the read model for those four columns, the transport handlers with their DTO
 conversion and error mapping, and the tests.
 
-Every file copies the shape of the `task` file at the same path. The files it creates, for
-`invoice`:
+Every file copies the shape of the `task` file at the same path, one file per operation on each
+transport, as `task` keeps them. The files it creates, for `invoice`:
 
 | Layer | Transport | Created |
 | --- | --- | --- |
-| entity | all | `internal/entity/invoice.go` (the read shape), `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `NewInvoiceAggregate`, `Update`, `Delete`, `Apply`), `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `invoiceEvents()`), `invoice_aggregate_test.go` |
-| read model | all | `internal/app/schema/invoices.hcl` (no foreign keys), `internal/repo/persistent/queries/invoice.sql`, `persistent/invoice/invoice.go` (`NewReadModel`), `tracing.go` |
-| projector | all | `persistent/invoice/projector.go`, `projector_test.go` against a fake `Querier` |
+| entity | all | `internal/entity/invoice.go` (the read shape and the sentinels `ErrInvoiceNotFound`, `ErrInvoiceForbidden`), `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `NewInvoiceAggregate`, `Update`, `Delete`, `Apply`), `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `InvoiceEvents()`), `invoice_aggregate_test.go` |
+| read model | all | `internal/app/schema/invoices.hcl` (no foreign keys), `internal/repo/persistent/queries/invoice.sql`, `internal/repo/invoice.go` (`InvoiceReadModel`, with the `go:generate` directive `make mock` runs), `persistent/invoice/invoice.go` (`NewReadModel`) |
+| projector | all | `persistent/invoice/projector.go` (`Handles` the invoice events), `projector_test.go` against a fake `Querier` |
 | use case | all | `internal/usecase/invoice/register.go`; in `command/`, `create_`, `update_` and `delete_invoice.go`, each with its test against `memstore`, and `command_test.go`; in `query/`, `get_invoice.go`, `list_invoices.go` and `query_test.go` against `repomock` |
-| REST | `rest` | `internal/controller/restapi/v1/invoice/`: `controller.go`, `invoice.go`, `request.go`, `response.go`, `fake_test.go`, `invoice_test.go`, `main_test.go` |
-| gRPC | `grpc` | `docs/proto/v1/invoice.proto`; `internal/controller/grpc/v1/invoice/`: `controller.go`, `invoice.go`, `request.go`, `response.go`, `response_test.go`, `invoice_test.go` |
-| GraphQL | `graphql` | `internal/controller/graphql/schema/invoice.graphqls`; `internal/controller/graphql/invoice/`: `resolver.go`, `query.go`, `mutation.go`, `fake_test.go`, `query_test.go`, `mutation_test.go` |
+| module | all | `internal/app/invoice.go`: `invoiceModule()`, its handlers, its projector, and its REST and gRPC registration |
+| REST | `rest` | `internal/controller/restapi/v1/invoice/`: `controller.go` (`NewRoutes`, `_tag`), `create_invoice.go`, `list_invoices.go`, `get_invoice.go`, `update_invoice.go`, `delete_invoice.go`, `request.go`, `response.go`, `fake_test.go`, `invoice_test.go` |
+| gRPC | `grpc` | `docs/proto/v1/invoice.proto`; `internal/controller/grpc/v1/invoice/`: `controller.go`, `create_invoice.go`, `get_invoice.go`, `list_invoices.go`, `update_invoice.go`, `delete_invoice.go`, `response.go`, `invoice_test.go` |
+| GraphQL | `graphql` | in `internal/controller/graphql/schema/`, `invoice_types.graphqls` (`Invoice`, `InvoiceList`) and one file per field: `invoice.graphqls`, `invoices.graphqls`, `create_invoice.graphqls`, `update_invoice.graphqls`, `delete_invoice.graphqls`; `internal/controller/graphql/invoice/`: `resolver.go`, one file per field (`invoice.go`, `invoices.go`, `create_invoice.go`, `update_invoice.go`, `delete_invoice.go`), `fake_test.go`, `query_test.go`, `mutation_test.go` |
 | integration | all | `integration-test/invoice_test.go`, covering the transports the domain gets |
 
-That is 22 files whatever the transports, and 7 more for each one: 43 with all three. There is no
-`importer.go`, since a new domain never had rows without events.
+That is 23 files whatever the transports, 10 more for REST, 9 for gRPC and 15 for GraphQL: 57 with
+all three. There is no `importer.go`, since a new domain never had rows without events.
 
 The operations, on each transport:
 
@@ -92,19 +93,16 @@ The create and update request bodies and messages are empty, as the place to add
 no empty input type, so its mutations take only `id`, and the domain gets no `input.go` until it has
 a field.
 
-The shared files it edits:
+The shared files it edits are the lists a domain joins, which cannot be split per domain:
 
 | File | Edit | Transport |
 | --- | --- | --- |
-| `internal/entity/event.go` | `invoiceEvents()` in `EventTypes()` | all |
-| `internal/entity/errors.go` | `ErrInvoiceNotFound`, `ErrInvoiceForbidden` | all |
-| `internal/repo/contracts.go` | `InvoiceReadModel` and the `InvoiceFilter` its `List` pages with | all |
-| `internal/app/buses.go` | `invoice.Register(…)` in `registerHandlers`, the projector in `subscribers`, both imports | all |
-| `internal/controller/restapi/v1/router.go` | `invoice.NewRoutes(api, b, l)` and its import | `rest` |
-| `internal/controller/grpc/v1/router.go` | `v1.RegisterInvoiceServiceServer(…)` and its import | `grpc` |
-| `internal/controller/graphql/resolver.go` | the `invoiceQuery` and `invoiceMutation` aliases, their embeds, and both in `newResolver` | `graphql` |
-| `internal/controller/graphql/gqlerr/gqlerr.go` | the two sentinels in `Map` | `graphql` |
-| `internal/controller/graphql/gqlgen.yml` | the `Invoice` model binding | `graphql` |
+| `internal/entity/event.go` | `InvoiceEvents()` in `EventTypes()`, so the store decodes the events | all |
+| `internal/app/modules.go` | `invoiceModule()` in `modules()`, which both binaries install | all |
+| `internal/controller/graphql/resolver.go` | the `invoiceQuery` and `invoiceMutation` aliases, their embeds, the statement in `newResolver` that fills them in, and the import | `graphql` |
+
+Nothing else names the domains. The module registers the REST operations and the gRPC service, and
+gqlgen binds the GraphQL type `Invoice` to `entity.Invoice` on its own (`autobind` in `gqlgen.yml`).
 
 It writes no `docs/*.md` file and nothing under `web/`; the regenerators refresh the generated files
 there (`docs/openapi/v1.json`, the web client's types). What it leaves for you is in
@@ -115,8 +113,10 @@ there (`docs/openapi/v1.json`, the web client's types). What it leaves for you i
 - **Use-case tests** assert that each stub returns `entity.ErrNotImplemented`, and say in a comment
   that the first real implementation replaces them. That test going red is the signal.
 - **Transport tests** send through real buses with fake handlers, as every domain's do: REST and
-  GraphQL with a `fake_test.go`, gRPC with fakes in the test. They test what is real: decoding,
-  encoding and the error mapping, "not implemented" included.
+  GraphQL with a `fake_test.go`, gRPC with fakes in the test. They test what is real: decoding and
+  encoding, and that a stub's `ErrNotImplemented` reaches the caller as 501, `Unimplemented` or
+  `NOT_IMPLEMENTED`; `apierr`, `rpcerr` and `gqlerr` own the rest of the error table. GraphQL's also
+  check that a field needs the caller, since each resolver asks for it.
 - **Aggregate and projector tests** assert real behaviour.
 - **The integration test** registers a user, then checks every operation's answer today: REST `501`,
   gRPC `Unimplemented`, GraphQL `NOT_IMPLEMENTED`. It runs with the rest of the suite, against the
@@ -132,29 +132,32 @@ there (`docs/openapi/v1.json`, the web client's types). What it leaves for you i
 | `plural=` | English rules | The domain's plural, when `make new-domain` was given one. |
 | `method=` | `POST` for a command, `GET` for a query | The REST method: `GET`, `POST`, `PUT`, `PATCH` or `DELETE`. |
 | `path=` | `/v1/<plural>/{id}/<verb>` for a command, `/v1/<plural>/<verb>` for a query | The REST path. It starts with `/` and holds no parameter but one `{id}`. The verb is the name's first word: `POST /v1/tasks/{id}/archive`, `GET /v1/tasks/count`. |
-| `transports=` | the domain's own | Comma-separated. The default leaves out GraphQL when the domain's schema file has no `Mutation` (for a command) or `Query` (for a query) to put the field on, as `exchange` has no `Mutation`. `user` has no GraphQL at all. |
+| `transports=` | the domain's own | Comma-separated. The default leaves out GraphQL when the domain's GraphQL package resolves no `Mutation` (for a command) or `Query` (for a query) for the field's resolver to join, as `exchange`'s resolves no mutations. `user` has no GraphQL at all. |
 | `dry-run=1` | off | Print the plan and run every rule; write nothing. |
 
 **`{id}` in the path decides whether the use case acts on one record.** Its message then carries the
 record's ID (`TaskID`), which the operation fills in from the path. So by default a command has
 `UserID` and `TaskID`, and a query only `UserID`. On `user` the record's ID would be `UserID`, the
-caller's field, so a use case there needs a path without `{id}`:
+caller's field, so a message there would declare `UserID` twice, which R1 refuses: give a use case
+there a path without `{id}`, as in
 `make new-usecase domain=user name=lock-user kind=command path=/v1/user/lock`.
 
 ### What it writes
 
-For `archive-task` on `task`, 2 files created and 10 edited:
+For `archive-task` on `task`, 9 files created and 3 edited. Each transport keeps one file per
+operation, so the use case creates its own, named after it; it edits only the lists that cannot be
+split:
 
 | Layer | Transport | Created or edited |
 | --- | --- | --- |
 | use case | all | creates `internal/usecase/task/command/archive_task.go` (or `query/count_tasks.go`) and its test; edits `register.go`, with one `cqrs.HandleCommand` (or `HandleQuery`) line after the last of its kind |
-| REST | `rest` | edits `restapi/v1/task/task.go` (the operation and its input and output structs, at the end), `controller.go` (`r.archiveTask(api)` after the last such call in `NewRoutes`) and `task_test.go` (a test, at the end) |
-| gRPC | `grpc` | edits `docs/proto/v1/task.proto` (the rpc in the service; its request and response messages at the end), `grpc/v1/task/task.go` (the method) and `task_test.go` (a test). A domain without a gRPC test file, as `user` and `exchange` are, gets one created |
-| GraphQL | `graphql` | edits `schema/task.graphqls` (a field on `Mutation` or `Query`; for a query, its `CountTasksResult` type at the end), `graphql/task/mutation.go` or `query.go` (the resolver) and `mutation_test.go` or `query_test.go` (a test, created when missing) |
+| REST | `rest` | creates `restapi/v1/task/archive_task.go` (the operation and its input and output structs) and `archive_task_test.go`; edits `controller.go`, with `r.archiveTask(api)` after the last such call in `NewRoutes` |
+| gRPC | `grpc` | creates `grpc/v1/task/archive_task.go` (the method) and `archive_task_test.go`; edits `docs/proto/v1/task.proto` (the rpc in the service; its request and response messages at the end) |
+| GraphQL | `graphql` | creates `schema/archive_task.graphqls` (`extend type Mutation` or `Query` with the field; for a query, its `CountTasksResult` type too), `graphql/task/archive_task.go` (the resolver) and `archive_task_test.go` |
 
 What each answers:
 
-- **A command** answers `cqrs.Written`, like every command. Its REST operation answers the written ID
+- **A command** answers `entity.Written`, like every command. Its REST operation answers the written ID
   (`{"id": …}`, the `ArchiveTaskResponse` it declares), its gRPC method an `ArchiveTaskResponse`
   holding `id`, and its GraphQL field `ID!`. It records nothing yet: its event and the aggregate's
   behavior method are yours.
@@ -165,18 +168,18 @@ What each answers:
 Each transport's test is self-contained: it builds buses holding only a fake for the new message, so
 it needs none of the folder's test helpers, and `fake_test.go` is left alone.
 
-A hand-written domain chose its own names, so `new-usecase` reads what it cannot derive from the
-domain's files. Each one is an anchor, found exactly once ([R4](#safety-rules)):
+The generated code relies on what every domain declares, under the names every domain gives it, and
+R2 checks that the domain declares each before anything is planned:
 
-- the handler's dependency: the one field of `Deps` in `register.go` of type `repo.EventStore` (a
-  command) or `repo.*ReadModel` (a query; `exchange`'s is `History`);
-- the REST tag: the one `_*Tag` constant in the domain's REST `controller.go`, which must also
-  declare `problem` and `NewRoutes`;
-- the gRPC service: the one `Unimplemented<Service>Server` the gRPC `Controller` embeds (`user`'s
-  serves `AuthService`), and the `.proto` file in `docs/proto/v1` that declares it (`auth.proto`);
-  that `controller.go` must also declare `fail`;
-- the names the gRPC test file imports the proto and controller packages under;
-- the `Mutation` or `Query` type in `schema/<name>.graphqls`.
+- the handler's dependency: the field of `Deps` in `register.go` named `Store` (the event store, for
+  a command) or after the domain's plural (its read model, for a query: `Tasks`, `Exchanges`);
+- the REST tag: the constant `_tag` in the domain's REST package;
+- the GraphQL resolver: the type `Mutation` (for a command) or `Query` (for a query) in the
+  domain's GraphQL package.
+
+The gRPC service is `<Domain>Service` in `docs/proto/v1/<domain>.proto`, with one exception kept on
+purpose: `user`'s controller serves `AuthService`, from `auth.proto`, a name its clients already use
+(`rules.GRPCService`).
 
 ## Dry run
 
@@ -186,13 +189,13 @@ exits 1; if they all pass it prints the checklist of [After generating](#after-g
 nothing either way.
 
 ```
-new-usecase task archive-task (dry run): 2 files to create, 10 to edit
+new-usecase task archive-task (dry run): 9 files to create, 3 to edit
 
-create internal/usecase/task/command/archive_task.go
-create internal/usecase/task/command/archive_task_test.go
-
+create internal/controller/graphql/schema/archive_task.graphqls
+create internal/controller/graphql/task/archive_task.go
+…
 edit   internal/controller/restapi/v1/task/controller.go
-  @@ line 35
+  @@ line 33
     	r.updateTask(api)
     	r.transitionTask(api)
     	r.deleteTask(api)
@@ -202,7 +205,7 @@ edit   internal/controller/restapi/v1/task/controller.go
 Every rule passes. Run it again without dry-run=1 to write it.
 ```
 
-R1, and R2's checks on a use case's domain, message, record and route, run before the plan is
+R1, and R2's checks on a use case's domain, message, conventions and route, run before the plan is
 printed: when one of them fails, the dry run prints only the failure.
 
 ## Safety rules
@@ -217,10 +220,10 @@ gen: R1 name: "task" is taken: internal/usecase/task exists
 
 | Rule | Refuses |
 | --- | --- |
-| R1 name | A name that does not match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`. A Go keyword, a predeclared name, or the name of one of the app's packages, which a generated file importing it would find shadowed (`command`, `query`, `entity`, `repo`, `cqrs`, `jwt`, `v1`, …: whatever `go list ./...` names in the repository). A word, in the name or its plural, that gqlgen or revive writes as an initialism and the generator would not (`api-key`; `http2`, though `utf8` passes). A letter right after a digit (`mp3player`), which protoc-gen-go capitalizes, and a word of the plural that starts with a digit (`plural=items-2`). For a domain, a name in use: a use-case or read-model folder, a controller folder on any transport (including a shared package, such as REST's `response` or GraphQL's `paging`), an entity file, a proto service, a GraphQL type or a table. Any identifier the plan adds to a package that the package declares already: `record` would add `entity.Record`; `login` would add `LoginResponse`, which `auth.proto` declares; `all-task` would add `Query.allTasks`. |
-| R2 targets | A file to create that exists, or a file to edit that does not. For a use case: a domain that does not exist, a transport asked for that the domain lacks, a message of its kind with the name already (any top-level name of the `command` or `query` package), and a REST operation ID or method and path the app already registers (parameter names aside), with a hint to give `path=`: `count-tasks` and `count-done-tasks` both default to `GET /v1/tasks/count`. The operations are those `docs/openapi/v1.json` lists, so it sees an operation however the code builds it, and the document must be current: `make openapi` exports it, both targets run it after they write, and CI fails when it is stale. A path with `{id}` on `user`. |
+| R1 name | A name that does not match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`. A Go keyword, a predeclared name, or the name of one of the app's packages, which a generated file importing it would find shadowed (`command`, `query`, `entity`, `repo`, `cqrs`, `jwt`, `v1`, …: whatever `go list ./...` names in the repository). A word, in the name or its plural, that gqlgen or revive writes as an initialism and the generator would not (`api-key`; `http2`, though `utf8` passes). A letter right after a digit (`mp3player`), which protoc-gen-go capitalizes, and a word of the plural that starts with a digit (`plural=items-2`). For a domain, a name in use: a use-case or read-model folder, a controller folder on any transport (including a shared package, such as REST's `response` or GraphQL's `gqlerr`), an entity, contract or module file, a proto service, a GraphQL type or a table. Any identifier the plan adds to a package that the package declares already, a struct's fields and a type's methods included: `record` would add `entity.Record`; `login` would add `LoginResponse`, which `auth.proto` declares; a `{id}` use case on `user` would declare its message's `UserID` twice. |
+| R2 targets | A file to create that exists, or a file to edit that does not. For a use case: a domain that does not exist, a transport asked for that the domain lacks, a message of its kind with the name already (any top-level name of the `command` or `query` package), a domain that lacks what the generated code uses (the `Deps` field, `_tag`, the GraphQL `Query` or `Mutation`), and a REST operation ID or method and path the app already registers (parameter names aside), with a hint to give `path=`: `count-tasks` and `count-done-tasks` both default to `GET /v1/tasks/count`. The operations are those `docs/openapi/v1.json` lists, so it sees an operation however the code builds it, and the document must be current: `make openapi` exports it, both targets run it after they write, and CI fails when it is stale. |
 | R3 clean | Uncommitted changes, staged or not, to any tracked file in the repository: the regenerators may change any file (`make format` formats every Go file), so after them every change to a tracked file is this run's, and the [undo](#undo) restores them all. Untracked files may be there, since the undo leaves each of them alone, but not where the plan writes: an untracked file it would edit, or an untracked folder it would create a file in. Also a `--root` that is not the top level of its git repository, since git reports paths from there. |
-| R4 one anchor | An edit whose place it finds zero times or twice. Places are found by parsing (`go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`), never by markers, line numbers or regular expressions. A place after the last of several statements, as a router's registrations or a `Register`'s handlers, needs them in one run: split by another statement, they are two places. It also refuses an import whose name another import in the file binds, as a domain called `time` would in `buses.go`. |
+| R4 one anchor | An edit whose place it finds zero times or twice. Places are found by parsing (`go/ast` for Go, `protocompile` for `.proto`), never by markers, line numbers or regular expressions. A place after the last of several statements, as `NewRoutes`'s registrations or a `Register`'s handlers, needs them in one run: split by another statement, they are two places. It also refuses an import whose name another import in the file binds, as a domain called `slog` would in `resolver.go`. |
 | R5 still valid | A created or edited file that does not parse afterwards. Every Go file goes through `go/format`, since gofmt aligns columns by the longest name in them; a template whose output for `widget` `go/format` would change fails the golden tests, as a wrong template. A created Go file that does not parse is planned as it was rendered, and R1's check of identifiers takes a file the plan leaves broken as declaring nothing, on purpose: R5 reports it in its turn, after R2 to R4, so a dry run still shows the plan, and an edit broken by a place R4 did not find is reported as R4. |
 | R6 all or nothing | A half-written tree. Each file is written to a temporary file and renamed into place; if any write fails, every edited file gets its old bytes back and every created file and folder is removed. |
 
@@ -266,6 +269,8 @@ The generator prints what is left to write, from
   `command/create_invoice.go`, `update_invoice.go`, `delete_invoice.go`, `query/get_invoice.go`
   and `list_invoices.go`. Each has a test that says so, which goes red once you have: replace it with
   tests of what the handler does.
+- **The REST operations' `Errors`**, which list 501 while their handlers are stubs: drop
+  `http.StatusNotImplemented` from each once its handler is written.
 - **The docs**: the domain's section in [api.md](api.md), its bullet in `What you get` in the
   README, and its aggregate and projector rows in [cqrs.md](cqrs.md).
 - **This domain, before you generate another** ([Known limitations](#known-limitations)).
@@ -273,26 +278,30 @@ The generator prints what is left to write, from
 The fields are yours too. The generated comments say where each one goes: the read shape in
 `internal/entity/invoice.go`, the events that set it and the aggregate's `Apply`, the table and its
 SQL (then `make sqlc`), the projector, the create and update DTOs on REST and gRPC, the proto
-messages and `NewInvoiceResponse`, and the GraphQL type, with a `CreateInvoiceInput` and
-`UpdateInvoiceInput` (and an `input.go`) once there is a first field.
+messages and `NewInvoiceResponse`, and the GraphQL type in `invoice_types.graphqls`, with a
+`CreateInvoiceInput` and `UpdateInvoiceInput` in their fields' schema files (and an `input.go`)
+once there is a first field.
 
 After a command:
 
 - **The handler**, `command/archive_task.go`: change the record through `aggregate.Change`, then
   replace its test with tests of what it records.
-- **The event it records** in `internal/entity/task_events.go` and in `EventTypes()`, the behavior
-  method that records it with its case in `Apply`, and its case in the projector.
+- **The event it records** in `internal/entity/task_events.go` and in `TaskEvents()` there, the
+  behavior method that records it with its case in `Apply`, and its case in the projector.
 - **A row** for it in the domain's table in [api.md](api.md).
 
 After a query:
 
 - **The handler**, `query/count_tasks.go`: read the answer from the read model, then replace its test
   with tests of what it reads.
-- **The read-model method** it calls, in `internal/repo/contracts.go`, the read model and its
-  `tracing.go`, with its SQL in `queries/<domain>.sql`; then `make sqlc` and `make mock`.
+- **The read-model method** it calls, in `internal/repo/<domain>.go` and the read model, with its
+  SQL in `queries/<domain>.sql`; then `make sqlc` and `make mock`.
 - **The fields of the answer**, in the `Result` struct, the gRPC response message and the GraphQL
   result type, in place of its `todo` field.
 - **A row** for it in the domain's table in [api.md](api.md).
+
+After either, once the handler is written, `http.StatusNotImplemented` comes out of its REST
+operation's `Errors`.
 
 [CLAUDE.md](../CLAUDE.md#adding-a-whole-domain) has the full recipes, starting from the generator.
 Before pushing, run `make pre-commit` and the integration tests, as for any change.
@@ -318,13 +327,14 @@ The code is in [`tools/gen`](../tools/gen):
 | Path | Holds |
 | --- | --- |
 | `main.go` | the two commands and their flags |
-| `domain.go`, `layer_<name>.go` | `new-domain`: `domainLayers()` lists the layers, one file each |
-| `usecase.go`, `usecase_<name>.go` | `new-usecase`: `usecaseLayers()`, the same way |
+| `domain.go` | `new-domain`: `domainLayers()` lists the layers, each the templates it creates and the edits it makes, and the three edits |
+| `usecase.go` | `new-usecase`: `usecaseLayers()`, the same way, and the three edits |
+| `layer.go` | the planner every layer plans with |
 | `names/` | the name forms and plurals |
-| `edit/` | the editors that find each insertion's place by parsing, one file per kind of file |
+| `edit/` | the editors that find each insertion's place by parsing: Go and `.proto`; and the GraphQL reader R1 uses |
 | `plan/` | the in-memory plan, the dry run and the all-or-nothing write (R6) |
-| `rules/` | R1 to R5; `layout.go`, the one place that says where each transport keeps a domain's controllers, and where the `.proto` files, the GraphQL schema and the OpenAPI document are |
-| `templates/domain/`, `templates/usecase/` | every byte the generator writes, as `.tmpl` files laid out like the repository |
+| `rules/` | R1 to R5; `layout.go`, the one place that says where each transport keeps a domain's controllers, where the `.proto` files, the GraphQL schema and the OpenAPI document are, and the one gRPC service named otherwise |
+| `templates/domain/`, `templates/usecase/command/`, `templates/usecase/query/` | every byte the generator writes, as `.tmpl` files laid out like the repository, one set per command and kind of use case |
 | `testdata/golden/` | the expected output for `widget` |
 
 ### Templates
@@ -332,8 +342,8 @@ The code is in [`tools/gen`](../tools/gen):
 The package doc of [`templates/templates.go`](../tools/gen/templates/templates.go) holds the
 conventions:
 
-- **A created file** is `<set>/<repo path>.tmpl`, where the set is `domain` or `usecase`. Its path is
-  a template too, rendered with the same data:
+- **A created file** is `<set>/<repo path>.tmpl`, where the set is `domain`, `usecase/command` or
+  `usecase/query`. Its path is a template too, rendered with the same data:
   `domain/internal/entity/{{.Name.Snake}}.go.tmpl` creates `internal/entity/widget.go`.
 - **The text an edit inserts** is `<set>/edits/<repo path>.<place>.tmpl`, such as
   `domain/edits/internal/entity/event.go.EventTypes.tmpl`. Even a one-line insertion has its own file,
@@ -347,16 +357,17 @@ conventions:
 - **The data**: `.Module`; `.Name`, the domain, in each form (`.Name.Go`, `.Name.Lower`, `.Name.Pkg`,
   `.Name.Snake`, `.Name.Kebab`, `.Name.Words`, and the same under `.Name.Plural`); `.Transports`, with
   `{{if .Has "rest"}}` to check one; and for a use case `.Usecase`, with its own `.Usecase.Name`, its
-  kind, route and the names read from the domain. A field the data lacks fails the render.
+  kind, its route and its gRPC service and `.proto` file. Everything else a template names follows
+  from the domain's name. A field the data lacks fails the render.
 - **Three habits** keep templates parsing and reading well. In Go, a brace right before an action is
   written `{ {{- .Name.Go}}`, since `{{{` does not parse. Two braces that open nested composite
   literals are written `{{"{{"}}`. Comments say "the" or "one" before a name, never "a" or "an",
   which would depend on how the name sounds.
 
-To add a file to a layer, add its template where the layer's `pl.create` pattern matches it. To add
-an edit, add its text under `edits/` and an `editFile` call in the layer, finding the place with one of
-the `edit` package's anchors. A new layer is one `layer_<name>.go` (or `usecase_<name>.go`) and one
-entry in `domainLayers()` (or `usecaseLayers()`).
+To add a file to a layer, add its template where one of the layer's `creates` patterns matches it.
+To add an edit, add its text under `edits/` and an `editFile` call in the layer's `edits`, finding
+the place with one of the `edit` package's anchors; first ask whether the app can do without the
+list it edits. A new layer is one entry in `domainLayers()` (or `usecaseLayers()`).
 
 ### Goldens and checks
 
@@ -374,9 +385,9 @@ make gen-e2e                                  # generate in a throwaway worktree
 The same tests check that every template renders `go/format`-clean for `widget`, that every template
 is used by a layer, and that planning `widget`, and a command and a query on each of `task`, `user`
 and `exchange`, against the repository's real files passes every rule. So `make gen-check` fails when
-a shared file or a hand-written domain loses an anchor the generator needs. A change to what
-`new-domain` creates or edits also changes the counts that `domain_test.go` and `main_test.go` assert
-("43 files to create, 9 to edit").
+a shared file or a hand-written domain loses an anchor or a convention the generator needs. A change
+to what `new-domain` creates or edits also changes the counts that `domain_test.go` and
+`main_test.go` assert ("57 files to create, 3 to edit").
 
 `make gen-e2e` ([`scripts/gen-e2e.sh`](../scripts/gen-e2e.sh)) runs against the working tree as it is
 on disk, not `HEAD`, so template work is tested before it is committed. It adds a throwaway git
@@ -398,6 +409,6 @@ CI runs both on every backend change: `runner / gen / check` runs `make gen-chec
 in its transport files. A change to how `task` is written (a new convention in its handlers, a
 renamed helper, a different test shape) belongs in the matching template under
 `tools/gen/templates` too, with its golden. So does a change to the shape of a shared file the
-generator edits: the nine in the table above, and the domain files `new-usecase` edits. Then
-`make gen-e2e` must pass. Code that still compiles but no longer looks like `task` is the drift the
+generator edits: the three in the table above, and the domain files `new-usecase` edits
+(`register.go`, the REST `controller.go`, the `.proto` file). Then `make gen-e2e` must pass. Code that still compiles but no longer looks like `task` is the drift the
 e2e job cannot see, so the template is updated in the same change.

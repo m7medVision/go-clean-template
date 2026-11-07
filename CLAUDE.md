@@ -69,8 +69,9 @@ Traps in these targets:
   `vp` provisions the Node version in `web/.node-version` and bun itself.
 - **`make new-domain`, `make new-usecase` and `make gen-e2e` run the regenerators** (`proto-v1`,
   `graphql`, `sqlc`, `mock`, `openapi`, `web-api`, `web-graphql`, `format`), so they need `protoc`,
-  Docker, Atlas, `vp` and `make web-deps`, as those do. The generator refuses to edit a file with
-  uncommitted changes (rule R3): commit first.
+  Docker, Atlas, `vp` and `make web-deps`, as those do. The generator refuses to run while a tracked
+  file has uncommitted changes (rule R3): commit first. Untracked files may stay, outside what it
+  writes.
 
 Never claim a change is done without `make format`, `make linter-golangci` and `make test` passing.
 For changes under `web/`, or to any Huma input/output struct, `make web-api` and `make web-check` too.
@@ -507,7 +508,7 @@ the matching page whenever a change touches what it documents:
 | Release rules, `release.yml` or `.goreleaser.yaml` | `docs/releasing.md` |
 | The exchange `Convert` path (handler, `ConvertCurrency` command, aggregate, webapi, event store, projector, query) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
-| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path), or a shared file the generator edits (`entity/event.go`, `entity/errors.go`, `repo/contracts.go`, `app/buses.go`, the REST and gRPC `v1/router.go`, `graphql/resolver.go`, `gqlerr/gqlerr.go`, `gqlgen.yml`; for `new-usecase`, a domain's `register.go`, `.proto`, schema and transport files) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
+| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path, its module `app/task.go` and its per-operation transport files included), a shared file the generator edits (`entity/event.go`, `app/modules.go`, `graphql/resolver.go`; for `new-usecase`, a domain's `register.go`, REST `controller.go` and `.proto`), or a convention the generated code relies on (the `Deps` field names, `_tag`, `gqlgen.yml`'s `autobind`) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
 | The generator's commands, flags, rules, output or template conventions | `docs/generator.md` |
 
 ## Adding a use case to an existing domain
@@ -523,12 +524,17 @@ make new-usecase domain=task name=archive-task kind=command            # or kind
 
 It writes the message type and a stub handler returning `entity.ErrNotImplemented`, with a test that
 asserts so (steps 1 and 2); its line in `register.go` (step 3); and, on each of the domain's
-transports, its operation and a test (step 5): the REST op and its registration, the rpc with its
-messages and the gRPC method, the GraphQL field and its resolver. The REST route defaults to
+transports, its operation in a file of its own with a test (step 5): the REST op (and its line in
+`NewRoutes`), the gRPC method (and the rpc with its messages in the `.proto` file), and the GraphQL
+field's schema file and resolver. The REST route defaults to
 `POST /v1/<plural>/{id}/<verb>` for a command and `GET /v1/<plural>/<verb>` for a query; `method=`,
-`path=` and `transports=` change the defaults. Then it runs the regenerators. What it leaves to you:
+`path=` and `transports=` change the defaults. It relies on the names every domain gives what it
+uses: `Deps.Store` and `Deps.<Plural>`, the REST `_tag`, the GraphQL `Query`/`Mutation`, and
+`<Domain>Service` (`user`'s `AuthService` aside). Then it runs the regenerators. What it leaves to
+you:
 
-- the handler's body, and tests of what it does in place of the stub's test;
+- the handler's body, and tests of what it does in place of the stub's test; then
+  `http.StatusNotImplemented` out of its REST op's `Errors`;
 - for a command, the event it records, the aggregate's behavior method with its `Apply` case, and the
   projector's case; `AdminOnly()` or `Validate()` if it needs them;
 - for a query, the read-model method with its SQL, `make sqlc` and `make mock`, and the fields of its
@@ -590,13 +596,16 @@ make new-domain name=invoice            # plural= when English gets it wrong, tr
 ```
 
 It writes steps 1 to 7 and 9 for a user-owned domain with create, update, delete, get and list on
-the base fields (`id`, `user_id`, `created_at`, `updated_at`): 43 files on all three transports, and
-the edits to the shared files those steps name. The command and query handlers are stubs returning
-`entity.ErrNotImplemented`, so every operation answers 501 / `Unimplemented` / `NOT_IMPLEMENTED`;
-everything they sit on (aggregate, events, read model, projector, wiring, transport handlers, tests)
-is real. Then it runs the regenerators, `make openapi` among them. What it leaves to you:
+the base fields (`id`, `user_id`, `created_at`, `updated_at`): 57 files on all three transports, and
+three edits, the lists a domain joins: `entity.EventTypes()`, `modules()` and, with GraphQL,
+`graphql/resolver.go`. The command and query handlers are stubs returning
+`entity.ErrNotImplemented`, so every operation answers 501 / `Unimplemented` / `NOT_IMPLEMENTED`,
+which each REST op lists in its `Errors`; everything they sit on (aggregate, events, read model,
+projector, module, transport handlers, tests) is real. Then it runs the regenerators, `make openapi`
+among them. What it leaves to you:
 
-- the five handlers' bodies, and tests of what they do in place of the stubs' tests;
+- the five handlers' bodies, and tests of what they do in place of the stubs' tests; then
+  `http.StatusNotImplemented` out of the REST ops' `Errors`;
 - the domain's fields, where the generated comments say: the read shape, the events and `Apply`, the
   HCL table and its SQL, the projector, the request DTOs and messages, and the GraphQL type;
 - the docs of step 8;
