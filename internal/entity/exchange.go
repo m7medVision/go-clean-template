@@ -24,9 +24,10 @@ const (
 	MaxAmountScale  = 8
 )
 
-// Conversion is an amount converted from one currency to another at a reference rate.
-// Amounts are exact decimals: money never passes through float64.
+// Conversion is an amount converted from one currency to another at a reference rate, for UserID
+// (none while it is being made). Amounts are exact decimals: money never passes through float64.
 type Conversion struct {
+	UserID   string
 	From     string
 	To       string
 	Amount   decimal.Decimal
@@ -66,6 +67,16 @@ func (c *Conversion) ApplyRate(rate decimal.Decimal, date time.Time) {
 // not "0.3".
 func (c *Conversion) ResultString() string {
 	return c.Result.StringFixed(_resultScale)
+}
+
+// ReadableBy is nil when userID may read the conversion: when it is theirs. Another user's
+// conversion is ErrConversionNotFound, the same as one that does not exist.
+func (c *Conversion) ReadableBy(userID string) error {
+	if c.UserID != userID {
+		return ErrConversionNotFound
+	}
+
+	return nil
 }
 
 func validCurrencyCode(code string) bool {

@@ -67,15 +67,14 @@ func (*TaskAggregate) NotFound() error {
 	return ErrTaskNotFound
 }
 
+// ownedBy is nil when userID may change the task: when it is live and theirs. A deleted task is
+// ErrTaskNotFound, and another user's ErrTaskForbidden, as a read of it is.
 func (t *TaskAggregate) ownedBy(userID string) error {
-	switch {
-	case t.deleted:
+	if t.deleted {
 		return ErrTaskNotFound
-	case t.task.UserID != userID:
-		return ErrTaskForbidden
-	default:
-		return nil
 	}
+
+	return taskOwnedBy(t.task.UserID, userID)
 }
 
 // Update replaces the title and description of userID's task.
@@ -108,7 +107,7 @@ func (t *TaskAggregate) Transition(userID string, to TaskStatus, at time.Time) e
 // Delete deletes userID's task. Another user's task is ErrTaskNotFound, not ErrTaskForbidden, so a
 // delete never tells a stranger the task exists.
 func (t *TaskAggregate) Delete(userID string, at time.Time) error {
-	if t.deleted || t.task.UserID != userID {
+	if t.ownedBy(userID) != nil {
 		return ErrTaskNotFound
 	}
 

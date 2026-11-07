@@ -95,10 +95,14 @@ func (a *PasskeyAggregate) Credential() json.RawMessage {
 	return a.passkey.Credential
 }
 
-// OwnedBy reports whether the passkey is live and userID's: whether userID may use, rename or
-// delete it.
-func (a *PasskeyAggregate) OwnedBy(userID string) bool {
-	return a.Live() && a.passkey.UserID == userID
+// OwnedBy is nil when userID may use, rename or delete the passkey: when it is live and theirs, as
+// a read of it is. Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
+func (a *PasskeyAggregate) OwnedBy(userID string) error {
+	if !a.Live() {
+		return ErrPasskeyNotFound
+	}
+
+	return passkeyOwnedBy(a.passkey.UserID, userID)
 }
 
 // Live reports whether the passkey is registered and not deleted: whether it can sign in.
@@ -125,8 +129,8 @@ func (a *PasskeyAggregate) Register(id PasskeyID, userID, name string, credentia
 
 // Rename names userID's passkey. Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
 func (a *PasskeyAggregate) Rename(userID, name string, at time.Time) error {
-	if !a.OwnedBy(userID) {
-		return ErrPasskeyNotFound
+	if err := a.OwnedBy(userID); err != nil {
+		return err
 	}
 
 	name, err := passkeyName(name)
@@ -142,8 +146,8 @@ func (a *PasskeyAggregate) Rename(userID, name string, at time.Time) error {
 // Use records userID's sign-in with the passkey, and the credential record as the login left it.
 // Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
 func (a *PasskeyAggregate) Use(userID string, credential json.RawMessage, at time.Time) error {
-	if !a.OwnedBy(userID) {
-		return ErrPasskeyNotFound
+	if err := a.OwnedBy(userID); err != nil {
+		return err
 	}
 
 	Record(a, PasskeyUsed{PasskeyID: a.passkey.ID, Credential: credential, At: at})
@@ -153,8 +157,8 @@ func (a *PasskeyAggregate) Use(userID string, credential json.RawMessage, at tim
 
 // Delete deletes userID's passkey. Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
 func (a *PasskeyAggregate) Delete(userID string, at time.Time) error {
-	if !a.OwnedBy(userID) {
-		return ErrPasskeyNotFound
+	if err := a.OwnedBy(userID); err != nil {
+		return err
 	}
 
 	Record(a, PasskeyDeleted{PasskeyID: a.passkey.ID, At: at})

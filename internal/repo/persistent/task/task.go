@@ -28,7 +28,7 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
+func (r *Repo) Get(ctx context.Context, taskID string) (entity.Task, error) {
 	task, err := r.q(ctx).GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -36,10 +36,6 @@ func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, err
 		}
 
 		return entity.Task{}, fmt.Errorf("TaskReadModel - Get - r.q(ctx).GetTask: %w", err)
-	}
-
-	if task.UserID != userID {
-		return entity.Task{}, entity.ErrTaskForbidden
 	}
 
 	return entity.Task(task), nil

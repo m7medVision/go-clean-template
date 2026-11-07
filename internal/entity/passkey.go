@@ -37,6 +37,22 @@ type Passkey struct {
 	LastUsedAt *time.Time      `json:"last_used_at" example:"2026-01-01T00:00:00Z"`
 }
 
+// ReadableBy is nil when userID may read the passkey: when it is theirs. Another user's passkey is
+// ErrPasskeyNotFound, the same as one that does not exist.
+func (p *Passkey) ReadableBy(userID string) error {
+	return passkeyOwnedBy(p.UserID, userID)
+}
+
+// passkeyOwnedBy is who may read, use or change a passkey: its owner. To anyone else it does not
+// exist: ErrPasskeyNotFound.
+func passkeyOwnedBy(owner, userID string) error {
+	if owner != userID {
+		return ErrPasskeyNotFound
+	}
+
+	return nil
+}
+
 // String returns the ID as unpadded base64url.
 func (id PasskeyID) String() string {
 	return base64.RawURLEncoding.EncodeToString(id)

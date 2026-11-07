@@ -41,6 +41,21 @@ type Task struct {
 	UpdatedAt   time.Time  `json:"updated_at"  example:"2026-01-01T00:00:00Z"`
 }
 
+// ReadableBy is nil when userID may read the task: when it is theirs. Another user's task is
+// ErrTaskForbidden.
+func (t *Task) ReadableBy(userID string) error {
+	return taskOwnedBy(t.UserID, userID)
+}
+
+// taskOwnedBy is who may read or change a task: its owner. Anyone else is ErrTaskForbidden.
+func taskOwnedBy(owner, userID string) error {
+	if owner != userID {
+		return ErrTaskForbidden
+	}
+
+	return nil
+}
+
 func (s TaskStatus) Valid() bool {
 	switch s {
 	case TaskStatusTodo, TaskStatusInProgress, TaskStatusDone:

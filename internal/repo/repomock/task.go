@@ -42,18 +42,18 @@ func (m *MockTaskReadModel) EXPECT() *MockTaskReadModelMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockTaskReadModel) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
+func (m *MockTaskReadModel) Get(ctx context.Context, taskID string) (entity.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, userID, taskID)
+	ret := m.ctrl.Call(m, "Get", ctx, taskID)
 	ret0, _ := ret[0].(entity.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockTaskReadModelMockRecorder) Get(ctx, userID, taskID any) *gomock.Call {
+func (mr *MockTaskReadModelMockRecorder) Get(ctx, taskID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockTaskReadModel)(nil).Get), ctx, userID, taskID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockTaskReadModel)(nil).Get), ctx, taskID)
 }
 
 // List mocks base method.

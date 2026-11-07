@@ -12,11 +12,12 @@ import (
 
 type (
 	// ExchangeReadModel reads exchange_history, which only the exchange projector writes. History is
-	// one page of the user's conversions, newest first, and their total count. Conversion of
-	// another user's or a missing conversion is entity.ErrConversionNotFound.
+	// one page of the user's conversions, newest first, and their total count. Conversion of a
+	// missing conversion is entity.ErrConversionNotFound; whether the caller may read it is
+	// entity.Conversion's rule.
 	ExchangeReadModel interface {
 		History(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Conversion], error)
-		Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error)
+		Conversion(ctx context.Context, conversionID string) (entity.Conversion, error)
 	}
 
 	// ExchangeWebAPI fetches the reference rate from one currency to another, and the date it

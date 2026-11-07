@@ -312,7 +312,9 @@ the conversion is saved, but a read could still miss it.
 `SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp,
 authorize, validate) to
 [`query/get_conversion.go`](../internal/usecase/exchange/query/get_conversion.go), which reads
-the row from `repo.ExchangeReadModel` and only from it. A query never touches the event store.
+the row by its ID from `repo.ExchangeReadModel` and only from it, then asks the conversion's
+`ReadableBy(userID)`: another user's conversion is `entity.ErrConversionNotFound`, as a missing one
+is. A query never touches the event store.
 
 ## The trace
 

@@ -34,8 +34,8 @@ func TestRegisterRecordsPasskeyRegistered(t *testing.T) {
 		PasskeyID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), At: createdAt(),
 	}}, a.Pending())
 	assert.Equal(t, "passkey-AQIDBA", a.StreamID())
-	assert.True(t, a.OwnedBy(_owner))
-	assert.False(t, a.OwnedBy(_other))
+	require.NoError(t, a.OwnedBy(_owner))
+	require.ErrorIs(t, a.OwnedBy(_other), entity.ErrPasskeyNotFound)
 }
 
 func TestRegisteringALiveCredentialAgainIsErrPasskeyExists(t *testing.T) {
@@ -115,7 +115,7 @@ func TestPasskeyAggregateSnapshotKeepsTheOwnerAndTheCredential(t *testing.T) {
 	restored := &entity.PasskeyAggregate{}
 	require.NoError(t, restored.RestoreSnapshot(data))
 	assert.Equal(t, a.StreamID(), restored.StreamID())
-	assert.True(t, restored.OwnedBy(_owner))
+	require.NoError(t, restored.OwnedBy(_owner))
 	assert.JSONEq(t, string(record()), string(restored.Credential()))
 }
 
@@ -129,7 +129,7 @@ func TestAPasskeySnapshotOfTheFirstShapeStillLoads(t *testing.T) {
 		"registered":true,"deleted":false}`)))
 
 	assert.Equal(t, "passkey-AQIDBA", restored.StreamID())
-	assert.True(t, restored.OwnedBy(_owner))
+	require.NoError(t, restored.OwnedBy(_owner))
 	assert.JSONEq(t, string(record()), string(restored.Credential()))
 }
 

@@ -25,9 +25,13 @@ type GetTaskHandler struct {
 }
 
 func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (entity.Task, error) {
-	task, err := h.Tasks.Get(ctx, q.UserID, q.TaskID)
+	task, err := h.Tasks.Get(ctx, q.TaskID)
 	if err != nil {
 		return entity.Task{}, fmt.Errorf("GetTask - h.Tasks.Get: %w", err)
+	}
+
+	if err = task.ReadableBy(q.UserID); err != nil {
+		return entity.Task{}, fmt.Errorf("GetTask: %w", err)
 	}
 
 	return task, nil

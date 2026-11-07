@@ -29,15 +29,13 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// Get returns the user's passkey id. Another user's passkey is ErrPasskeyNotFound, the same as one
-// that does not exist.
-func (r *Repo) Get(ctx context.Context, userID string, id entity.PasskeyID) (entity.Passkey, error) {
+func (r *Repo) Get(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error) {
 	passkey, err := r.q(ctx).GetPasskey(ctx, id)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && passkey.UserID != userID) {
-		return entity.Passkey{}, entity.ErrPasskeyNotFound
-	}
-
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return entity.Passkey{}, entity.ErrPasskeyNotFound
+		}
+
 		return entity.Passkey{}, fmt.Errorf("PasskeyReadModel - Get - r.q(ctx).GetPasskey: %w", err)
 	}
 

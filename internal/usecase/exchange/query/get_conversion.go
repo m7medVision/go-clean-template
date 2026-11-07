@@ -23,9 +23,13 @@ type GetConversionHandler struct {
 }
 
 func (h GetConversionHandler) Handle(ctx context.Context, q GetConversion) (entity.Conversion, error) {
-	conversion, err := h.History.Conversion(ctx, q.UserID, q.ConversionID)
+	conversion, err := h.History.Conversion(ctx, q.ConversionID)
 	if err != nil {
 		return entity.Conversion{}, fmt.Errorf("GetConversion - h.History.Conversion: %w", err)
+	}
+
+	if err = conversion.ReadableBy(q.UserID); err != nil {
+		return entity.Conversion{}, fmt.Errorf("GetConversion: %w", err)
 	}
 
 	return conversion, nil

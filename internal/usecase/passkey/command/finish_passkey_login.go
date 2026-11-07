@@ -86,7 +86,7 @@ func (h *FinishPasskeyLoginHandler) find(ctx context.Context, userID string, id 
 	passkey := &entity.PasskeyAggregate{}
 
 	err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey)
-	if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && !passkey.OwnedBy(userID)) {
+	if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && passkey.OwnedBy(userID) != nil) {
 		return entity.User{}, nil, fmt.Errorf("no such passkey: %w", entity.ErrPasskeyCeremonyInvalid)
 	}
 

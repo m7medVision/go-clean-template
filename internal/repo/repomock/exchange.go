@@ -44,18 +44,18 @@ func (m *MockExchangeReadModel) EXPECT() *MockExchangeReadModelMockRecorder {
 }
 
 // Conversion mocks base method.
-func (m *MockExchangeReadModel) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
+func (m *MockExchangeReadModel) Conversion(ctx context.Context, conversionID string) (entity.Conversion, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Conversion", ctx, userID, conversionID)
+	ret := m.ctrl.Call(m, "Conversion", ctx, conversionID)
 	ret0, _ := ret[0].(entity.Conversion)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Conversion indicates an expected call of Conversion.
-func (mr *MockExchangeReadModelMockRecorder) Conversion(ctx, userID, conversionID any) *gomock.Call {
+func (mr *MockExchangeReadModelMockRecorder) Conversion(ctx, conversionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conversion", reflect.TypeOf((*MockExchangeReadModel)(nil).Conversion), ctx, userID, conversionID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conversion", reflect.TypeOf((*MockExchangeReadModel)(nil).Conversion), ctx, conversionID)
 }
 
 // History mocks base method.

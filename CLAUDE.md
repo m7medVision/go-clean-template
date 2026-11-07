@@ -296,6 +296,9 @@ loads an aggregate, calls its behavior method and saves what it recorded (`aggre
 `aggregate.Change`). A query reads only a read model and never loads an aggregate. Only a projector
 writes its tables, so read-model tables have no foreign keys. Uniqueness across records (emails,
 usernames, SSO identities) is a claim saved with the events, not a unique index on a read model.
+A read model returns a record by its ID, whoever owns it; the query handler then asks the record's
+`ReadableBy(userID)` (another user's task is `ErrTaskForbidden`, passkey `ErrPasskeyNotFound`,
+conversion `ErrConversionNotFound`), never the SQL. The task aggregate changes a task by that rule.
 
 **Mocks are generated, not written.** Each file in `internal/repo/repomock/` comes from the
 `go:generate` directive of the contract file it is named after (`repo/task.go` →

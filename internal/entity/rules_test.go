@@ -8,6 +8,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// A record is its owner's to read. To anyone else a task is forbidden, and a passkey or a conversion
+// does not exist.
+func TestOnlyTheOwnerReadsARecord(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		readableBy func(userID string) error
+		other      error
+	}{
+		"task":       {(&entity.Task{UserID: _owner}).ReadableBy, entity.ErrTaskForbidden},
+		"passkey":    {(&entity.Passkey{UserID: _owner}).ReadableBy, entity.ErrPasskeyNotFound},
+		"conversion": {(&entity.Conversion{UserID: _owner}).ReadableBy, entity.ErrConversionNotFound},
+	} {
+		require.NoError(t, tc.readableBy(_owner), name)
+		require.ErrorIs(t, tc.readableBy(_other), tc.other, name)
+	}
+}
+
 func TestTaskTextLimits(t *testing.T) {
 	t.Parallel()
 

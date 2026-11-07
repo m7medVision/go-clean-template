@@ -30,7 +30,7 @@ type Querier interface {
 	DeleteTaskRow(ctx context.Context, id string) error
 	EnsureCheckpoint(ctx context.Context, name string) error
 	GetCheckpoint(ctx context.Context, name string) (int64, error)
-	GetConversion(ctx context.Context, arg GetConversionParams) (GetConversionRow, error)
+	GetConversion(ctx context.Context, conversionID *string) (GetConversionRow, error)
 	GetPasskey(ctx context.Context, id entity.PasskeyID) (WebauthnCredential, error)
 	GetSnapshot(ctx context.Context, streamID string) (GetSnapshotRow, error)
 	GetTask(ctx context.Context, id string) (Task, error)

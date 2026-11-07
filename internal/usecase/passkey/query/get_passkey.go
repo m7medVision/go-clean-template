@@ -28,9 +28,13 @@ func (h GetPasskeyHandler) Handle(ctx context.Context, q GetPasskey) (entity.Pas
 		return entity.Passkey{}, fmt.Errorf("GetPasskey: %w", err)
 	}
 
-	passkey, err := h.Passkeys.Get(ctx, q.UserID, id)
+	passkey, err := h.Passkeys.Get(ctx, id)
 	if err != nil {
 		return entity.Passkey{}, fmt.Errorf("GetPasskey - h.Passkeys.Get: %w", err)
+	}
+
+	if err = passkey.ReadableBy(q.UserID); err != nil {
+		return entity.Passkey{}, fmt.Errorf("GetPasskey: %w", err)
 	}
 
 	return passkey, nil

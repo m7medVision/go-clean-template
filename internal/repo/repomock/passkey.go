@@ -42,18 +42,18 @@ func (m *MockPasskeyReadModel) EXPECT() *MockPasskeyReadModelMockRecorder {
 }
 
 // Get mocks base method.
-func (m *MockPasskeyReadModel) Get(ctx context.Context, userID string, id entity.PasskeyID) (entity.Passkey, error) {
+func (m *MockPasskeyReadModel) Get(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, userID, id)
+	ret := m.ctrl.Call(m, "Get", ctx, id)
 	ret0, _ := ret[0].(entity.Passkey)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockPasskeyReadModelMockRecorder) Get(ctx, userID, id any) *gomock.Call {
+func (mr *MockPasskeyReadModelMockRecorder) Get(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPasskeyReadModel)(nil).Get), ctx, userID, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPasskeyReadModel)(nil).Get), ctx, id)
 }
 
 // ListByUser mocks base method.

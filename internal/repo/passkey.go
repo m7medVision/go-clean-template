@@ -13,11 +13,11 @@ import (
 
 type (
 	// PasskeyReadModel reads webauthn_credentials, which only the passkey projector writes.
-	// ListByUser is the user's passkeys, oldest first. Get of another user's or a missing passkey is
-	// entity.ErrPasskeyNotFound.
+	// ListByUser is the user's passkeys, oldest first. Get of a missing passkey is
+	// entity.ErrPasskeyNotFound; whether the caller may read it is entity.Passkey's rule.
 	PasskeyReadModel interface {
 		ListByUser(ctx context.Context, userID string) ([]entity.Passkey, error)
-		Get(ctx context.Context, userID string, id entity.PasskeyID) (entity.Passkey, error)
+		Get(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error)
 	}
 
 	// PasskeyCeremony runs the WebAuthn ceremonies of passkey registration and sign-in. Callers pass

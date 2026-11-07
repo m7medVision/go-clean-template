@@ -95,13 +95,16 @@ func TestGetPasskeyReadsOneOfTheUsersPasskeys(t *testing.T) {
 	t.Parallel()
 
 	r := newReads(t)
-	want := entity.Passkey{ID: entity.PasskeyID{1, 2, 3, 4}, Name: "Laptop"}
-	r.passkeys.EXPECT().Get(gomock.Any(), "u1", entity.PasskeyID{1, 2, 3, 4}).Return(want, nil)
+	want := entity.Passkey{ID: entity.PasskeyID{1, 2, 3, 4}, UserID: "u1", Name: "Laptop"}
+	r.passkeys.EXPECT().Get(gomock.Any(), entity.PasskeyID{1, 2, 3, 4}).Return(want, nil).Times(2)
+	h := query.GetPasskeyHandler{Passkeys: r.passkeys}
 
-	got, err := query.GetPasskeyHandler{Passkeys: r.passkeys}.Handle(context.Background(), query.GetPasskey{UserID: "u1", ID: "AQIDBA"})
-
+	got, err := h.Handle(context.Background(), query.GetPasskey{UserID: "u1", ID: "AQIDBA"})
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
+
+	_, err = h.Handle(context.Background(), query.GetPasskey{UserID: "u2", ID: "AQIDBA"})
+	require.ErrorIs(t, err, entity.ErrPasskeyNotFound, "another user's passkey, as one that does not exist")
 }
 
 func TestGetPasskeyOfAnIDThatIsNotBase64URLIsNotFound(t *testing.T) {

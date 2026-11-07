@@ -81,7 +81,9 @@ The shared helpers in `internal/usecase/aggregate` do the store work:
 ### Queries
 
 One file per query, in `internal/usecase/<domain>/query/`. A query reads its domain's read model
-interface (`repo.TaskReadModel`, …) and nothing else. It never loads an aggregate.
+interface (`repo.TaskReadModel`, …) and nothing else. It never loads an aggregate. A read model
+returns a record by its ID, whoever owns it, and the query decides whether the caller may read it
+with the record's `ReadableBy` (`GetTask`, `GetPasskey`, `GetConversion`).
 
 The begin steps of the passkey and SSO ceremonies are queries: they record nothing, since the token
 they return carries the ceremony's state.

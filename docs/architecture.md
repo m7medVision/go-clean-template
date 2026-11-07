@@ -72,7 +72,9 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
    never duplicated per transport. A rule about one record goes on its aggregate
    (`TaskAggregate.Transition`, `entity.NewConversion`); a rule across records uses a claim
    (unique emails). Authorization is a domain rule too: "only an admin lists every user's tasks" is
-   `ListAllTasks.AdminOnly`, enforced by the buses' authorize step for every transport.
+   `ListAllTasks.AdminOnly`, enforced by the buses' authorize step for every transport, and who may
+   read a record is the record's `ReadableBy` (`entity.Task.ReadableBy`), which the query handler
+   checks on what the read model returns by ID. The task aggregate changes a task by the same rule.
 10. **State changes only through aggregates recording events.** A command handler loads an
     aggregate, calls its behavior method and saves what it recorded. A command returns what
     identifies the write (`entity.Written`), never resource data; a query reads only read models; and

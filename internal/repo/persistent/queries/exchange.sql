@@ -7,8 +7,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (conversion_id) DO NOTHING;
 
 -- name: GetConversion :one
-SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
-WHERE conversion_id = $1 AND user_id = $2;
+SELECT user_id, from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
+WHERE conversion_id = $1;
 
 -- ListEveryExchange is what the backfill imports, oldest first, so a rebuild keeps the order.
 -- name: ListEveryExchange :many

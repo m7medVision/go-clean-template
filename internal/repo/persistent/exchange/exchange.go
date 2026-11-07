@@ -28,8 +28,8 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
-	row, err := r.q(ctx).GetConversion(ctx, queries.GetConversionParams{ConversionID: &conversionID, UserID: userID})
+func (r *Repo) Conversion(ctx context.Context, conversionID string) (entity.Conversion, error) {
+	row, err := r.q(ctx).GetConversion(ctx, &conversionID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Conversion{}, entity.ErrConversionNotFound
@@ -39,8 +39,8 @@ func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (ent
 	}
 
 	return entity.Conversion{
-		From: row.FromCurrency, To: row.ToCurrency, Amount: row.Amount, Rate: row.Rate, Result: row.Result,
-		RateDate: row.RateDate,
+		UserID: row.UserID, From: row.FromCurrency, To: row.ToCurrency, Amount: row.Amount, Rate: row.Rate,
+		Result: row.Result, RateDate: row.RateDate,
 	}, nil
 }
 
@@ -61,6 +61,7 @@ func (r *Repo) History(ctx context.Context, userID string, page entity.Page) (en
 	history := make([]entity.Conversion, 0, len(rows))
 	for _, row := range rows {
 		history = append(history, entity.Conversion{
+			UserID:   userID,
 			From:     row.FromCurrency,
 			To:       row.ToCurrency,
 			Amount:   row.Amount,
