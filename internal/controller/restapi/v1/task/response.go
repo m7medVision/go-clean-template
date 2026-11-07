@@ -7,3 +7,12 @@ type TaskList struct { //nolint:revive // Huma names the OpenAPI schema after th
 	Tasks []entity.Task `json:"tasks"`
 	Total int           `json:"total" example:"42"`
 }
+
+// taskOutput is the task an operation wrote or read.
+type taskOutput struct {
+	Body entity.Task
+}
+
+type listTasksOutput struct {
+	Body TaskList
+}

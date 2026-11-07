@@ -1,0 +1,5 @@
+input UpdateTaskInput { title: String!  description: String }
+
+extend type Mutation {
+  updateTask(id: ID!, input: UpdateTaskInput!): Task!
+}

@@ -24,3 +24,24 @@ type TransitionTask struct {
 
 	Status entity.TaskStatus `json:"status" minLength:"1" enum:"todo,in_progress,done" example:"in_progress"`
 }
+
+type listTasksInput struct {
+	Status entity.TaskStatus `query:"status" required:"false" enum:"todo,in_progress,done" example:"todo"`
+	Limit  int               `query:"limit" default:"10" minimum:"1" maximum:"100"`
+	Offset int               `query:"offset" default:"0" minimum:"0"`
+}
+
+// status is the filter the query asks for, or nil for every status.
+func (in *listTasksInput) status() *entity.TaskStatus {
+	if in.Status == "" {
+		return nil
+	}
+
+	status := in.Status
+
+	return &status
+}
+
+type taskPathInput struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}

@@ -136,8 +136,10 @@ changes show up in review and clients can generate types without a running serve
 ## GraphQL
 
 [gqlgen](https://github.com/99designs/gqlgen) on the REST port, covering tasks and the exchange
-history. The schemas are [task.graphqls](../internal/controller/graphql/schema/task.graphqls) and
-[exchange.graphqls](../internal/controller/graphql/schema/exchange.graphqls).
+history. The schema is in [schema/](../internal/controller/graphql/schema/): each domain's types
+in `<domain>_types.graphqls`, and each field in its own file, named after it
+([create_task.graphqls](../internal/controller/graphql/schema/create_task.graphqls) declares
+`createTask`).
 
 | Operation | GraphQL |
 | --- | --- |

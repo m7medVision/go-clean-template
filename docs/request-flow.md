@@ -94,8 +94,9 @@ middleware in this order, before any handler runs:
 ## 2. Decode and validate (Huma)
 
 The handler is registered with [Huma](https://github.com/danielgtaylor/huma) in
-[`internal/controller/restapi/v1/exchange/exchange.go`](../internal/controller/restapi/v1/exchange/exchange.go),
-in the exchange domain's folder. Its input type wraps a transport-local DTO from the same folder's
+[`internal/controller/restapi/v1/exchange/convert_currency.go`](../internal/controller/restapi/v1/exchange/convert_currency.go),
+in the exchange domain's folder, a file of its own as every operation has. Its input type wraps a
+transport-local DTO from the same folder's
 [`request.go`](../internal/controller/restapi/v1/exchange/request.go):
 
 ```go
@@ -341,7 +342,7 @@ error with the layer path goes only to the log.
 
 ## The same command over gRPC
 
-[`internal/controller/grpc/v1/exchange/exchange.go`](../internal/controller/grpc/v1/exchange/exchange.go) is the same
+[`internal/controller/grpc/v1/exchange/convert.go`](../internal/controller/grpc/v1/exchange/convert.go) is the same
 six steps with different types:
 
 | | REST | gRPC |

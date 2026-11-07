@@ -1,4 +1,5 @@
-// Package exchange resolves the exchange fields of the GraphQL schema (schema/exchange.graphqls).
+// Package exchange resolves the exchange fields of the GraphQL schema: each field in the file
+// named as its schema file is (exchange_history.go resolves schema/exchange_history.graphqls).
 package exchange
 
 import (

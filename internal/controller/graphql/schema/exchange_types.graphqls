@@ -12,8 +12,3 @@ type Conversion {
 }
 
 type ConversionList { conversions: [Conversion!]!  total: Int! }
-
-extend type Query {
-  "One page of the caller's conversions, newest first. limit is 1–100."
-  exchangeHistory(limit: Int! = 10, offset: Int! = 0): ConversionList!
-}

@@ -49,3 +49,13 @@ func NewPasskeyList(passkeys []entity.Passkey) PasskeyList {
 
 	return PasskeyList{Passkeys: passkeys}
 }
+
+// ceremonyOutput is a WebAuthn ceremony a begin operation started.
+type ceremonyOutput struct {
+	Body PasskeyCeremony
+}
+
+// passkeyOutput is the passkey an operation wrote.
+type passkeyOutput struct {
+	Body entity.Passkey
+}

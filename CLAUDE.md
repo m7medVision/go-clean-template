@@ -137,7 +137,7 @@ Decide by asking what the code knows about:
 | how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event its `Handles` lists, listed in `projectors` |
 | rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, listed in `importers` (`internal/app/backfill.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
-| a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<domain>.go` (GraphQL: `graphql/<domain>/query.go`, `mutation.go`) | handler |
+| a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<operation>.go` (GraphQL: `graphql/<domain>/<field>.go`) | handler |
 | a queue message (decode, send a command, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
 | the data an email shows | `internal/entity/email_<name>.go` | struct with `Template()`/`Recipient()`, plus an entry in `EmailTypes()` (`email.go`) |
 | an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
@@ -146,8 +146,9 @@ Decide by asking what the code knows about:
 Layout rules:
 
 - In `usecase/<domain>/`, one file per message in `command/`, `query/` or `event/`, named after it
-  in snake case (`create_task.go`), with its test beside it. Elsewhere, one file per domain per
-  layer, named after the domain (`task.go`, `user.go`, `exchange.go`).
+  in snake case (`create_task.go`), with its test beside it. In a transport's domain folder, one
+  file per operation, named after it the same way (see **Controller layout**). Elsewhere, one file
+  per domain per layer, named after the domain (`task.go`, `user.go`, `exchange.go`).
 - Package name matches the directory name. A repository package shares its name with the use-case
   package of the same domain, so `internal/app` imports the repositories under aliases
   (`persistTaskRepo`, …).
@@ -161,18 +162,24 @@ Layout rules:
 
 ## Controller layout
 
-Every transport splits by domain, then by job: **folders by domain, files by job, tests beside the
-code.** The version comes first, so a v2 is one sibling folder (`restapi/v2/`) with the same
+Every transport splits by domain, then by operation: **folders by domain, one file per operation,
+tests beside the code.** Adding an operation creates its file; the shared files change by one
+line at most. The version comes first, so a v2 is one sibling folder (`restapi/v2/`) with the same
 domain folders inside.
 
 ```
-restapi/v1/<domain>/   controller.go (struct, NewRoutes), <domain>.go (Huma ops and their
-                       input/output structs), request.go, response.go, <domain>_test.go,
-                       fake_test.go, main_test.go
-grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface),
-                       <domain>.go (RPCs), request.go, response.go, tests
-graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go, input.go or
-                       response.go, tests
+restapi/v1/<domain>/   controller.go (struct, NewRoutes, helpers several ops share), one file per
+                       Huma op named after its operation ID (create_task.go: the op, its own
+                       input/output structs), request.go and response.go (DTOs, and the input/
+                       output structs several ops share), <domain>_test.go, fake_test.go,
+                       main_test.go
+grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface, shared
+                       helpers), one file per RPC (create_task.go), request.go, response.go, tests
+graphql/<domain>/      resolver.go (Query/Mutation, New, shared helpers), one file per field
+                       (create_task.go resolves createTask), input.go or response.go, tests
+graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_types.graphqls
+                       (a domain's types), one file per field (create_task.graphqls: extend type
+                       Mutation, plus an input type only that field takes)
 ```
 
 - **A domain folder never imports another domain folder.** What several domains share has its own
@@ -193,8 +200,9 @@ graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go,
   alias (`taskQuery = task.Query`): Go names an embedded field after its type, so two domains'
   `Query` types would clash without one. gqlgen writes no resolver code (`gqlgen.yml` has no
   `resolver:` section), so it never rewrites a hand-written file; `generated/` has one file per
-  schema file. GraphQL has no `v1/`: a schema evolves by adding fields and marking old ones
-  `@deprecated`.
+  schema file that declares a type (a field-only file generates none), and gqlgen does not delete
+  the file of a schema file you remove or rename: delete it by hand. GraphQL has no `v1/`: a schema
+  evolves by adding fields and marking old ones `@deprecated`.
 
 ## The handler contract
 
@@ -504,18 +512,20 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
    `cqrs.ErrNoHandler` at the first send.
 4. Tests are table-driven where there are cases and call `t.Parallel()` (`paralleltest` enforces it).
 5. Expose it on whichever transports need it, sending the message (see **The handler contract**):
-   - REST: Huma input/output structs and the op in `internal/controller/restapi/v1/<domain>/<domain>.go`,
-     DTOs in that folder's `request.go`/`response.go`, the op registered in its `controller.go`
-     (`NewRoutes`), the fake handler in `fake_test.go` and the test beside it; then `make openapi`,
-     and commit the generated diff.
+   - REST: the op and its own Huma input/output structs in a new file named after its operation ID,
+     `internal/controller/restapi/v1/<domain>/<operation>.go`, DTOs in that folder's
+     `request.go`/`response.go`, the op registered in its `controller.go` (`NewRoutes`), the fake
+     handler in `fake_test.go` and the test beside it; then `make openapi`, and commit the
+     generated diff.
      Then `make web-api`, commit its diff too, and fix any `make web-check` errors in `web/`.
-   - GraphQL (task and exchange today): schema change in `internal/controller/graphql/schema/` →
-     `make graphql` → the build fails with `missing method <Field>` → write that method in
-     `internal/controller/graphql/<domain>/query.go` or `mutation.go`, with the signature from
+   - GraphQL (task and exchange today): a new `internal/controller/graphql/schema/<field>.graphqls`
+     with `extend type Query` or `extend type Mutation` → `make graphql` → the build fails with
+     `missing method <Field>` → write that method in a new
+     `internal/controller/graphql/<domain>/<field>.go`, with the signature from
      `generated.QueryResolver` / `generated.MutationResolver`, and its test beside it.
      Then `make web-graphql` and fix any `make web-check` errors in `web/`.
-   - gRPC: `.proto` change → `make proto-v1` → controller method in
-     `internal/controller/grpc/v1/<domain>/<domain>.go`, its mapping in that folder's `response.go`.
+   - gRPC: `.proto` change → `make proto-v1` → controller method in a new
+     `internal/controller/grpc/v1/<domain>/<rpc>.go`, its mapping in that folder's `response.go`.
 
 Transports are independent by design; adding a method to only one is a legitimate choice, not an
 oversight — but say which ones you covered.
@@ -568,12 +578,13 @@ generated files copy — read it before writing. The steps are what the generate
    the projector in `projectors` (and any event handler in `eventHandlers`). The transports already receive the
    buses through `initServers`.
 7. **Transports** — for each one, a new domain folder (see **Controller layout**):
-   `<transport>/v1/<domain>/` with its `controller.go`, handlers, `request.go`, `response.go` and
-   tests (with a `fake_test.go` registering fake handlers), plus one call in that transport's
-   `v1/router.go` that registers it.
+   `<transport>/v1/<domain>/` with its `controller.go`, one file per operation, `request.go`,
+   `response.go` and tests (with a `fake_test.go` registering fake handlers), plus one call in that
+   transport's `v1/router.go` that registers it.
    gRPC also needs `docs/proto/v1/<domain>.proto` and `make proto-v1`.
-   GraphQL instead gets `schema/<domain>.graphqls`, a `graphql/<domain>/` folder, and an alias plus
-   an embed for its `Query`/`Mutation` in `graphql/resolver.go`.
+   GraphQL instead gets `schema/<domain>_types.graphqls` and a schema file per field, a
+   `graphql/<domain>/` folder, and an alias plus an embed for its `Query`/`Mutation` in
+   `graphql/resolver.go`.
 8. **Docs** — `make openapi` to refresh `docs/openapi/v1.json`, then the docs updates listed
    above, including the aggregate and projector tables in `docs/cqrs.md`.
 9. **Integration test** — `integration-test/<domain>_test.go` exercising the domain over the

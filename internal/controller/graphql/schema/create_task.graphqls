@@ -1,0 +1,5 @@
+input CreateTaskInput { title: String!  description: String }
+
+extend type Mutation {
+  createTask(input: CreateTaskInput!): Task!
+}
