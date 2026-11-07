@@ -123,7 +123,8 @@ Inner layers never import outer ones. Wiring happens exactly once, in `internal/
 domain (`task.go`, `user.go`, …) returns its `module` (handlers, importer, REST and gRPC
 registration, projector, event handlers, queues), `modules.go` lists the modules and is the only
 domain list besides `graphql/resolver.go`; `buses.go` (`newBuses`), `bootstrap.go` (what both
-binaries start from), `http.go` (the one chi mux: REST and GraphQL mounted side by side) and
+binaries start from), `http.go` (the one chi mux: REST and GraphQL mounted side by side), `grpc.go`
+(the gRPC server and its interceptors) and
 `app.go` / `worker.go` (`Run`, `RunWorker`). Each binary installs only the module parts it runs: the
 worker the projectors, event handlers and queues (mail delivery), the app everything else.
 Every long-running part (the HTTP and gRPC servers, the queue worker, the projection runner) is a
@@ -207,7 +208,8 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
   no controller reads config), GraphQL with `graphql/graphqltest`, gRPC over
   `bufconn` in the test itself. REST-wide tests (docs, auth exemption) stay in
   `restapi/router_test.go`; tests of the whole HTTP mux (public routes, panics, metrics, GraphQL
-  beside REST) and of the exported OpenAPI document are in `internal/app`.
+  beside REST), of the gRPC server (panics) and of the exported OpenAPI document are in
+  `internal/app`.
 - **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
   renaming one changes `docs/openapi/v1.json` and the web client's types. A name that repeats its
   folder (`task.TaskList`) carries a `//nolint:revive` saying so.

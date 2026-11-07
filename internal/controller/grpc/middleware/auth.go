@@ -1,3 +1,5 @@
+// Package middleware holds the gRPC server's interceptors, in the order the server chains them: the
+// request log, metrics, panic recovery and the token check.
 package middleware
 
 import (

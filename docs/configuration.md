@@ -26,7 +26,7 @@ settings reach take them as arguments. "required" means the binary refuses to st
 | `PG_POOL_MAX` | required | |
 | `JWT_SECRET` | required | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
-| `METRICS_ENABLED` | `true` | Prometheus at `/metrics` |
+| `METRICS_ENABLED` | `true` | Prometheus at `/metrics`, with HTTP and gRPC request counts and latencies ([api.md](api.md)) |
 | `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)) |
 
 Two variables are read by tooling, not by the app:

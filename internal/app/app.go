@@ -45,7 +45,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	httpServer := newHTTPServer(cfg.HTTP.Port, newHTTPHandler(cfg, b.buses, d.tokens, b.l), cfg.CQRS.ConsistencyTimeout)
-	grpcServer := newGRPCServer(b.buses, d.tokens, b.l)
+	grpcServer := newGRPCServer(cfg, b.buses, d.tokens, b.l)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return serveHTTP(ctx, httpServer, b.l) })

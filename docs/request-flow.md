@@ -363,7 +363,8 @@ On gRPC:
 - there are no Huma tags, so a malformed code falls through to the entity;
 - a bad amount, an invalid conversion and an unknown currency are all `InvalidArgument`;
 - a lagging read model is `Unavailable`;
-- the 500 cases are `Internal`.
+- the 500 cases are `Internal`, and so is a panic, which the `Recovery` interceptor logs; the
+  `Logger` and `Metrics` interceptors log and count the call as the HTTP middleware does.
 
 GraphQL exposes only the history query (`exchangeHistory`): conversion is a form, and forms use REST.
 

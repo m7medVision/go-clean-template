@@ -130,7 +130,8 @@ changes show up in review and clients can generate types without a running serve
   Unknown fields in a request body are ignored.
 - **Metrics** at `/metrics` (`METRICS_ENABLED`): `http_requests_total` and
   `http_request_duration_seconds`, labeled by `method`, `route` (the chi pattern, or `unmatched`) and
-  `code`.
+  `code`; for gRPC, `grpc_requests_total` and `grpc_request_duration_seconds`, labeled by `method`
+  (the full method name) and `code`.
 - `/healthz` answers when the app is up.
 
 ## GraphQL
@@ -183,6 +184,8 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 
 - The token goes in the `authorization` metadata as it is, with no `Bearer` prefix; without a valid
   one a call answers `Unauthenticated`.
+- Every call is logged and counted like an HTTP request, and a panic answers `Internal` instead of
+  ending the process.
 - Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
   user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
   list without the `admin` role `PermissionDenied`, a write the read models have not caught up with
