@@ -33,12 +33,17 @@ func (*Projector) Tables() []string {
 	return []string{"user_identities", "users"}
 }
 
+// Handles is every user event.
+func (*Projector) Handles() []entity.Event {
+	return entity.UserEvents()
+}
+
 // Handle -.
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }
 
-// Project applies one event to the user tables through q. Events of other domains change nothing.
+// Project applies one event to the user tables through q.
 func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	var err error
 
@@ -52,6 +57,8 @@ func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) er
 		err = projectOIDCUser(ctx, q, &ev)
 	case entity.UserImported:
 		err = projectImport(ctx, q, &ev)
+	default:
+		err = entity.ErrUnhandledEvent
 	}
 
 	if err != nil {

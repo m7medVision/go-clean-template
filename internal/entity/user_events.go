@@ -60,6 +60,7 @@ func (UserImported) EventType() string { return "UserImported" }
 // SchemaVersion -.
 func (UserImported) SchemaVersion() int { return 1 }
 
-func userEvents() []Event {
+// UserEvents lists the user events, one zero value each.
+func UserEvents() []Event {
 	return []Event{UserRegistered{}, UserRegisteredViaOIDC{}, UserImported{}}
 }

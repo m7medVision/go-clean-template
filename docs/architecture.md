@@ -58,7 +58,7 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
    `restapi/v1/apidoc`, `restapi/v1/apierr`, `grpc/v1/rpcerr`, `graphql/middleware`, `graphql/gqlerr`).
 6. **`pkg/` never imports `internal/` or `config/`.** It takes its settings as arguments.
 7. **Wiring happens once,** in `internal/app`: `buses.go` builds the buses, registers every domain's
-   handlers (`registerHandlers`) and lists the worker's subscribers. Nothing else constructs its own
+   handlers (`registerHandlers`) and lists the worker's projectors and event handlers. Nothing else constructs its own
    dependencies.
 
 ### Each layer's job

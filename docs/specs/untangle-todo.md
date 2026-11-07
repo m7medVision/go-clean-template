@@ -132,7 +132,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 12. **Size:** L
 
 ### 17. Projectors are values that declare what they handle  (E)
-- [ ] `Projector{Name, Tables, Handles, Project}` and an event-handler value; no `Tables()` duck typing;
+- [x] Projectors and event handlers in separate typed lists, each subscriber declaring what it `Handles`; no `Tables()` duck typing;
       the runner skips events a subscriber doesn't handle without a transaction per event; startup
       fails on an event type no projector handles or declares ignored.
 

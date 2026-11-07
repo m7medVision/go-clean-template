@@ -10,6 +10,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/config"
 	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
@@ -93,8 +94,8 @@ func RunWorker(cfg *config.Config) error {
 func newRunner(cfg *config.Config, pg *postgres.Postgres, l *slog.Logger) (
 	*projection.Runner, *projection.PostgresStore, error,
 ) {
-	subs := subscribers(cfg, pg)
-	if err := checkSubscribers(subs); err != nil {
+	ps, handlers := projectors(pg), eventHandlers(cfg, pg)
+	if err := projection.Check(ps, handlers, entity.EventTypes()); err != nil {
 		return nil, nil, err
 	}
 
@@ -104,8 +105,12 @@ func newRunner(cfg *config.Config, pg *postgres.Postgres, l *slog.Logger) (
 		projection.BatchSize(cfg.CQRS.ProjectionBatchSize),
 	)
 
-	for _, s := range subs {
-		runner.Add(s)
+	for _, p := range ps {
+		runner.Add(p)
+	}
+
+	for _, h := range handlers {
+		runner.Add(h)
 	}
 
 	return runner, store, nil
@@ -120,7 +125,7 @@ func RebuildProjection(cfg *config.Config, name string) error {
 	}
 	defer pg.Close()
 
-	if err = projection.Rebuild(context.Background(), pg, name, subscribers(cfg, pg)...); err != nil {
+	if err = projection.Rebuild(context.Background(), pg, name, projectors(pg)...); err != nil {
 		return fmt.Errorf("app - RebuildProjection: %w", err)
 	}
 

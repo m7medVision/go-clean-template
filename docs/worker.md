@@ -11,7 +11,8 @@ The app needs the worker: a write waits for the projectors before it answers
 
 ## Projections
 
-The worker starts one loop per subscriber listed in `subscribers` in `internal/app/buses.go`, next to
+The worker starts one loop per subscriber, the projectors in `projectors` and the event handlers in
+`eventHandlers` (`internal/app/buses.go`), next to
 the queue consumer, and stops them on the same SIGTERM. How a loop reads, commits and wakes is in
 [cqrs.md](cqrs.md#projections-and-event-handlers-internalrepopersistentprojection); its settings
 (`PROJECTION_POLL_INTERVAL`, `PROJECTION_BATCH_SIZE`) are in

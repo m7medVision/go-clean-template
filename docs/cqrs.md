@@ -151,7 +151,12 @@ The worker runs one loop per subscriber:
 | `passkey` | projector | `webauthn_credentials` |
 | `send-welcome-email` | event handler | the `mail` queue |
 
-- **Each loop reads in order.** It reads the events after its checkpoint, in position order.
+- **Each loop reads in order.** It reads the events after its checkpoint, in position order, and
+  hands the subscriber those of the types it `Handles`. The others move its checkpoint without
+  reaching it, a batch of them in one transaction.
+- **Every event reaches a read model.** The worker refuses to start when an event type in
+  `entity.EventTypes()` has no projector, when two subscribers share a name, or when a name starts
+  with `_` (`projection.Check`).
 - **An event and its checkpoint commit together.** Each event is handled in one transaction with the
   checkpoint's move: a subscriber writes through `Executor(ctx)`, so its rows, or its queue message,
   commit with the checkpoint exactly once. A failure rolls both back, and the event is retried.
@@ -217,11 +222,12 @@ database with a running worker.
   `Apply` and in the projector.
 - **A changed event.** Raise its `SchemaVersion` and add the upcast from the previous version.
 - **A projector.** Add `internal/repo/persistent/<domain>/projector.go`. It needs `Name`, `Tables`,
-  and a `Project` function tested against a fake of sqlc's `Querier`. Add it to `subscribers` in
-  `internal/app/buses.go`.
-- **An event handler.** Add `internal/usecase/<domain>/event/<name>.go`, with a `Name` and a
-  `Handle` that does its work through repositories that join the context's transaction. Add it to
-  `subscribers`.
+  `Handles` (its domain's event list, such as `entity.TaskEvents()`) and a `Project` function, with a
+  `default` case answering `entity.ErrUnhandledEvent`, tested against a fake of sqlc's `Querier`.
+  Add it to `projectors` in `internal/app/buses.go`.
+- **An event handler.** Add `internal/usecase/<domain>/event/<name>.go`, with a `Name`, the events it
+  `Handles` and a `Handle` that does its work through repositories that join the context's
+  transaction. Add it to `eventHandlers`.
 
 ## Configuration
 

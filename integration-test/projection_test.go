@@ -50,6 +50,10 @@ func (c *runCounter) Name() string { return c.name }
 
 func (*runCounter) Tables() []string { return nil }
 
+func (*runCounter) Handles() []entity.Event {
+	return append(entity.EventTypes(), eventstoretest.Events()...)
+}
+
 func (c *runCounter) Handle(_ context.Context, e *entity.RecordedEvent) error {
 	if !strings.HasPrefix(e.StreamID, c.prefix) {
 		return nil

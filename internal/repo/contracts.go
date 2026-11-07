@@ -32,11 +32,13 @@ type (
 		ClaimOwner(ctx context.Context, scope, value string) (string, error)
 	}
 
-	// Subscriber is a projector or an event handler. The projection runner hands it every stored
-	// event in order, inside the transaction that moves its checkpoint, so whatever it writes
-	// through the context's transaction commits exactly once with the checkpoint.
+	// Subscriber is a projector or an event handler. The projection runner hands it, in order, every
+	// stored event of a type it Handles (one zero value per type), inside the transaction that moves
+	// its checkpoint, so whatever it writes through the context's transaction commits exactly once
+	// with the checkpoint. Events of other types move its checkpoint without reaching it.
 	Subscriber interface {
 		Name() string
+		Handles() []entity.Event
 		Handle(ctx context.Context, e *entity.RecordedEvent) error
 	}
 

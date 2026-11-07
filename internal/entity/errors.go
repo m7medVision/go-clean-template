@@ -138,6 +138,9 @@ var (
 	ErrStreamNotFound = errors.New("stream not found")
 	// ErrClaimTaken is a claim another owner holds, when the claim names no Taken error of its own.
 	ErrClaimTaken = errors.New("claim taken")
+	// ErrUnhandledEvent is an event handed to a subscriber whose Handles lists it but whose Handle
+	// has no case for it: a bug the subscriber stops on rather than skipping the event.
+	ErrUnhandledEvent = errors.New("event its subscriber has no case for")
 	// ErrClaimNotFound is a lookup of a claim nobody holds.
 	ErrClaimNotFound = errors.New("claim not found")
 )

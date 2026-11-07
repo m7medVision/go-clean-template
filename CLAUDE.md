@@ -117,7 +117,7 @@ internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → intern
   include it, so `make gen-check` is what lints and tests it. See `docs/generator.md`.
 
 Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: `buses.go`
-(`newBuses`, `registerHandlers`, `subscribers`), `backfill.go` (`importers`) and `app.go`
+(`newBuses`, `registerHandlers`, `projectors`, `eventHandlers`), `backfill.go` (`importers`) and `app.go`
 (`initUseCases`, `initServers`).
 
 ## Where code goes
@@ -130,11 +130,11 @@ Decide by asking what the code knows about:
 | a state change and its rules | `internal/entity/<name>_aggregate.go`, events in `<name>_events.go` | aggregate method that checks the rule and calls `entity.Record`; every event type listed in `EventTypes()` |
 | one change a caller asks for | `internal/usecase/<domain>/command/<name>.go` | command type + handler returning `entity.Written`, one line in `register.go` |
 | one thing a caller reads | `internal/usecase/<domain>/query/<name>.go` | query type + handler reading a read model, one line in `register.go` |
-| a side effect that follows an event | `internal/usecase/<domain>/event/<name>.go` | `repo.Subscriber` (`Name`, `Handle`), listed in `subscribers` (`internal/app/buses.go`) |
+| a side effect that follows an event | `internal/usecase/<domain>/event/<name>.go` | `repo.Subscriber` (`Name`, `Handles`, `Handle`), listed in `eventHandlers` (`internal/app/buses.go`) |
 | a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a read-model table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | read-model method calling the generated query |
-| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event type, listed in `subscribers` |
+| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event its `Handles` lists, listed in `projectors` |
 | rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, listed in `importers` (`internal/app/backfill.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<domain>.go` (GraphQL: `graphql/<domain>/query.go`, `mutation.go`) | handler |
@@ -322,7 +322,8 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   inserts claims and events; then `NOTIFY events`. Keep that lock: without it a projector can pass a
   position whose earlier neighbour commits later, and never see it.
 - **Projections run in the worker** (`internal/repo/persistent/projection`): one loop per
-  subscriber in `subscribers`, each event handled in one transaction with its checkpoint's move.
+  subscriber (`projectors` and `eventHandlers`), each event of a type it `Handles` handled in one
+  transaction with its checkpoint's move.
   A subscriber writes through `pg.Executor(ctx)` (`pkg/postgres`) so its rows join that
   transaction; anything else (a second pool, a goroutine) breaks exactly-once.
 - **Every command waits for the projectors** (the wait step) until they pass its position, or
@@ -563,7 +564,7 @@ generated files copy — read it before writing. The steps are what the generate
    for side effects, `event/`, one file per message with its test (see the recipe above), and
    `register.go` with the domain's `Deps` and `Register`.
 6. **Wiring** — in `internal/app/buses.go`: a `<domain>.Register(...)` call in `registerHandlers`,
-   and the projector (and any event handler) in `subscribers`. The transports already receive the
+   the projector in `projectors` (and any event handler in `eventHandlers`). The transports already receive the
    buses through `initServers`.
 7. **Transports** — for each one, a new domain folder (see **Controller layout**):
    `<transport>/v1/<domain>/` with its `controller.go`, handlers, `request.go`, `response.go` and

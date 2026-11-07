@@ -1,7 +1,8 @@
 // Package projection runs the event store's subscribers, projectors and event handlers, in the
 // worker. Each subscriber reads the store in position order after its own checkpoint, and each event
 // it handles commits in one transaction with the checkpoint's move, so a subscriber sees every
-// event exactly once even across restarts, failures and several worker replicas.
+// event of the types it handles exactly once even across restarts, failures and several worker
+// replicas. Events of other types move its checkpoint, a batch of them in one transaction.
 package projection
 
 import (
@@ -85,11 +86,6 @@ func (r *Runner) Add(s repo.Subscriber) {
 	r.subscribers = append(r.subscribers, s)
 }
 
-// Subscribers lists the registered subscribers.
-func (r *Runner) Subscribers() []repo.Subscriber {
-	return r.subscribers
-}
-
 // Start runs one loop per subscriber, and one that fans the store's notifications out to them.
 func (r *Runner) Start() {
 	for _, s := range r.subscribers {
@@ -139,8 +135,13 @@ func (r *Runner) run(s repo.Subscriber, wake <-chan struct{}) {
 		return
 	}
 
+	handles := make(map[string]bool, len(s.Handles()))
+	for _, e := range s.Handles() {
+		handles[e.EventType()] = true
+	}
+
 	for r.ctx.Err() == nil {
-		full, err := r.batch(s)
+		full, err := r.batch(s, handles)
 
 		switch {
 		case full, errors.Is(err, errMoved):
@@ -184,9 +185,11 @@ func (r *Runner) logError(s repo.Subscriber, err error) {
 	}
 }
 
-// batch handles the events after s's checkpoint, at most a batch of them. It reports whether the
-// batch was full, so the loop reads again without waiting.
-func (r *Runner) batch(s repo.Subscriber) (bool, error) {
+// batch handles the events after s's checkpoint, at most a batch of them. Each event of a type s
+// handles commits with the checkpoint's move to it, past any events before it s does not handle;
+// events s does not handle at the batch's end move the checkpoint in one transaction of their own.
+// It reports whether the batch was full, so the loop reads again without waiting.
+func (r *Runner) batch(s repo.Subscriber, handles map[string]bool) (bool, error) {
 	checkpoint, err := r.store.Checkpoint(r.ctx, s.Name())
 	if err != nil {
 		return false, fmt.Errorf("Checkpoint: %w", err)
@@ -198,18 +201,37 @@ func (r *Runner) batch(s repo.Subscriber) (bool, error) {
 	}
 
 	for i := range events {
-		if err := r.handle(s, checkpoint, &events[i]); err != nil {
+		e := &events[i]
+		if !handles[e.Event.EventType()] {
+			continue
+		}
+
+		err = r.move(s, checkpoint, e.Position, func(ctx context.Context) error {
+			if err := s.Handle(ctx, e); err != nil {
+				return fmt.Errorf("handle %s at %d: %w", e.Event.EventType(), e.Position, err)
+			}
+
+			return nil
+		})
+		if err != nil {
 			return false, err
 		}
 
-		checkpoint = events[i].Position
+		checkpoint = e.Position
+	}
+
+	if n := len(events); n > 0 && checkpoint != events[n-1].Position {
+		if err := r.move(s, checkpoint, events[n-1].Position, nil); err != nil {
+			return false, err
+		}
 	}
 
 	return len(events) == r.batchSize, nil
 }
 
-// handle hands e to s and moves s's checkpoint from `from` to e, in one transaction.
-func (r *Runner) handle(s repo.Subscriber, from int64, e *entity.RecordedEvent) error {
+// move runs handle, when there is one, and moves s's checkpoint from `from` to `to`, in one
+// transaction.
+func (r *Runner) move(s repo.Subscriber, from, to int64, handle func(ctx context.Context) error) error {
 	return r.store.InTx(r.ctx, func(ctx context.Context) error {
 		locked, err := r.store.TryLock(ctx, s.Name())
 		if err != nil {
@@ -220,11 +242,13 @@ func (r *Runner) handle(s repo.Subscriber, from int64, e *entity.RecordedEvent) 
 			return errBusy
 		}
 
-		if err = s.Handle(ctx, e); err != nil {
-			return fmt.Errorf("handle %s at %d: %w", e.Event.EventType(), e.Position, err)
+		if handle != nil {
+			if err := handle(ctx); err != nil {
+				return err
+			}
 		}
 
-		moved, err := r.store.AdvanceCheckpoint(ctx, s.Name(), from, e.Position)
+		moved, err := r.store.AdvanceCheckpoint(ctx, s.Name(), from, to)
 		if err != nil {
 			return fmt.Errorf("AdvanceCheckpoint: %w", err)
 		}

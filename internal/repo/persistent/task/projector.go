@@ -33,12 +33,17 @@ func (*Projector) Tables() []string {
 	return []string{"tasks"}
 }
 
+// Handles is every task event.
+func (*Projector) Handles() []entity.Event {
+	return entity.TaskEvents()
+}
+
 // Handle -.
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }
 
-// Project applies one event to the tasks table through q. Events of other domains change nothing.
+// Project applies one event to the tasks table through q.
 func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	var err error
 
@@ -61,6 +66,8 @@ func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) er
 		err = q.SetTaskStatus(ctx, queries.SetTaskStatusParams{ID: ev.TaskID, Status: ev.To, UpdatedAt: ev.At})
 	case entity.TaskDeleted:
 		err = q.DeleteTaskRow(ctx, ev.TaskID)
+	default:
+		err = entity.ErrUnhandledEvent
 	}
 
 	if err != nil {

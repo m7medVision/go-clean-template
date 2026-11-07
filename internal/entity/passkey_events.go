@@ -76,6 +76,7 @@ func (PasskeyImported) EventType() string { return "PasskeyImported" }
 // SchemaVersion -.
 func (PasskeyImported) SchemaVersion() int { return 1 }
 
-func passkeyEvents() []Event {
+// PasskeyEvents lists the passkey events, one zero value each.
+func PasskeyEvents() []Event {
 	return []Event{PasskeyRegistered{}, PasskeyRenamed{}, PasskeyUsed{}, PasskeyDeleted{}, PasskeyImported{}}
 }

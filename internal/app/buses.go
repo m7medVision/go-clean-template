@@ -1,8 +1,6 @@
 package app
 
 import (
-	"errors"
-	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -42,11 +40,6 @@ const (
 	_waitTick = 20 * time.Millisecond
 	// _commandAttempts is how many times a command runs before a concurrent write wins for good.
 	_commandAttempts = 3
-)
-
-var (
-	errDuplicateSubscriber = errors.New("two subscribers share a name")
-	errReservedSubscriber  = errors.New("a subscriber name may not start with an underscore")
 )
 
 // newBuses builds the command and query buses with their pipelines, outermost step first:
@@ -119,13 +112,20 @@ func registerHandlers(
 	return nil
 }
 
-// subscribers lists every projector and event handler the worker runs, in the order it starts them.
-func subscribers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
-	return []repo.Subscriber{
+// projectors lists every read model's projector: a write waits for them, and each can be rebuilt.
+func projectors(pg *postgres.Postgres) []projection.Projector {
+	return []projection.Projector{
 		persistTaskRepo.NewProjector(pg),
 		persistUserRepo.NewProjector(pg),
 		persistExchangeRepo.NewProjector(pg),
 		persistPasskeyRepo.NewProjector(pg),
+	}
+}
+
+// eventHandlers lists the side effects that follow events. Nothing waits for them, and they are
+// never rebuilt: replaying one would repeat its side effects.
+func eventHandlers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
+	return []repo.Subscriber{
 		userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(pg), loginURL(cfg))},
 	}
 }
@@ -133,37 +133,4 @@ func subscribers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
 // loginURL is the sign-in page the welcome email links to.
 func loginURL(cfg *config.Config) string {
 	return strings.TrimSuffix(cfg.App.BaseURL, "/") + "/login"
-}
-
-// projectorNames lists the subscribers a write waits for: the projectors. Event handlers, such as
-// the one that enqueues the welcome email, run in the background without holding the write up.
-func projectorNames(subs []repo.Subscriber) []string {
-	names := make([]string, 0, len(subs))
-
-	for _, s := range subs {
-		if _, ok := s.(projection.Projector); ok {
-			names = append(names, s.Name())
-		}
-	}
-
-	return names
-}
-
-// checkSubscribers fails on two subscribers with one name, which would share a checkpoint, and on
-// a name starting with an underscore, which is kept for the backfill markers.
-func checkSubscribers(subs []repo.Subscriber) error {
-	seen := make(map[string]bool, len(subs))
-
-	for _, s := range subs {
-		switch {
-		case strings.HasPrefix(s.Name(), "_"):
-			return fmt.Errorf("%w: %q", errReservedSubscriber, s.Name())
-		case seen[s.Name()]:
-			return fmt.Errorf("%w: %q", errDuplicateSubscriber, s.Name())
-		}
-
-		seen[s.Name()] = true
-	}
-
-	return nil
 }

@@ -36,10 +36,10 @@ func Upcasts() []Upcast {
 // event needs an entry here; each domain's events live in its <name>_events.go file.
 func EventTypes() []Event {
 	return slices.Concat(
-		taskEvents(),
-		userEvents(),
-		conversionEvents(),
-		passkeyEvents(),
+		TaskEvents(),
+		UserEvents(),
+		ConversionEvents(),
+		PasskeyEvents(),
 	)
 }
 

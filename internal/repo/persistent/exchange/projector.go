@@ -33,12 +33,17 @@ func (*Projector) Tables() []string {
 	return []string{"exchange_history"}
 }
 
+// Handles is every exchange event.
+func (*Projector) Handles() []entity.Event {
+	return entity.ConversionEvents()
+}
+
 // Handle -.
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }
 
-// Project applies one event to exchange_history through q. Events of other domains change nothing.
+// Project applies one event to exchange_history through q.
 func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	var err error
 
@@ -53,6 +58,8 @@ func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) er
 			ConversionID: &ev.ConversionID, UserID: ev.UserID, FromCurrency: ev.From, ToCurrency: ev.To,
 			Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate, CreatedAt: ev.CreatedAt,
 		})
+	default:
+		err = entity.ErrUnhandledEvent
 	}
 
 	if err != nil {

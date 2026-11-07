@@ -34,6 +34,11 @@ type ticked struct{ N int }
 func (ticked) EventType() string  { return "Ticked" }
 func (ticked) SchemaVersion() int { return 1 }
 
+type tocked struct{}
+
+func (tocked) EventType() string  { return "Tocked" }
+func (tocked) SchemaVersion() int { return 1 }
+
 // fakeStore keeps events and checkpoints in memory. A transaction's checkpoint moves apply only
 // when fn succeeds, as Postgres would commit them; a move made by another transaction meanwhile,
 // such as a rebuild's reset, stays.
@@ -45,6 +50,7 @@ type fakeStore struct {
 	readErr     error
 	ensureFails int
 	notify      chan struct{}
+	txs         int
 }
 
 func newFakeStore(n int) *fakeStore {
@@ -112,6 +118,10 @@ type fakeTx struct {
 }
 
 func (s *fakeStore) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	s.mu.Lock()
+	s.txs++
+	s.mu.Unlock()
+
 	tx := &fakeTx{moves: map[string]int64{}}
 
 	if err := fn(context.WithValue(ctx, txKey{}, tx)); err != nil {
@@ -182,10 +192,11 @@ func (s *fakeStore) AdvanceCheckpoint(ctx context.Context, name string, from, to
 
 func (s *fakeStore) Notifications() <-chan struct{} { return s.notify }
 
-// recorder is a subscriber that keeps the positions it handled. failAt makes it fail once at that
-// position; onHandle runs before it records.
+// recorder is a subscriber that keeps the positions it handled: of Ticked events, or of the types
+// in handles when set. failAt makes it fail once at that position; onHandle runs before it records.
 type recorder struct {
 	name     string
+	handles  []entity.Event
 	mu       sync.Mutex
 	handled  []int64
 	failAt   int64
@@ -194,6 +205,14 @@ type recorder struct {
 }
 
 func (r *recorder) Name() string { return r.name }
+
+func (r *recorder) Handles() []entity.Event {
+	if r.handles != nil {
+		return r.handles
+	}
+
+	return []entity.Event{ticked{}}
+}
 
 func (r *recorder) Handle(_ context.Context, e *entity.RecordedEvent) error {
 	if r.onHandle != nil {
@@ -213,6 +232,11 @@ func (r *recorder) Handle(_ context.Context, e *entity.RecordedEvent) error {
 
 	return nil
 }
+
+// projector is a recorder with tables, so it can be rebuilt.
+type projector struct{ recorder }
+
+func (*projector) Tables() []string { return []string{"t"} }
 
 func (r *recorder) positions() []int64 {
 	r.mu.Lock()
@@ -337,18 +361,29 @@ func TestAReadFailureIsRetried(t *testing.T) {
 	require.Eventually(t, handledUpTo(s, r, 1), _eventually, _tick)
 }
 
-func TestRebuildRefusesAnEventHandler(t *testing.T) {
+// Events a subscriber does not handle move its checkpoint without reaching it, one transaction per
+// batch rather than per event.
+func TestEventsASubscriberDoesNotHandlePassItBy(t *testing.T) {
 	t.Parallel()
 
-	err := projection.Rebuild(context.Background(), nil, "r", &recorder{name: "r"})
+	s := newFakeStore(5)
+	r := &recorder{name: "r", handles: []entity.Event{tocked{}}}
 
-	require.ErrorIs(t, err, projection.ErrNotAProjector)
+	start(t, s, _poll, r)
+
+	require.Eventually(t, handledUpTo(s, r, 5), _eventually, _tick)
+	assert.Empty(t, r.positions())
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	assert.LessOrEqual(t, s.txs, 3, "five events in batches of two: one move per batch")
 }
 
 func TestRebuildRefusesAnUnknownName(t *testing.T) {
 	t.Parallel()
 
-	err := projection.Rebuild(context.Background(), nil, "missing", &recorder{name: "r"})
+	err := projection.Rebuild(context.Background(), nil, "missing", &projector{recorder{name: "r"}})
 
 	require.ErrorIs(t, err, projection.ErrUnknownProjector)
 	assert.Contains(t, err.Error(), "r")

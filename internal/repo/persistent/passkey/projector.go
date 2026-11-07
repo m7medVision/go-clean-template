@@ -33,13 +33,17 @@ func (*Projector) Tables() []string {
 	return []string{"webauthn_credentials"}
 }
 
+// Handles is every passkey event.
+func (*Projector) Handles() []entity.Event {
+	return entity.PasskeyEvents()
+}
+
 // Handle -.
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }
 
-// Project applies one event to webauthn_credentials through q. Events of other domains change
-// nothing.
+// Project applies one event to webauthn_credentials through q.
 func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	var err error
 
@@ -60,6 +64,8 @@ func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) er
 		err = q.SetPasskeyUsage(ctx, queries.SetPasskeyUsageParams{ID: ev.PasskeyID, Credential: ev.Credential, LastUsedAt: &at})
 	case entity.PasskeyDeleted:
 		err = q.DeletePasskeyRow(ctx, ev.PasskeyID)
+	default:
+		err = entity.ErrUnhandledEvent
 	}
 
 	if err != nil {

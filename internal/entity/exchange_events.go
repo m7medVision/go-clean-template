@@ -45,6 +45,7 @@ func (ConversionImported) EventType() string { return "ConversionImported" }
 // SchemaVersion -.
 func (ConversionImported) SchemaVersion() int { return 1 }
 
-func conversionEvents() []Event {
+// ConversionEvents lists the conversion events, one zero value each.
+func ConversionEvents() []Event {
 	return []Event{CurrencyConverted{}, ConversionImported{}}
 }

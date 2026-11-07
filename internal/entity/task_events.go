@@ -75,6 +75,7 @@ func (TaskImported) EventType() string { return "TaskImported" }
 // SchemaVersion -.
 func (TaskImported) SchemaVersion() int { return 1 }
 
-func taskEvents() []Event {
+// TaskEvents lists the task events, one zero value each.
+func TaskEvents() []Event {
 	return []Event{TaskCreated{}, TaskUpdated{}, TaskTransitioned{}, TaskDeleted{}, TaskImported{}}
 }

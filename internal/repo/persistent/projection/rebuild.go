@@ -12,16 +12,12 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-var (
-	// ErrUnknownProjector is a rebuild of a name no subscriber has.
-	ErrUnknownProjector = errors.New("projection: unknown projector")
-	// ErrNotAProjector is a rebuild of an event handler: replaying it would repeat its side effects,
-	// such as sending every welcome email again.
-	ErrNotAProjector = errors.New("projection: not a projector")
-)
+// ErrUnknownProjector is a rebuild of a name no projector has. An event handler is never rebuilt:
+// replaying it would repeat its side effects, such as sending every welcome email again.
+var ErrUnknownProjector = errors.New("projection: unknown projector")
 
-// Projector is a subscriber that writes nothing but its own read-model tables, so it can be
-// rebuilt from the first event.
+// Projector is a subscriber that writes nothing but its own read-model tables, so writes wait for
+// it and it can be rebuilt from the first event.
 type Projector interface {
 	repo.Subscriber
 	Tables() []string
@@ -30,25 +26,14 @@ type Projector interface {
 // Rebuild empties the tables of the projector called name and resets its checkpoint, in one
 // transaction, and wakes the worker running it, which then replays every event into them. Until it
 // catches up, reads from those tables are incomplete.
-func Rebuild(ctx context.Context, pg *postgres.Postgres, name string, subs ...repo.Subscriber) error {
-	names := make([]string, 0, len(subs))
-
-	for _, s := range subs {
-		if s.Name() != name {
-			names = append(names, s.Name())
-
-			continue
+func Rebuild(ctx context.Context, pg *postgres.Postgres, name string, projectors ...Projector) error {
+	for _, p := range projectors {
+		if p.Name() == name {
+			return rebuild(ctx, pg, p)
 		}
-
-		p, ok := s.(Projector)
-		if !ok {
-			return fmt.Errorf("%w: %s is an event handler", ErrNotAProjector, name)
-		}
-
-		return rebuild(ctx, pg, p)
 	}
 
-	return fmt.Errorf("%w: %q; known: %s", ErrUnknownProjector, name, strings.Join(names, ", "))
+	return fmt.Errorf("%w: %q; known: %s", ErrUnknownProjector, name, strings.Join(Names(projectors), ", "))
 }
 
 func rebuild(ctx context.Context, pg *postgres.Postgres, p Projector) error {
