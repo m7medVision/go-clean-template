@@ -43,10 +43,12 @@ type module struct {
 }
 
 type deps struct {
-	cfg   *config.Config
-	pg    *postgres.Postgres
+	cfg *config.Config
+	pg  *postgres.Postgres
+	l   *slog.Logger
+	// store is the event store the command handlers write through. Only the app has one: the
+	// worker's handlers record no event.
 	store repo.EventStore
-	l     *slog.Logger
 	// tokens signs and checks the auth token. Only the app has one: the worker issues none.
 	tokens *jwt.Manager
 }

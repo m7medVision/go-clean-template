@@ -38,9 +38,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("app - Run - syncSchema: %w", err)
 	}
 
-	d := &deps{cfg: cfg, pg: b.pg, store: b.store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)}
+	store := newEventStore(b.pg, cfg.CQRS.SnapshotEvery)
+	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)}
 
-	if err = eventstore.Backfill(ctx, b.pg, b.store, importers(b.pg)...); err != nil {
+	if err = eventstore.Backfill(ctx, b.pg, store, importers(b.pg)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
 	}
 

@@ -25,7 +25,7 @@ func RunWorker(ctx context.Context, cfg *config.Config) error {
 	}
 	defer b.close(ctx)
 
-	d := &deps{cfg: cfg, pg: b.pg, store: b.store, l: b.l}
+	d := &deps{cfg: cfg, pg: b.pg, l: b.l}
 
 	runner, err := newRunner(d)
 	if err != nil {

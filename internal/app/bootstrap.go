@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/tracing"
@@ -16,11 +15,10 @@ import (
 )
 
 // bootstrap is what both binaries start from: the logger, tracing, the metrics registry, the
-// database, the event store and the buses, with no handler registered yet.
+// database and the buses, with no handler registered yet.
 type bootstrap struct {
 	l           *slog.Logger
 	pg          *postgres.Postgres
-	store       repo.EventStore
 	buses       cqrs.Buses
 	metrics     *prometheus.Registry
 	stopTracing tracing.ShutdownFunc
@@ -50,7 +48,6 @@ func newBootstrap(ctx context.Context, cfg *config.Config, service string) (*boo
 	return &bootstrap{
 		l:           l,
 		pg:          pg,
-		store:       newEventStore(pg, cfg.CQRS.SnapshotEvery),
 		buses:       cqrs.Buses{Commands: cmds, Queries: qs},
 		metrics:     metrics,
 		stopTracing: stopTracing,
