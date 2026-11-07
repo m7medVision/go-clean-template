@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
@@ -21,7 +22,7 @@ type Importer struct {
 	store repo.EventStore
 }
 
-var _ repo.Importer = (*Importer)(nil)
+var _ eventstore.Importer = (*Importer)(nil)
 
 // ImportedConversion is one row to import: the conversion, whose it is, its ID and when it was made.
 type ImportedConversion struct {

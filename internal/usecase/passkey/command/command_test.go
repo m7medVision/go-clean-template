@@ -90,17 +90,33 @@ func (f *fixture) events(id entity.PasskeyID) []entity.Event {
 	return f.store.Events(entity.PasskeyStreamID(id))
 }
 
-// burnStore is an in-memory webauthn_used_challenges: BurnChallenge succeeds once per hash.
+// burnStore is an in-memory webauthn_used_challenges: Burn succeeds once per hash, and takes the
+// burn back when then fails, as the rolled-back transaction would.
 type burnStore struct {
-	mu        sync.Mutex
-	used      map[string]time.Time
-	burnErr   error
-	expireErr error
+	mu      sync.Mutex
+	used    map[string]time.Time
+	burnErr error
 }
 
 func newBurnStore() *burnStore { return &burnStore{used: map[string]time.Time{}} }
 
-func (b *burnStore) BurnChallenge(_ context.Context, hash []byte, expiresAt time.Time) error {
+func (b *burnStore) Burn(ctx context.Context, hash []byte, expiresAt time.Time, then func(ctx context.Context) error) error {
+	if err := b.mark(hash, expiresAt); err != nil {
+		return err
+	}
+
+	if err := then(ctx); err != nil {
+		b.mu.Lock()
+		delete(b.used, string(hash))
+		b.mu.Unlock()
+
+		return err
+	}
+
+	return nil
+}
+
+func (b *burnStore) mark(hash []byte, expiresAt time.Time) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -116,10 +132,3 @@ func (b *burnStore) BurnChallenge(_ context.Context, hash []byte, expiresAt time
 
 	return nil
 }
-
-func (b *burnStore) DeleteExpiredChallenges(context.Context) error { return b.expireErr }
-
-// inline runs a transaction's work as it is: the memstore has no transactions to join.
-type inline struct{}
-
-func (inline) InTx(ctx context.Context, fn func(ctx context.Context) error) error { return fn(ctx) }

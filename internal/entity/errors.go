@@ -74,54 +74,10 @@ func (k Kind) LogLevel() (slog.Level, bool) {
 }
 
 var (
-	ErrUserNotFound      = newError(KindNotFound, "user not found")
-	ErrUserAlreadyExists = newError(KindExists, "user already exists")
-	// ErrOIDCIdentityTaken is a first SSO sign-in of an identity another sign-in has just created a
-	// user for: the race's loser signs in to the winner's user.
-	ErrOIDCIdentityTaken      = newError(KindExists, "user already exists")
-	ErrInvalidCredentials     = newError(KindUnauthenticated, "invalid credentials")
-	ErrInvalidUsername        = newError(KindInvalid, "username must be 3–255 characters")
-	ErrInvalidEmail           = newError(KindInvalid, "email must be an address such as name@example.com")
-	ErrWeakPassword           = newError(KindInvalid, "password must be at least 6 characters")
-	ErrTaskNotFound           = newError(KindNotFound, "task not found")
-	ErrTaskForbidden          = newError(KindForbidden, "forbidden")
-	ErrInvalidTaskTitle       = newError(KindInvalid, "title must be 1–255 characters")
-	ErrInvalidTaskDescription = newError(KindInvalid, "description must be at most 1000 characters")
-	ErrInvalidTaskStatus      = newError(KindInvalid, "invalid task status")
 	// ErrAdminRequired is a request only a caller holding RoleAdmin may make.
-	ErrAdminRequired     = newError(KindForbidden, "admin role required")
-	ErrInvalidTransition = newError(KindInvalid, "invalid status transition")
+	ErrAdminRequired = newError(KindForbidden, "admin role required")
 	// ErrInvalidPage is a list asked for with a negative offset or a limit outside 0–MaxPageLimit.
-	ErrInvalidPage         = newError(KindInvalid, "limit must be 1–100 and offset at least 0")
-	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
-	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
-	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")
-	ErrInvalidAmount       = newError(KindInvalid,
-		"amount must be positive, with at most 15 digits before the point and 8 after it")
-	ErrInvalidPasskeyName = newError(KindInvalid, "passkey name must be at most 64 characters")
-	// ErrOIDCDisabled is an SSO request to an app with no OpenID Connect provider configured.
-	ErrOIDCDisabled = newError(KindNotFound, "sso sign-in is not configured")
-	// ErrOIDCUnavailable is an SSO sign-in while the OpenID Connect provider cannot be reached.
-	ErrOIDCUnavailable = newError(KindUpstream, "sso provider unavailable")
-	// ErrOIDCCeremonyInvalid is an SSO sign-in that cannot complete: a bad, expired or replayed
-	// state token, code or ID token, or an ID token without an email.
-	ErrOIDCCeremonyInvalid = newError(KindUnauthenticated, "invalid sso sign-in")
-	// ErrAccountConflict is an SSO sign-in whose email or username already belongs to another account.
-	// Accounts are never linked by email, so the sign-in is refused.
-	ErrAccountConflict = newError(KindExists,
-		"an account with this email or username already exists; sign in with it instead")
-	ErrPasskeyNotFound = newError(KindNotFound, "passkey not found")
-	ErrPasskeyExists   = newError(KindExists, "passkey already registered")
-	// ErrPasskeyCeremonyInvalid is a WebAuthn registration that cannot complete: a bad, expired or
-	// foreign ceremony token, or a credential response that does not verify against it.
-	ErrPasskeyCeremonyInvalid = newError(KindInvalid, "invalid passkey ceremony")
-	// ErrPasskeyLoginInvalid is a passkey sign-in that cannot complete, for the same reasons.
-	ErrPasskeyLoginInvalid = newError(KindUnauthenticated, "invalid passkey login")
-	// ErrPasskeyChallengeUsed is a login ceremony whose challenge has already completed once: a replay.
-	ErrPasskeyChallengeUsed = newError(KindConflict, "passkey login already completed")
-	// ErrPasskeyReauthRequired is a request to add a passkey from a sign-in older than the allowed
-	// age: the caller must sign in again first. Clients match on its message, so it must not change.
-	ErrPasskeyReauthRequired = newError(KindUnauthenticated, "reauthentication required")
+	ErrInvalidPage = newError(KindInvalid, "limit must be 1–100 and offset at least 0")
 	// ErrConcurrencyConflict is an append whose stream moved on since the aggregate was loaded:
 	// another write got there first. The command bus retries the command before giving up.
 	ErrConcurrencyConflict = newError(KindConflict, "the record changed while this request ran: try again")
@@ -132,7 +88,6 @@ var (
 	// (tools/gen).
 	ErrNotImplemented = newError(KindNotImplemented, "not implemented")
 
-	ErrUnknownEmail = errors.New("unknown email template")
 	// ErrStreamNotFound is a load of a stream that has no events. Command handlers turn it into
 	// their domain's not-found error.
 	ErrStreamNotFound = errors.New("stream not found")

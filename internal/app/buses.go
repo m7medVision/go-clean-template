@@ -104,7 +104,7 @@ func registerHandlers(
 	})
 	passkey.Register(cmds, qs, &passkey.Deps{
 		Ceremony: passkeyCeremony, Store: store, Users: persistUserRepo.NewReadModel(pg),
-		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Tx: pg, Sessions: sessions,
+		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Sessions: sessions,
 	})
 	oidc.Register(cmds, qs, oidc.Deps{SSO: signIn, Store: store, Sessions: sessions})
 	mail.Register(cmds, qs, mailDeps)

@@ -206,9 +206,9 @@ integration-test: ### run integration-test
 	go clean -testcache && go test -v ./integration-test/...
 .PHONY: integration-test
 
-mock: ### run mockgen
-	mkdir -p ./internal/repo/repomock
-	mockgen -source ./internal/repo/contracts.go -package repomock > ./internal/repo/repomock/repomock.go
+mock: ### run mockgen: one mock file per contract file, from its go:generate directive
+	rm -rf ./internal/repo/repomock
+	go generate ./internal/repo
 .PHONY: mock
 
 schema-apply: ### apply desired schema to the database (Atlas)

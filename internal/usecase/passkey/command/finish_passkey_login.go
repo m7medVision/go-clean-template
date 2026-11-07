@@ -33,7 +33,6 @@ type FinishPasskeyLoginHandler struct {
 	Store    repo.EventStore
 	Users    repo.UserReadModel
 	Guard    repo.ChallengeGuard
-	Tx       repo.Transactor
 	Sessions repo.SessionIssuer
 	Now      func() time.Time
 }
@@ -108,21 +107,14 @@ func loginFailed(err error) error {
 	return fmt.Errorf("FinishPasskeyLogin: %w", err)
 }
 
-// record burns the login's challenge and records the passkey's use, in one transaction.
+// record burns the login's challenge and records the passkey's use: the guard saves the use in the
+// burn's transaction, so both commit or neither does.
 func (h *FinishPasskeyLoginHandler) record(
 	ctx context.Context, login *entity.PasskeyLogin, passkey *entity.PasskeyAggregate,
 ) (entity.Written, error) {
 	var written entity.Written
 
-	err := h.Tx.InTx(ctx, func(ctx context.Context) error {
-		if err := h.Guard.DeleteExpiredChallenges(ctx); err != nil {
-			return fmt.Errorf("h.Guard.DeleteExpiredChallenges: %w", err)
-		}
-
-		if err := h.Guard.BurnChallenge(ctx, login.ChallengeHash, login.ExpiresAt); err != nil {
-			return fmt.Errorf("h.Guard.BurnChallenge: %w", err)
-		}
-
+	err := h.Guard.Burn(ctx, login.ChallengeHash, login.ExpiresAt, func(ctx context.Context) error {
 		if err := passkey.Use(login.UserID, login.Credential, aggregate.Now(h.Now)); err != nil {
 			return err
 		}
@@ -133,6 +125,9 @@ func (h *FinishPasskeyLoginHandler) record(
 
 		return err
 	})
+	if err != nil {
+		return entity.Written{}, fmt.Errorf("h.Guard.Burn: %w", err)
+	}
 
-	return written, err
+	return written, nil
 }

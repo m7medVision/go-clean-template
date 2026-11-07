@@ -16,19 +16,13 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo reads webauthn_credentials and keeps the used login challenges. Its queries join the
-// transaction the context carries, so a burn commits with the login's events.
+// Repo reads webauthn_credentials. Its queries join the transaction the context carries.
 type Repo struct {
 	pg *postgres.Postgres
 }
 
 // NewReadModel returns the passkey read model.
 func NewReadModel(pg *postgres.Postgres) repo.PasskeyReadModel {
-	return &Repo{pg: pg}
-}
-
-// NewGuard returns the used-challenge guard.
-func NewGuard(pg *postgres.Postgres) repo.ChallengeGuard {
 	return &Repo{pg: pg}
 }
 
@@ -39,16 +33,16 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 // Get returns the user's passkey id. Another user's passkey is ErrPasskeyNotFound, the same as one
 // that does not exist.
 func (r *Repo) Get(ctx context.Context, userID string, id entity.PasskeyID) (entity.Passkey, error) {
-	passkey, err := r.GetByID(ctx, id)
-	if err != nil {
-		return entity.Passkey{}, err
-	}
-
-	if passkey.UserID != userID {
+	passkey, err := r.q(ctx).GetPasskey(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && passkey.UserID != userID) {
 		return entity.Passkey{}, entity.ErrPasskeyNotFound
 	}
 
-	return passkey, nil
+	if err != nil {
+		return entity.Passkey{}, fmt.Errorf("PasskeyReadModel - Get - r.q(ctx).GetPasskey: %w", err)
+	}
+
+	return entity.Passkey(passkey), nil
 }
 
 // ListByUser returns the user's passkeys, oldest first.
@@ -66,42 +60,37 @@ func (r *Repo) ListByUser(ctx context.Context, userID string) ([]entity.Passkey,
 	return passkeys, nil
 }
 
-// GetByID -.
-func (r *Repo) GetByID(ctx context.Context, id entity.PasskeyID) (entity.Passkey, error) {
-	passkey, err := r.q(ctx).GetPasskey(ctx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return entity.Passkey{}, entity.ErrPasskeyNotFound
-		}
-
-		return entity.Passkey{}, fmt.Errorf("PasskeyReadModel - GetByID - r.q(ctx).GetPasskey: %w", err)
-	}
-
-	return entity.Passkey(passkey), nil
+// Guard keeps the used login challenges in webauthn_used_challenges.
+type Guard struct {
+	pg *postgres.Postgres
 }
 
-// BurnChallenge records a login challenge as used until expiresAt. The insert is the check: a hash
-// already present inserts no row, so two concurrent finishes of one ceremony cannot both succeed.
-func (r *Repo) BurnChallenge(ctx context.Context, hash []byte, expiresAt time.Time) error {
-	_, err := r.q(ctx).BurnChallenge(ctx, queries.BurnChallengeParams{ChallengeHash: hash, ExpiresAt: expiresAt})
-	if err != nil {
+// NewGuard returns the used-challenge guard.
+func NewGuard(pg *postgres.Postgres) repo.ChallengeGuard {
+	return &Guard{pg: pg}
+}
+
+// Burn forgets the challenges whose ceremonies have expired (a token that old is rejected before
+// its challenge is ever looked up), records hash as used until expiresAt, and runs then, in one
+// transaction. The insert is the check: a hash already present inserts no row, so two concurrent
+// finishes of one ceremony cannot both succeed.
+func (g *Guard) Burn(ctx context.Context, hash []byte, expiresAt time.Time, then func(ctx context.Context) error) error {
+	return g.pg.InTx(ctx, func(ctx context.Context) error {
+		q := queries.New(g.pg.Executor(ctx))
+
+		if err := q.DeleteExpiredChallenges(ctx); err != nil {
+			return fmt.Errorf("ChallengeGuard - Burn - q.DeleteExpiredChallenges: %w", err)
+		}
+
+		_, err := q.BurnChallenge(ctx, queries.BurnChallengeParams{ChallengeHash: hash, ExpiresAt: expiresAt})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ErrPasskeyChallengeUsed
 		}
 
-		return fmt.Errorf("PasskeyReadModel - BurnChallenge - r.q(ctx).BurnChallenge: %w", err)
-	}
+		if err != nil {
+			return fmt.Errorf("ChallengeGuard - Burn - q.BurnChallenge: %w", err)
+		}
 
-	return nil
-}
-
-// DeleteExpiredChallenges forgets used challenges whose ceremonies have expired: a token that old
-// is rejected before its challenge is ever looked up.
-func (r *Repo) DeleteExpiredChallenges(ctx context.Context) error {
-	err := r.q(ctx).DeleteExpiredChallenges(ctx)
-	if err != nil {
-		return fmt.Errorf("PasskeyReadModel - DeleteExpiredChallenges - r.q(ctx).DeleteExpiredChallenges: %w", err)
-	}
-
-	return nil
+		return then(ctx)
+	})
 }

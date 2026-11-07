@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -155,5 +156,5 @@ func TestExecutorIsThePoolOutsideATransaction(t *testing.T) {
 	_, ok := postgres.TxFrom(context.Background())
 
 	assert.False(t, ok)
-	assert.Equal(t, pg.Pool, pg.Executor(context.Background()))
+	assert.IsType(t, (*pgxpool.Pool)(nil), pg.Executor(context.Background()))
 }

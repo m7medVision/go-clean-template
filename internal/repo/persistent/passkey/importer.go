@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
@@ -18,7 +19,7 @@ type Importer struct {
 	store repo.EventStore
 }
 
-var _ repo.Importer = (*Importer)(nil)
+var _ eventstore.Importer = (*Importer)(nil)
 
 // NewImporter returns the passkey importer, reading pg and saving through store.
 func NewImporter(pg *postgres.Postgres, store repo.EventStore) *Importer {

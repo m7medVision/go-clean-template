@@ -15,25 +15,29 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo -.
+// Repo reads exchange_history. Its queries join the transaction the context carries.
 type Repo struct {
-	q *queries.Queries
+	pg *postgres.Postgres
 }
 
 // NewReadModel returns the exchange read model.
 func NewReadModel(pg *postgres.Postgres) repo.ExchangeReadModel {
-	return &Repo{queries.New(pg.Pool)}
+	return &Repo{pg: pg}
+}
+
+func (r *Repo) q(ctx context.Context) *queries.Queries {
+	return queries.New(r.pg.Executor(ctx))
 }
 
 // Conversion -.
 func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
-	row, err := r.q.GetConversion(ctx, queries.GetConversionParams{ConversionID: &conversionID, UserID: userID})
+	row, err := r.q(ctx).GetConversion(ctx, queries.GetConversionParams{ConversionID: &conversionID, UserID: userID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Conversion{}, entity.ErrConversionNotFound
 		}
 
-		return entity.Conversion{}, fmt.Errorf("ExchangeReadModel - Conversion - r.q.GetConversion: %w", err)
+		return entity.Conversion{}, fmt.Errorf("ExchangeReadModel - Conversion - r.q(ctx).GetConversion: %w", err)
 	}
 
 	return entity.Conversion{
@@ -44,16 +48,16 @@ func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (ent
 
 // History returns one page of the user's conversions, newest first, and their total count.
 func (r *Repo) History(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Conversion], error) {
-	total, err := r.q.CountExchanges(ctx, userID)
+	total, err := r.q(ctx).CountExchanges(ctx, userID)
 	if err != nil {
-		return entity.List[entity.Conversion]{}, fmt.Errorf("ExchangeReadModel - History - r.q.CountExchanges: %w", err)
+		return entity.List[entity.Conversion]{}, fmt.Errorf("ExchangeReadModel - History - r.q(ctx).CountExchanges: %w", err)
 	}
 
-	rows, err := r.q.ListExchanges(ctx, queries.ListExchangesParams{
+	rows, err := r.q(ctx).ListExchanges(ctx, queries.ListExchangesParams{
 		UserID: userID, Limit: int64(page.Size()), Offset: int64(page.Offset),
 	})
 	if err != nil {
-		return entity.List[entity.Conversion]{}, fmt.Errorf("ExchangeReadModel - History - r.q.ListExchanges: %w", err)
+		return entity.List[entity.Conversion]{}, fmt.Errorf("ExchangeReadModel - History - r.q(ctx).ListExchanges: %w", err)
 	}
 
 	history := make([]entity.Conversion, 0, len(rows))

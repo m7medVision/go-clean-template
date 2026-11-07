@@ -6,6 +6,22 @@ import (
 	"time"
 )
 
+var (
+	ErrInvalidPasskeyName = newError(KindInvalid, "passkey name must be at most 64 characters")
+	ErrPasskeyNotFound    = newError(KindNotFound, "passkey not found")
+	ErrPasskeyExists      = newError(KindExists, "passkey already registered")
+	// ErrPasskeyCeremonyInvalid is a WebAuthn registration that cannot complete: a bad, expired or
+	// foreign ceremony token, or a credential response that does not verify against it.
+	ErrPasskeyCeremonyInvalid = newError(KindInvalid, "invalid passkey ceremony")
+	// ErrPasskeyLoginInvalid is a passkey sign-in that cannot complete, for the same reasons.
+	ErrPasskeyLoginInvalid = newError(KindUnauthenticated, "invalid passkey login")
+	// ErrPasskeyChallengeUsed is a login ceremony whose challenge has already completed once: a replay.
+	ErrPasskeyChallengeUsed = newError(KindConflict, "passkey login already completed")
+	// ErrPasskeyReauthRequired is a request to add a passkey from a sign-in older than the allowed
+	// age: the caller must sign in again first. Clients match on its message, so it must not change.
+	ErrPasskeyReauthRequired = newError(KindUnauthenticated, "reauthentication required")
+)
+
 // PasskeyID is a WebAuthn credential ID: raw bytes in the database, unpadded base64url (the
 // encoding WebAuthn JSON uses) in text and JSON.
 type PasskeyID []byte

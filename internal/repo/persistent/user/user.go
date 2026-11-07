@@ -15,21 +15,25 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo reads the users table.
+// Repo reads the users table. Its queries join the transaction the context carries.
 type Repo struct {
-	q *queries.Queries
+	pg *postgres.Postgres
 }
 
 // NewReadModel returns the user read model.
 func NewReadModel(pg *postgres.Postgres) repo.UserReadModel {
-	return &Repo{queries.New(pg.Pool)}
+	return &Repo{pg: pg}
+}
+
+func (r *Repo) q(ctx context.Context) *queries.Queries {
+	return queries.New(r.pg.Executor(ctx))
 }
 
 // ByID -.
 func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
-	user, err := r.q.GetUserByID(ctx, id)
+	user, err := r.q(ctx).GetUserByID(ctx, id)
 	if err != nil {
-		return entity.User{}, mapGetError(err, "ByID - r.q.GetUserByID")
+		return entity.User{}, mapGetError(err, "ByID - r.q(ctx).GetUserByID")
 	}
 
 	return entity.User(user), nil
@@ -37,9 +41,9 @@ func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
 
 // ByEmail -.
 func (r *Repo) ByEmail(ctx context.Context, email string) (entity.User, error) {
-	user, err := r.q.GetUserByEmail(ctx, email)
+	user, err := r.q(ctx).GetUserByEmail(ctx, email)
 	if err != nil {
-		return entity.User{}, mapGetError(err, "ByEmail - r.q.GetUserByEmail")
+		return entity.User{}, mapGetError(err, "ByEmail - r.q(ctx).GetUserByEmail")
 	}
 
 	return entity.User(user), nil

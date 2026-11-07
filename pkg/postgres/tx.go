@@ -24,7 +24,7 @@ type txKey struct{}
 // rolls back when fn fails or panics. Inside a transaction already, InTx joins it instead of
 // opening a second one, and the outermost call decides the outcome.
 func (p *Postgres) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	return inTx(ctx, p.Pool.Begin, fn)
+	return inTx(ctx, p.pool.Begin, fn)
 }
 
 // Executor returns the transaction ctx carries, or the pool when it carries none.
@@ -33,7 +33,7 @@ func (p *Postgres) Executor(ctx context.Context) DBTX {
 		return tx
 	}
 
-	return p.Pool
+	return p.pool
 }
 
 // TxFrom returns the transaction ctx carries.

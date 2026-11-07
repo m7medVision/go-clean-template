@@ -5,6 +5,15 @@ import (
 	"unicode/utf8"
 )
 
+var (
+	ErrTaskNotFound           = newError(KindNotFound, "task not found")
+	ErrTaskForbidden          = newError(KindForbidden, "forbidden")
+	ErrInvalidTaskTitle       = newError(KindInvalid, "title must be 1–255 characters")
+	ErrInvalidTaskDescription = newError(KindInvalid, "description must be at most 1000 characters")
+	ErrInvalidTaskStatus      = newError(KindInvalid, "invalid task status")
+	ErrInvalidTransition      = newError(KindInvalid, "invalid status transition")
+)
+
 const (
 	// MaxTaskTitleLen is the longest title a task may have, in characters; the shortest is 1.
 	MaxTaskTitleLen = 255

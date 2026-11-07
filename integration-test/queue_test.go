@@ -43,7 +43,7 @@ func queueRowExists(ctx context.Context, t *testing.T, pg *postgres.Postgres, id
 
 	var exists bool
 
-	err := pg.Pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM queue_messages WHERE id = $1)", id).Scan(&exists)
+	err := pg.Executor(ctx).QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM queue_messages WHERE id = $1)", id).Scan(&exists)
 	require.NoError(t, err)
 
 	return exists

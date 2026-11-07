@@ -78,7 +78,7 @@ func TestSaveStampsTheContextsMetadata(t *testing.T) {
 
 	var raw json.RawMessage
 
-	err = pg.Pool.QueryRow(ctx, "SELECT metadata FROM events WHERE stream_id = $1", n.StreamID()).Scan(&raw)
+	err = pg.Executor(ctx).QueryRow(ctx, "SELECT metadata FROM events WHERE stream_id = $1", n.StreamID()).Scan(&raw)
 	require.NoError(t, err)
 
 	var md entity.Metadata
@@ -99,7 +99,7 @@ type tailer struct {
 func (tl *tailer) read(ctx context.Context, t *testing.T) {
 	t.Helper()
 
-	rows, err := tl.pg.Pool.Query(ctx,
+	rows, err := tl.pg.Executor(ctx).Query(ctx,
 		"SELECT position FROM events WHERE stream_id LIKE $1 AND position > $2 ORDER BY position", tl.pattern, tl.cursor)
 	require.NoError(t, err)
 

@@ -86,8 +86,8 @@ breaking (`!`) commit merged to master is released as the next version (`docs/re
 ```
 cmd/app → internal/app → internal/controller/*  ── sends commands and queries on pkg/cqrs ──┐
                        → internal/usecase/<domain> (handlers, registered on the buses) ◀───┘
-                       → internal/repo/*        ── implements internal/repo/contracts.go
-internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → internal/entity
+                       → internal/repo/*        ── implements internal/repo/*.go (the contracts)
+internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entity
 ```
 
 - `internal/entity` — domain types (the read shapes the API returns), aggregates and their events,
@@ -96,8 +96,11 @@ internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → intern
   message type and its handler, plus `register.go`, which registers them on the buses. `aggregate/`
   (load, change, save) and `behavior/` (the app's pipeline steps) are shared by every domain. There
   are no use-case interfaces: a controller builds its domain's command or query and sends it.
-- `internal/repo/contracts.go` — the interfaces handlers call: `EventStore`, one read model per
-  domain, `Subscriber`, `QueueRepo` and the outbound ports. Implemented by
+- `internal/repo/` — the interfaces handlers call: `contracts.go` holds the shared ones
+  (`EventStore`, `Subscriber`, `ProjectionCheckpoints`, `SessionIssuer`), and one file per domain
+  (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) holds its read model and
+  outbound ports. A port only infrastructure uses lives with its consumer (`notify.Queue`,
+  `eventstore.Importer`, `worker.Queue`). Implemented by
   `internal/repo/persistent/eventstore` (the event store), `persistent/projection` (the runner the
   worker runs), `persistent/<domain>/` (each domain's read model, projector and importer), and
   `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
@@ -152,9 +155,11 @@ Layout rules:
 - Package name matches the directory name. A repository package shares its name with the use-case
   package of the same domain, so `internal/app` imports the repositories under aliases
   (`persistTaskRepo`, …).
-- Repository constructors take their dependencies as arguments. `New` and `NewReadModel` return the
-  *interface* from `contracts.go`; `NewProjector` and `NewImporter`
-  return their struct, which `internal/app` lists as a `repo.Subscriber` or `repo.Importer`. A handler is a struct
+- Repository constructors take their dependencies as arguments. `NewReadModel` returns the
+  *interface* from its contract file; `NewProjector` and `NewImporter`
+  return their struct, which `internal/app` lists as a `repo.Subscriber` or `eventstore.Importer`.
+  Every repository queries through `pg.Executor(ctx)`, so it joins the transaction the context
+  carries; the pool itself is unexported. A handler is a struct
   whose exported fields are its dependencies, filled in by `register.go`. No package-level state —
   `gochecknoglobals` and `gochecknoinits` are on.
 - Unexported package constants are prefixed with an underscore (`_defaultEntityCap`,
@@ -269,13 +274,15 @@ loads an aggregate, calls its behavior method and saves what it recorded (`aggre
 writes its tables, so read-model tables have no foreign keys. Uniqueness across records (emails,
 usernames, SSO identities) is a claim saved with the events, not a unique index on a read model.
 
-**Mocks are generated, not written.** `internal/repo/repomock/repomock.go` comes from the
-`go:generate` directive in `internal/repo/contracts.go`. After any repository contract change run
-`make mock` before running tests. Query handlers are tested with these mocks; command handlers
+**Mocks are generated, not written.** Each file in `internal/repo/repomock/` comes from the
+`go:generate` directive of the contract file it is named after (`repo/task.go` →
+`repomock/task.go`); only ports a test constructs get one, and `-exclude_interfaces` leaves out the
+rest. After any repository contract change run `make mock` before running tests. Query handlers are tested with these mocks; command handlers
 against `internal/repo/memstore`; projectors against a fake of sqlc's `Querier`.
 
-**Error style.** Domain failures are sentinel errors in `internal/entity/errors.go`
-(`ErrTaskNotFound`, `ErrTaskForbidden`, `ErrInvalidTransition`, …), each an `*entity.Error` built
+**Error style.** Domain failures are sentinel errors in their domain's entity file
+(`ErrTaskNotFound`, `ErrTaskForbidden`, `ErrInvalidTransition`, … in `internal/entity/task.go`;
+the ones every domain shares in `errors.go`), each an `*entity.Error` built
 with its kind and the message callers see. Every other error is wrapped with the layer path:
 `fmt.Errorf("CreateTask - aggregate.Save: %w", err)`, and is internal: logged, never shown. The
 `err113` linter rejects `errors.New`/`fmt.Errorf` for new dynamic errors — add a sentinel to `entity`
@@ -303,7 +310,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 ## Generated files — do not hand-edit
 
 - `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
-- `internal/repo/repomock/repomock.go` ← `make mock`.
+- `internal/repo/repomock/*.go` ← `make mock`, from the `go:generate` directives in `internal/repo/`.
 - `internal/repo/persistent/queries/schema/schema.sql` ← `make sqlc`, rendered by Atlas from
   `internal/app/schema/*.hcl`. It exists only because sqlc cannot read HCL; CI fails when it is stale.
 - `internal/repo/persistent/queries/*.go` ← `make sqlc` from the `.sql` query files beside them,
@@ -353,13 +360,13 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 - The queue is one ordinary table, `queue_messages` (`internal/app/schema/queue_messages.hcl`), on the
   stock `postgres:18.6-alpine` image: no extension, no custom image. Its queries are in
   `internal/repo/persistent/queries/queue.sql` (sqlc), and `internal/repo/persistent/queue` implements
-  `repo.QueueRepo` with them.
+  `worker.Queue` (and `notify.Queue`, its `Send`) with them.
 - `ReadQueueMessages` claims and hides in one statement (`FOR UPDATE SKIP LOCKED` in a CTE, then
   `UPDATE … SET visible_at = now() + vt`). Keep it one statement; splitting it lets two workers take
   the same message.
-- `worker.Message` lives in `pkg/worker`, and `repo.QueueRepo` returns it, so the repo satisfies
-  `worker.Queue` with no adapter (`var _ worker.Queue` in `queue.go`). The sqlc row converts with
-  `worker.Message(row)`; a column change that breaks the field order fails to compile.
+- `worker.Message` lives in `pkg/worker`, and the queue returns it, so the repo satisfies
+  `worker.Queue` with no adapter (`var _ worker.Queue` in `queue.go`). The queue maps each sqlc row
+  to it field by field, so the table's column order never shapes a `pkg/` type.
 - `pkg/worker` is at-least-once: a handler returning `nil` deletes the message; an error leaves it
   to reappear after `WORKER_VISIBILITY_TIMEOUT`. Handlers must be idempotent; a body that can never
   decode should be logged and acknowledged (`return nil`), or it redelivers forever.
@@ -367,16 +374,16 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   consumer. Queue handlers send commands on the buses from `initUseCases`, like the servers. The
   Dockerfile builds `/app` and `/worker` into one image; the compose `worker` service runs
   `/worker`. Only the app applies the schema.
-- A command or event handler enqueues by taking `repo.QueueRepo` and calling `Send`, which joins the
-  transaction in `ctx`: from an event handler, the message commits with the checkpoint.
-- A handler can also enqueue through a port that hides the queue: the `send-welcome-email` event
-  handler (`internal/usecase/user/event`) calls `repo.UserNotifier.Welcome`, implemented by
+- A handler enqueues through a port that hides the queue, whose implementation calls the queue's
+  `Send`, which joins the transaction in `ctx`: from an event handler, the message commits with the
+  checkpoint. The `send-welcome-email` event handler (`internal/usecase/user/event`) calls `repo.UserNotifier.Welcome`, implemented by
   `internal/repo/notify`.
 - Email goes through the `mail` queue (`entity.EmailQueue`): the sender writes the body with
   `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
   handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
   It sends the `DeliverEmail` command (`internal/usecase/mail`), whose handler renders with
-  `internal/repo/mailtmpl` and sends through `pkg/smtp`; only the worker sends it. `initUseCases`
+  `internal/repo/mailtmpl` into a `repo.RenderedEmail` and sends through `internal/repo/mailer`,
+  which hands it to `pkg/smtp`; only the worker sends it. `initUseCases`
   registers it for both binaries, and fails if a template is broken.
 - Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
   integration stack.
@@ -505,7 +512,7 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
 2. **A query:** add `internal/usecase/<domain>/query/<name>.go`: the query type (embedding
    `cqrs.Query[R]`, R being what it answers) and
    its handler, which reads only the domain's read model. A new read-model method goes in
-   `internal/repo/contracts.go` and `internal/repo/persistent/<domain>/<domain>.go`, with its SQL in
+   `internal/repo/<domain>.go` and `internal/repo/persistent/<domain>/<domain>.go`, with its SQL in
    `queries/<domain>.sql` and `make sqlc`; then `make mock`. Test the
    handler against `internal/repo/repomock`.
 3. **Register it**: one line in `internal/usecase/<domain>/register.go`. A message with no handler is
@@ -559,13 +566,13 @@ generated files copy — read it before writing. The steps are what the generate
 1. **Entity** — `internal/entity/<domain>.go` with the read shape the API returns;
    `<domain>_aggregate.go` with the aggregate (embedding `entity.AggregateBase`, its stream ID
    `<domain>-<id>`, `Apply`, and the behavior methods that record events); `<domain>_events.go` with
-   the events, added to `EventTypes()`. New sentinel errors go in `internal/entity/errors.go`. A
+   the events, added to `EventTypes()`. Its sentinel errors go in `internal/entity/<domain>.go`. A
    value unique across records is a claim (`entity.Claim`), saved with the events.
 2. **Schema** — the read-model table as `internal/app/schema/<domain>.hcl` (Atlas declarative
    workflow), with no foreign keys: its projector advances on its own. Then `make sqlc` to refresh
    the rendered schema sqlc reads; set any new env vars in `docker-compose.yml` and `.env.example`.
-3. **Read-model contract** — add `<Domain>ReadModel` to `internal/repo/contracts.go`, then
-   `make mock`.
+3. **Read-model contract** — add `<Domain>ReadModel` to `internal/repo/<domain>.go`, with a
+   `go:generate` directive like `task.go`'s, then `make mock`.
 4. **Read model and projector** — in `internal/repo/persistent/<domain>/`: `<domain>.go` (`package
    <domain>`, the read-model methods calling the sqlc queries from `queries/<domain>.sql`, driver
    errors mapped to sentinels, `NewReadModel` returning the interface), and `projector.go`

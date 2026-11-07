@@ -68,9 +68,10 @@ on the command bus with the handler's `ctx`, and return its error.
 ### Adding a queue
 
 1. Handler: `internal/controller/worker/v1/<name>.go`, registered in `v1/router.go`.
-2. Producer: give the command or event handler a `repo.QueueRepo` and call `Send(ctx, "<name>", body)`.
-   `Send` joins the transaction in `ctx`, so from an event handler the message commits with the
-   handler's checkpoint, exactly once.
+2. Producer: give the command or event handler a port whose implementation calls the queue's
+   `Send(ctx, "<name>", body)` (`*queue.Repo`, through a small interface of its own, as
+   `notify.Queue` does). `Send` joins the transaction in `ctx`, so from an event handler the message
+   commits with the handler's checkpoint, exactly once.
 
 ## Email
 
@@ -111,8 +112,9 @@ part with `text/template`.
 [`pkg/smtp`](../pkg/smtp) is a client on the standard library's `net/smtp`: one connection per
 message, STARTTLS when the server offers it, PLAIN auth when a username is set. A message goes out as
 `multipart/alternative` (text, then HTML, both quoted-printable), with a Q-encoded subject that cannot
-carry a header. It implements `repo.Mailer`; another provider is another implementation of that
-interface.
+carry a header. [`internal/repo/mailer`](../internal/repo/mailer) implements `repo.Mailer` on it,
+turning the `repo.RenderedEmail` that `mailtmpl` renders into an `smtp.Message`; another provider
+is another implementation of that interface.
 
 ### Adding an email
 
@@ -122,7 +124,7 @@ interface.
 3. A full and a zero-value fixture in `mailtmpl_test.go`, then
    `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/`, and review the golden files.
 4. Enqueue it from an event handler for the event that sends it: `body, err := entity.EncodeEmail(e)`,
-   then `queue.Send(ctx, entity.EmailQueue, body)` on a `repo.QueueRepo`.
+   then `Send(ctx, entity.EmailQueue, body)` on the queue.
    To keep the handler unaware of the queue, put this behind a port, as the welcome email does: a
-   method on `repo.UserNotifier` in `internal/repo/contracts.go`, implemented in
+   method on `repo.UserNotifier` in `internal/repo/user.go`, implemented in
    `internal/repo/notify`.

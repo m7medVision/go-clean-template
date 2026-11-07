@@ -15,25 +15,29 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo reads the tasks table.
+// Repo reads the tasks table. Its queries join the transaction the context carries.
 type Repo struct {
-	q *queries.Queries
+	pg *postgres.Postgres
 }
 
 // NewReadModel returns the task read model.
 func NewReadModel(pg *postgres.Postgres) repo.TaskReadModel {
-	return &Repo{queries.New(pg.Pool)}
+	return &Repo{pg: pg}
+}
+
+func (r *Repo) q(ctx context.Context) *queries.Queries {
+	return queries.New(r.pg.Executor(ctx))
 }
 
 // Get -.
 func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	task, err := r.q.GetTask(ctx, taskID)
+	task, err := r.q(ctx).GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Task{}, entity.ErrTaskNotFound
 		}
 
-		return entity.Task{}, fmt.Errorf("TaskReadModel - Get - r.q.GetTask: %w", err)
+		return entity.Task{}, fmt.Errorf("TaskReadModel - Get - r.q(ctx).GetTask: %w", err)
 	}
 
 	if task.UserID != userID {
@@ -47,19 +51,19 @@ func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, err
 func (r *Repo) List(
 	ctx context.Context, userID string, status *entity.TaskStatus, page entity.Page,
 ) (entity.List[entity.Task], error) {
-	total, err := r.q.CountTasks(ctx, queries.CountTasksParams{UserID: userID, Status: (*string)(status)})
+	total, err := r.q(ctx).CountTasks(ctx, queries.CountTasksParams{UserID: userID, Status: (*string)(status)})
 	if err != nil {
-		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - List - r.q.CountTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - List - r.q(ctx).CountTasks: %w", err)
 	}
 
-	rows, err := r.q.ListTasks(ctx, queries.ListTasksParams{
+	rows, err := r.q(ctx).ListTasks(ctx, queries.ListTasksParams{
 		UserID: userID,
 		Status: (*string)(status),
 		Limit:  int64(page.Size()),
 		Offset: int64(page.Offset),
 	})
 	if err != nil {
-		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - List - r.q.ListTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - List - r.q(ctx).ListTasks: %w", err)
 	}
 
 	return entity.List[entity.Task]{Items: tasks(rows), Total: int(total)}, nil
@@ -67,18 +71,18 @@ func (r *Repo) List(
 
 // ListAll -.
 func (r *Repo) ListAll(ctx context.Context, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error) {
-	total, err := r.q.CountAllTasks(ctx, (*string)(status))
+	total, err := r.q(ctx).CountAllTasks(ctx, (*string)(status))
 	if err != nil {
-		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - ListAll - r.q.CountAllTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - ListAll - r.q(ctx).CountAllTasks: %w", err)
 	}
 
-	rows, err := r.q.ListAllTasks(ctx, queries.ListAllTasksParams{
+	rows, err := r.q(ctx).ListAllTasks(ctx, queries.ListAllTasksParams{
 		Status: (*string)(status),
 		Limit:  int64(page.Size()),
 		Offset: int64(page.Offset),
 	})
 	if err != nil {
-		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - ListAll - r.q.ListAllTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - ListAll - r.q(ctx).ListAllTasks: %w", err)
 	}
 
 	return entity.List[entity.Task]{Items: tasks(rows), Total: int(total)}, nil

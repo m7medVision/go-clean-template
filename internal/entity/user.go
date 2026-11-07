@@ -9,6 +9,29 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var (
+	ErrUserNotFound      = newError(KindNotFound, "user not found")
+	ErrUserAlreadyExists = newError(KindExists, "user already exists")
+	// ErrOIDCIdentityTaken is a first SSO sign-in of an identity another sign-in has just created a
+	// user for: the race's loser signs in to the winner's user.
+	ErrOIDCIdentityTaken  = newError(KindExists, "user already exists")
+	ErrInvalidCredentials = newError(KindUnauthenticated, "invalid credentials")
+	ErrInvalidUsername    = newError(KindInvalid, "username must be 3–255 characters")
+	ErrInvalidEmail       = newError(KindInvalid, "email must be an address such as name@example.com")
+	ErrWeakPassword       = newError(KindInvalid, "password must be at least 6 characters")
+	// ErrOIDCDisabled is an SSO request to an app with no OpenID Connect provider configured.
+	ErrOIDCDisabled = newError(KindNotFound, "sso sign-in is not configured")
+	// ErrOIDCUnavailable is an SSO sign-in while the OpenID Connect provider cannot be reached.
+	ErrOIDCUnavailable = newError(KindUpstream, "sso provider unavailable")
+	// ErrOIDCCeremonyInvalid is an SSO sign-in that cannot complete: a bad, expired or replayed
+	// state token, code or ID token, or an ID token without an email.
+	ErrOIDCCeremonyInvalid = newError(KindUnauthenticated, "invalid sso sign-in")
+	// ErrAccountConflict is an SSO sign-in whose email or username already belongs to another account.
+	// Accounts are never linked by email, so the sign-in is refused.
+	ErrAccountConflict = newError(KindExists,
+		"an account with this email or username already exists; sign in with it instead")
+)
+
 const (
 	// MinUsernameLen and MaxUsernameLen bound a username a user signs up with, in characters.
 	MinUsernameLen = 3

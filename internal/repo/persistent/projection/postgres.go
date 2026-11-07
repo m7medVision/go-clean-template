@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
@@ -113,9 +112,9 @@ func (s *PostgresStore) listen(ctx context.Context) {
 
 // listenOnce holds one LISTEN connection until it fails or ctx ends.
 func (s *PostgresStore) listenOnce(ctx context.Context) error {
-	conn, err := pgx.ConnectConfig(ctx, s.pg.Pool.Config().ConnConfig.Copy())
+	conn, err := s.pg.Connect(ctx)
 	if err != nil {
-		return fmt.Errorf("pgx.ConnectConfig: %w", err)
+		return fmt.Errorf("s.pg.Connect: %w", err)
 	}
 
 	defer func() {

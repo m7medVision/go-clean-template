@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/exaring/otelpgx"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,7 +24,7 @@ type Postgres struct {
 	connAttempts int
 	connTimeout  time.Duration
 
-	Pool *pgxpool.Pool
+	pool *pgxpool.Pool
 }
 
 // New -.
@@ -48,7 +49,7 @@ func New(url string, opts ...Option) (*Postgres, error) {
 	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	for pg.connAttempts > 0 {
-		pg.Pool, err = connect(poolConfig, pg.connTimeout)
+		pg.pool, err = connect(poolConfig, pg.connTimeout)
 		if err == nil {
 			break
 		}
@@ -87,13 +88,24 @@ func connect(cfg *pgxpool.Config, timeout time.Duration) (*pgxpool.Pool, error) 
 
 // Close -.
 func (p *Postgres) Close() {
-	if p.Pool != nil {
-		p.Pool.Close()
+	if p.pool != nil {
+		p.pool.Close()
 	}
 }
 
-func safeIntToInt32(v int) int32 {
-	clamped := v & math.MaxInt32
+// Connect opens a connection of its own, outside the pool and with its settings, for a caller that
+// holds one for long, such as a LISTEN. The caller closes it.
+func (p *Postgres) Connect(ctx context.Context) (*pgx.Conn, error) {
+	conn, err := pgx.ConnectConfig(ctx, p.pool.Config().ConnConfig.Copy())
+	if err != nil {
+		return nil, fmt.Errorf("postgres - Connect: %w", err)
+	}
 
-	return int32(clamped)
+	return conn, nil
+}
+
+// safeIntToInt32 clamps a pool size to what pgxpool takes: at least one connection, and at most
+// the int32 range.
+func safeIntToInt32(v int) int32 {
+	return int32(min(max(v, 1), math.MaxInt32))
 }

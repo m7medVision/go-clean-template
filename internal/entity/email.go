@@ -2,9 +2,13 @@ package entity
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 )
+
+// ErrUnknownEmail is an email no template exists for.
+var ErrUnknownEmail = errors.New("unknown email template")
 
 // EmailQueue is the queue use cases send email to and the worker delivers it from.
 const EmailQueue = "mail"

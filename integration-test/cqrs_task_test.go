@@ -162,7 +162,7 @@ func TestConcurrentTaskUpdatesLoseNoWrite(t *testing.T) {
 	var updates int
 
 	pg := newPostgres(t)
-	err := pg.Pool.QueryRow(t.Context(), "SELECT count(*) FROM events WHERE stream_id = $1 AND type = $2",
+	err := pg.Executor(t.Context()).QueryRow(t.Context(), "SELECT count(*) FROM events WHERE stream_id = $1 AND type = $2",
 		entity.TaskStreamID(created.ID), entity.TaskUpdated{}.EventType()).Scan(&updates)
 	require.NoError(t, err)
 
@@ -184,7 +184,7 @@ func TestRebuildingTheTaskProjectionRestoresItsReads(t *testing.T) {
 	before := httpGetJSON[taskListResponse](t, token, "/tasks")
 
 	pg := newPostgres(t)
-	last, err := queries.New(pg.Pool).LastPosition(t.Context())
+	last, err := queries.New(pg.Executor(t.Context())).LastPosition(t.Context())
 	require.NoError(t, err)
 
 	require.NoError(t, projection.Rebuild(t.Context(), pg, "task", persistTaskRepo.NewProjector(pg)))

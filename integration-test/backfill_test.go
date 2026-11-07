@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
@@ -52,7 +51,7 @@ func TestBackfillRunsEachImporterOnce(t *testing.T) {
 
 	assert.Equal(t, 1, imp.runs)
 
-	marked, err := queries.New(pg.Pool).HasMarker(ctx, "_backfill/"+imp.domain)
+	marked, err := queries.New(pg.Executor(ctx)).HasMarker(ctx, "_backfill/"+imp.domain)
 	require.NoError(t, err)
 	assert.True(t, marked)
 }
@@ -64,7 +63,7 @@ func TestAFailedImportLeavesNoMarkerAndRunsAgain(t *testing.T) {
 
 	require.ErrorIs(t, eventstore.Backfill(ctx, pg, imp), errImport)
 
-	marked, err := queries.New(pg.Pool).HasMarker(ctx, "_backfill/"+imp.domain)
+	marked, err := queries.New(pg.Executor(ctx)).HasMarker(ctx, "_backfill/"+imp.domain)
 	require.NoError(t, err)
 	assert.False(t, marked)
 
@@ -81,7 +80,7 @@ func importAll(t *testing.T, pg *postgres.Postgres) {
 	ctx := context.Background()
 	store := eventstore.New(pg, eventcodec.New(entity.EventTypes()), 0)
 
-	for _, imp := range []repo.Importer{
+	for _, imp := range []eventstore.Importer{
 		persistTaskRepo.NewImporter(pg, store),
 		persistUserRepo.NewImporter(pg, store),
 		persistExchangeRepo.NewImporter(pg, store),
@@ -90,7 +89,7 @@ func importAll(t *testing.T, pg *postgres.Postgres) {
 		require.NoError(t, pg.InTx(ctx, imp.Import), imp.Domain())
 	}
 
-	last, err := queries.New(pg.Pool).LastPosition(ctx)
+	last, err := queries.New(pg.Executor(ctx)).LastPosition(ctx)
 	require.NoError(t, err)
 
 	checkpoints := projection.NewCheckpoints(pg)
@@ -105,7 +104,7 @@ func importAll(t *testing.T, pg *postgres.Postgres) {
 func eventsOf(t *testing.T, pg *postgres.Postgres, stream string) []string {
 	t.Helper()
 
-	rows, err := pg.Pool.Query(context.Background(), "SELECT type FROM events WHERE stream_id = $1 ORDER BY stream_version", stream)
+	rows, err := pg.Executor(context.Background()).Query(context.Background(), "SELECT type FROM events WHERE stream_id = $1 ORDER BY stream_version", stream)
 	require.NoError(t, err)
 
 	defer rows.Close()
@@ -127,7 +126,7 @@ func eventsOf(t *testing.T, pg *postgres.Postgres, stream string) []string {
 func claimOwner(t *testing.T, pg *postgres.Postgres, scope, value string) string {
 	t.Helper()
 
-	owner, err := queries.New(pg.Pool).ClaimOwner(context.Background(), queries.ClaimOwnerParams{Scope: scope, Value: value})
+	owner, err := queries.New(pg.Executor(context.Background())).ClaimOwner(context.Background(), queries.ClaimOwnerParams{Scope: scope, Value: value})
 	require.NoError(t, err)
 
 	return owner
@@ -163,7 +162,7 @@ func writeLegacyRows(t *testing.T, pg *postgres.Postgres, userID, taskID, name s
 		{"INSERT INTO exchange_history (user_id, from_currency, to_currency, amount, rate, result, rate_date, created_at) " +
 			"VALUES ($1, 'OMR', 'CNY', 100, 17.4, 1740, $2, $3)", []any{userID, at, at}},
 	} {
-		_, err := pg.Pool.Exec(context.Background(), stmt.sql, stmt.args...)
+		_, err := pg.Executor(context.Background()).Exec(context.Background(), stmt.sql, stmt.args...)
 		require.NoError(t, err, stmt.sql)
 	}
 }
@@ -182,7 +181,7 @@ func TestBackfillImportsRowsWrittenBeforeEventSourcing(t *testing.T) {
 
 	var taskBefore string
 
-	require.NoError(t, pg.Pool.QueryRow(ctx, "SELECT row_to_json(t)::text FROM tasks t WHERE id = $1", taskID).Scan(&taskBefore))
+	require.NoError(t, pg.Executor(ctx).QueryRow(ctx, "SELECT row_to_json(t)::text FROM tasks t WHERE id = $1", taskID).Scan(&taskBefore))
 
 	importAll(t, pg)
 
@@ -196,18 +195,18 @@ func TestBackfillImportsRowsWrittenBeforeEventSourcing(t *testing.T) {
 
 	var conversionID string
 
-	require.NoError(t, pg.Pool.QueryRow(ctx,
+	require.NoError(t, pg.Executor(ctx).QueryRow(ctx,
 		"SELECT conversion_id::text FROM exchange_history WHERE user_id = $1", userID).Scan(&conversionID))
 	assert.Equal(t, []string{"ConversionImported"}, eventsOf(t, pg, entity.ConversionStreamID(conversionID)))
 
 	var taskAfter string
 
-	require.NoError(t, pg.Pool.QueryRow(ctx, "SELECT row_to_json(t)::text FROM tasks t WHERE id = $1", taskID).Scan(&taskAfter))
+	require.NoError(t, pg.Executor(ctx).QueryRow(ctx, "SELECT row_to_json(t)::text FROM tasks t WHERE id = $1", taskID).Scan(&taskAfter))
 	assert.JSONEq(t, taskBefore, taskAfter, "projecting the import leaves the row as it was")
 
 	var users int
 
-	require.NoError(t, pg.Pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE id = $1", userID).Scan(&users))
+	require.NoError(t, pg.Executor(ctx).QueryRow(ctx, "SELECT count(*) FROM users WHERE id = $1", userID).Scan(&users))
 	assert.Equal(t, 1, users)
 
 	importAll(t, pg)

@@ -7,6 +7,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var (
+	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
+	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
+	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")
+	ErrInvalidAmount       = newError(KindInvalid,
+		"amount must be positive, with at most 15 digits before the point and 8 after it")
+)
+
 const (
 	// _resultScale is the number of decimal places a converted amount is rounded to.
 	_resultScale = 2

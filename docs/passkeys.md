@@ -12,7 +12,7 @@ The code, layer by layer:
 
 | Layer | Where |
 | --- | --- |
-| Entity | [`internal/entity/passkey.go`](../internal/entity/passkey.go), the aggregate and its events in [`passkey_aggregate.go`](../internal/entity/passkey_aggregate.go) and [`passkey_events.go`](../internal/entity/passkey_events.go), sentinels in [`errors.go`](../internal/entity/errors.go) |
+| Entity | [`internal/entity/passkey.go`](../internal/entity/passkey.go), the aggregate and its events in [`passkey_aggregate.go`](../internal/entity/passkey_aggregate.go) and [`passkey_events.go`](../internal/entity/passkey_events.go), sentinels in [`passkey.go`](../internal/entity/passkey.go) |
 | Use case | [`internal/usecase/passkey`](../internal/usecase/passkey): the `begin` steps and the reads are queries, the `finish` steps, rename and delete are commands, against the `repo.PasskeyCeremony` port |
 | Adapter | [`internal/repo/ceremony`](../internal/repo/ceremony/ceremony.go), the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn); it signs the ceremony token with its own scope and `WEBAUTHN_CEREMONY_TIMEOUT` as its lifetime. `ceremonytest/` drives a software authenticator for the tests |
 | Read model | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey/passkey.go) (with the `passkey` projector and the challenge guard), queries in [`queries/passkey.sql`](../internal/repo/persistent/queries/passkey.sql) |
@@ -141,7 +141,9 @@ RETURNING challenge_hash;
 No row back means the challenge was used before: `entity.ErrPasskeyChallengeUsed`, a `409`. The
 database writes only for logins that verified, and each challenge works once. The row only has to
 outlive the token, so `expires_at` is the ceremony's expiry, and the same finish path deletes the
-expired rows first (`DeleteExpiredChallenges`). There is no cleanup job.
+expired rows first (`DeleteExpiredChallenges`). There is no cleanup job. The guard
+(`repo.ChallengeGuard`) opens the transaction itself and records the passkey's use inside it, so the
+burn and the use commit together or not at all.
 
 ### The ceremony token
 

@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
-	"github.com/m7medvision/go-clean-template/pkg/smtp"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -35,8 +35,8 @@ func newHandler(t *testing.T) (command.DeliverEmailHandler, *repomock.MockMailRe
 
 func note() noteEmail { return noteEmail{To: "john@example.com", Body: "Hi"} }
 
-func rendered() smtp.Message {
-	return smtp.Message{To: "john@example.com", Subject: "Note", HTML: "<p>Hi</p>\n", Text: "Hi\n"}
+func rendered() repo.RenderedEmail {
+	return repo.RenderedEmail{To: "john@example.com", Subject: "Note", HTML: "<p>Hi</p>\n", Text: "Hi\n"}
 }
 
 func TestDeliverEmailSendsTheRenderedMessage(t *testing.T) {
@@ -55,7 +55,7 @@ func TestARenderErrorSendsNothing(t *testing.T) {
 	t.Parallel()
 
 	h, renderer, _ := newHandler(t)
-	renderer.EXPECT().Render(gomock.Any(), note()).Return(smtp.Message{}, errRelay)
+	renderer.EXPECT().Render(gomock.Any(), note()).Return(repo.RenderedEmail{}, errRelay)
 
 	_, err := h.Handle(context.Background(), command.DeliverEmail{Email: note()})
 
@@ -66,7 +66,7 @@ func TestAnUnknownEmailStaysRecognizable(t *testing.T) {
 	t.Parallel()
 
 	h, renderer, _ := newHandler(t)
-	renderer.EXPECT().Render(gomock.Any(), note()).Return(smtp.Message{}, entity.ErrUnknownEmail)
+	renderer.EXPECT().Render(gomock.Any(), note()).Return(repo.RenderedEmail{}, entity.ErrUnknownEmail)
 
 	_, err := h.Handle(context.Background(), command.DeliverEmail{Email: note()})
 

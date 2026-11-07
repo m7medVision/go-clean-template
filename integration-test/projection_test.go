@@ -174,11 +174,11 @@ func TestTheLagCollectorReportsEachCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	pg := newPostgres(t)
 	name := "lagtest-" + uuid.NewString()
-	q := queries.New(pg.Pool)
+	q := queries.New(pg.Executor(ctx))
 
 	require.NoError(t, q.EnsureCheckpoint(ctx, name))
 	t.Cleanup(func() {
-		_, err := pg.Pool.Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = $1", name)
+		_, err := pg.Executor(context.Background()).Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = $1", name)
 		assert.NoError(t, err)
 	})
 
@@ -205,11 +205,11 @@ func TestCheckpointsReachedNeedsEveryNamedProjector(t *testing.T) {
 	ctx := context.Background()
 	pg := newPostgres(t)
 	a, b := "_reached-"+uuid.NewString(), "_reached-"+uuid.NewString()
-	q := queries.New(pg.Pool)
+	q := queries.New(pg.Executor(ctx))
 	checkpoints := projection.NewCheckpoints(pg)
 
 	t.Cleanup(func() {
-		_, err := pg.Pool.Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = ANY($1)", []string{a, b})
+		_, err := pg.Executor(context.Background()).Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = ANY($1)", []string{a, b})
 		assert.NoError(t, err)
 	})
 

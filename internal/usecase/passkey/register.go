@@ -14,7 +14,6 @@ type Deps struct {
 	Users    repo.UserReadModel
 	Passkeys repo.PasskeyReadModel
 	Guard    repo.ChallengeGuard
-	Tx       repo.Transactor
 	Sessions repo.SessionIssuer
 }
 
@@ -25,7 +24,7 @@ func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d *Deps) {
 	cqrs.HandleCommand(cmds, command.RenamePasskeyHandler{Store: d.Store})
 	cqrs.HandleCommand(cmds, command.DeletePasskeyHandler{Store: d.Store})
 	cqrs.HandleCommand(cmds, &command.FinishPasskeyLoginHandler{
-		Ceremony: d.Ceremony, Store: d.Store, Users: d.Users, Guard: d.Guard, Tx: d.Tx, Sessions: d.Sessions,
+		Ceremony: d.Ceremony, Store: d.Store, Users: d.Users, Guard: d.Guard, Sessions: d.Sessions,
 	})
 
 	cqrs.HandleQuery(qs, query.BeginPasskeyRegistrationHandler{Ceremony: d.Ceremony, Users: d.Users, Passkeys: d.Passkeys})

@@ -71,8 +71,8 @@ grpc.NewRouter(grpcServer.App, uc.buses, l) // grpc.go
 ```
 
 Every handler's dependency is an **interface** from
-[`internal/repo/contracts.go`](../internal/repo/contracts.go): `repo.EventStore`,
-`repo.ExchangeWebAPI` and `repo.ExchangeReadModel`. A handler never learns which implementation it
+[`internal/repo`](../internal/repo): `repo.EventStore` (in `contracts.go`), and
+`repo.ExchangeWebAPI` and `repo.ExchangeReadModel` (in `exchange.go`). A handler never learns which implementation it
 got, which is what lets the unit tests hand it the in-memory store and mocks instead.
 
 ## 1. Middleware

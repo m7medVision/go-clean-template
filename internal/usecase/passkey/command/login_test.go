@@ -38,7 +38,7 @@ func (f *fixture) login(t *testing.T) login {
 
 	return login{
 		handler: &command.FinishPasskeyLoginHandler{
-			Ceremony: f.ceremony, Store: f.store, Users: users, Guard: guard, Tx: inline{}, Sessions: session.New(tokens), Now: now,
+			Ceremony: f.ceremony, Store: f.store, Users: users, Guard: guard, Sessions: session.New(tokens), Now: now,
 		},
 		guard:  guard,
 		tokens: tokens,
@@ -143,21 +143,16 @@ func TestAnUnregisteredCredentialCannotSignIn(t *testing.T) {
 func TestAGuardFailureIsNotABadCeremony(t *testing.T) {
 	t.Parallel()
 
-	for name, set := range map[string]func(b *burnStore){
-		"expired challenge cleanup": func(b *burnStore) { b.expireErr = errGuard },
-		"burn":                      func(b *burnStore) { b.burnErr = errGuard },
-	} {
-		f := newFixture(t)
-		id := f.register(t)
-		l := f.login(t)
-		set(l.guard)
+	f := newFixture(t)
+	id := f.register(t)
+	l := f.login(t)
+	l.guard.burnErr = errGuard
 
-		token, body, _ := f.assertion(t)
+	token, body, _ := f.assertion(t)
 
-		_, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
+	_, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
-		require.ErrorIs(t, err, errGuard, name)
-		require.NotErrorIs(t, err, entity.ErrPasskeyLoginInvalid, name)
-		assert.Len(t, f.events(id), 1, name)
-	}
+	require.ErrorIs(t, err, errGuard)
+	require.NotErrorIs(t, err, entity.ErrPasskeyLoginInvalid)
+	assert.Len(t, f.events(id), 1, "a login whose burn failed records no use")
 }
