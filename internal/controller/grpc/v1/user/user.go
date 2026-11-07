@@ -27,7 +27,7 @@ func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1
 		return nil, rpcerr.Status(ctx, c.l, err, "Register")
 	}
 
-	return NewRegisterResponse(&user), nil
+	return NewUserResponse[v1.RegisterResponse](&user), nil
 }
 
 // Login -.
@@ -52,5 +52,5 @@ func (c *Controller) GetProfile(ctx context.Context, _ *v1.GetProfileRequest) (*
 		return nil, rpcerr.Status(ctx, c.l, err, "GetProfile")
 	}
 
-	return NewGetProfileResponse(&user), nil
+	return NewUserResponse[v1.GetProfileResponse](&user), nil
 }

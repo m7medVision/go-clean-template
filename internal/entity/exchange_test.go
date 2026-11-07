@@ -80,7 +80,7 @@ func TestConversion_ApplyRate(t *testing.T) {
 			date := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
 			c.ApplyRate(decimal.RequireFromString(tt.rate), date)
 
-			assert.Equal(t, tt.wantResult, c.Result.StringFixed(2))
+			assert.Equal(t, tt.wantResult, c.ResultString())
 			assert.True(t, c.Rate.Equal(decimal.RequireFromString(tt.rate)))
 			assert.Equal(t, date, c.RateDate)
 		})

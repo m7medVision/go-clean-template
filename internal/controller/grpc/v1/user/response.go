@@ -2,27 +2,20 @@ package user
 
 import (
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// NewRegisterResponse -.
-func NewRegisterResponse(user *entity.User) *v1.RegisterResponse {
-	return &v1.RegisterResponse{
+// NewUserResponse is user as Register and GetProfile answer it. Their two messages have the same
+// fields, so one converts to the other; the proto keeps both names, which clients compile against.
+func NewUserResponse[T v1.RegisterResponse | v1.GetProfileResponse](user *entity.User) *T {
+	resp := T(v1.RegisterResponse{
 		Id:        user.ID,
 		Username:  user.Username,
 		Email:     user.Email,
-		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-	}
-}
+		CreatedAt: response.Time(user.CreatedAt),
+		UpdatedAt: response.Time(user.UpdatedAt),
+	})
 
-// NewGetProfileResponse -.
-func NewGetProfileResponse(user *entity.User) *v1.GetProfileResponse {
-	return &v1.GetProfileResponse{
-		Id:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: user.UpdatedAt.Format("2006-01-02T15:04:05Z"),
-	}
+	return &resp
 }

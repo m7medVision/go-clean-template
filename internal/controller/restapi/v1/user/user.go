@@ -19,7 +19,8 @@ type registerInput struct {
 	Body Register
 }
 
-type registerOutput struct {
+// userOutput is the user an operation wrote or read.
+type userOutput struct {
 	Body entity.User
 }
 
@@ -33,10 +34,6 @@ type loginOutput struct {
 
 type profileInput struct{}
 
-type profileOutput struct {
-	Body entity.User
-}
-
 func (r *controller) register(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "register",
@@ -47,7 +44,7 @@ func (r *controller) register(api huma.API) {
 		Tags:          []string{apidoc.AuthTag},
 		DefaultStatus: http.StatusCreated,
 		Errors:        apierr.CommandErrors(http.StatusConflict),
-	}, func(ctx context.Context, input *registerInput) (*registerOutput, error) {
+	}, func(ctx context.Context, input *registerInput) (*userOutput, error) {
 		written, err := cqrs.SendCommand(ctx, r.cmds, command.RegisterUser{
 			Username: input.Body.Username, Email: input.Body.Email, Password: input.Body.Password,
 		})
@@ -60,7 +57,7 @@ func (r *controller) register(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "register")
 		}
 
-		return &registerOutput{Body: user}, nil
+		return &userOutput{Body: user}, nil
 	})
 }
 
@@ -93,7 +90,7 @@ func (r *controller) profile(api huma.API) {
 		Tags:        []string{_usersTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, _ *profileInput) (*profileOutput, error) {
+	}, func(ctx context.Context, _ *profileInput) (*userOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -104,6 +101,6 @@ func (r *controller) profile(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "profile")
 		}
 
-		return &profileOutput{Body: user}, nil
+		return &userOutput{Body: user}, nil
 	})
 }

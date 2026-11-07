@@ -14,7 +14,8 @@ import (
 
 type beginPasskeyRegistrationInput struct{}
 
-type beginPasskeyRegistrationOutput struct {
+// ceremonyOutput is a WebAuthn ceremony a begin operation started.
+type ceremonyOutput struct {
 	Body PasskeyCeremony
 }
 
@@ -25,7 +26,8 @@ type finishPasskeyRegistrationInput struct {
 	Body PasskeyCredential
 }
 
-type finishPasskeyRegistrationOutput struct {
+// passkeyOutput is the passkey an operation wrote.
+type passkeyOutput struct {
 	Body entity.Passkey
 }
 
@@ -49,7 +51,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		Tags:     []string{_passkeysTag},
 		Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:   apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*beginPasskeyRegistrationOutput, error) {
+	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*ceremonyOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -63,7 +65,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyRegistration")
 		}
 
-		return &beginPasskeyRegistrationOutput{Body: PasskeyCeremony{
+		return &ceremonyOutput{Body: PasskeyCeremony{
 			Options:       started.Options,
 			CeremonyToken: started.Token,
 		}}, nil
@@ -81,7 +83,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 		DefaultStatus: http.StatusCreated,
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:        apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict),
-	}, func(ctx context.Context, input *finishPasskeyRegistrationInput) (*finishPasskeyRegistrationOutput, error) {
+	}, func(ctx context.Context, input *finishPasskeyRegistrationInput) (*passkeyOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -92,7 +94,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "finishPasskeyRegistration")
 		}
 
-		return &finishPasskeyRegistrationOutput{Body: passkey}, nil
+		return &passkeyOutput{Body: passkey}, nil
 	})
 }
 
@@ -130,10 +132,6 @@ type renamePasskeyInput struct {
 	Body RenamePasskey
 }
 
-type renamePasskeyOutput struct {
-	Body entity.Passkey
-}
-
 type deletePasskeyOutput struct {
 	Status int
 }
@@ -148,7 +146,7 @@ func (r *controller) renamePasskey(api huma.API) {
 		Tags:        []string{_passkeysTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, input *renamePasskeyInput) (*renamePasskeyOutput, error) {
+	}, func(ctx context.Context, input *renamePasskeyInput) (*passkeyOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -159,7 +157,7 @@ func (r *controller) renamePasskey(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "renamePasskey")
 		}
 
-		return &renamePasskeyOutput{Body: passkey}, nil
+		return &passkeyOutput{Body: passkey}, nil
 	})
 }
 
@@ -192,10 +190,6 @@ func (r *controller) deletePasskey(api huma.API) {
 
 type beginPasskeyLoginInput struct{}
 
-type beginPasskeyLoginOutput struct {
-	Body PasskeyCeremony
-}
-
 type finishPasskeyLoginInput struct {
 	CeremonyToken string `header:"X-Ceremony-Token" required:"true" minLength:"1" doc:"The ceremony_token from begin"`
 
@@ -217,13 +211,13 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 		Path:   "/v1/auth/passkey/begin",
 		Tags:   []string{apidoc.AuthTag},
 		Errors: apierr.QueryErrors(),
-	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*beginPasskeyLoginOutput, error) {
+	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*ceremonyOutput, error) {
 		started, err := r.beginLogin(ctx)
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyLogin")
 		}
 
-		return &beginPasskeyLoginOutput{Body: PasskeyCeremony{
+		return &ceremonyOutput{Body: PasskeyCeremony{
 			Options:       started.Options,
 			CeremonyToken: started.Token,
 		}}, nil

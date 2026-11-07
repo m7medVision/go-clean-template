@@ -18,7 +18,8 @@ type createTaskInput struct {
 	Body CreateTask
 }
 
-type createTaskOutput struct {
+// taskOutput is the task an operation wrote or read.
+type taskOutput struct {
 	Body entity.Task
 }
 
@@ -52,17 +53,9 @@ type updateTaskInput struct {
 	Body UpdateTask
 }
 
-type updateTaskOutput struct {
-	Body entity.Task
-}
-
 type transitionTaskInput struct {
 	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Body TransitionTask
-}
-
-type transitionTaskOutput struct {
-	Body entity.Task
 }
 
 type deleteTaskOutput struct {
@@ -80,7 +73,7 @@ func (r *controller) createTask(api huma.API) {
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusCreated,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized),
-	}, func(ctx context.Context, input *createTaskInput) (*createTaskOutput, error) {
+	}, func(ctx context.Context, input *createTaskInput) (*taskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -98,7 +91,7 @@ func (r *controller) createTask(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "createTask")
 		}
 
-		return &createTaskOutput{Body: task}, nil
+		return &taskOutput{Body: task}, nil
 	})
 }
 
@@ -156,7 +149,7 @@ func (r *controller) getTask(api huma.API) {
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound),
-	}, func(ctx context.Context, input *taskPathInput) (*updateTaskOutput, error) {
+	}, func(ctx context.Context, input *taskPathInput) (*taskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -167,7 +160,7 @@ func (r *controller) getTask(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "getTask")
 		}
 
-		return &updateTaskOutput{Body: task}, nil
+		return &taskOutput{Body: task}, nil
 	})
 }
 
@@ -181,7 +174,7 @@ func (r *controller) updateTask(api huma.API) {
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound),
-	}, func(ctx context.Context, input *updateTaskInput) (*updateTaskOutput, error) {
+	}, func(ctx context.Context, input *updateTaskInput) (*taskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -199,7 +192,7 @@ func (r *controller) updateTask(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "updateTask")
 		}
 
-		return &updateTaskOutput{Body: task}, nil
+		return &taskOutput{Body: task}, nil
 	})
 }
 
@@ -213,7 +206,7 @@ func (r *controller) transitionTask(api huma.API) {
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound),
-	}, func(ctx context.Context, input *transitionTaskInput) (*transitionTaskOutput, error) {
+	}, func(ctx context.Context, input *transitionTaskInput) (*taskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthorized")
@@ -231,7 +224,7 @@ func (r *controller) transitionTask(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "transitionTask")
 		}
 
-		return &transitionTaskOutput{Body: task}, nil
+		return &taskOutput{Body: task}, nil
 	})
 }
 

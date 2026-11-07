@@ -54,6 +54,12 @@ func (c *Conversion) ApplyRate(rate decimal.Decimal, date time.Time) {
 	c.Result = c.Amount.Mul(rate).RoundBank(_resultScale)
 }
 
+// ResultString is Result with every decimal place it is rounded to, as the API shows it: "0.30",
+// not "0.3".
+func (c *Conversion) ResultString() string {
+	return c.Result.StringFixed(_resultScale)
+}
+
 func validCurrencyCode(code string) bool {
 	const length = 3
 

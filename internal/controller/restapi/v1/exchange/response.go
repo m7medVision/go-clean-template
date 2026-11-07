@@ -6,9 +6,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// _resultPlaces matches the scale entity.Conversion rounds Result to.
-const _resultPlaces = 2
-
 // Conversion is entity.Conversion with its decimals as strings: decimal.Decimal has no schema of
 // its own, and a JSON number would lose precision in most clients.
 type Conversion struct {
@@ -33,7 +30,7 @@ func NewConversion(c *entity.Conversion) Conversion {
 		To:       c.To,
 		Amount:   c.Amount.String(),
 		Rate:     c.Rate.String(),
-		Result:   c.Result.StringFixed(_resultPlaces),
+		Result:   c.ResultString(),
 		RateDate: c.RateDate.Format(time.DateOnly),
 	}
 }

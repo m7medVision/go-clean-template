@@ -177,7 +177,8 @@ graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go,
 
 - **A domain folder never imports another domain folder.** What several domains share has its own
   package in that transport: REST `v1/response/` (`Token`) and `v1/apidoc/` (the `BearerAuth`
-  scheme, the `auth` tag); GraphQL `middleware/` and `gqlerr/`.
+  scheme, the `auth` tag); gRPC `v1/response/` (timestamps and counts as proto fields); GraphQL
+  `middleware/` and `gqlerr/`.
 - Each version's `router.go` (`restapi/v1`, `grpc/v1`) is the only file that lists the domains: one
   call per domain, each passed the `cqrs.Buses`. `restapi/router.go`, `grpc/router.go` and `docs/api.md`'s v2 examples call it.
 - Tests go through the real server and real buses, with fake handlers registered for the domain's

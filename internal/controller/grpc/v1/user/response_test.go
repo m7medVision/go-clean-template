@@ -4,19 +4,12 @@ import (
 	"testing"
 	"time"
 
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcuser "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type userResponseFields struct {
-	id        string
-	username  string
-	email     string
-	createdAt string
-	updatedAt string
-}
 
 type userResponseGetter interface {
 	GetId() string
@@ -26,59 +19,26 @@ type userResponseGetter interface {
 	GetUpdatedAt() string
 }
 
-func assertUserResponseFields(t *testing.T, f *userResponseFields, got userResponseGetter) {
-	t.Helper()
-
-	require.NotNil(t, got)
-	assert.Equal(t, f.id, got.GetId())
-	assert.Equal(t, f.username, got.GetUsername())
-	assert.Equal(t, f.email, got.GetEmail())
-	assert.Equal(t, f.createdAt, got.GetCreatedAt())
-	assert.Equal(t, f.updatedAt, got.GetUpdatedAt())
-}
-
-func TestNewRegisterResponse(t *testing.T) {
+func TestNewUserResponse(t *testing.T) {
 	t.Parallel()
 
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	user := &entity.User{
-		ID:        "user-id-123",
-		Username:  "testuser",
-		Email:     "test@example.com",
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	resp := grpcuser.NewRegisterResponse(user)
-
-	assertUserResponseFields(t, &userResponseFields{
-		id:        user.ID,
-		username:  user.Username,
-		email:     user.Email,
-		createdAt: "2026-01-01T00:00:00Z",
-		updatedAt: "2026-01-01T00:00:00Z",
-	}, resp)
-}
-
-func TestNewGetProfileResponse(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, 3, 15, 12, 30, 0, 0, time.UTC)
 	user := &entity.User{
 		ID:        "user-id-456",
 		Username:  "anotheruser",
 		Email:     "another@example.com",
-		CreatedAt: now,
-		UpdatedAt: now,
+		CreatedAt: time.Date(2026, 3, 15, 12, 30, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 3, 16, 8, 0, 0, 0, time.UTC),
 	}
 
-	resp := grpcuser.NewGetProfileResponse(user)
-
-	assertUserResponseFields(t, &userResponseFields{
-		id:        user.ID,
-		username:  user.Username,
-		email:     user.Email,
-		createdAt: "2026-03-15T12:30:00Z",
-		updatedAt: "2026-03-15T12:30:00Z",
-	}, resp)
+	for name, got := range map[string]userResponseGetter{
+		"RegisterResponse":   grpcuser.NewUserResponse[v1.RegisterResponse](user),
+		"GetProfileResponse": grpcuser.NewUserResponse[v1.GetProfileResponse](user),
+	} {
+		require.NotNil(t, got, name)
+		assert.Equal(t, user.ID, got.GetId(), name)
+		assert.Equal(t, user.Username, got.GetUsername(), name)
+		assert.Equal(t, user.Email, got.GetEmail(), name)
+		assert.Equal(t, "2026-03-15T12:30:00Z", got.GetCreatedAt(), name)
+		assert.Equal(t, "2026-03-16T08:00:00Z", got.GetUpdatedAt(), name)
+	}
 }
