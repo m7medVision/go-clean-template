@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,6 +15,10 @@ const (
 	_owner    = "user-1"
 	_widgetID = "widget-1"
 )
+
+// The update and delete handlers change the widget through aggregate.Change: this stops compiling
+// when the aggregate no longer fits it.
+var _ = aggregate.Change[entity.WidgetAggregate]
 
 // givenWidget is a store holding _owner's widget, for the commands that change one.
 func givenWidget(t *testing.T) *memstore.Store {

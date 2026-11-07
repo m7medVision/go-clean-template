@@ -24,7 +24,8 @@ type GetWidgetHandler struct {
 	Widgets repo.WidgetReadModel
 }
 
-// Handle is a stub: write it to read the widget with h.Widgets.Get.
+// Handle is a stub: write it to read the widget with h.Widgets.Get, then ask its
+// ReadableBy(q.UserID).
 func (GetWidgetHandler) Handle(_ context.Context, _ GetWidget) (entity.Widget, error) {
 	return entity.Widget{}, fmt.Errorf("GetWidget: %w", entity.ErrNotImplemented)
 }

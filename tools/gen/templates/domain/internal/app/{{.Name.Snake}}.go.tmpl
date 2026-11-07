@@ -10,11 +10,9 @@ import (
 {{- if .Has "rest"}}
 	rest{{.Name.Pkg}} "{{.Module}}/internal/controller/restapi/v1/{{.Name.Pkg}}"
 {{- end}}
-	"{{.Module}}/internal/repo/persistent/projection"
 	persist{{.Name.Go}}Repo "{{.Module}}/internal/repo/persistent/{{.Name.Pkg}}"
 	"{{.Module}}/internal/usecase/{{.Name.Pkg}}"
 	"{{.Module}}/pkg/cqrs"
-	"{{.Module}}/pkg/postgres"
 {{- if .Has "grpc"}}
 	"google.golang.org/grpc"
 {{- end}}
@@ -29,7 +27,7 @@ func {{.Name.Lower}}Module() module {
 
 			return nil
 		},
-		projector: func(pg *postgres.Postgres) projection.Projector { return persist{{.Name.Go}}Repo.NewProjector(pg) },
+		projector: persist{{.Name.Go}}Repo.NewProjector,
 {{- if .Has "rest"}}
 		rest:      rest{{.Name.Pkg}}.NewRoutes,
 {{- end}}

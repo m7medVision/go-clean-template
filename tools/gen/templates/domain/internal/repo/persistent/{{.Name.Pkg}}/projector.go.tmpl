@@ -2,63 +2,31 @@ package {{.Name.Pkg}}
 
 import (
 	"context"
-	"fmt"
 
 	"{{.Module}}/internal/entity"
-	"{{.Module}}/internal/repo"
+	"{{.Module}}/internal/repo/persistent/projection"
 	"{{.Module}}/internal/repo/persistent/queries"
 	"{{.Module}}/pkg/postgres"
 )
 
-// Projector keeps the {{.Name.Plural.Snake}} table, the {{.Name.Words}} read model, up to date from the {{.Name.Words}} events. The
-// worker runs it; it writes through the transaction the runner's context carries.
-type Projector struct {
-	pg *postgres.Postgres
+// NewProjector keeps the {{.Name.Plural.Snake}} table, the {{.Name.Words}} read model, up to date from the {{.Name.Words}} events. The
+// worker runs it.
+func NewProjector(pg *postgres.Postgres) projection.Projector {
+	return projection.NewProjector("{{.Name.Pkg}}", []string{"{{.Name.Plural.Snake}}"}, entity.{{.Name.Go}}Events(), pg, project)
 }
 
-var _ repo.Subscriber = (*Projector)(nil)
-
-func NewProjector(pg *postgres.Postgres) *Projector {
-	return &Projector{pg: pg}
-}
-
-func (*Projector) Name() string {
-	return "{{.Name.Pkg}}"
-}
-
-// Tables are what a rebuild empties.
-func (*Projector) Tables() []string {
-	return []string{"{{.Name.Plural.Snake}}"}
-}
-
-func (*Projector) Handles() []entity.Event {
-	return entity.{{.Name.Go}}Events()
-}
-
-func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
-	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
-}
-
-// Project applies one event to the {{.Name.Plural.Snake}} table through q.
-func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
-	var err error
-
+// project applies one event to the {{.Name.Plural.Snake}} table through q.
+func project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	switch ev := e.Event.(type) {
 	case entity.{{.Name.Go}}Created:
-		err = q.Insert{{.Name.Go}}Row(ctx, queries.Insert{{.Name.Go}}RowParams{
+		return q.Insert{{.Name.Go}}Row(ctx, queries.Insert{{.Name.Go}}RowParams{
 			ID: ev.{{.Name.Go}}ID, UserID: ev.UserID, CreatedAt: ev.At, UpdatedAt: ev.At,
 		})
 	case entity.{{.Name.Go}}Updated:
-		err = q.Update{{.Name.Go}}Row(ctx, queries.Update{{.Name.Go}}RowParams{ID: ev.{{.Name.Go}}ID, UpdatedAt: ev.At})
+		return q.Update{{.Name.Go}}Row(ctx, queries.Update{{.Name.Go}}RowParams{ID: ev.{{.Name.Go}}ID, UpdatedAt: ev.At})
 	case entity.{{.Name.Go}}Deleted:
-		err = q.Delete{{.Name.Go}}Row(ctx, ev.{{.Name.Go}}ID)
+		return q.Delete{{.Name.Go}}Row(ctx, ev.{{.Name.Go}}ID)
 	default:
-		err = entity.ErrUnhandledEvent
+		return entity.ErrUnhandledEvent
 	}
-
-	if err != nil {
-		return fmt.Errorf("{{.Name.Go}}Projector - %s at %d: %w", e.Event.EventType(), e.Position, err)
-	}
-
-	return nil
 }

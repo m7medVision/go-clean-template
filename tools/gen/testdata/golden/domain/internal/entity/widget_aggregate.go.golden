@@ -46,8 +46,9 @@ func (a *WidgetAggregate) ID() string {
 	return a.widget.ID
 }
 
-func (*WidgetAggregate) StreamOf(id string) string {
-	return WidgetStreamID(id)
+// StreamOf names the stream of the widget with id. Every ID names one.
+func (*WidgetAggregate) StreamOf(id string) (string, error) {
+	return WidgetStreamID(id), nil
 }
 
 // NotFound is the error for one widget ID with no stream.
@@ -55,15 +56,14 @@ func (*WidgetAggregate) NotFound() error {
 	return ErrWidgetNotFound
 }
 
+// ownedBy is nil when userID may change the widget: when it is live and theirs. A deleted widget is
+// ErrWidgetNotFound, and another user's ErrWidgetForbidden, as a read of it is.
 func (a *WidgetAggregate) ownedBy(userID string) error {
-	switch {
-	case a.deleted:
+	if a.deleted {
 		return ErrWidgetNotFound
-	case a.widget.UserID != userID:
-		return ErrWidgetForbidden
-	default:
-		return nil
 	}
+
+	return widgetOwnedBy(a.widget.UserID, userID)
 }
 
 // Update changes userID's widget. Check the update's rules here, before it is recorded.
@@ -80,7 +80,7 @@ func (a *WidgetAggregate) Update(userID string, at time.Time) error {
 // Delete deletes userID's widget. Another user's widget is ErrWidgetNotFound, not
 // ErrWidgetForbidden, so a delete never tells a stranger the widget exists.
 func (a *WidgetAggregate) Delete(userID string, at time.Time) error {
-	if a.deleted || a.widget.UserID != userID {
+	if a.ownedBy(userID) != nil {
 		return ErrWidgetNotFound
 	}
 

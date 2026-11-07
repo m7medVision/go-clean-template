@@ -1,0 +1,13 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo/persistent/queries"
+)
+
+// Project is what the projector writes through q for e.
+func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
+	return project(ctx, q, e)
+}

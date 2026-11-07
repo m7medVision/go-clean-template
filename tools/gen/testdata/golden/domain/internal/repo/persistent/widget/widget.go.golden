@@ -27,7 +27,7 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-func (r *Repo) Get(ctx context.Context, userID, widgetID string) (entity.Widget, error) {
+func (r *Repo) Get(ctx context.Context, widgetID string) (entity.Widget, error) {
 	row, err := r.q(ctx).GetWidget(ctx, widgetID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -35,10 +35,6 @@ func (r *Repo) Get(ctx context.Context, userID, widgetID string) (entity.Widget,
 		}
 
 		return entity.Widget{}, fmt.Errorf("WidgetReadModel - Get - r.q(ctx).GetWidget: %w", err)
-	}
-
-	if row.UserID != userID {
-		return entity.Widget{}, entity.ErrWidgetForbidden
 	}
 
 	return entity.Widget(row), nil

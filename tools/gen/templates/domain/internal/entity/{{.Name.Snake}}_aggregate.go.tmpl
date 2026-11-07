@@ -46,8 +46,9 @@ func (a *{{.Name.Go}}Aggregate) ID() string {
 	return a.{{.Name.Lower}}.ID
 }
 
-func (*{{.Name.Go}}Aggregate) StreamOf(id string) string {
-	return {{.Name.Go}}StreamID(id)
+// StreamOf names the stream of the {{.Name.Words}} with id. Every ID names one.
+func (*{{.Name.Go}}Aggregate) StreamOf(id string) (string, error) {
+	return {{.Name.Go}}StreamID(id), nil
 }
 
 // NotFound is the error for one {{.Name.Words}} ID with no stream.
@@ -55,15 +56,14 @@ func (*{{.Name.Go}}Aggregate) NotFound() error {
 	return Err{{.Name.Go}}NotFound
 }
 
+// ownedBy is nil when userID may change the {{.Name.Words}}: when it is live and theirs. A deleted {{.Name.Words}} is
+// Err{{.Name.Go}}NotFound, and another user's Err{{.Name.Go}}Forbidden, as a read of it is.
 func (a *{{.Name.Go}}Aggregate) ownedBy(userID string) error {
-	switch {
-	case a.deleted:
+	if a.deleted {
 		return Err{{.Name.Go}}NotFound
-	case a.{{.Name.Lower}}.UserID != userID:
-		return Err{{.Name.Go}}Forbidden
-	default:
-		return nil
 	}
+
+	return {{.Name.Lower}}OwnedBy(a.{{.Name.Lower}}.UserID, userID)
 }
 
 // Update changes userID's {{.Name.Words}}. Check the update's rules here, before it is recorded.
@@ -80,7 +80,7 @@ func (a *{{.Name.Go}}Aggregate) Update(userID string, at time.Time) error {
 // Delete deletes userID's {{.Name.Words}}. Another user's {{.Name.Words}} is Err{{.Name.Go}}NotFound, not
 // Err{{.Name.Go}}Forbidden, so a delete never tells a stranger the {{.Name.Words}} exists.
 func (a *{{.Name.Go}}Aggregate) Delete(userID string, at time.Time) error {
-	if a.deleted || a.{{.Name.Lower}}.UserID != userID {
+	if a.ownedBy(userID) != nil {
 		return Err{{.Name.Go}}NotFound
 	}
 

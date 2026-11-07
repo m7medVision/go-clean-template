@@ -66,9 +66,9 @@ transport, as `task` keeps them. The files it creates, for `invoice`:
 
 | Layer | Transport | Created |
 | --- | --- | --- |
-| entity | all | `internal/entity/invoice.go` (the read shape and the sentinels `ErrInvoiceNotFound`, `ErrInvoiceForbidden`), `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `NewInvoiceAggregate`, `Update`, `Delete`, `Apply`), `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `InvoiceEvents()`), `invoice_aggregate_test.go` |
+| entity | all | `internal/entity/invoice.go` (the read shape, its `ReadableBy`, and the sentinels `ErrInvoiceNotFound`, `ErrInvoiceForbidden`), `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `NewInvoiceAggregate`, `StreamOf`, `Update`, `Delete`, `Apply`), `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `InvoiceEvents()`), `invoice_aggregate_test.go` |
 | read model | all | `internal/app/schema/invoices.hcl` (no foreign keys), `internal/repo/persistent/queries/invoice.sql`, `internal/repo/invoice.go` (`InvoiceReadModel`, with the `go:generate` directive `make mock` runs), `persistent/invoice/invoice.go` (`NewReadModel`) |
-| projector | all | `persistent/invoice/projector.go` (`Handles` the invoice events), `projector_test.go` against a fake `Querier` |
+| projector | all | `persistent/invoice/projector.go` (`NewProjector`, through `projection.NewProjector`, handling the invoice events, and the unexported `project`), `export_test.go` (exports `project` to its test), `projector_test.go` against a fake `Querier` |
 | use case | all | `internal/usecase/invoice/register.go`; in `command/`, `create_`, `update_` and `delete_invoice.go`, each with its test against `memstore`, and `command_test.go`; in `query/`, `get_invoice.go`, `list_invoices.go` and `query_test.go` against `repomock` |
 | module | all | `internal/app/invoice.go`: `invoiceModule()`, its handlers, its projector, and its REST and gRPC registration |
 | REST | `rest` | `internal/controller/restapi/v1/invoice/`: `controller.go` (`NewRoutes`, `_tag`), `create_invoice.go`, `list_invoices.go`, `get_invoice.go`, `update_invoice.go`, `delete_invoice.go`, `request.go`, `response.go`, `fake_test.go`, `invoice_test.go` |
@@ -76,7 +76,7 @@ transport, as `task` keeps them. The files it creates, for `invoice`:
 | GraphQL | `graphql` | in `internal/controller/graphql/schema/`, `invoice_types.graphqls` (`Invoice`, `InvoiceList`) and one file per field: `invoice.graphqls`, `invoices.graphqls`, `create_invoice.graphqls`, `update_invoice.graphqls`, `delete_invoice.graphqls`; `internal/controller/graphql/invoice/`: `resolver.go`, one file per field (`invoice.go`, `invoices.go`, `create_invoice.go`, `update_invoice.go`, `delete_invoice.go`), `fake_test.go`, `query_test.go`, `mutation_test.go` |
 | integration | all | `integration-test/invoice_test.go`, covering the transports the domain gets |
 
-That is 23 files whatever the transports, 10 more for REST, 9 for gRPC and 15 for GraphQL: 57 with
+That is 24 files whatever the transports, 10 more for REST, 9 for gRPC and 15 for GraphQL: 58 with
 all three. There is no `importer.go`, since a new domain never had rows without events.
 
 The operations, on each transport:
@@ -387,7 +387,7 @@ is used by a layer, and that planning `widget`, and a command and a query on eac
 and `exchange`, against the repository's real files passes every rule. So `make gen-check` fails when
 a shared file or a hand-written domain loses an anchor or a convention the generator needs. A change
 to what `new-domain` creates or edits also changes the counts that `domain_test.go` and
-`main_test.go` assert ("57 files to create, 3 to edit").
+`main_test.go` assert ("58 files to create, 3 to edit").
 
 `make gen-e2e` ([`scripts/gen-e2e.sh`](../scripts/gen-e2e.sh)) runs against the working tree as it is
 on disk, not `HEAD`, so template work is tested before it is committed. It adds a throwaway git

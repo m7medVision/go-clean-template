@@ -16,3 +16,18 @@ type Widget struct {
 	CreatedAt time.Time `json:"created_at" example:"2026-01-01T00:00:00Z"`
 	UpdatedAt time.Time `json:"updated_at" example:"2026-01-01T00:00:00Z"`
 }
+
+// ReadableBy is nil when userID may read the widget: when it is theirs. Another user's widget is
+// ErrWidgetForbidden.
+func (a *Widget) ReadableBy(userID string) error {
+	return widgetOwnedBy(a.UserID, userID)
+}
+
+// widgetOwnedBy is who may read or change a widget: its owner. Anyone else is ErrWidgetForbidden.
+func widgetOwnedBy(owner, userID string) error {
+	if owner != userID {
+		return ErrWidgetForbidden
+	}
+
+	return nil
+}

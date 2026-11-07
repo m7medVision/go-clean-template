@@ -2,63 +2,31 @@ package widget
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Projector keeps the widgets table, the widget read model, up to date from the widget events. The
-// worker runs it; it writes through the transaction the runner's context carries.
-type Projector struct {
-	pg *postgres.Postgres
+// NewProjector keeps the widgets table, the widget read model, up to date from the widget events. The
+// worker runs it.
+func NewProjector(pg *postgres.Postgres) projection.Projector {
+	return projection.NewProjector("widget", []string{"widgets"}, entity.WidgetEvents(), pg, project)
 }
 
-var _ repo.Subscriber = (*Projector)(nil)
-
-func NewProjector(pg *postgres.Postgres) *Projector {
-	return &Projector{pg: pg}
-}
-
-func (*Projector) Name() string {
-	return "widget"
-}
-
-// Tables are what a rebuild empties.
-func (*Projector) Tables() []string {
-	return []string{"widgets"}
-}
-
-func (*Projector) Handles() []entity.Event {
-	return entity.WidgetEvents()
-}
-
-func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
-	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
-}
-
-// Project applies one event to the widgets table through q.
-func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
-	var err error
-
+// project applies one event to the widgets table through q.
+func project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	switch ev := e.Event.(type) {
 	case entity.WidgetCreated:
-		err = q.InsertWidgetRow(ctx, queries.InsertWidgetRowParams{
+		return q.InsertWidgetRow(ctx, queries.InsertWidgetRowParams{
 			ID: ev.WidgetID, UserID: ev.UserID, CreatedAt: ev.At, UpdatedAt: ev.At,
 		})
 	case entity.WidgetUpdated:
-		err = q.UpdateWidgetRow(ctx, queries.UpdateWidgetRowParams{ID: ev.WidgetID, UpdatedAt: ev.At})
+		return q.UpdateWidgetRow(ctx, queries.UpdateWidgetRowParams{ID: ev.WidgetID, UpdatedAt: ev.At})
 	case entity.WidgetDeleted:
-		err = q.DeleteWidgetRow(ctx, ev.WidgetID)
+		return q.DeleteWidgetRow(ctx, ev.WidgetID)
 	default:
-		err = entity.ErrUnhandledEvent
+		return entity.ErrUnhandledEvent
 	}
-
-	if err != nil {
-		return fmt.Errorf("WidgetProjector - %s at %d: %w", e.Event.EventType(), e.Position, err)
-	}
-
-	return nil
 }

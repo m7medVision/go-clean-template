@@ -9,9 +9,9 @@ import (
 //go:generate mockgen -source=widget.go -destination=repomock/widget.go -package=repomock
 
 // WidgetReadModel reads the widgets table, which only the widget projector writes. Get of
-// one missing widget is entity.ErrWidgetNotFound, and of another user's entity.ErrWidgetForbidden.
+// one missing widget is entity.ErrWidgetNotFound; whether the caller may read it is entity.Widget's rule.
 type WidgetReadModel interface {
-	Get(ctx context.Context, userID, widgetID string) (entity.Widget, error)
+	Get(ctx context.Context, widgetID string) (entity.Widget, error)
 	// List is one page of the user's widgets, newest first.
 	List(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Widget], error)
 }

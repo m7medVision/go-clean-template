@@ -16,3 +16,18 @@ type {{.Name.Go}} struct {
 	CreatedAt time.Time `json:"created_at" example:"2026-01-01T00:00:00Z"`
 	UpdatedAt time.Time `json:"updated_at" example:"2026-01-01T00:00:00Z"`
 }
+
+// ReadableBy is nil when userID may read the {{.Name.Words}}: when it is theirs. Another user's {{.Name.Words}} is
+// Err{{.Name.Go}}Forbidden.
+func (a *{{.Name.Go}}) ReadableBy(userID string) error {
+	return {{.Name.Lower}}OwnedBy(a.UserID, userID)
+}
+
+// {{.Name.Lower}}OwnedBy is who may read or change a {{.Name.Words}}: its owner. Anyone else is Err{{.Name.Go}}Forbidden.
+func {{.Name.Lower}}OwnedBy(owner, userID string) error {
+	if owner != userID {
+		return Err{{.Name.Go}}Forbidden
+	}
+
+	return nil
+}
