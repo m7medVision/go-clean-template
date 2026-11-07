@@ -56,7 +56,6 @@ type Querier interface {
 	// The user projector's writes. Each leaves an existing row alone, so replaying a user's first event
 	// (an import, a rebuild) never overwrites it.
 	InsertUserRow(ctx context.Context, arg InsertUserRowParams) error
-	LastPosition(ctx context.Context) (int64, error)
 	ListAllTasks(ctx context.Context, arg ListAllTasksParams) ([]Task, error)
 	// ListEveryExchange is what the backfill imports, oldest first, so a rebuild keeps the order.
 	ListEveryExchange(ctx context.Context) ([]ExchangeHistory, error)

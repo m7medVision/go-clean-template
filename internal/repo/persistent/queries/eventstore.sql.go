@@ -199,19 +199,6 @@ func (q *Queries) InsertClaim(ctx context.Context, arg InsertClaimParams) (int64
 	return result.RowsAffected(), nil
 }
 
-const lastPosition = `-- name: LastPosition :one
-SELECT COALESCE(MAX(position), 0)::bigint
-FROM events
-WHERE stream_id NOT LIKE '\_%'
-`
-
-func (q *Queries) LastPosition(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, lastPosition)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const lockEventStore = `-- name: LockEventStore :exec
 SELECT pg_advisory_xact_lock($1::bigint)
 `

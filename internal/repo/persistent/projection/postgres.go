@@ -7,28 +7,25 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
 const _reconnectDelay = time.Second
 
-// Reader reads the event store in position order.
-type Reader interface {
-	ReadAll(ctx context.Context, after int64, limit int) ([]entity.RecordedEvent, error)
-}
-
-// PostgresStore is the runner's Store on the app's database. Its notifications come from a
-// connection of its own, outside the pool, that LISTENs on the channel every append notifies.
+// PostgresStore is the runner's Store on the app's database: it reads the event store through
+// reader. Its notifications come from a connection of its own, outside the pool, that LISTENs on
+// the channel every append notifies.
 type PostgresStore struct {
 	pg     *postgres.Postgres
-	reader Reader
+	reader *eventstore.Reader
 	logger *slog.Logger
 }
 
 var _ Store = (*PostgresStore)(nil)
 
-func NewStore(pg *postgres.Postgres, reader Reader, l *slog.Logger) *PostgresStore {
+func NewStore(pg *postgres.Postgres, reader *eventstore.Reader, l *slog.Logger) *PostgresStore {
 	return &PostgresStore{pg: pg, reader: reader, logger: l}
 }
 

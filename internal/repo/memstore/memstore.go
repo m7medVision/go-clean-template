@@ -1,7 +1,7 @@
 // Package memstore is an in-memory repo.EventStore for tests. It shares internal/repo/eventcodec with
-// the Postgres store (the codec, snapshots, claims and metadata) and passes the same contract suite
+// the Postgres store (the codec, snapshots and claims) and passes the same contract suite
 // (internal/repo/eventstoretest), so a command handler tested against it behaves the same against
-// Postgres.
+// Postgres. It keeps only what a load reads back: each stream's encoded events, in order.
 package memstore
 
 import (
@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -23,14 +22,6 @@ type Option func(*Store)
 // SnapshotEvery makes the store snapshot a stream each time it crosses a multiple of n events.
 func SnapshotEvery(n int) Option {
 	return func(s *Store) { s.snapshotEvery = n }
-}
-
-type row struct {
-	position   int64
-	version    int
-	stored     eventcodec.Stored
-	metadata   entity.Metadata
-	recordedAt time.Time
 }
 
 type snapshot struct {
@@ -49,7 +40,7 @@ type Store struct {
 	codec         *eventcodec.Codec
 	snapshotEvery int
 	position      int64
-	streams       map[string][]row
+	streams       map[string][]eventcodec.Stored
 	snapshots     map[string]snapshot
 	claims        map[claimKey]string
 }
@@ -59,7 +50,7 @@ type Store struct {
 func New(events []entity.Event, opts ...Option) *Store {
 	s := &Store{
 		codec:     eventcodec.New(events, entity.Upcasts()...),
-		streams:   map[string][]row{},
+		streams:   map[string][]eventcodec.Stored{},
 		snapshots: map[string]snapshot{},
 		claims:    map[claimKey]string{},
 	}
@@ -72,7 +63,7 @@ func New(events []entity.Event, opts ...Option) *Store {
 }
 
 // Save appends a's pending events and applies claims, all or nothing.
-func (s *Store) Save(ctx context.Context, a entity.Aggregate, claims ...entity.Claim) (int64, error) {
+func (s *Store) Save(_ context.Context, a entity.Aggregate, claims ...entity.Claim) (int64, error) {
 	if len(a.Pending()) == 0 && len(claims) == 0 {
 		return 0, nil
 	}
@@ -109,14 +100,8 @@ func (s *Store) Save(ctx context.Context, a entity.Aggregate, claims ...entity.C
 		return 0, nil
 	}
 
-	md := eventcodec.Metadata(ctx)
-
-	for i, st := range stored {
-		s.position++
-		s.streams[streamID] = append(s.streams[streamID], row{
-			position: s.position, version: before + i + 1, stored: st, metadata: md, recordedAt: time.Now(),
-		})
-	}
+	s.position += int64(len(stored))
+	s.streams[streamID] = append(s.streams[streamID], stored...)
 
 	if err := s.snapshotIfDue(a, before, before+len(stored)); err != nil {
 		return 0, err
@@ -194,7 +179,7 @@ func (s *Store) Load(_ context.Context, streamID string, a entity.Aggregate) err
 	events := make([]entity.Event, 0, len(rows)-from)
 
 	for i := from; i < len(rows); i++ {
-		e, err := s.codec.Decode(rows[i].stored)
+		e, err := s.codec.Decode(rows[i])
 		if err != nil {
 			return fmt.Errorf("memstore - Load %s: %w", streamID, err)
 		}
@@ -229,7 +214,7 @@ func (s *Store) Events(streamID string) []entity.Event {
 	events := make([]entity.Event, 0, len(s.streams[streamID]))
 
 	for i := range s.streams[streamID] {
-		e, err := s.codec.Decode(s.streams[streamID][i].stored)
+		e, err := s.codec.Decode(s.streams[streamID][i])
 		if err != nil {
 			panic(fmt.Sprintf("memstore - Events %s: %v", streamID, err))
 		}

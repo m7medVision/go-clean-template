@@ -31,11 +31,6 @@ WHERE position > sqlc.arg('after_position')
 ORDER BY position
 LIMIT sqlc.arg('max_events');
 
--- name: LastPosition :one
-SELECT COALESCE(MAX(position), 0)::bigint
-FROM events
-WHERE stream_id NOT LIKE '\_%';
-
 -- NotifyEvents wakes the projection runners; Postgres delivers it when the transaction commits.
 -- name: NotifyEvents :exec
 SELECT pg_notify('events', '');

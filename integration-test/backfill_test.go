@@ -142,9 +142,7 @@ func importAll(t *testing.T, pg *postgres.Postgres) {
 		require.NoError(t, eventstore.Backfill(ctx, pg, newStore(pg), again), imp.Domain())
 	}
 
-	last, err := queries.New(pg.Executor(ctx)).LastPosition(ctx)
-	require.NoError(t, err)
-
+	last := lastPosition(t, pg)
 	checkpoints := projection.NewCheckpoints(pg)
 
 	require.Eventually(t, func() bool {
@@ -152,6 +150,20 @@ func importAll(t *testing.T, pg *postgres.Postgres) {
 
 		return err == nil && reached
 	}, rebuildWait, rebuildTick, "the projectors pass the imported events")
+}
+
+// lastPosition is the position of the last event a subscriber is handed: the last one outside the
+// scratch streams.
+func lastPosition(t *testing.T, pg *postgres.Postgres) int64 {
+	t.Helper()
+
+	var last int64
+
+	err := pg.Executor(context.Background()).QueryRow(context.Background(),
+		`SELECT COALESCE(MAX(position), 0) FROM events WHERE stream_id NOT LIKE '\_%'`).Scan(&last)
+	require.NoError(t, err)
+
+	return last
 }
 
 func eventsOf(t *testing.T, pg *postgres.Postgres, stream string) []string {

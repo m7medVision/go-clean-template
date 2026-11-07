@@ -13,7 +13,6 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -131,8 +130,7 @@ func TestRebuildingTheTaskProjectionRestoresItsReads(t *testing.T) {
 	before := httpGetJSON[taskListResponse](t, token, "/tasks")
 
 	pg := newPostgres(t)
-	last, err := queries.New(pg.Executor(t.Context())).LastPosition(t.Context())
-	require.NoError(t, err)
+	last := lastPosition(t, pg)
 
 	require.NoError(t, projection.Rebuild(t.Context(), pg, "task", []projection.Projector{persistTaskRepo.NewProjector(pg)}, nil))
 
