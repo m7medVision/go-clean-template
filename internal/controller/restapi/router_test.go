@@ -50,27 +50,6 @@ func taskBuses(stored *entity.Task) cqrs.Buses {
 	return cqrs.Buses{Commands: cmds, Queries: qs}
 }
 
-func TestDocsArePublic(t *testing.T) {
-	t.Parallel()
-
-	handler := newRouter(taskBuses(&entity.Task{}))
-
-	for _, target := range []string{"/openapi.json", "/docs"} {
-		resp := resttest.Do(t.Context(), handler, http.MethodGet, target, "", "")
-		assert.Equal(t, http.StatusOK, resp.Code, target)
-	}
-}
-
-func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
-	t.Parallel()
-
-	handler := newRouter(taskBuses(&entity.Task{}))
-
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", "", "")
-	assert.Equal(t, http.StatusUnauthorized, resp.Code)
-	assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
-}
-
 func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 	t.Parallel()
 

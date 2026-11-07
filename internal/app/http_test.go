@@ -200,6 +200,7 @@ func TestTheDocumentedSecurityIsEnforced(t *testing.T) {
 			}
 
 			assert.Equal(t, http.StatusUnauthorized, resp.Code, op.OperationID)
+			assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"), op.OperationID)
 			assert.JSONEq(t, `{"type":"about:blank","title":"Unauthorized","status":401,"detail":"missing authorization header"}`,
 				resp.Body.String(), op.OperationID)
 		}

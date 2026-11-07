@@ -219,8 +219,8 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
 - Tests go through the real server and real buses, with fake handlers registered for the domain's
   messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (it sets no env:
   no controller reads config), GraphQL with `graphql/graphqltest`, gRPC over
-  `bufconn` in the test itself. REST-wide tests (docs, auth following each operation's `Security`)
-  stay in `restapi/router_test.go`; tests of the whole HTTP mux (public routes, panics, metrics,
+  `bufconn` in the test itself. REST-wide tests (auth following each operation's `Security`, response
+  shape, validation) stay in `restapi/router_test.go`; tests of the whole HTTP mux (public routes, panics, metrics,
   GraphQL beside REST, the documented security enforced), of the gRPC server (public methods,
   panics) and of the exported OpenAPI document are in `internal/app`.
 - **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
