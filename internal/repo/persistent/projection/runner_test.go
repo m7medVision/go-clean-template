@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -301,13 +302,10 @@ func (r *recorder) positions() []int64 {
 	return append([]int64(nil), r.handled...)
 }
 
-func start(t *testing.T, s *fakeStore, poll time.Duration, subs ...*recorder) {
+func start(t *testing.T, s *fakeStore, poll time.Duration, subs ...repo.Subscriber) {
 	t.Helper()
 
-	runner := projection.New(slog.New(slog.DiscardHandler), s, poll, 2)
-	for _, sub := range subs {
-		runner.Add(sub)
-	}
+	runner := projection.New(slog.New(slog.DiscardHandler), s, poll, 2, subs...)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

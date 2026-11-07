@@ -6,6 +6,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
@@ -53,18 +54,15 @@ func newRunner(d *deps) (*projection.Runner, error) {
 		return nil, err
 	}
 
-	store := projection.NewStore(d.pg, eventstore.NewReader(d.pg, newCodec()), d.l)
-	runner := projection.New(d.l, store, d.cfg.CQRS.ProjectionPollInterval, d.cfg.CQRS.ProjectionBatchSize)
-
+	subscribers := make([]repo.Subscriber, 0, len(ps)+len(handlers))
 	for _, p := range ps {
-		runner.Add(p)
+		subscribers = append(subscribers, p)
 	}
 
-	for _, h := range handlers {
-		runner.Add(h)
-	}
+	store := projection.NewStore(d.pg, eventstore.NewReader(d.pg, newCodec()), d.l)
 
-	return runner, nil
+	return projection.New(d.l, store, d.cfg.CQRS.ProjectionPollInterval, d.cfg.CQRS.ProjectionBatchSize,
+		append(subscribers, handlers...)...), nil
 }
 
 // RebuildProjection empties the read model of the projector called name and resets its checkpoint,

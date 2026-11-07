@@ -104,8 +104,7 @@ func startRunner(t *testing.T, pg *postgres.Postgres, c *runCounter) func() {
 	store := projection.NewStore(pg, eventstore.NewReader(pg, eventcodec.New(events)).IncludingScratch(), l)
 
 	// An hour between polls: only the LISTEN notification can wake the runner in time.
-	runner := projection.New(l, store, time.Hour, projectionBatchSize)
-	runner.Add(c)
+	runner := projection.New(l, store, time.Hour, projectionBatchSize, c)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

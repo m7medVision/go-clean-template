@@ -49,15 +49,10 @@ type Runner struct {
 	logger       *slog.Logger
 }
 
-// New returns a runner reading s, at most batchSize events at once. An idle subscriber waits
-// pollInterval for a notification before it reads again.
-func New(l *slog.Logger, s Store, pollInterval time.Duration, batchSize int) *Runner {
-	return &Runner{store: s, pollInterval: pollInterval, batchSize: batchSize, logger: l}
-}
-
-// Add registers a subscriber. Call it before Run.
-func (r *Runner) Add(s repo.Subscriber) {
-	r.subscribers = append(r.subscribers, s)
+// New returns a runner that runs subscribers on s, reading at most batchSize events at once. An
+// idle subscriber waits pollInterval for a notification before it reads again.
+func New(l *slog.Logger, s Store, pollInterval time.Duration, batchSize int, subscribers ...repo.Subscriber) *Runner {
+	return &Runner{store: s, subscribers: subscribers, pollInterval: pollInterval, batchSize: batchSize, logger: l}
 }
 
 // Run runs one loop per subscriber, and one that fans the store's notifications out to them,
