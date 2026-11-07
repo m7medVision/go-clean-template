@@ -1,6 +1,7 @@
 package sso_test
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -13,6 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// _stall bounds a step's calls to a provider that stalls, so the test does not wait out sso.Timeout.
+const _stall = 300 * time.Millisecond
 
 func newSSO(t *testing.T, idp *ssotest.IDP, configure ...func(*config.OIDC)) *sso.SSO {
 	t.Helper()
@@ -100,12 +104,12 @@ func TestBeginRetriesDiscovery(t *testing.T) {
 	s := newSSO(t, idp)
 
 	// The provider may still be starting when the first sign-in arrives.
-	idp.Down.Store(true)
+	idp.Fail(ssotest.Discovery, ssotest.Fails)
 
 	_, _, err := s.Begin(t.Context())
 	require.ErrorIs(t, err, entity.ErrOIDCUnavailable)
 
-	idp.Down.Store(false)
+	idp.Fail(ssotest.Discovery, ssotest.Answers)
 
 	_, _, err = s.Begin(t.Context())
 	require.NoError(t, err, "a failed discovery is not cached")
@@ -243,6 +247,116 @@ func TestVerifyRefusesAnInvalidCeremony(t *testing.T) {
 
 			_, err = s.Verify(t.Context(), code, state, token)
 			require.ErrorIs(t, err, entity.ErrOIDCCeremonyInvalid)
+		})
+	}
+}
+
+// Keys the provider serves that verify none of its ID token are the token's fault, not an outage.
+func TestVerifyRefusesAnIDTokenTheProviderDidNotSign(t *testing.T) {
+	t.Parallel()
+
+	idp := ssotest.New(t)
+	idp.Forge()
+
+	_, err := signIn(t, newSSO(t, idp), idp, nil)
+	require.ErrorIs(t, err, entity.ErrOIDCCeremonyInvalid)
+}
+
+// finishElsewhere begins a sign-in at idp and has the provider sign the user in, then breaks endpoint
+// with fault and returns a second SSO to finish on, as after a restart: it discovers idp again.
+func finishElsewhere(
+	t *testing.T, idp *ssotest.IDP, endpoint ssotest.Endpoint, fault ssotest.Fault,
+) (s *sso.SSO, code, state, token string) {
+	t.Helper()
+
+	authURL, token, err := newSSO(t, idp).Begin(t.Context())
+	require.NoError(t, err)
+
+	code, state = idp.Authorize(authURL, nil)
+	idp.Fail(endpoint, fault)
+
+	return newSSO(t, idp), code, state, token
+}
+
+// Finishing a sign-in calls the provider three times: discovery, the code exchange, and the key fetch
+// that verifies the ID token. At each, the provider failing is an outage (502), and only the provider
+// turning the code down is the sign-in's fault (401).
+func TestVerifyTellsAnOutageFromARefusal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		endpoint ssotest.Endpoint
+		fault    ssotest.Fault
+		want     error
+	}{
+		{"discovery cannot be reached", ssotest.Discovery, ssotest.HangsUp, entity.ErrOIDCUnavailable},
+		{"discovery fails", ssotest.Discovery, ssotest.Fails, entity.ErrOIDCUnavailable},
+		{"discovery answers 400", ssotest.Discovery, ssotest.Refuses, entity.ErrOIDCUnavailable},
+		{"discovery does not answer in time", ssotest.Discovery, ssotest.Stalls, entity.ErrOIDCUnavailable},
+		{"the token endpoint cannot be reached", ssotest.Token, ssotest.HangsUp, entity.ErrOIDCUnavailable},
+		{"the token endpoint fails", ssotest.Token, ssotest.Fails, entity.ErrOIDCUnavailable},
+		{"the token endpoint refuses the code", ssotest.Token, ssotest.Refuses, entity.ErrOIDCCeremonyInvalid},
+		{"the token endpoint does not answer in time", ssotest.Token, ssotest.Stalls, entity.ErrOIDCUnavailable},
+		{"the keys cannot be reached", ssotest.Keys, ssotest.HangsUp, entity.ErrOIDCUnavailable},
+		{"the keys fail", ssotest.Keys, ssotest.Fails, entity.ErrOIDCUnavailable},
+		{"the keys answer 400", ssotest.Keys, ssotest.Refuses, entity.ErrOIDCUnavailable},
+		{"the keys do not come in time", ssotest.Keys, ssotest.Stalls, entity.ErrOIDCUnavailable},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			s, code, state, token := finishElsewhere(t, ssotest.New(t), tt.endpoint, tt.fault)
+			if tt.fault == ssotest.Stalls {
+				s.SetTimeout(_stall)
+			}
+
+			_, err := s.Verify(t.Context(), code, state, token)
+			require.ErrorIs(t, err, tt.want)
+		})
+	}
+}
+
+// A caller that goes away while the provider works on its sign-in is neither an outage nor a bad
+// sign-in.
+func TestACanceledSignInIsNeitherAnOutageNorARefusal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		endpoint ssotest.Endpoint
+	}{
+		{"while the provider is discovered", ssotest.Discovery},
+		{"while the code is exchanged", ssotest.Token},
+		{"while the keys are fetched", ssotest.Keys},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			idp := ssotest.New(t)
+			s, code, state, token := finishElsewhere(t, idp, tt.endpoint, ssotest.Stalls)
+
+			// The caller leaves once the provider stalls, past the calls before it.
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			go func() {
+				select {
+				case <-idp.Stalled():
+				case <-ctx.Done():
+				}
+
+				cancel()
+			}()
+
+			_, err := s.Verify(ctx, code, state, token)
+			require.ErrorContains(t, err, context.Canceled.Error())
+			assert.NotErrorIs(t, err, entity.ErrOIDCUnavailable)
+			assert.NotErrorIs(t, err, entity.ErrOIDCCeremonyInvalid)
 		})
 	}
 }

@@ -10,7 +10,8 @@ import (
 // Enabled is false and Begin and Verify are entity.ErrOIDCDisabled. Begin returns the provider
 // URL to send the browser to and a token carrying the sign-in's state; Verify checks the
 // provider's redirect against it and returns who signed in. A bad, expired or replayed sign-in is
-// entity.ErrOIDCCeremonyInvalid, and an unreachable provider entity.ErrOIDCUnavailable.
+// entity.ErrOIDCCeremonyInvalid. A provider that fails at any step (unreachable, timed out, an error
+// status, keys that cannot be fetched) is entity.ErrOIDCUnavailable; a canceled ctx is neither.
 type SSOProvider interface {
 	Enabled() bool
 	Begin(ctx context.Context) (authURL, token string, err error)

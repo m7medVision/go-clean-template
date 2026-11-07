@@ -408,6 +408,7 @@ API
 - Every list pages by one rule (`entity.Page`): limit 0–100, 0 meaning 10. The REST task list, which had no maximum, and gRPC lists are capped at 100.
 - The OpenAPI document lists 409, 503 and 501 on every command, oidc-status's errors, and 502 on convert-currency; `docs/openapi/v1.json` and the web types changed with it.
 - Any failure of the rate provider (unreachable, timed out, non-2xx, an error result, an unreadable body) answers 502, as an SSO outage does; it was 500 for most of them.
+- An SSO provider outage answers 502 at every step of a sign-in (discovery, the code exchange, the key fetch), not only the first lookup: after discovery it was a 500, or a 401 for a token endpoint answering 5xx and for keys that could not be fetched. A step gives up on the provider after 5 s (`sso.Timeout`); it had no timeout. The HTTP write deadline covers that wait as it does the rate's.
 - An amount is parsed once, in the domain: gRPC's message for an unparsable amount is the entity's.
 - A read of an ID other than a lowercase UUID, as the app writes them, answers not found instead of 500, as a write to it already did.
 - Task lists page in one order when two tasks share a timestamp.

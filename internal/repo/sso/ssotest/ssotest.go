@@ -1,9 +1,10 @@
 // Package ssotest is an OpenID Connect provider on httptest for the SSO tests: discovery, JWKS, and
 // a token endpoint that checks the client secret, the code and its PKCE verifier, and signs a real
-// RS256 ID token.
+// RS256 ID token. A test can make any endpoint fail as an outage would.
 package ssotest
 
 import (
+	"cmp"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -14,7 +15,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,16 +37,51 @@ const (
 	_codeTTL = 5 * time.Minute
 )
 
-// IDP is the fake provider. Down makes discovery fail, as a provider that is still starting does.
-type IDP struct {
-	Down atomic.Bool
+// Endpoint is one of the provider's endpoints, which Fail makes fail.
+type Endpoint int
 
+const (
+	// Discovery serves the provider's metadata.
+	Discovery Endpoint = iota
+	// Token exchanges a code for tokens.
+	Token
+	// Keys serves the keys the provider signs ID tokens with.
+	Keys
+)
+
+// Fault is how Fail makes an endpoint fail.
+type Fault int
+
+const (
+	// Answers is an endpoint that works, as each one does until Fail says otherwise.
+	Answers Fault = iota
+	// HangsUp closes the connection without an answer, as a provider that cannot be reached.
+	HangsUp
+	// Fails answers 500, as a provider that is up but failing.
+	Fails
+	// Refuses answers 400 invalid_grant, the OAuth error for a code the provider turns down.
+	Refuses
+	// Stalls answers nothing until the caller gives up, as a provider that does not answer in time.
+	// Stalled receives each request it holds.
+	Stalls
+)
+
+// IDP is the fake provider.
+type IDP struct {
 	t   *testing.T
 	srv *httptest.Server
+	// key signs the ID tokens and is the key the provider publishes.
 	key *rsa.PrivateKey
+	// stalled receives a request a Stalls fault holds, as it starts holding it.
+	stalled chan struct{}
+	// released ends the requests a Stalls fault holds, when the test ends.
+	released chan struct{}
 
-	mu    sync.Mutex
-	codes map[string]grant
+	mu     sync.Mutex
+	codes  map[string]grant
+	faults map[Endpoint]Fault
+	// forged, once Forge sets it, signs the ID tokens in place of key.
+	forged *rsa.PrivateKey
 }
 
 // grant is what the fake remembers about a code it handed out.
@@ -59,23 +94,56 @@ type grant struct {
 func New(t *testing.T) *IDP {
 	t.Helper()
 
-	key, err := rsa.GenerateKey(rand.Reader, _keyBits)
-	require.NoError(t, err)
-
-	idp := &IDP{t: t, key: key, codes: map[string]grant{}}
+	idp := &IDP{
+		t: t, key: newKey(t), stalled: make(chan struct{}, 1), released: make(chan struct{}),
+		codes: map[string]grant{}, faults: map[Endpoint]Fault{},
+	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /.well-known/openid-configuration", idp.discovery)
-	mux.HandleFunc("GET /jwks", idp.jwks)
-	mux.HandleFunc("POST /token", idp.token)
+	mux.HandleFunc("GET /.well-known/openid-configuration", idp.faulty(Discovery, idp.discovery))
+	mux.HandleFunc("GET /jwks", idp.faulty(Keys, idp.jwks))
+	mux.HandleFunc("POST /token", idp.faulty(Token, idp.token))
 
 	idp.srv = httptest.NewServer(mux)
 	t.Cleanup(idp.srv.Close)
+	// Cleanups run last first: the stalled requests end before Close waits for them.
+	t.Cleanup(func() { close(idp.released) })
 
 	return idp
 }
 
+func newKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, _keyBits)
+	require.NoError(t, err)
+
+	return key
+}
+
 func (p *IDP) Issuer() string { return p.srv.URL }
+
+// Fail makes endpoint e fail as f says from now on; Answers makes it work again.
+func (p *IDP) Fail(e Endpoint, f Fault) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.faults[e] = f
+}
+
+// Stalled receives a request a Stalls fault holds, as it starts holding it.
+func (p *IDP) Stalled() <-chan struct{} { return p.stalled }
+
+// Forge makes the provider sign every ID token from now on with a key it does not publish, under the
+// published key's ID.
+func (p *IDP) Forge() {
+	key := newKey(p.t)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.forged = key
+}
 
 // Authorize plays the user signing in at the provider: it reads the nonce and PKCE challenge from
 // the authorize URL and returns a code whose ID token carries claims on top of valid defaults. A
@@ -109,13 +177,39 @@ func (p *IDP) Authorize(authURL string, claims map[string]any) (code, state stri
 	return code, q.Get("state")
 }
 
-func (p *IDP) discovery(w http.ResponseWriter, _ *http.Request) {
-	if p.Down.Load() {
-		w.WriteHeader(http.StatusServiceUnavailable)
+// faulty serves h, unless Fail made endpoint e fail.
+func (p *IDP) faulty(e Endpoint, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p.mu.Lock()
+		fault := p.faults[e]
+		p.mu.Unlock()
 
-		return
+		switch fault {
+		case Answers:
+			h(w, r)
+		case HangsUp:
+			conn, _, err := http.NewResponseController(w).Hijack()
+			require.NoError(p.t, err)
+			require.NoError(p.t, conn.Close())
+		case Fails:
+			w.WriteHeader(http.StatusInternalServerError)
+		case Refuses:
+			p.writeError(w, "invalid_grant")
+		case Stalls:
+			select {
+			case p.stalled <- struct{}{}:
+			default:
+			}
+
+			select {
+			case <-r.Context().Done():
+			case <-p.released:
+			}
+		}
 	}
+}
 
+func (p *IDP) discovery(w http.ResponseWriter, _ *http.Request) {
 	p.writeJSON(w, map[string]any{
 		"issuer":                                p.Issuer(),
 		"authorization_endpoint":                p.Issuer() + "/auth",
@@ -166,7 +260,11 @@ func (p *IDP) sign(claims map[string]any) string {
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodRS256, jwtlib.MapClaims(claims))
 	token.Header["kid"] = _keyID
 
-	signed, err := token.SignedString(p.key)
+	p.mu.Lock()
+	key := cmp.Or(p.forged, p.key)
+	p.mu.Unlock()
+
+	signed, err := token.SignedString(key)
 	require.NoError(p.t, err)
 
 	return signed

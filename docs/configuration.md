@@ -93,7 +93,7 @@ required. See [cqrs.md](cqrs.md) for how they behave.
 
 | Env var | Default | |
 | --- | --- | --- |
-| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly). The HTTP write deadline follows it: this, plus the rate API's 5s timeout (a conversion waits for both), plus 3s |
+| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly). The HTTP write deadline follows it: this, plus the 5s timeout of the rate API and of the SSO provider (a conversion or a finished sign-in waits for both), plus 3s |
 | `EVENTSTORE_SNAPSHOT_EVERY` | `100` | snapshot a stream each time it crosses a multiple of this many events; `0` never snapshots |
 | `PROJECTION_POLL_INTERVAL` | `1s` | how often an idle projection reads the store when no notification arrives |
 | `PROJECTION_BATCH_SIZE` | `100` | events a projection reads at once |
@@ -122,7 +122,8 @@ http://127.0.0.1:16686.
   [otelhttp](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp)
   middleware.
   gRPC uses the [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler.
-  The outbound exchange-rate call uses an `otelhttp` transport, so it joins the same trace.
+  The outbound calls, to the exchange-rate API and to the SSO provider, use an `otelhttp` transport,
+  so they join the same trace (all but the SSO key fetch, which go-oidc runs in the background).
 - **Every layer has spans.** A trace shows the request, then a span per command or query (the
   buses' trace step), then one per SQL statement (otelpgx) and per outbound HTTP call (otelhttp).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the

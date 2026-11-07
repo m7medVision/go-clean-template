@@ -36,8 +36,8 @@ setup are in [sso.md](sso.md).
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/v1/auth/oidc` | none | `{enabled}`: whether `OIDC_ISSUER` is set |
-| `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down |
-| `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in, `409` when the email or username belongs to another account |
+| `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down or does not answer within 5 s |
+| `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in (the provider refuses the code, or the ID token does not verify), `409` when the email or username belongs to another account, `502` when the provider is down or does not answer within 5 s at any step: discovery, the code exchange or fetching its keys |
 
 ## Passkeys
 

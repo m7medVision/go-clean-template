@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/repo/sso"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
@@ -203,13 +204,15 @@ func TestServeFailsWhenItCannotListen(t *testing.T) {
 	require.Error(t, serveGRPC(t.Context(), grpc.NewServer(), port, _testDrain, slog.New(slog.DiscardHandler)))
 }
 
-// A conversion waits up to the rate API's timeout for its rate, then up to the consistency timeout
-// for its projections, so its answer must still fit in the write deadline.
+// A conversion waits up to the rate API's timeout for its rate, and a finished SSO sign-in up to the
+// provider's for its provider, then each up to the consistency timeout for its projections, so the
+// answer must still fit in the write deadline.
 func TestTheWriteDeadlineOutlastsTheSlowestWrite(t *testing.T) {
 	t.Parallel()
 
 	for _, timeout := range []time.Duration{time.Second, 2 * time.Second, time.Minute} {
 		srv := newHTTPServer("0", http.NotFoundHandler(), timeout)
-		assert.Greater(t, srv.WriteTimeout, webapi.Timeout+timeout)
+		assert.Greater(t, srv.WriteTimeout, webapi.Timeout+timeout, "a conversion")
+		assert.Greater(t, srv.WriteTimeout, sso.Timeout+timeout, "a finished SSO sign-in")
 	}
 }

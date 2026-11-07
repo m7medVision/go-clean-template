@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/repo/sso"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"google.golang.org/grpc"
 )
@@ -16,7 +17,8 @@ import (
 const (
 	_readTimeout = 5 * time.Second
 	// _writeMargin is how much longer than its waits a response may take: the slowest write still has
-	// to save and answer once it has its rate and its projections.
+	// to save and answer once the outside service (the rate API, the SSO provider) and its projections
+	// have answered.
 	_writeMargin = 3 * time.Second
 	// _shutdownTimeout bounds how long each server finishes the requests and streams in flight once it
 	// is told to stop; it drops what is left after that.
@@ -34,15 +36,17 @@ type server struct {
 	stopNow func()
 }
 
-// newHTTPServer serves h on port. The slowest write, a conversion, waits up to webapi.Timeout for
-// its rate and then up to consistencyTimeout for its projections, so the write deadline is both
-// plus a margin: a shorter one would cut off the answer of a write that waits its full time.
+// newHTTPServer serves h on port. The slowest writes wait on an outside service and then up to
+// consistencyTimeout for their projections: a conversion up to webapi.Timeout for its rate, a finished
+// SSO sign-in up to sso.Timeout for its provider (one deadline for all its calls to it). So the write
+// deadline is the longer of those, plus consistencyTimeout, plus a margin: a shorter one would cut
+// off the answer of a write that waits its full time.
 func newHTTPServer(port string, h http.Handler, consistencyTimeout time.Duration) *http.Server {
 	return &http.Server{
 		Addr:         net.JoinHostPort("", port),
 		Handler:      h,
 		ReadTimeout:  _readTimeout,
-		WriteTimeout: webapi.Timeout + consistencyTimeout + _writeMargin,
+		WriteTimeout: max(webapi.Timeout, sso.Timeout) + consistencyTimeout + _writeMargin,
 	}
 }
 

@@ -49,6 +49,14 @@ The provider is discovered on the first sign-in, not at startup. The app starts 
 is still booting or down, and `GET /v1/auth/oidc` never calls it. A failed discovery is retried on
 the next sign-in and answers `502` until then.
 
+Begin calls the provider only to discover it. Finish calls it up to three times: discovery, if the
+app has not done it since it started; the code exchange; and fetching the provider's keys, when none
+the app holds verifies the ID token. One deadline, `sso.Timeout` (5 s), bounds each step's calls
+together, so a finished sign-in fits the HTTP write deadline. Every call follows one rule: the
+provider turning the code down (a 4xx) or an ID token that does not verify is the sign-in's fault
+(`401`); failing to reach the provider or to get an answer from it (no connection, the deadline, a
+5xx, keys that cannot be fetched) is an outage (`502`); a caller that goes away is neither.
+
 ## Users and identities
 
 An identity at the provider is `(issuer, subject)`, and `user_identities` links it to a local user.
@@ -83,7 +91,7 @@ buses' authorize step): `GET /v1/admin/tasks`,
 | Case | Sentinel | REST |
 | --- | --- | --- |
 | `OIDC_ISSUER` is empty | `ErrOIDCDisabled` | `404` |
-| The provider cannot be reached | `ErrOIDCUnavailable` | `502` |
+| The provider cannot be reached, fails (5xx) or does not answer in 5 s, at discovery, the code exchange or the key fetch | `ErrOIDCUnavailable` | `502` |
 | Bad, expired or replayed state, token, code or ID token; no email | `ErrOIDCCeremonyInvalid` | `401` |
 | The email or username belongs to another account | `ErrAccountConflict` | `409` |
 | A caller without `admin` lists every user's tasks | `ErrAdminRequired` | `403` (`FORBIDDEN`, `PERMISSION_DENIED`) |
