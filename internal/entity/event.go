@@ -12,7 +12,8 @@ import (
 //
 // EventType names the event in the store and never changes once events of the type are stored.
 // SchemaVersion is the version of the event's current shape; changing the shape means a new
-// version and an upcaster in the store's codec that rewrites the previous one.
+// version and an Upcast in Upcasts from the previous one, which the store's codec applies as it
+// loads.
 type Event interface {
 	EventType() string
 	SchemaVersion() int

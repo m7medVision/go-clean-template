@@ -381,7 +381,8 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 - **The backfill** (`eventstore.Backfill`, `internal/app/backfill.go`) runs at app start, once per
   domain (its marker is a row in `backfill_markers`), and turns rows written before event sourcing
   into `*Imported` events. An importer only returns one new aggregate per row; the backfill's one
-  loop saves them and skips a stream that exists. Projectors apply `*Imported` as upserts. A new
+  loop saves them and skips a stream that exists. Projectors insert `*Imported` rows with
+  `ON CONFLICT DO NOTHING`, so a row already there stays as it was. A new
   domain needs no importer: it never had rows without events.
 - **Scratch streams** start with `_` and are never delivered; the event store's integration tests use
   only those, so they can share the database with a running worker.

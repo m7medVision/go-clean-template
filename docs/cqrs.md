@@ -160,8 +160,7 @@ The worker runs one loop per subscriber:
   hands the subscriber those of the types it `Handles`. The others move its checkpoint without
   reaching it, a batch of them in one transaction.
 - **Every event reaches a read model.** The worker refuses to start when an event type in
-  `entity.EventTypes()` has no projector, when two subscribers share a name, or when a name starts
-  with `_` (`projection.Check`).
+  `entity.EventTypes()` has no projector, or when two subscribers share a name (`projection.Check`).
 - **An event and its checkpoint commit together.** Each event is handled in one transaction with the
   checkpoint's move: a subscriber writes through `Executor(ctx)`, so its rows, or its queue message,
   commit with the checkpoint exactly once. A failure rolls both back, and the event is retried.
@@ -211,8 +210,8 @@ that exists never fails a statement inside the import's transaction. A database 
 v0.3, which kept its markers in `projection_checkpoints` as `_backfill/<domain>`, has them moved to
 `backfill_markers` at the next start instead of importing again.
 
-Projectors apply `*Imported` events as upserts, so the rows stay as they were and no checkpoint is
-ever moved by hand.
+Projectors insert the rows of `*Imported` events with `ON CONFLICT DO NOTHING`, so a row that is
+there already stays as it was and no checkpoint is ever moved by hand.
 
 ### Scratch streams
 
