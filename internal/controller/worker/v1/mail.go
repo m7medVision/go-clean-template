@@ -1,3 +1,5 @@
+// Package v1 handles the queue messages the worker consumes: each handler decodes a message, sends
+// a command on the buses, and returns its error so the message is retried.
 package v1
 
 import (
@@ -23,7 +25,7 @@ func NewMailController(cmds *cqrs.Commands, l *slog.Logger) *MailController {
 	return &MailController{cmds: cmds, l: l}
 }
 
-// NewMailRoutes -.
+// NewMailRoutes registers the handler of entity.EmailQueue on w, delivering through cmds.
 func NewMailRoutes(w *worker.Worker, cmds *cqrs.Commands, l *slog.Logger) {
 	w.Handle(entity.EmailQueue, NewMailController(cmds, l).Handle)
 }

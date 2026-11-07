@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/config"
-	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
+	workerv1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
@@ -17,9 +17,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// RunWorker runs the projections and consumes the queues registered in internal/controller/worker
-// until ctx ends. It returns once both have stopped and the pool is closed. It does not apply the
-// schema; the app does.
+// RunWorker runs the projections and consumes the mail queue until ctx ends. It returns once both
+// have stopped and the pool is closed. It does not apply the schema; the app does.
 func RunWorker(ctx context.Context, cfg *config.Config) error {
 	b, err := newBootstrap(ctx, cfg, cfg.App.Name+"-worker")
 	if err != nil {
@@ -38,7 +37,7 @@ func RunWorker(ctx context.Context, cfg *config.Config) error {
 	}
 
 	w := worker.New(b.l, queue.New(b.pg), worker.Settings(cfg.Worker))
-	workerctl.NewRouter(w, b.l, workerctl.WithMail(b.buses.Commands))
+	workerv1.NewMailRoutes(w, b.buses.Commands, b.l)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return w.Run(ctx) })

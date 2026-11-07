@@ -32,11 +32,20 @@ func greeting() smtp.Message {
 	}
 }
 
+func newClient(t *testing.T, srv *fakeServer, opts ...smtp.Option) *smtp.Client {
+	t.Helper()
+
+	c, err := smtp.New(srv.host, srv.port, _from, opts...)
+	require.NoError(t, err)
+
+	return c
+}
+
 func TestSend_DeliversToTheEnvelopeAddresses(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	require.NoError(t, c.Send(context.Background(), greeting()))
 
@@ -49,7 +58,7 @@ func TestSend_WritesHeaders(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	require.NoError(t, c.Send(context.Background(), greeting()))
 
@@ -75,7 +84,7 @@ func TestSend_WritesTextThenHTML(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	require.NoError(t, c.Send(context.Background(), greeting()))
 
@@ -91,7 +100,7 @@ func TestSend_EncodesANonASCIISubject(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	m := greeting()
 	m.Subject = "Bienvenue, José"
@@ -109,7 +118,7 @@ func TestSend_SubjectCannotInjectHeaders(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	m := greeting()
 	m.Subject = "Hi\r\nBcc: attacker@example.com"
@@ -124,7 +133,7 @@ func TestSend_RejectsAnInvalidRecipient(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	for _, to := range []string{"", "not an address", "john@example.com\r\nBcc: attacker@example.com"} {
 		m := greeting()
@@ -137,21 +146,21 @@ func TestSend_RejectsAnInvalidRecipient(t *testing.T) {
 	assert.Empty(t, srv.received(), "nothing reaches the server")
 }
 
-func TestSend_RejectsAnInvalidSender(t *testing.T) {
+// A bad MAIL_FROM fails when the client is built, at startup, rather than on every send.
+func TestNew_RejectsAnInvalidSender(t *testing.T) {
 	t.Parallel()
 
-	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, "not an address")
-
-	err := c.Send(context.Background(), greeting())
-	assert.ErrorIs(t, err, smtp.ErrInvalidAddress)
+	for _, from := range []string{"not an address", "a@example.com, b@example.com", ""} {
+		_, err := smtp.New("localhost", 25, from)
+		assert.ErrorIs(t, err, smtp.ErrInvalidAddress, from)
+	}
 }
 
 func TestSend_ReturnsTheServersRefusal(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{refuseRcpt: true})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	err := c.Send(context.Background(), greeting())
 	require.Error(t, err)
@@ -163,7 +172,7 @@ func TestSend_AuthenticatesWhenGivenCredentials(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{auth: true})
-	c := smtp.New(srv.host, srv.port, _from, smtp.Auth("user", "secret"))
+	c := newClient(t, srv, smtp.Auth("user", "secret"))
 
 	require.NoError(t, c.Send(context.Background(), greeting()))
 	assert.Equal(t, "\x00user\x00secret", srv.only(t).auth)
@@ -173,7 +182,7 @@ func TestSend_SkipsAuthWithoutCredentials(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{auth: true})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	require.NoError(t, c.Send(context.Background(), greeting()))
 	assert.Empty(t, srv.only(t).auth)
@@ -183,7 +192,7 @@ func TestSend_StopsOnACanceledContext(t *testing.T) {
 	t.Parallel()
 
 	srv := startFakeServer(t, fakeOptions{})
-	c := smtp.New(srv.host, srv.port, _from)
+	c := newClient(t, srv)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

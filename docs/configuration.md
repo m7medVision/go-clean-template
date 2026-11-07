@@ -81,7 +81,7 @@ Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.m
 | Env var | Default | |
 | --- | --- | --- |
 | `WORKER_POLL_INTERVAL` | `1s` | sleep after an empty read |
-| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery |
+| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery; its handler's context ends then too |
 | `WORKER_BATCH_SIZE` | `10` | messages per read |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
@@ -108,7 +108,7 @@ Also read only by the worker, which sends the email.
 | `MAILPIT_UI_PORT` | `8025` | the port compose publishes Mailpit's inbox UI and API on; the app does not read it |
 | `SMTP_USERNAME` | empty | empty turns auth off; when set, PLAIN auth, sent only over TLS or to localhost |
 | `SMTP_PASSWORD` | empty | |
-| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; `.env.example` uses a bare address because of the no-spaces rule |
+| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address, parsed at startup: anything but exactly one address stops the binary. `.env.example` uses a bare address because of the no-spaces rule |
 
 ## Tracing
 

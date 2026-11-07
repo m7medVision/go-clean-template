@@ -141,7 +141,7 @@ Decide by asking what the code knows about:
 | rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, listed in `importers` (`internal/app/backfill.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<domain>.go` (GraphQL: `graphql/<domain>/query.go`, `mutation.go`) | handler |
-| a queue message (decode, send a command, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
+| a queue message (decode, send a command, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc` and the function that registers it, called by the worker in `internal/app` |
 | the data an email shows | `internal/entity/email_<name>.go` | struct with `Template()`/`Recipient()`, plus an entry in `EmailTypes()` (`email.go`) |
 | an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
@@ -359,7 +359,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   `worker.Queue` with no adapter (`var _ worker.Queue` in `queue.go`). The sqlc row converts with
   `worker.Message(row)`; a column change that breaks the field order fails to compile.
 - `pkg/worker` is at-least-once: a handler returning `nil` deletes the message; an error leaves it
-  to reappear after `WORKER_VISIBILITY_TIMEOUT`. Handlers must be idempotent; a body that can never
+  to reappear after `WORKER_VISIBILITY_TIMEOUT`, which also ends the handler's context. Handlers must be idempotent; a body that can never
   decode should be logged and acknowledged (`return nil`), or it redelivers forever.
 - The worker is wired in `internal/app/worker.go` (`RunWorker`): the projection runner and the queue
   consumer. Queue handlers send commands on the buses `registerHandlers` fills, like the servers. The

@@ -40,7 +40,9 @@ as something is sent to it.
   in the same statement, hides them until `now() + WORKER_VISIBILITY_TIMEOUT`. Several workers can
   run side by side without getting the same message at the same time.
 - **At-least-once.** A message is deleted only after its handler returns `nil`. If the handler fails,
-  the message comes back once its visibility timeout expires, so handlers must be idempotent.
+  the message comes back once its visibility timeout expires, so handlers must be idempotent. A
+  handler's context ends with that timeout too: by then another worker may hold the message, so a
+  slow handler is canceled rather than left running beside it.
   `worker.Message.ReadCount` tells a handler how many times it has been delivered. A body that can
   never decode should be logged and acknowledged, or it redelivers forever.
 - **Shutdown.** On SIGTERM it stops reading, waits up to `WORKER_SHUTDOWN_TIMEOUT` for in-flight
@@ -52,22 +54,16 @@ The settings are in [configuration.md](configuration.md#worker).
 
 ## Handlers
 
-Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker/v1) and are
-registered in `v1/router.go` (`w.Handle(queue, handler)`). A queue message is an inbound request like
-an HTTP call, so a handler has the same shape: decode the body into a `v1/request` DTO, send a command
-on the command bus with the handler's `ctx`, and return its error.
-
-- `example.go` only logs the message. Try it with:
-
-  ```sh
-  psql "$PG_URL" -c "INSERT INTO queue_messages (queue, body) VALUES ('example', '{\"text\": \"hi\"}')"
-  ```
-
-- `mail.go` delivers email from the `mail` queue (below).
+Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker/v1), each with a
+function that registers it on the worker (`w.Handle(queue, handler)`), which `internal/app` calls. A
+queue message is an inbound request like an HTTP call, so a handler has the same shape: decode the
+body into a transport-local DTO, send a command on the command bus with the handler's `ctx`, and
+return its error. The one queue today is `mail` (below): `mail.go` delivers email from it.
 
 ### Adding a queue
 
-1. Handler: `internal/controller/worker/v1/<name>.go`, registered in `v1/router.go`.
+1. Handler: `internal/controller/worker/v1/<name>.go`, with the function that registers it, called
+   by the worker in `internal/app`.
 2. Producer: give the command or event handler a `repo.QueueRepo` and call `Send(ctx, "<name>", body)`.
    `Send` joins the transaction in `ctx`, so from an event handler the message commits with the
    handler's checkpoint, exactly once.
@@ -81,7 +77,7 @@ For the welcome email the sender is the `send-welcome-email` event handler
 `repo.UserNotifier`, implemented in `internal/repo/notify`, so the handler never sees the queue or
 the email encoding. A registration answers before its email is enqueued, and an enqueue that fails
 is retried with the event, so a registration never fails over its email.
-The worker's `mail` handler (registered by `workerctl.WithMail`) decodes it with
+The worker's `mail` handler (`v1.NewMailRoutes`) decodes it with
 `entity.DecodeEmail` (both ends are this codebase, so it skips the request DTO) and sends the
 `DeliverEmail` command (`internal/usecase/mail`), whose handler renders and sends.
 Delivery is at-least-once, so an email can arrive twice if the worker stops between the relay
@@ -102,7 +98,8 @@ part with `text/template`.
 - An email is two files: `templates/<name>.html.tmpl` defining `content`, and
   `templates/<name>.txt.tmpl` defining `subject` and `text`. They execute against the `entity.Email`
   whose `Template()` returns `<name>`.
-- Templates are parsed at startup, so a broken one stops the binary. A template that reads a field its
+- Templates are parsed at startup, so a broken one stops the binary, as does a `MAIL_FROM` that is
+  not exactly one address. A template that reads a field its
   struct lacks fails `make test`: the render test executes every email against a full and a zero-value
   fixture and compares the output with `testdata/<name>.golden.{html,txt}`.
 

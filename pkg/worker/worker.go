@@ -35,7 +35,7 @@ type Settings struct {
 	// PollInterval is how long a queue loop sleeps after a read returns no messages.
 	PollInterval time.Duration
 	// VisibilityTimeout is how long a read message stays hidden from other readers. A message whose
-	// handler fails is redelivered once it expires.
+	// handler fails is redelivered once it expires, and a handler's context ends when it does.
 	VisibilityTimeout time.Duration
 	// BatchSize is the most messages read per poll.
 	BatchSize int
@@ -45,7 +45,8 @@ type Settings struct {
 }
 
 // HandlerFunc processes one message. Returning nil deletes the message; returning an error leaves
-// it for redelivery.
+// it for redelivery. Its context ends when the message's visibility timeout does, since another
+// reader may take the message from then on.
 type HandlerFunc func(ctx context.Context, msg *Message) error
 
 // Worker reads its queues and hands each message to the queue's handler.
@@ -120,6 +121,10 @@ func (w *Worker) poll(ctx, handlerCtx context.Context, queue string, h HandlerFu
 
 // readBatch handles one batch and returns how many messages it read.
 func (w *Worker) readBatch(ctx, handlerCtx context.Context, queue string, h HandlerFunc) int {
+	// The batch reappears to other readers once its visibility timeout passes, counted from the
+	// read; taking the time before the read keeps this deadline on the early side.
+	deadline := time.Now().Add(w.settings.VisibilityTimeout)
+
 	msgs, err := w.queue.Read(ctx, queue, w.settings.VisibilityTimeout, w.settings.BatchSize)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -131,18 +136,25 @@ func (w *Worker) readBatch(ctx, handlerCtx context.Context, queue string, h Hand
 
 	for i := range msgs {
 		// Messages left in the batch become visible again once their timeout expires.
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || !time.Now().Before(deadline) {
 			break
 		}
 
-		w.process(handlerCtx, queue, h, &msgs[i])
+		w.process(handlerCtx, deadline, queue, h, &msgs[i])
 	}
 
 	return len(msgs)
 }
 
-func (w *Worker) process(ctx context.Context, queue string, h HandlerFunc, msg *Message) {
-	if err := h(ctx, msg); err != nil {
+// process hands msg to h, which must finish by deadline: past it the message is visible again, and
+// another reader may be handling it.
+func (w *Worker) process(ctx context.Context, deadline time.Time, queue string, h HandlerFunc, msg *Message) {
+	handleCtx, cancel := context.WithDeadline(ctx, deadline)
+	err := h(handleCtx, msg)
+
+	cancel()
+
+	if err != nil {
 		w.logger.Error("worker - handle a message", "queue", queue, "message", msg.ID, "error", err)
 
 		return

@@ -26,7 +26,7 @@ type Querier interface {
 	CountTasks(ctx context.Context, arg CountTasksParams) (int64, error)
 	DeleteExpiredChallenges(ctx context.Context) error
 	DeletePasskeyRow(ctx context.Context, id entity.PasskeyID) error
-	DeleteQueueMessage(ctx context.Context, id int64) error
+	DeleteQueueMessage(ctx context.Context, arg DeleteQueueMessageParams) error
 	DeleteTaskRow(ctx context.Context, id string) error
 	EnsureCheckpoint(ctx context.Context, name string) error
 	GetCheckpoint(ctx context.Context, name string) (int64, error)

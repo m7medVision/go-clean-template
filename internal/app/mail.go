@@ -14,14 +14,18 @@ import (
 var _ repo.Mailer = (*smtp.Client)(nil)
 
 // newMailDeps builds what DeliverEmail renders and sends with, through the relay m names. It fails
-// when an embedded template is broken, so a bad template stops the binary at startup.
+// when an embedded template is broken or MAIL_FROM is not one address, so either stops the binary
+// at startup.
 func newMailDeps(m *config.Mail) (mail.Deps, error) {
 	renderer, err := mailtmpl.New()
 	if err != nil {
 		return mail.Deps{}, fmt.Errorf("mailtmpl.New: %w", err)
 	}
 
-	mailer := smtp.New(m.SMTPHost, m.SMTPPort, m.From, smtp.Auth(m.SMTPUsername, m.SMTPPassword))
+	mailer, err := smtp.New(m.SMTPHost, m.SMTPPort, m.From, smtp.Auth(m.SMTPUsername, m.SMTPPassword))
+	if err != nil {
+		return mail.Deps{}, fmt.Errorf("smtp.New: %w", err)
+	}
 
 	return mail.Deps{Renderer: renderer, Mailer: mailer}, nil
 }

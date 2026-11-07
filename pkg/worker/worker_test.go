@@ -241,3 +241,35 @@ func TestWorker_StopCancelsHandlerAfterTimeout(t *testing.T) {
 	require.NoError(t, stop())
 	assert.Empty(t, q.deletedIDs())
 }
+
+// Past its visibility timeout a message is visible again and another reader may take it, so its
+// handler is canceled then rather than left running beside the next one.
+func TestWorker_HandlerStopsWhenTheMessageIsVisibleAgain(t *testing.T) {
+	t.Parallel()
+
+	q := newFakeQueue(worker.Message{ID: 1})
+	ended := make(chan error, 1)
+
+	w := worker.New(slog.New(slog.DiscardHandler), q, worker.Settings{
+		PollInterval: _poll, VisibilityTimeout: 5 * _poll, BatchSize: 1, ShutdownTimeout: _timeout,
+	})
+	w.Handle(_queue, func(ctx context.Context, _ *worker.Message) error {
+		<-ctx.Done()
+
+		ended <- ctx.Err()
+
+		return ctx.Err()
+	})
+
+	stop := run(t, w)
+
+	select {
+	case err := <-ended:
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(_wait):
+		t.Fatal("the handler ran past its message's visibility timeout")
+	}
+
+	require.NoError(t, stop())
+	assert.Empty(t, q.deletedIDs())
+}

@@ -22,4 +22,4 @@ RETURNING m.id, m.queue, m.body, m.read_count, m.enqueued_at, m.visible_at;
 
 -- name: DeleteQueueMessage :exec
 DELETE FROM queue_messages
-WHERE id = $1;
+WHERE id = $1 AND queue = $2;
