@@ -16,10 +16,6 @@ type passkeyPathInput struct {
 	ID string `path:"id" example:"AQIDBA" doc:"The passkey's ID, unpadded base64url"`
 }
 
-type deletePasskeyOutput struct {
-	Status int
-}
-
 func (r *controller) deletePasskey(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-passkey",
@@ -32,7 +28,7 @@ func (r *controller) deletePasskey(api huma.API) {
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, input *passkeyPathInput) (*deletePasskeyOutput, error) {
+	}, func(ctx context.Context, input *passkeyPathInput) (*struct{}, error) {
 		userID := authn.MustCaller(ctx).UserID
 
 		_, err := cqrs.SendCommand(ctx, r.cmds, command.DeletePasskey{UserID: userID, ID: input.ID})
@@ -40,6 +36,6 @@ func (r *controller) deletePasskey(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "deletePasskey")
 		}
 
-		return &deletePasskeyOutput{Status: http.StatusNoContent}, nil
+		return &struct{}{}, nil
 	})
 }

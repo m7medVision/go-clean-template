@@ -12,10 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-type deleteTaskOutput struct {
-	Status int
-}
-
 func (r *controller) deleteTask(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-task",
@@ -27,7 +23,7 @@ func (r *controller) deleteTask(api huma.API) {
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, input *taskPathInput) (*deleteTaskOutput, error) {
+	}, func(ctx context.Context, input *taskPathInput) (*struct{}, error) {
 		userID := authn.MustCaller(ctx).UserID
 
 		_, err := cqrs.SendCommand(ctx, r.cmds, command.DeleteTask{UserID: userID, TaskID: input.ID})
@@ -35,6 +31,6 @@ func (r *controller) deleteTask(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "deleteTask")
 		}
 
-		return &deleteTaskOutput{Status: http.StatusNoContent}, nil
+		return &struct{}{}, nil
 	})
 }
