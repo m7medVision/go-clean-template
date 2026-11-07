@@ -59,11 +59,11 @@ CREATE TABLE "public"."projection_checkpoints" (
 -- Create "queue_messages" table
 CREATE TABLE "public"."queue_messages" (
   "id" bigserial NOT NULL,
-  "queue" character varying(255) NOT NULL,
+  "queue" text NOT NULL,
   "body" jsonb NOT NULL,
   "read_count" integer NOT NULL DEFAULT 0,
-  "enqueued_at" timestamp NOT NULL DEFAULT now(),
-  "visible_at" timestamp NOT NULL DEFAULT now(),
+  "enqueued_at" timestamptz NOT NULL DEFAULT now(),
+  "visible_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id")
 );
 -- Create index "idx_queue_messages_queue_visible_at" to table: "queue_messages"

@@ -38,7 +38,7 @@ SET visible_at = now() + make_interval(secs => $1::double precision),
     read_count = m.read_count + 1
 FROM due
 WHERE m.id = due.id
-RETURNING m.id, m.queue, m.body, m.read_count, m.enqueued_at, m.visible_at
+RETURNING m.id, m.queue, m.body, m.read_count
 `
 
 type ReadQueueMessagesParams struct {
@@ -47,24 +47,29 @@ type ReadQueueMessagesParams struct {
 	Qty       int32
 }
 
+type ReadQueueMessagesRow struct {
+	ID        int64
+	Queue     string
+	Body      json.RawMessage
+	ReadCount int32
+}
+
 // ReadQueueMessages claims up to qty visible messages and hides them for vt_seconds in one
 // statement. SKIP LOCKED lets concurrent workers claim disjoint batches without waiting.
-func (q *Queries) ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]QueueMessage, error) {
+func (q *Queries) ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]ReadQueueMessagesRow, error) {
 	rows, err := q.db.Query(ctx, readQueueMessages, arg.VtSeconds, arg.Queue, arg.Qty)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []QueueMessage
+	var items []ReadQueueMessagesRow
 	for rows.Next() {
-		var i QueueMessage
+		var i ReadQueueMessagesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Queue,
 			&i.Body,
 			&i.ReadCount,
-			&i.EnqueuedAt,
-			&i.VisibleAt,
 		); err != nil {
 			return nil, err
 		}

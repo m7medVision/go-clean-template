@@ -13,13 +13,13 @@ import (
 	"time"
 )
 
+// Message is one delivery of a queued message. ReadCount is how many times it has been read,
+// this delivery included.
 type Message struct {
-	ID         int64
-	Queue      string
-	Body       json.RawMessage
-	ReadCount  int32
-	EnqueuedAt time.Time
-	VisibleAt  time.Time
+	ID        int64
+	Queue     string
+	Body      json.RawMessage
+	ReadCount int32
 }
 
 // Queue is what the worker reads from. Read hides the returned messages for vt; Delete removes one

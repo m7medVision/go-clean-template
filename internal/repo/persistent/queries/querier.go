@@ -85,7 +85,7 @@ type Querier interface {
 	ReadAll(ctx context.Context, arg ReadAllParams) ([]Event, error)
 	// ReadQueueMessages claims up to qty visible messages and hides them for vt_seconds in one
 	// statement. SKIP LOCKED lets concurrent workers claim disjoint batches without waiting.
-	ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]QueueMessage, error)
+	ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]ReadQueueMessagesRow, error)
 	ReadStream(ctx context.Context, arg ReadStreamParams) ([]Event, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) error
 	ResetCheckpoint(ctx context.Context, name string) error

@@ -6,7 +6,7 @@ table "queue_messages" {
   }
   column "queue" {
     null = false
-    type = varchar(255)
+    type = text
   }
   column "body" {
     null = false
@@ -19,12 +19,12 @@ table "queue_messages" {
   }
   column "enqueued_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   column "visible_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   primary_key {

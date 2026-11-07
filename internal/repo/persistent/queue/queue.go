@@ -56,12 +56,10 @@ func (r *Repo) Read(ctx context.Context, queue string, vt time.Duration, qty int
 	for i := range rows {
 		row := &rows[i]
 		msgs[i] = worker.Message{
-			ID:         row.ID,
-			Queue:      row.Queue,
-			Body:       row.Body,
-			ReadCount:  row.ReadCount,
-			EnqueuedAt: row.EnqueuedAt,
-			VisibleAt:  row.VisibleAt,
+			ID:        row.ID,
+			Queue:     row.Queue,
+			Body:      row.Body,
+			ReadCount: row.ReadCount,
 		}
 	}
 
