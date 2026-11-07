@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"slices"
 	"time"
 	"unicode/utf8"
 )
@@ -57,13 +58,14 @@ func taskOwnedBy(owner, userID string) error {
 	return nil
 }
 
+// TaskStatuses is every status a task can have, in the order a task moves through them. Each
+// transport's status enum lists the same values; internal/app and the GraphQL schema test pin them.
+func TaskStatuses() []TaskStatus {
+	return []TaskStatus{TaskStatusTodo, TaskStatusInProgress, TaskStatusDone}
+}
+
 func (s TaskStatus) Valid() bool {
-	switch s {
-	case TaskStatusTodo, TaskStatusInProgress, TaskStatusDone:
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(TaskStatuses(), s)
 }
 
 // ValidateTaskText refuses a title of no characters or more than MaxTaskTitleLen, and a description

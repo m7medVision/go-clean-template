@@ -255,7 +255,9 @@ shape from a neighbouring handler in the same transport.
    `entity.ValidateSignUp`, `entity.Page`), and the buses' validate step runs it for every
    transport. REST still writes the same limits as Huma tags, because they are the API's
    documentation and reject a bad request before it is decoded; `internal/app/openapi_test.go` pins
-   those tags to the entity constants. gRPC and GraphQL check nothing of their own. A rule about the
+   those tags to the entity constants (`entity.TaskStatuses()` for the status enums), and
+   `graphql/schema_test.go` pins GraphQL's `limit` defaults and `TaskStatus` values the same way.
+   gRPC and GraphQL check nothing of their own. A rule about the
    record's state, like a status transition, lives on the aggregate.
 4. **Send the command or query** with the request context:
    `cqrs.SendCommand(ctx, r.cmds, command.CreateTask{...})` or
