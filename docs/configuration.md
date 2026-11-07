@@ -37,6 +37,13 @@ Two variables are read by tooling, not by the app:
 - `ATLAS_DEV_URL` is read only by `make sqlc`, which renders the HCL schema in a throwaway
   `docker://` Postgres container.
 
+## Valkey
+
+| Env var | Default | |
+| --- | --- | --- |
+| `VALKEY_URL` | required by the app | `valkey://host:port/db`, or `valkeys://` for TLS; a password goes in the URL (`valkey://:secret@host:6379/0`). The app connects at startup and stops when Valkey cannot be reached: unlike Postgres, it does not wait for a server that is still starting |
+| `VALKEY_PORT` | `6379` | the host port the compose `valkey` service publishes, and `VALKEY_URL` in `.env.example` is built from it, as `PG_URL` is from `PG_PORT`. Set it when something else on the host already uses 6379. The app does not read it |
+
 ## Exchange
 
 | Env var | Default | |

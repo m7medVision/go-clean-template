@@ -12,6 +12,7 @@ transports:
 A second binary, `cmd/worker`, runs the projections that keep the read models up to date and
 consumes a minimal Postgres queue (the `queue_messages` table); see **CQRS and event sourcing** and
 **Queue and worker** below. The app needs it running: every write waits for the projections.
+The app also needs Valkey (`VALKEY_URL`) and refuses to start without one.
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -41,7 +42,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
-| Start dependencies (Postgres) | `make compose-up` | `docker compose up` |
+| Start dependencies (Postgres, Valkey) | `make compose-up` | `docker compose up` |
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
@@ -115,8 +116,8 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   token), which every transport imports and which imports none, and `internal/controller/httpmw`
   (the middleware around every HTTP request: log, tracing, metrics, recovery), which REST's `Auth`
   borrows its problem writer from; see **Controller layout** below.
-- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, tracing). Logging is
-  `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
+- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, valkey, tracing).
+  Logging is `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
   module (`github.com/m7medvision/go-clean-template/tools/gen`). It imports nothing from the app, and
@@ -336,8 +337,10 @@ reads, never `*config.Config`; no controller imports `config`. Defaults are writ
 from it, as `worker.Settings(cfg.Worker)`). A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
-startup. `.env.example` is read both by `make` (`include`) and by the shell in CI
-(`. ./.env.example`), so values there must not need quoting: no spaces.
+startup. A setting only the app needs (`JWT_SECRET`, `VALKEY_URL`) carries no `required` tag,
+because the worker parses the same config: `app.Run` checks it instead. `.env.example` is read
+both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so values there must not
+need quoting: no spaces.
 `MAIL_FROM` is a bare address for that reason.
 
 **The linter is strict and non-obvious.** `.golangci.yml` enables ~45 linters. The ones that

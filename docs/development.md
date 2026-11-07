@@ -10,6 +10,8 @@ that CI uses too.
 in `DEV_SERVICES` (see the `Makefile`) run in docker:
 
 - `db`: Postgres.
+- `valkey`: [Valkey](https://valkey.io/), which the app needs to start. It keeps no data on disk, so
+  a restart empties it.
 - `mailpit`: [Mailpit](https://mailpit.axllent.org/), which catches email.
 - `keycloak`: the SSO provider.
 
@@ -39,7 +41,9 @@ Sign in with SSO as `alice` / `alice` (admin) or `bob` / `bob`; see
 If something else on the host already listens on 5432, set `PG_PORT` in `.env` (for example
 `PG_PORT=5433`). It moves the published port of the compose `db` service and the port in `PG_URL`
 together. Without it, the app connects to whatever already owns 5432, and the startup schema apply
-will try to make that database match this schema.
+will try to make that database match this schema. Set `VALKEY_PORT` the same way when 6379 is taken
+(for example `VALKEY_PORT=6380`): it moves the compose `valkey` port and the port in `VALKEY_URL`
+together.
 
 The same pieces without tmux, one terminal each:
 
@@ -70,6 +74,7 @@ answers `503` after `CQRS_CONSISTENCY_TIMEOUT` ([cqrs.md](cqrs.md#reads-after-wr
 | GraphQL | http://127.0.0.1:8080/graphql; see [api.md](api.md#graphql) |
 | gRPC | `127.0.0.1:8081` |
 | Postgres | `127.0.0.1:${PG_PORT}`; credentials in `PG_URL` in [`.env.example`](../.env.example) |
+| Valkey | `127.0.0.1:${VALKEY_PORT}`, and `valkey:6379` (alias `valkey.lvh.me`) inside the compose network; no UI |
 | Mailpit | http://127.0.0.1:8025 (inbox and API), SMTP on `127.0.0.1:1025` |
 | Keycloak | http://keycloak.lvh.me:8180 (realm `app`; admin console `admin` / `admin`); see [sso.md](sso.md#keycloak-in-development) |
 | Jaeger | http://127.0.0.1:16686 (full stack only) |

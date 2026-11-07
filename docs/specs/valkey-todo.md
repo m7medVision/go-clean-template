@@ -52,12 +52,12 @@ comments in new code unless important. Sizes: S = 1–2 files, M = 3–5.
 **Verify:** G1 (`go vet ./integration-test/...`); G3. **Depends on:** 2, 3. **Size:** S
 
 ### 5. Docs
-- [ ] `docs/configuration.md`: a Valkey section with `VALKEY_URL` and `VALKEY_PORT`.
-- [ ] `docs/development.md`: Valkey in the service tables.
-- [ ] `docs/architecture.md`: `pkg/valkey` in the Packages table.
-- [ ] `README.md`: "Postgres and nothing else" becomes Postgres for everything durable, Valkey for the
+- [x] `docs/configuration.md`: a Valkey section with `VALKEY_URL` and `VALKEY_PORT`.
+- [x] `docs/development.md`: Valkey in the service tables.
+- [x] `docs/architecture.md`: `pkg/valkey` in the Packages table.
+- [x] `README.md`: "Postgres and nothing else" becomes Postgres for everything durable, Valkey for the
       cache and counters.
-- [ ] `CLAUDE.md`: the app needs Valkey; `pkg/valkey` in the dependency notes.
+- [x] `CLAUDE.md`: the app needs Valkey; `pkg/valkey` in the dependency notes.
 
 **Files:** the five above. **Verify:** each page read through; links resolve. **Depends on:** 3.
 **Size:** M
