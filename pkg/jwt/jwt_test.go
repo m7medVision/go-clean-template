@@ -19,21 +19,21 @@ func TestJWT_GenerateAndParse(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	userID, err := j.ParseToken(token)
+	claims, err := j.Parse(token)
 	require.NoError(t, err)
-	assert.Equal(t, "user-123", userID)
+	assert.Equal(t, "user-123", claims.UserID)
 }
 
-func TestJWT_ParseToken_Invalid(t *testing.T) {
+func TestJWT_Parse_Invalid(t *testing.T) {
 	t.Parallel()
 
 	j := jwt.New("test-secret", time.Hour)
 
-	_, err := j.ParseToken("invalid-token")
+	_, err := j.Parse("invalid-token")
 	require.Error(t, err)
 }
 
-func TestJWT_ParseToken_WrongSecret(t *testing.T) {
+func TestJWT_Parse_WrongSecret(t *testing.T) {
 	t.Parallel()
 
 	j1 := jwt.New("secret-1", time.Hour)
@@ -42,11 +42,11 @@ func TestJWT_ParseToken_WrongSecret(t *testing.T) {
 	token, err := j1.GenerateToken("user-123", nil)
 	require.NoError(t, err)
 
-	_, err = j2.ParseToken(token)
+	_, err = j2.Parse(token)
 	require.Error(t, err)
 }
 
-func TestJWT_ParseToken_Expired(t *testing.T) {
+func TestJWT_Parse_Expired(t *testing.T) {
 	t.Parallel()
 
 	j := jwt.New("test-secret", -time.Hour)
@@ -54,8 +54,25 @@ func TestJWT_ParseToken_Expired(t *testing.T) {
 	token, err := j.GenerateToken("user-123", nil)
 	require.NoError(t, err)
 
-	_, err = j.ParseToken(token)
+	_, err = j.Parse(token)
 	require.Error(t, err)
+}
+
+// A token is valid only as GenerateToken signs it: another HMAC, even with the right secret, is
+// refused.
+func TestJWT_Parse_RejectsAnotherSigningMethod(t *testing.T) {
+	t.Parallel()
+
+	for _, method := range []jwtlib.SigningMethod{jwtlib.SigningMethodHS384, jwtlib.SigningMethodHS512} {
+		token, err := jwtlib.NewWithClaims(method, jwtlib.RegisteredClaims{
+			Subject:   "user-123",
+			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Hour)),
+		}).SignedString([]byte("test-secret"))
+		require.NoError(t, err)
+
+		_, err = jwt.New("test-secret", time.Hour).Parse(token)
+		require.ErrorIs(t, err, jwtlib.ErrTokenSignatureInvalid, method.Alg())
+	}
 }
 
 func TestJWT_Parse_IssuedAt(t *testing.T) {

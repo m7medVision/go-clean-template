@@ -2,7 +2,6 @@ package smtp
 
 import (
 	"net/smtp"
-	"time"
 )
 
 type Option func(*Client)
@@ -14,12 +13,5 @@ func Auth(username, password string) Option {
 		if username != "" {
 			c.auth = smtp.PlainAuth("", username, password, c.host)
 		}
-	}
-}
-
-// Timeout bounds one whole send: dial, conversation and data.
-func Timeout(d time.Duration) Option {
-	return func(c *Client) {
-		c.timeout = d
 	}
 }

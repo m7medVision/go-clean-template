@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	_defaultTimeout = 30 * time.Second
+	// _timeout bounds one whole send: dial, conversation and data.
+	_timeout        = 30 * time.Second
 	_messageIDBytes = 16
 )
 
@@ -31,11 +32,10 @@ var ErrInvalidAddress = errors.New("invalid email address")
 // Client sends each message on its own connection: STARTTLS when the server offers it, then AUTH
 // when credentials are set.
 type Client struct {
-	host    string
-	addr    string
-	from    *mail.Address
-	auth    smtp.Auth
-	timeout time.Duration
+	host string
+	addr string
+	from *mail.Address
+	auth smtp.Auth
 }
 
 // New returns a client for the relay at host:port that sends from from, an RFC 5322 address such as
@@ -48,10 +48,9 @@ func New(host string, port int, from string, opts ...Option) (*Client, error) {
 	}
 
 	c := &Client{
-		host:    host,
-		addr:    net.JoinHostPort(host, strconv.Itoa(port)),
-		from:    sender,
-		timeout: _defaultTimeout,
+		host: host,
+		addr: net.JoinHostPort(host, strconv.Itoa(port)),
+		from: sender,
 	}
 
 	for _, opt := range opts {
@@ -100,7 +99,7 @@ func (c *Client) deliver(ctx context.Context, from, to string, data []byte) erro
 		return err
 	}
 
-	dialer := net.Dialer{Timeout: c.timeout}
+	dialer := net.Dialer{Timeout: _timeout}
 
 	conn, err := dialer.DialContext(ctx, "tcp", c.addr)
 	if err != nil {
@@ -111,7 +110,7 @@ func (c *Client) deliver(ctx context.Context, from, to string, data []byte) erro
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 
-	if err = conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+	if err = conn.SetDeadline(time.Now().Add(_timeout)); err != nil {
 		_ = conn.Close()
 
 		return fmt.Errorf("set deadline: %w", err)

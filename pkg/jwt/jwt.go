@@ -1,14 +1,11 @@
 package jwt
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	jwtlib "github.com/golang-jwt/jwt/v5"
 )
-
-var ErrUnexpectedSigningMethod = errors.New("unexpected signing method")
 
 type Manager struct {
 	secret   string
@@ -57,27 +54,13 @@ type Claims struct {
 	Roles []string
 }
 
-// ParseToken validates a JWT token and returns the user ID.
-func (m *Manager) ParseToken(tokenString string) (string, error) {
-	claims, err := m.Parse(tokenString)
-	if err != nil {
-		return "", err
-	}
-
-	return claims.UserID, nil
-}
-
-// Parse validates a JWT token and returns its claims.
+// Parse validates a JWT token, signed with HS256 as GenerateToken signs it, and returns its claims.
 func (m *Manager) Parse(tokenString string) (Claims, error) {
 	var parsed tokenClaims
 
-	token, err := jwtlib.ParseWithClaims(tokenString, &parsed, func(token *jwtlib.Token) (any, error) {
-		if _, ok := token.Method.(*jwtlib.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("%w: %v", ErrUnexpectedSigningMethod, token.Header["alg"])
-		}
-
+	token, err := jwtlib.ParseWithClaims(tokenString, &parsed, func(*jwtlib.Token) (any, error) {
 		return []byte(m.secret), nil
-	})
+	}, jwtlib.WithValidMethods([]string{jwtlib.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return Claims{}, fmt.Errorf("jwt - Parse - jwtlib.Parse: %w", err)
 	}
