@@ -11,20 +11,21 @@ Keep `.env` values free of spaces and quotes: both `make` and the shell read tha
 ## App
 
 The Default column is the value in `config/`, the only place a default is written: the packages the
-settings reach take them as arguments. "required" means the binary refuses to start without it.
+settings reach take them as arguments. "required" means both binaries refuse to start without it;
+"required by the app" means `cmd/app` refuses to start without it, and `cmd/worker` does not read it.
 
 | Env var | Default | |
 | --- | --- | --- |
 | `APP_NAME` | required | |
 | `APP_VERSION` | required | |
 | `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds; a trailing slash is dropped |
-| `HTTP_PORT` | required | the HTTP API, its docs and metrics |
+| `HTTP_PORT` | required by the app | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `GRPC_PORT` | `8081` | the gRPC transport |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |
 | `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
 | `PG_POOL_MAX` | required | |
-| `JWT_SECRET` | required | change it outside development |
+| `JWT_SECRET` | required by the app | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
 | `METRICS_ENABLED` | `true` | Prometheus at `/metrics`, with HTTP and gRPC request counts and latencies ([api.md](api.md)) |
 | `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)) |

@@ -37,8 +37,9 @@ type (
 		BaseURL string `env:"APP_BASE_URL" envDefault:"http://localhost"`
 	}
 
+	// HTTP is read only by the app, which refuses to start without a port; the worker serves no HTTP.
 	HTTP struct {
-		Port string `env:"HTTP_PORT,required"`
+		Port string `env:"HTTP_PORT"`
 	}
 
 	Log struct {
@@ -50,8 +51,10 @@ type (
 		URL     string `env:"PG_URL,required"`
 	}
 
+	// JWT is read only by the app, which refuses to start without a secret; the worker issues and
+	// checks no token.
 	JWT struct {
-		Secret      string        `env:"JWT_SECRET,required"`
+		Secret      string        `env:"JWT_SECRET"`
 		TokenExpiry time.Duration `env:"JWT_TOKEN_EXPIRY" envDefault:"15m"`
 	}
 

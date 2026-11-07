@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/config"
@@ -13,10 +14,21 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// The settings only the app needs. config does not require them, so the worker starts without them;
+// Run refuses to start without them.
+var (
+	ErrNoHTTPPort  = errors.New("app: HTTP_PORT is not set")
+	ErrNoJWTSecret = errors.New("app: JWT_SECRET is not set")
+)
+
 // Run applies the schema, imports what predates event sourcing, and serves HTTP and gRPC until ctx
 // ends or a server fails. It returns once both have stopped and the pool is closed. It installs every
 // module's handlers but mail delivery's, which only the worker runs.
 func Run(ctx context.Context, cfg *config.Config) error {
+	if err := checkAppSettings(cfg); err != nil {
+		return fmt.Errorf("app - Run: %w", err)
+	}
+
 	b, err := newBootstrap(ctx, cfg, cfg.App.Name)
 	if err != nil {
 		return fmt.Errorf("app - Run: %w", err)
@@ -56,4 +68,19 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// checkAppSettings fails on each setting the app needs that config leaves optional for the worker.
+func checkAppSettings(cfg *config.Config) error {
+	var errs []error
+
+	if cfg.HTTP.Port == "" {
+		errs = append(errs, ErrNoHTTPPort)
+	}
+
+	if cfg.JWT.Secret == "" {
+		errs = append(errs, ErrNoJWTSecret)
+	}
+
+	return errors.Join(errs...)
 }
