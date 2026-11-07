@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 
+	gqlgen "github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
@@ -28,8 +30,13 @@ func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, l *slog.Logger) http.Hand
 
 	srv.AddTransport(transport.POST{})
 	srv.Use(extension.Introspection{})
-	srv.SetRecoverFunc(func(_ context.Context, p any) error {
-		l.Error(fmt.Sprintf("graphql - panic: %v", p))
+	srv.SetRecoverFunc(func(ctx context.Context, p any) error {
+		attrs := []any{"panic", fmt.Sprint(p), "stack", string(debug.Stack())}
+		if fc := gqlgen.GetFieldContext(ctx); fc != nil {
+			attrs = append(attrs, "path", fc.Path().String())
+		}
+
+		l.ErrorContext(ctx, "graphql panic", attrs...)
 
 		return gqlerr.Internal()
 	})

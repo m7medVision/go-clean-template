@@ -1,16 +1,22 @@
 package graphql_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,6 +49,33 @@ func TestPanicIsHidden(t *testing.T) {
 	assert.Equal(t, "INTERNAL", resp.Code(t))
 	assert.Equal(t, "internal server error", resp.Errors[0].Message)
 	assert.NotContains(t, resp.Body, _panicDetail)
+}
+
+// A panic is logged as REST and gRPC log one: the panic and its stack, with the field it broke.
+func TestPanicIsLoggedWithItsStack(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+
+	tokens := jwt.New("test-secret", time.Hour)
+
+	token, err := tokens.GenerateToken("user-1", nil)
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/graphql",
+		strings.NewReader(`{"query":"query { task(id: \"task-1\") { id } }"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	graphql.NewHandler(panicBuses(), tokens, slog.New(slog.NewJSONHandler(&logs, nil))).ServeHTTP(httptest.NewRecorder(), req)
+
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(logs.Bytes(), &record), logs.String())
+
+	assert.Equal(t, "graphql panic", record["msg"])
+	assert.Equal(t, _panicDetail, record["panic"])
+	assert.Contains(t, record["stack"], "runtime/debug.Stack")
+	assert.Equal(t, "task", record["path"])
 }
 
 func TestPlaygroundTargetsEndpoint(t *testing.T) {
