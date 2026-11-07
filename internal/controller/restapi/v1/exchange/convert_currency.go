@@ -11,7 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/shopspring/decimal"
 )
 
 type convertInput struct {
@@ -35,13 +34,8 @@ func (r *controller) convert(api huma.API) {
 	}, func(ctx context.Context, input *convertInput) (*convertOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 
-		amount, err := decimal.NewFromString(input.Body.Amount)
-		if err != nil {
-			return nil, huma.Error422UnprocessableEntity("invalid amount")
-		}
-
 		written, err := cqrs.SendCommand(ctx, r.cmds, command.ConvertCurrency{
-			UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
+			UserID: userID, From: input.Body.From, To: input.Body.To, Amount: input.Body.Amount,
 		})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "convert")

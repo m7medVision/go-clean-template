@@ -39,9 +39,10 @@ type Conversion struct {
 
 // NewConversion validates a conversion request. Currency codes are trimmed and uppercased and
 // must be three letters (ISO 4217 shape), and the two codes must differ (else ErrInvalidConversion).
-// The amount must be positive and fit MaxAmountDigits and MaxAmountScale (else ErrInvalidAmount).
-// Whether a code is a currency the rate provider knows is checked by the provider.
-func NewConversion(from, to string, amount decimal.Decimal) (Conversion, error) {
+// The amount is a decimal string, parsed here for every transport: it must be one, positive, and
+// fit MaxAmountDigits and MaxAmountScale (else ErrInvalidAmount). Whether a code is a currency the
+// rate provider knows is checked by the provider.
+func NewConversion(from, to, amount string) (Conversion, error) {
 	from = strings.ToUpper(strings.TrimSpace(from))
 	to = strings.ToUpper(strings.TrimSpace(to))
 
@@ -49,12 +50,13 @@ func NewConversion(from, to string, amount decimal.Decimal) (Conversion, error) 
 		return Conversion{}, ErrInvalidConversion
 	}
 
-	if !amount.IsPositive() || amount.Exponent() < -MaxAmountScale ||
-		amount.Truncate(0).GreaterThanOrEqual(decimal.New(1, MaxAmountDigits)) {
+	parsed, err := decimal.NewFromString(amount)
+	if err != nil || !parsed.IsPositive() || parsed.Exponent() < -MaxAmountScale ||
+		parsed.Truncate(0).GreaterThanOrEqual(decimal.New(1, MaxAmountDigits)) {
 		return Conversion{}, ErrInvalidAmount
 	}
 
-	return Conversion{From: from, To: to, Amount: amount}, nil
+	return Conversion{From: from, To: to, Amount: parsed}, nil
 }
 
 // ApplyRate sets a rate published on date: Result is Amount × Rate, rounded half-even.

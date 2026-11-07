@@ -33,13 +33,15 @@ func TestNewConversion(t *testing.T) {
 		{"negative amount", "EUR", "USD", "-5", entity.ErrInvalidAmount, "", ""},
 		{"16 digits before the point", "EUR", "USD", "1000000000000000", entity.ErrInvalidAmount, "", ""},
 		{"9 digits after the point", "EUR", "USD", "1.123456789", entity.ErrInvalidAmount, "", ""},
+		{"not a number", "EUR", "USD", "ten", entity.ErrInvalidAmount, "", ""},
+		{"no amount", "EUR", "USD", "", entity.ErrInvalidAmount, "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c, err := entity.NewConversion(tt.from, tt.to, decimal.RequireFromString(tt.amount))
+			c, err := entity.NewConversion(tt.from, tt.to, tt.amount)
 
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -74,7 +76,7 @@ func TestConversion_ApplyRate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			c, err := entity.NewConversion("EUR", "USD", decimal.RequireFromString(tt.amount))
+			c, err := entity.NewConversion("EUR", "USD", tt.amount)
 			require.NoError(t, err)
 
 			date := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)

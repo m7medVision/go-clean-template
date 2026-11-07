@@ -11,19 +11,19 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/shopspring/decimal"
 )
 
-// ConvertCurrency converts Amount from one currency to another at today's reference rate and
-// records it in UserID's history. An invalid request is entity.ErrInvalidConversion, and a currency
-// the rate provider does not know entity.ErrUnsupportedCurrency.
+// ConvertCurrency converts Amount, a decimal string, from one currency to another at today's
+// reference rate and records it in UserID's history. An invalid pair of codes is
+// entity.ErrInvalidConversion, an amount that does not parse or fit entity.ErrInvalidAmount, and a
+// currency the rate provider does not know entity.ErrUnsupportedCurrency.
 type ConvertCurrency struct {
 	cqrs.Command[entity.Written]
 
 	UserID string
 	From   string
 	To     string
-	Amount decimal.Decimal
+	Amount string
 }
 
 func (c ConvertCurrency) ActorID() string { return c.UserID }

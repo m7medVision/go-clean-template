@@ -122,11 +122,12 @@ failing field. The same tags also produce:
 One declaration, and nothing to keep in sync by hand.
 
 The DTO checks only **shape**: three letters, a decimal-looking string. Whether `"omr"` and `"OMR"` are
-the same currency, or whether converting OMR to OMR makes sense, is a domain rule and lives in the
-entity (step 5).
+the same currency, whether converting OMR to OMR makes sense, and what the amount is worth are domain
+rules and live in the entity (step 5).
 
 `Amount` is a string on purpose. A JSON number would be decoded into a `float64` somewhere, and money
-must never pass through a float.
+must never pass through a float. It stays a string until `entity.NewConversion` parses it into a
+`decimal.Decimal`, once, for every transport.
 
 ## 3. The handler
 
@@ -135,25 +136,20 @@ The handler body does the same steps in the same order as every handler on every
 ```go
 userID := authn.MustCaller(ctx).UserID  // 1. who is calling
 
-amount, err := decimal.NewFromString(input.Body.Amount)  // 2. DTO → domain value
-if err != nil {
-	return nil, huma.Error422UnprocessableEntity("invalid amount")
-}
-
-written, err := cqrs.SendCommand(ctx, r.cmds, command.ConvertCurrency{  // 3. the write
-	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
+written, err := cqrs.SendCommand(ctx, r.cmds, command.ConvertCurrency{  // 2. the DTO's fields → the write
+	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: input.Body.Amount,
 })
 if err != nil {
-	return nil, apierr.Problem(ctx, r.l, err, "convert")  // 4. error kind → status
+	return nil, apierr.Problem(ctx, r.l, err, "convert")  // 3. error kind → status
 }
 
-conversion, err := cqrs.SendQuery(ctx, r.qs,  // 5. read it back
+conversion, err := cqrs.SendQuery(ctx, r.qs,  // 4. read it back
 	query.GetConversion{UserID: userID, ConversionID: written.ID})
 if err != nil {
 	return nil, apierr.Problem(ctx, r.l, err, "convert")
 }
 
-return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO
+return &convertOutput{Body: NewConversion(&conversion)}, nil  // 5. entity → response DTO
 ```
 
 - **The caller is always there.** The operation declares `Security`, so `Auth` has already
@@ -167,8 +163,8 @@ return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → r
   it is cancelled if the client disconnects, which cancels the outbound HTTP call and the event
   store's transaction below.
 - **[`apierr.Problem`](../internal/controller/restapi/v1/apierr/apierr.go) maps errors, for every
-  domain.** Each `entity.Err*` carries its kind: `ErrInvalidConversion` and `ErrUnsupportedCurrency`
-  are invalid (400), `ErrReadModelBehind` is unavailable (503), `ErrConcurrencyConflict` a conflict
+  domain.** Each `entity.Err*` carries its kind: `ErrInvalidConversion`, `ErrInvalidAmount` and
+  `ErrUnsupportedCurrency` are invalid (400), `ErrReadModelBehind` is unavailable (503), `ErrConcurrencyConflict` a conflict
   (409), and a [generated](generator.md) stub's `ErrNotImplemented` 501. Anything that is not an
   `*entity.Error` is logged and becomes a 500.
 - **The DTO and the entity never cross the boundary.** The handler never passes the `Convert` DTO to
@@ -227,10 +223,11 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
 
 - Validation runs first, so a bad request never costs a call to the provider.
 - The rules are the entity's ([`exchange.go`](../internal/entity/exchange.go)):
-  - `NewConversion` uppercases `"omr"` to `"OMR"`, once, for every transport. gRPC requests carry no
-    Huma tags, so this is the check that protects them. It refuses a code that isn't three letters,
-    `from` equal to `to`, and an amount that isn't positive or has more than 15 digits before the
-    point or 8 after it.
+  - `NewConversion` uppercases `"omr"` to `"OMR"` and parses the amount, once, for every transport.
+    gRPC requests carry no Huma tags, so this is the check that protects them. It refuses a code
+    that isn't three letters and `from` equal to `to` (`ErrInvalidConversion`), and an amount that
+    isn't a decimal, isn't positive or has more than 15 digits before the point or 8 after it
+    (`ErrInvalidAmount`).
   - `ApplyRate` rounds half-to-even, the usual rule for money: `100 × 17.406483 = 1740.6483` →
     `1740.65`.
 - `NewConversionAggregate` ([`exchange_aggregate.go`](../internal/entity/exchange_aggregate.go))
@@ -339,8 +336,8 @@ carries the trace ID as its correlation ID.
 | --- | --- | --- |
 | No token, malformed header, expired token | `Auth` middleware | 401 |
 | `from` not three letters, amount not a decimal string | Huma tags on `request.Convert` | 422 |
-| Amount that doesn't parse as a decimal | handler | 422 |
-| `from` = `to`, amount ≤ 0, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 |
+| `from` = `to`, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 |
+| Amount ≤ 0 (or, on gRPC, not a decimal or too long) | `entity.NewConversion` → `ErrInvalidAmount` | 400 |
 | Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 |
 | Saved, but the projector didn't catch up in time | wait step → `ErrReadModelBehind` | 503 |
 | Provider down, non-200, bad JSON; database error | wrapped error, logged by the handler | 500 |
@@ -367,7 +364,7 @@ about a rule.
 On gRPC:
 - the `Auth` interceptor rejects a missing or expired token with `Unauthenticated`, on every method
   no module lists as public (`grpcPublic`);
-- there are no Huma tags, so a malformed code falls through to the entity;
+- there are no Huma tags, so a malformed code or amount falls through to the entity;
 - a bad amount, an invalid conversion and an unknown currency are all `InvalidArgument`;
 - a lagging read model is `Unavailable`;
 - the 500 cases are `Internal`, and so is a panic, which the `Recovery` interceptor logs; the

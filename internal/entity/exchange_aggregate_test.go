@@ -16,7 +16,7 @@ const _conversionID = "conv-1"
 func converted(t *testing.T) entity.Conversion {
 	t.Helper()
 
-	c, err := entity.NewConversion("omr", "cny", decimal.RequireFromString("100"))
+	c, err := entity.NewConversion("omr", "cny", "100")
 	require.NoError(t, err)
 	c.ApplyRate(decimal.RequireFromString("17.406483"), time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC))
 

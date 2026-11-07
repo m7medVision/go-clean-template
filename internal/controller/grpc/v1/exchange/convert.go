@@ -9,21 +9,13 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/shopspring/decimal"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func (c *Controller) Convert(ctx context.Context, req *v1.ConvertRequest) (*v1.ConversionResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 
-	amount, err := decimal.NewFromString(req.GetAmount())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid amount")
-	}
-
 	written, err := cqrs.SendCommand(ctx, c.cmds, command.ConvertCurrency{
-		UserID: userID, From: req.GetFrom(), To: req.GetTo(), Amount: amount,
+		UserID: userID, From: req.GetFrom(), To: req.GetTo(), Amount: req.GetAmount(),
 	})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "Convert")
