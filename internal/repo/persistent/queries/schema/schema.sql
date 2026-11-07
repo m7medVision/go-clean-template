@@ -36,13 +36,13 @@ CREATE TABLE "public"."exchange_history" (
   "rate" numeric NOT NULL,
   "result" numeric NOT NULL,
   "rate_date" date NOT NULL,
-  "created_at" timestamp NOT NULL DEFAULT now(),
+  "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id")
 );
 -- Create index "exchange_history_conversion_id_key" to table: "exchange_history"
 CREATE UNIQUE INDEX "exchange_history_conversion_id_key" ON "public"."exchange_history" ("conversion_id");
 -- Create index "idx_exchange_history_user_id" to table: "exchange_history"
-CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id");
+CREATE INDEX "idx_exchange_history_user_id" ON "public"."exchange_history" ("user_id", "created_at");
 -- Create "projection_checkpoints" table
 CREATE TABLE "public"."projection_checkpoints" (
   "name" text NOT NULL,
@@ -75,11 +75,11 @@ CREATE TABLE "public"."snapshots" (
 CREATE TABLE "public"."tasks" (
   "id" uuid NOT NULL,
   "user_id" uuid NOT NULL,
-  "title" character varying(255) NOT NULL,
+  "title" text NOT NULL,
   "description" text NULL DEFAULT '',
   "status" character varying(20) NOT NULL DEFAULT 'todo',
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  "updated_at" timestamp NOT NULL DEFAULT now(),
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id")
 );
 -- Create index "idx_tasks_user_id" to table: "tasks"
@@ -99,17 +99,15 @@ CREATE INDEX "idx_user_identities_user_id" ON "public"."user_identities" ("user_
 -- Create "users" table
 CREATE TABLE "public"."users" (
   "id" uuid NOT NULL,
-  "username" character varying(255) NOT NULL,
-  "email" character varying(255) NOT NULL,
-  "password_hash" character varying(255) NOT NULL,
-  "created_at" timestamp NOT NULL DEFAULT now(),
-  "updated_at" timestamp NOT NULL DEFAULT now(),
+  "username" text NOT NULL,
+  "email" text NOT NULL,
+  "password_hash" text NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id")
 );
--- Create index "users_email_key" to table: "users"
-CREATE UNIQUE INDEX "users_email_key" ON "public"."users" ("email");
--- Create index "users_username_key" to table: "users"
-CREATE UNIQUE INDEX "users_username_key" ON "public"."users" ("username");
+-- Create index "idx_users_email" to table: "users"
+CREATE INDEX "idx_users_email" ON "public"."users" ("email");
 -- Create "webauthn_credentials" table
 CREATE TABLE "public"."webauthn_credentials" (
   "id" bytea NOT NULL,

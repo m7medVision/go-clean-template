@@ -24,8 +24,9 @@ WHERE id = $1 AND conversion_id IS NULL;
 SELECT count(*) FROM exchange_history
 WHERE user_id = $1;
 
+-- ListExchanges pages by when each conversion happened, newest first.
 -- name: ListExchanges :many
 SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
 WHERE user_id = sqlc.arg('user_id')
-ORDER BY id DESC
+ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;

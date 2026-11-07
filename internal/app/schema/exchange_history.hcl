@@ -41,7 +41,7 @@ table "exchange_history" {
   }
   column "created_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   primary_key {
@@ -54,6 +54,9 @@ table "exchange_history" {
   index "idx_exchange_history_user_id" {
     on {
       column = column.user_id
+    }
+    on {
+      column = column.created_at
     }
   }
 }

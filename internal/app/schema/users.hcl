@@ -1,3 +1,6 @@
+# The user read model: written only by the user projector. Usernames and emails are unique by their
+# claims, which commit with the events; the table repeats no rule, so it can store whatever was
+# committed.
 table "users" {
   schema = schema.public
   column "id" {
@@ -6,35 +9,30 @@ table "users" {
   }
   column "username" {
     null = false
-    type = varchar(255)
+    type = text
   }
   column "email" {
     null = false
-    type = varchar(255)
+    type = text
   }
   column "password_hash" {
     null = false
-    type = varchar(255)
+    type = text
   }
   column "created_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   column "updated_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   primary_key {
     columns = [column.id]
   }
-  index "users_username_key" {
-    unique  = true
-    columns = [column.username]
-  }
-  index "users_email_key" {
-    unique  = true
+  index "idx_users_email" {
     columns = [column.email]
   }
 }

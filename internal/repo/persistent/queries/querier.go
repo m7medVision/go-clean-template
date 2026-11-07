@@ -61,6 +61,7 @@ type Querier interface {
 	ListEveryPasskey(ctx context.Context) ([]WebauthnCredential, error)
 	ListEveryTask(ctx context.Context) ([]Task, error)
 	ListEveryUser(ctx context.Context) ([]User, error)
+	// ListExchanges pages by when each conversion happened, newest first.
 	ListExchanges(ctx context.Context, arg ListExchangesParams) ([]ListExchangesRow, error)
 	ListPasskeysByUser(ctx context.Context, userID string) ([]WebauthnCredential, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)

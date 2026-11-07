@@ -77,7 +77,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2. **Depends on:** 4. **Size:** M
 
 ### 10. Read models stop re-checking the domain  (B, N)
-- [ ] `varchar(255)` → `text`, users' unique indexes → plain indexes, `timestamp` → `timestamptz`,
+- [x] `varchar(255)` → `text`, users' unique indexes → plain indexes, `timestamp` → `timestamptz`,
       exchange history ordered by event time; `make sqlc` clean.
 
 **Verify:** G1, then G3 at the checkpoint. **Depends on:** 8. **Size:** M

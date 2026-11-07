@@ -133,7 +133,7 @@ func (q *Queries) ListEveryExchange(ctx context.Context) ([]ExchangeHistory, err
 const listExchanges = `-- name: ListExchanges :many
 SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
 WHERE user_id = $1
-ORDER BY id DESC
+ORDER BY created_at DESC, id DESC
 LIMIT $3::bigint OFFSET $2::bigint
 `
 
@@ -152,6 +152,7 @@ type ListExchangesRow struct {
 	RateDate     time.Time
 }
 
+// ListExchanges pages by when each conversion happened, newest first.
 func (q *Queries) ListExchanges(ctx context.Context, arg ListExchangesParams) ([]ListExchangesRow, error) {
 	rows, err := q.db.Query(ctx, listExchanges, arg.UserID, arg.Offset, arg.Limit)
 	if err != nil {
