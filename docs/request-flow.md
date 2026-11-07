@@ -324,16 +324,19 @@ is. A query never touches the event store.
 With `TRACING_ENABLED=true`, this request shows up in Jaeger as one trace:
 
 ```
-POST /v1/exchange/convert                      (otelhttp server span, REST middleware)
-├── command ConvertCurrency                    (the command bus)
-│   ├── HTTP GET                               (otelhttp client span → open.er-api.com)
-│   └── EventStore.Save                        stream.id, events.count
-└── query GetConversion                        (the query bus)
-    └── ExchangeReadModel.Conversion
+POST /v1/exchange/convert              (otelhttp server span, httpmw.Tracing)
+├── command ConvertCurrency            (the command bus's trace step)
+│   ├── HTTP GET                       (otelhttp client span → open.er-api.com)
+│   ├── BEGIN, SELECT, INSERT, COMMIT  (otelpgx, a span per statement: the event store's Save)
+│   └── SELECT                         (otelpgx: the wait step reading projection_checkpoints, once a poll)
+└── query GetConversion                (the query bus's trace step)
+    └── SELECT                         (otelpgx: the exchange_history row)
 ```
 
-The projector's insert runs in the worker, so it isn't part of this trace; the event's metadata
-carries the trace ID as its correlation ID.
+Repositories open no spans of their own: below the buses' span, otelpgx opens one per SQL
+statement, named after its operation, with the statement in `db.query.text`. The projector's insert
+runs in the worker, so it isn't part of this trace; the event's metadata carries the trace ID as its
+correlation ID.
 
 ## Where each failure ends up
 
