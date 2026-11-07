@@ -27,8 +27,8 @@ const (
 // newBuses builds the command and query buses with their pipelines, outermost step first:
 // trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
 // concurrent write; then authorize and validate on both, right before the handler.
-// A write waits consistencyTimeout at most for the projectors to pass it.
-func newBuses(pg *postgres.Postgres, projectors []repo.Subscriber, consistencyTimeout time.Duration, l *slog.Logger) (
+// A write waits consistencyTimeout at most for the projectors of what it wrote to pass it.
+func newBuses(pg *postgres.Postgres, projectors []projection.Projector, consistencyTimeout time.Duration, l *slog.Logger) (
 	*cqrs.Commands, *cqrs.Queries,
 ) {
 	outer := []cqrs.Step{
@@ -40,7 +40,7 @@ func newBuses(pg *postgres.Postgres, projectors []repo.Subscriber, consistencyTi
 	inner := []cqrs.Step{behavior.Authorize(), behavior.Validate()}
 
 	cmds := cqrs.NewCommands(slices.Concat(outer, []cqrs.Step{
-		behavior.Wait(projection.NewCheckpoints(pg), projectors, consistencyTimeout, _waitTick),
+		behavior.Wait(projection.NewCheckpoints(pg), projectorsByEvent(projectors), consistencyTimeout, _waitTick),
 		behavior.Retry(_commandAttempts),
 	}, inner)...)
 	qs := cqrs.NewQueries(slices.Concat(outer, inner)...)
@@ -56,11 +56,16 @@ func newEventStore(pg *postgres.Postgres, snapshotEvery int) repo.EventStore {
 	return eventstore.New(pg, newCodec(), snapshotEvery)
 }
 
-func subscribersOf(projectors []projection.Projector) []repo.Subscriber {
-	subs := make([]repo.Subscriber, len(projectors))
-	for i, p := range projectors {
-		subs[i] = p
+// projectorsByEvent names, for each event type, the projectors that handle it: what a write of that
+// type waits for.
+func projectorsByEvent(projectors []projection.Projector) map[string][]string {
+	byEvent := map[string][]string{}
+
+	for _, p := range projectors {
+		for _, e := range p.Handles() {
+			byEvent[e.EventType()] = append(byEvent[e.EventType()], p.Name())
+		}
 	}
 
-	return subs
+	return byEvent
 }

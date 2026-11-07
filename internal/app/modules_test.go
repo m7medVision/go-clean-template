@@ -125,3 +125,14 @@ func TestTheModulesSubscribersRunTogether(t *testing.T) {
 	_, err := newRunner(d)
 	require.NoError(t, err)
 }
+
+// A write waits for the projector of each event type it wrote: every type has one, its domain's.
+func TestAWriteWaitsForItsDomainsProjector(t *testing.T) {
+	t.Parallel()
+
+	byEvent := projectorsByEvent(projectors(testDeps(nil).pg))
+
+	assert.Len(t, byEvent, len(entity.EventTypes()))
+	assert.Equal(t, []string{"task"}, byEvent[entity.TaskCreated{}.EventType()])
+	assert.Equal(t, []string{"passkey"}, byEvent[entity.PasskeyUsed{}.EventType()])
+}

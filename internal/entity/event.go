@@ -84,7 +84,7 @@ type Written struct {
 	ID       string
 	Position int64
 	// Events are the types of the events the command appended, which say which projectors it
-	// waits for.
+	// waits for: none when it appended nothing.
 	Events []string
 }
 

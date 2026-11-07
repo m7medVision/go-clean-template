@@ -41,7 +41,7 @@ func newBootstrap(ctx context.Context, cfg *config.Config, service string) (*boo
 		return nil, fmt.Errorf("postgres.New: %w", err)
 	}
 
-	cmds, qs := newBuses(pg, subscribersOf(projectors(pg)), cfg.CQRS.ConsistencyTimeout, l)
+	cmds, qs := newBuses(pg, projectors(pg), cfg.CQRS.ConsistencyTimeout, l)
 
 	return &bootstrap{
 		l:           l,

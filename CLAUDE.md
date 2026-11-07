@@ -373,7 +373,8 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   A subscriber writes through `pg.Executor(ctx)` (`pkg/postgres`) so its rows join that
   transaction; anything else (a second pool, a goroutine) breaks exactly-once.
 - **Every command waits for the projectors of what it wrote** (the wait step: those whose `Handles`
-  include a type in `entity.Written.Events`) until they pass its position, or
+  include a type in `entity.Written.Events`, from a map of event type to projector names that
+  `newBuses` builds once; no events, no wait) until they pass its position, or
   answers `entity.ErrReadModelBehind` after `CQRS_CONSISTENCY_TIMEOUT`. Event handlers are not waited
   for. So the app and the integration tests need the worker running; `make dev` and the compose stack
   start it.

@@ -49,12 +49,13 @@ func Stamp() cqrs.Step {
 	}
 }
 
-// Wait holds a command's result until the projectors that handle the events it wrote (an
-// entity.Write, alone or embedded) have handled the event at its position, checking every tick, so
-// a read sent straight after the command sees the write. A projector that handles none of them is
-// not waited for, so one that is stuck holds up only the writes it projects.
+// Wait holds a command's result until the projectors of the events it wrote (an entity.Write, alone
+// or embedded) have handled the event at its position, checking every tick, so a read sent straight
+// after the command sees the write. projectors names, for each event type, the projectors that
+// handle it. A projector that handles none of the events written is not waited for, so one that is
+// stuck holds up only the writes it projects; a command that wrote no events waits for nothing.
 // Past timeout it returns entity.ErrReadModelBehind: the write itself is committed.
-func Wait(checkpoints repo.ProjectionCheckpoints, projectors []repo.Subscriber, timeout, tick time.Duration) cqrs.Step {
+func Wait(checkpoints repo.ProjectionCheckpoints, projectors map[string][]string, timeout, tick time.Duration) cqrs.Step {
 	return func(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
 		out, err := next(ctx)
 		if err != nil {
@@ -62,7 +63,7 @@ func Wait(checkpoints repo.ProjectionCheckpoints, projectors []repo.Subscriber, 
 		}
 
 		written, ok := out.(entity.Write)
-		if !ok || written.WrittenAt() == 0 {
+		if !ok {
 			return out, nil
 		}
 
@@ -79,12 +80,15 @@ func Wait(checkpoints repo.ProjectionCheckpoints, projectors []repo.Subscriber, 
 	}
 }
 
-func projecting(projectors []repo.Subscriber, types []string) []string {
+// projecting lists, once each, the projectors of the event types written.
+func projecting(projectors map[string][]string, written []string) []string {
 	var names []string
 
-	for _, p := range projectors {
-		if slices.ContainsFunc(p.Handles(), func(e entity.Event) bool { return slices.Contains(types, e.EventType()) }) {
-			names = append(names, p.Name())
+	for _, eventType := range written {
+		for _, name := range projectors[eventType] {
+			if !slices.Contains(names, name) {
+				names = append(names, name)
+			}
 		}
 	}
 
