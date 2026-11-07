@@ -2,6 +2,7 @@ package entity_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -138,11 +139,18 @@ func TestPasskeyAggregateSnapshotKeepsTheHiddenFields(t *testing.T) {
 	assert.True(t, restored.Live())
 }
 
-func TestPasskeyNameTrimsAndDefaults(t *testing.T) {
+func TestAPasskeysNameIsTrimmedDefaultedAndBounded(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "Laptop", entity.PasskeyName("  Laptop "))
-	assert.Equal(t, "Passkey", entity.PasskeyName("   "))
+	a := &entity.PasskeyAggregate{}
+	require.NoError(t, a.Register(passkeyID(), _owner, "  Laptop ", record(), createdAt()))
+	assert.Equal(t, "Laptop", a.State().Name)
+
+	require.NoError(t, a.Rename(_owner, "   ", laterAt()))
+	assert.Equal(t, "Passkey", a.State().Name)
+
+	require.ErrorIs(t, a.Rename(_owner, strings.Repeat("a", entity.MaxPasskeyNameLen+1), laterAt()),
+		entity.ErrInvalidPasskeyName)
 }
 
 func TestThePasskeyEventsAreRegistered(t *testing.T) {

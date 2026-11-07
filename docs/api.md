@@ -101,7 +101,8 @@ example of an outbound HTTP API behind a repository interface.
   rounded half-even to 2 places.
 - Rates update once a day and are not live market rates; the response carries the rate's `rate_date`.
   The provider's terms require a link back to it wherever the rates are shown (the web page has one).
-- An unknown currency, or `from` equal to `to`, answers 400. History pages
+- An unknown currency, or `from` equal to `to`, answers 400. The amount is positive with at most 15
+  digits before the point and 8 after (`entity.NewConversion`; REST's pattern says the same). History pages
   with `limit`/`offset` and returns a `total`.
 
 ## REST

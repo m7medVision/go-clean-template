@@ -71,7 +71,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2. **Depends on:** 4. **Size:** L
 
 ### 9. Exchange amount and passkey name rules in the domain  (B)
-- [ ] `ConvertCurrency` validates the amount once for every transport; REST op lists the status it
+- [x] `ConvertCurrency` validates the amount once for every transport; REST op lists the status it
       returns. Passkey names are normalized by the aggregate.
 
 **Verify:** G2. **Depends on:** 4. **Size:** M

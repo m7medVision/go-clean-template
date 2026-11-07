@@ -93,6 +93,9 @@ var (
 	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
 	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
 	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")
+	ErrInvalidAmount       = newError(KindInvalid,
+		"amount must be positive, with at most 15 digits before the point and 8 after it")
+	ErrInvalidPasskeyName = newError(KindInvalid, "passkey name must be at most 64 characters")
 	// ErrOIDCDisabled is an SSO request to an app with no OpenID Connect provider configured.
 	ErrOIDCDisabled = newError(KindNotFound, "sso sign-in is not configured")
 	// ErrOIDCUnavailable is an SSO sign-in while the OpenID Connect provider cannot be reached.

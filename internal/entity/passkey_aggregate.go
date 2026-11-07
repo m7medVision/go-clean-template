@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
 	// _defaultPasskeyName names a passkey registered or renamed without one.
 	_defaultPasskeyName = "Passkey"
+	// MaxPasskeyNameLen is the longest name a passkey may have, in characters.
+	MaxPasskeyNameLen = 64
 	// _passkeySnapshotVersion is the version of passkeySnapshot's shape.
 	_passkeySnapshotVersion = 1
 )
@@ -20,14 +23,19 @@ func PasskeyStreamID(id PasskeyID) string {
 	return "passkey-" + id.String()
 }
 
-// PasskeyName is a passkey's name trimmed, and a blank one the default.
-func PasskeyName(name string) string {
+// passkeyName is a passkey's name trimmed, a blank one the default, and one longer than
+// MaxPasskeyNameLen ErrInvalidPasskeyName.
+func passkeyName(name string) (string, error) {
 	name = strings.TrimSpace(name)
-	if name == "" {
-		return _defaultPasskeyName
-	}
 
-	return name
+	switch {
+	case name == "":
+		return _defaultPasskeyName, nil
+	case utf8.RuneCountInString(name) > MaxPasskeyNameLen:
+		return "", ErrInvalidPasskeyName
+	default:
+		return name, nil
+	}
 }
 
 // PasskeyAggregate is one WebAuthn credential on the write side. Every sign-in with it records
@@ -75,6 +83,11 @@ func (a *PasskeyAggregate) Register(id PasskeyID, userID, name string, credentia
 		return ErrPasskeyExists
 	}
 
+	name, err := passkeyName(name)
+	if err != nil {
+		return err
+	}
+
 	Record(a, PasskeyRegistered{PasskeyID: id, UserID: userID, Name: name, Credential: credential, At: at})
 
 	return nil
@@ -84,6 +97,11 @@ func (a *PasskeyAggregate) Register(id PasskeyID, userID, name string, credentia
 func (a *PasskeyAggregate) Rename(userID, name string, at time.Time) error {
 	if !a.ownedBy(userID) {
 		return ErrPasskeyNotFound
+	}
+
+	name, err := passkeyName(name)
+	if err != nil {
+		return err
 	}
 
 	Record(a, PasskeyRenamed{PasskeyID: a.passkey.ID, Name: name, At: at})

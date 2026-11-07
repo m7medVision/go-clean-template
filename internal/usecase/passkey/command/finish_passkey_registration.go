@@ -51,7 +51,7 @@ func (h FinishPasskeyRegistrationHandler) Handle(ctx context.Context, cmd Finish
 		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - h.Store.Load: %w", err)
 	}
 
-	if err = passkey.Register(id, cmd.UserID, entity.PasskeyName(cmd.Name), record, aggregate.Now(h.Now)); err != nil {
+	if err = passkey.Register(id, cmd.UserID, cmd.Name, record, aggregate.Now(h.Now)); err != nil {
 		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
 	}
 

@@ -7,8 +7,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// _resultScale is the number of decimal places a converted amount is rounded to.
-const _resultScale = 2
+const (
+	// _resultScale is the number of decimal places a converted amount is rounded to.
+	_resultScale = 2
+	// MaxAmountDigits and MaxAmountScale bound an amount to convert: at most 15 digits before the
+	// point and 8 after it.
+	MaxAmountDigits = 15
+	MaxAmountScale  = 8
+)
 
 // Conversion is an amount converted from one currency to another at a reference rate.
 // Amounts are exact decimals: money never passes through float64.
@@ -22,14 +28,20 @@ type Conversion struct {
 }
 
 // NewConversion validates a conversion request. Currency codes are trimmed and uppercased and
-// must be three letters (ISO 4217 shape); the two codes must differ and the amount must be
-// positive. Whether a code is a currency the rate provider knows is checked by the provider.
+// must be three letters (ISO 4217 shape), and the two codes must differ (else ErrInvalidConversion).
+// The amount must be positive and fit MaxAmountDigits and MaxAmountScale (else ErrInvalidAmount).
+// Whether a code is a currency the rate provider knows is checked by the provider.
 func NewConversion(from, to string, amount decimal.Decimal) (Conversion, error) {
 	from = strings.ToUpper(strings.TrimSpace(from))
 	to = strings.ToUpper(strings.TrimSpace(to))
 
-	if !validCurrencyCode(from) || !validCurrencyCode(to) || from == to || !amount.IsPositive() {
+	if !validCurrencyCode(from) || !validCurrencyCode(to) || from == to {
 		return Conversion{}, ErrInvalidConversion
+	}
+
+	if !amount.IsPositive() || amount.Exponent() < -MaxAmountScale ||
+		amount.Truncate(0).GreaterThanOrEqual(decimal.New(1, MaxAmountDigits)) {
+		return Conversion{}, ErrInvalidAmount
 	}
 
 	return Conversion{From: from, To: to, Amount: amount}, nil

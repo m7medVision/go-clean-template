@@ -3,6 +3,7 @@ package restapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -222,8 +223,8 @@ func TestEveryLimitDocumentsTheDomainsPage(t *testing.T) {
 	assert.Positive(t, limits)
 }
 
-// The REST schema's length hints document the domain's rules (entity.ValidateTaskText and
-// entity.ValidateSignUp), which every transport enforces.
+// The REST schema's length and pattern hints document the domain's rules (entity.ValidateTaskText,
+// entity.ValidateSignUp, entity.NewConversion, the passkey name), which every transport enforces.
 func TestBodyLengthHintsDocumentTheDomainsRules(t *testing.T) {
 	t.Parallel()
 
@@ -234,8 +235,9 @@ func TestBodyLengthHintsDocumentTheDomainsRules(t *testing.T) {
 		Components struct {
 			Schemas map[string]struct {
 				Properties map[string]struct {
-					MinLength *int `json:"minLength"`
-					MaxLength *int `json:"maxLength"`
+					MinLength *int   `json:"minLength"`
+					MaxLength *int   `json:"maxLength"`
+					Pattern   string `json:"pattern"`
 				} `json:"properties"`
 			} `json:"schemas"`
 		} `json:"components"`
@@ -254,4 +256,7 @@ func TestBodyLengthHintsDocumentTheDomainsRules(t *testing.T) {
 	assert.Equal(t, entity.MinUsernameLen, *schemas["Register"].Properties["username"].MinLength)
 	assert.Equal(t, entity.MaxUsernameLen, *schemas["Register"].Properties["username"].MaxLength)
 	assert.Equal(t, entity.MinPasswordLen, *schemas["Register"].Properties["password"].MinLength)
+	assert.Equal(t, entity.MaxPasskeyNameLen, *schemas["RenamePasskey"].Properties["name"].MaxLength)
+	assert.Equal(t, fmt.Sprintf(`^[0-9]{1,%d}(\.[0-9]{1,%d})?$`, entity.MaxAmountDigits, entity.MaxAmountScale),
+		schemas["Convert"].Properties["amount"].Pattern)
 }

@@ -17,18 +17,22 @@ func TestNewConversion(t *testing.T) {
 		name     string
 		from, to string
 		amount   string
-		wantErr  bool
+		wantErr  error
 		wantFrom string
 		wantTo   string
 	}{
-		{"valid", "EUR", "USD", "100", false, "EUR", "USD"},
-		{"lowercase and spaces are normalized", " eur ", "usd", "1.5", false, "EUR", "USD"},
-		{"same currency", "EUR", "eur", "1", true, "", ""},
-		{"code too short", "EU", "USD", "1", true, "", ""},
-		{"code too long", "EURO", "USD", "1", true, "", ""},
-		{"code with digits", "EU1", "USD", "1", true, "", ""},
-		{"zero amount", "EUR", "USD", "0", true, "", ""},
-		{"negative amount", "EUR", "USD", "-5", true, "", ""},
+		{"valid", "EUR", "USD", "100", nil, "EUR", "USD"},
+		{"lowercase and spaces are normalized", " eur ", "usd", "1.5", nil, "EUR", "USD"},
+		{"the largest amount", "EUR", "USD", "999999999999999.12345678", nil, "EUR", "USD"},
+		{"an exponent within bounds", "EUR", "USD", "1e3", nil, "EUR", "USD"},
+		{"same currency", "EUR", "eur", "1", entity.ErrInvalidConversion, "", ""},
+		{"code too short", "EU", "USD", "1", entity.ErrInvalidConversion, "", ""},
+		{"code too long", "EURO", "USD", "1", entity.ErrInvalidConversion, "", ""},
+		{"code with digits", "EU1", "USD", "1", entity.ErrInvalidConversion, "", ""},
+		{"zero amount", "EUR", "USD", "0", entity.ErrInvalidAmount, "", ""},
+		{"negative amount", "EUR", "USD", "-5", entity.ErrInvalidAmount, "", ""},
+		{"16 digits before the point", "EUR", "USD", "1000000000000000", entity.ErrInvalidAmount, "", ""},
+		{"9 digits after the point", "EUR", "USD", "1.123456789", entity.ErrInvalidAmount, "", ""},
 	}
 
 	for _, tt := range tests {
@@ -37,8 +41,8 @@ func TestNewConversion(t *testing.T) {
 
 			c, err := entity.NewConversion(tt.from, tt.to, decimal.RequireFromString(tt.amount))
 
-			if tt.wantErr {
-				require.ErrorIs(t, err, entity.ErrInvalidConversion)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
 
 				return
 			}

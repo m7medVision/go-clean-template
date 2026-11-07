@@ -39,7 +39,7 @@ func (h RenamePasskeyHandler) Handle(ctx context.Context, cmd RenamePasskey) (en
 
 	written, err := aggregate.Change(ctx, h.Store, id.String(), entity.PasskeyStreamID(id), &entity.PasskeyAggregate{},
 		entity.ErrPasskeyNotFound, func(p *entity.PasskeyAggregate) error {
-			return p.Rename(cmd.UserID, entity.PasskeyName(cmd.Name), aggregate.Now(h.Now))
+			return p.Rename(cmd.UserID, cmd.Name, aggregate.Now(h.Now))
 		})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("RenamePasskey: %w", err)
