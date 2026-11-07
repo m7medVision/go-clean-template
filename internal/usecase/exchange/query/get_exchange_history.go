@@ -20,13 +20,13 @@ type GetExchangeHistory struct {
 }
 
 type GetExchangeHistoryHandler struct {
-	History repo.ExchangeReadModel
+	Exchanges repo.ExchangeReadModel
 }
 
 func (h GetExchangeHistoryHandler) Handle(ctx context.Context, q GetExchangeHistory) (entity.List[entity.Conversion], error) {
-	history, err := h.History.History(ctx, q.UserID, q.Page)
+	history, err := h.Exchanges.History(ctx, q.UserID, q.Page)
 	if err != nil {
-		return entity.List[entity.Conversion]{}, fmt.Errorf("GetExchangeHistory - h.History.History: %w", err)
+		return entity.List[entity.Conversion]{}, fmt.Errorf("GetExchangeHistory - h.Exchanges.History: %w", err)
 	}
 
 	return history, nil

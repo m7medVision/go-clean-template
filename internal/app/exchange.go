@@ -20,7 +20,7 @@ func exchangeModule() module {
 	return module{
 		handlers: func(d *deps, b cqrs.Buses) error {
 			exchange.Register(b.Commands, b.Queries, exchange.Deps{
-				Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(d.pg),
+				Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
 			})
 
 			return nil

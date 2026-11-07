@@ -58,7 +58,7 @@ builds the two buses once, and each domain's module registers its handlers on th
 
 ```go
 exchange.Register(b.Commands, b.Queries, exchange.Deps{
-	Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(d.pg),
+	Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
 })
 ```
 

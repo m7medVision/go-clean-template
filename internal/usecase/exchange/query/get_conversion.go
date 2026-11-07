@@ -19,13 +19,13 @@ type GetConversion struct {
 }
 
 type GetConversionHandler struct {
-	History repo.ExchangeReadModel
+	Exchanges repo.ExchangeReadModel
 }
 
 func (h GetConversionHandler) Handle(ctx context.Context, q GetConversion) (entity.Conversion, error) {
-	conversion, err := h.History.Conversion(ctx, q.ConversionID)
+	conversion, err := h.Exchanges.Conversion(ctx, q.ConversionID)
 	if err != nil {
-		return entity.Conversion{}, fmt.Errorf("GetConversion - h.History.Conversion: %w", err)
+		return entity.Conversion{}, fmt.Errorf("GetConversion - h.Exchanges.Conversion: %w", err)
 	}
 
 	if err = conversion.ReadableBy(q.UserID); err != nil {
