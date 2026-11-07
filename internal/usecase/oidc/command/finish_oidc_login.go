@@ -85,7 +85,7 @@ func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *sso.Identity
 		aggregate.Now(h.Now))
 
 	written, err := aggregate.Save(ctx, h.Store, user, claims...)
-	if errors.Is(err, entity.ErrUserAlreadyExists) {
+	if errors.Is(err, entity.ErrOIDCIdentityTaken) {
 		// A concurrent first sign-in of the same identity created its user first.
 		owner, err = h.Store.ClaimOwner(ctx, entity.ClaimOIDCIdentity, claim)
 		if err != nil {

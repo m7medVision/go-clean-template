@@ -86,7 +86,7 @@ func (h *FinishPasskeyLoginHandler) lookup(ctx context.Context, used **entity.Pa
 		passkey := &entity.PasskeyAggregate{}
 
 		err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey)
-		if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && (!passkey.Live() || passkey.State().UserID != userID)) {
+		if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && !passkey.OwnedBy(userID)) {
 			return &user, nil, nil
 		}
 
@@ -95,9 +95,8 @@ func (h *FinishPasskeyLoginHandler) lookup(ctx context.Context, used **entity.Pa
 		}
 
 		*used = passkey
-		state := passkey.State()
 
-		return &user, &state, nil
+		return &user, &entity.Passkey{ID: id, UserID: userID, Credential: passkey.Credential()}, nil
 	}
 }
 
@@ -120,7 +119,7 @@ func (h *FinishPasskeyLoginHandler) record(ctx context.Context, login *ceremony.
 			return fmt.Errorf("h.Guard.BurnChallenge: %w", err)
 		}
 
-		if err := used.Use(login.Credential, aggregate.Now(h.Now)); err != nil {
+		if err := used.Use(login.UserID, login.Credential, aggregate.Now(h.Now)); err != nil {
 			return err
 		}
 

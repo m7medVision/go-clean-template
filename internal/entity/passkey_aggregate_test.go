@@ -34,10 +34,8 @@ func TestRegisterRecordsPasskeyRegistered(t *testing.T) {
 		PasskeyID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), At: createdAt(),
 	}}, a.Pending())
 	assert.Equal(t, "passkey-AQIDBA", a.StreamID())
-	assert.Equal(t, entity.Passkey{
-		ID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), CreatedAt: createdAt(),
-	}, a.State())
-	assert.True(t, a.Live())
+	assert.True(t, a.OwnedBy(_owner))
+	assert.False(t, a.OwnedBy(_other))
 }
 
 func TestRegisteringALiveCredentialAgainIsErrPasskeyExists(t *testing.T) {
@@ -58,7 +56,6 @@ func TestADeletedCredentialCanBeRegisteredAgain(t *testing.T) {
 
 	require.NoError(t, a.Register(passkeyID(), _owner, "Again", record(), laterAt()))
 	assert.True(t, a.Live())
-	assert.Equal(t, "Again", a.State().Name)
 }
 
 func TestRenameAndDeleteAreTheOwnersOnly(t *testing.T) {
@@ -90,22 +87,21 @@ func TestADeletedOrMissingPasskeyIsNotFound(t *testing.T) {
 	}()} {
 		require.ErrorIs(t, a.Rename(_owner, "x", laterAt()), entity.ErrPasskeyNotFound)
 		require.ErrorIs(t, a.Delete(_owner, laterAt()), entity.ErrPasskeyNotFound)
-		require.ErrorIs(t, a.Use(record(), laterAt()), entity.ErrPasskeyNotFound)
+		require.ErrorIs(t, a.Use(_owner, record(), laterAt()), entity.ErrPasskeyNotFound)
 	}
 }
 
-func TestUseRecordsTheCredentialAndWhenItWasUsed(t *testing.T) {
+func TestUseRecordsTheCredentialTheNextSignInVerifiesAgainst(t *testing.T) {
 	t.Parallel()
 
 	a := registered()
 	updated := json.RawMessage(`{"id":"AQIDBA","signCount":2}`)
 
-	require.NoError(t, a.Use(updated, laterAt()))
+	require.ErrorIs(t, a.Use(_other, updated, laterAt()), entity.ErrPasskeyNotFound, "another user's passkey")
+	require.NoError(t, a.Use(_owner, updated, laterAt()))
 
 	assert.Equal(t, []entity.Event{entity.PasskeyUsed{PasskeyID: passkeyID(), Credential: updated, At: laterAt()}}, a.Pending())
-	assert.JSONEq(t, string(updated), string(a.State().Credential))
-	require.NotNil(t, a.State().LastUsedAt)
-	assert.Equal(t, laterAt(), *a.State().LastUsedAt)
+	assert.JSONEq(t, string(updated), string(a.Credential()))
 }
 
 func TestImportPasskeyAggregateRecordsTheRow(t *testing.T) {
@@ -121,10 +117,9 @@ func TestImportPasskeyAggregateRecordsTheRow(t *testing.T) {
 	assert.Equal(t, []entity.Event{entity.PasskeyImported{
 		PasskeyID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), CreatedAt: createdAt(), LastUsedAt: &used,
 	}}, a.Pending())
-	assert.Equal(t, row, a.State())
 }
 
-func TestPasskeyAggregateSnapshotKeepsTheHiddenFields(t *testing.T) {
+func TestPasskeyAggregateSnapshotKeepsTheOwnerAndTheCredential(t *testing.T) {
 	t.Parallel()
 
 	a := registered()
@@ -134,9 +129,23 @@ func TestPasskeyAggregateSnapshotKeepsTheHiddenFields(t *testing.T) {
 
 	restored := &entity.PasskeyAggregate{}
 	require.NoError(t, restored.RestoreSnapshot(data))
-	assert.Equal(t, a.State().UserID, restored.State().UserID)
-	assert.JSONEq(t, string(record()), string(restored.State().Credential))
-	assert.True(t, restored.Live())
+	assert.Equal(t, a.StreamID(), restored.StreamID())
+	assert.True(t, restored.OwnedBy(_owner))
+	assert.JSONEq(t, string(record()), string(restored.Credential()))
+}
+
+// A snapshot stored before the aggregate kept its own state held the whole passkey; it still loads.
+func TestAPasskeySnapshotOfTheFirstShapeStillLoads(t *testing.T) {
+	t.Parallel()
+
+	restored := &entity.PasskeyAggregate{}
+	require.NoError(t, restored.RestoreSnapshot([]byte(`{"passkey":{"id":"AQIDBA","name":"Laptop",
+		"created_at":"2026-01-01T09:00:00Z","last_used_at":null},"user_id":"user-1","credential":{"id":"AQIDBA"},
+		"registered":true,"deleted":false}`)))
+
+	assert.Equal(t, "passkey-AQIDBA", restored.StreamID())
+	assert.True(t, restored.OwnedBy(_owner))
+	assert.JSONEq(t, string(record()), string(restored.Credential()))
 }
 
 func TestAPasskeysNameIsTrimmedDefaultedAndBounded(t *testing.T) {
@@ -144,13 +153,14 @@ func TestAPasskeysNameIsTrimmedDefaultedAndBounded(t *testing.T) {
 
 	a := &entity.PasskeyAggregate{}
 	require.NoError(t, a.Register(passkeyID(), _owner, "  Laptop ", record(), createdAt()))
-	assert.Equal(t, "Laptop", a.State().Name)
-
 	require.NoError(t, a.Rename(_owner, "   ", laterAt()))
-	assert.Equal(t, "Passkey", a.State().Name)
-
 	require.ErrorIs(t, a.Rename(_owner, strings.Repeat("a", entity.MaxPasskeyNameLen+1), laterAt()),
 		entity.ErrInvalidPasskeyName)
+
+	assert.Equal(t, []entity.Event{
+		entity.PasskeyRegistered{PasskeyID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), At: createdAt()},
+		entity.PasskeyRenamed{PasskeyID: passkeyID(), Name: "Passkey", At: laterAt()},
+	}, a.Pending())
 }
 
 func TestThePasskeyEventsAreRegistered(t *testing.T) {

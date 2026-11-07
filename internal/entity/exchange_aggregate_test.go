@@ -35,7 +35,6 @@ func TestNewConversionAggregateRecordsCurrencyConverted(t *testing.T) {
 		Amount: c.Amount, Rate: c.Rate, Result: c.Result, RateDate: c.RateDate, At: createdAt(),
 	}}, a.Pending())
 	assert.Equal(t, "conversion-"+_conversionID, a.StreamID())
-	assert.Equal(t, c, a.State())
 }
 
 func TestCurrencyConvertedKeepsAmountsExactThroughJSON(t *testing.T) {
@@ -64,7 +63,6 @@ func TestImportConversionAggregateRecordsTheRow(t *testing.T) {
 		ConversionID: _conversionID, UserID: _owner, From: "OMR", To: "CNY",
 		Amount: c.Amount, Rate: c.Rate, Result: c.Result, RateDate: c.RateDate, CreatedAt: createdAt(),
 	}}, a.Pending())
-	assert.Equal(t, c, a.State())
 }
 
 func TestTheConversionEventsAreRegistered(t *testing.T) {

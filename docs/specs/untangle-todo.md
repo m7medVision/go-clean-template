@@ -83,7 +83,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1, then G3 at the checkpoint. **Depends on:** 8. **Size:** M
 
 ### Checkpoint 2
-- [ ] G3 green.
+- [x] G3 green.
 
 ## Phase 4: Write model and ports
 
@@ -93,10 +93,10 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 6. **Size:** L (mechanical)
 
 ### 12. Aggregates own a private state  (C)
-- [ ] Task and passkey aggregates keep a private state and snapshot; stored snapshots still load
+- [x] Task and passkey aggregates keep a private state and snapshot; stored snapshots still load
       (same JSON or a bumped snapshot version); user and conversion aggregates lose the state and
       snapshots nothing reads; duplicate `Apply` case gone; event versions per event, same values.
-- [ ] Passkey ownership checked by the aggregate; the OIDC identity claim built in one place.
+- [x] Passkey ownership checked by the aggregate; the OIDC identity claim built in one place.
 
 **Verify:** G1 (eventstore contract suite included). **Depends on:** 11. **Size:** L
 

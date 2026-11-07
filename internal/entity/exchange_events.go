@@ -6,10 +6,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// The conversion events, all at schema version 1. Amounts are decimals, which encode to JSON as
-// strings, so no amount passes through a float on its way to the store.
-const _conversionEventsVersion = 1
-
 // CurrencyConverted is a conversion a user made at a reference rate.
 type CurrencyConverted struct {
 	ConversionID string          `json:"conversion_id"`
@@ -40,14 +36,14 @@ type ConversionImported struct {
 // EventType -.
 func (CurrencyConverted) EventType() string { return "CurrencyConverted" }
 
-// SchemaVersion -.
-func (CurrencyConverted) SchemaVersion() int { return _conversionEventsVersion }
+// SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
+func (CurrencyConverted) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (ConversionImported) EventType() string { return "ConversionImported" }
 
 // SchemaVersion -.
-func (ConversionImported) SchemaVersion() int { return _conversionEventsVersion }
+func (ConversionImported) SchemaVersion() int { return 1 }
 
 func conversionEvents() []Event {
 	return []Event{CurrencyConverted{}, ConversionImported{}}

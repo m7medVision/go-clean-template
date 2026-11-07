@@ -74,8 +74,11 @@ func (k Kind) LogLevel() (slog.Level, bool) {
 }
 
 var (
-	ErrUserNotFound           = newError(KindNotFound, "user not found")
-	ErrUserAlreadyExists      = newError(KindExists, "user already exists")
+	ErrUserNotFound      = newError(KindNotFound, "user not found")
+	ErrUserAlreadyExists = newError(KindExists, "user already exists")
+	// ErrOIDCIdentityTaken is a first SSO sign-in of an identity another sign-in has just created a
+	// user for: the race's loser signs in to the winner's user.
+	ErrOIDCIdentityTaken      = newError(KindExists, "user already exists")
 	ErrInvalidCredentials     = newError(KindUnauthenticated, "invalid credentials")
 	ErrInvalidUsername        = newError(KindInvalid, "username must be 3–255 characters")
 	ErrInvalidEmail           = newError(KindInvalid, "email must be an address such as name@example.com")

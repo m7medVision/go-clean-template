@@ -43,9 +43,17 @@ func passkeyName(name string) (string, error) {
 type PasskeyAggregate struct {
 	AggregateBase
 
-	passkey    Passkey
+	passkey    passkeyState
 	registered bool
 	deleted    bool
+}
+
+// passkeyState is what the passkey's rules and a sign-in need: who owns it, and the credential
+// record the next sign-in verifies against.
+type passkeyState struct {
+	ID         PasskeyID
+	UserID     string
+	Credential json.RawMessage
 }
 
 var _ Snapshotter = (*PasskeyAggregate)(nil)
@@ -86,9 +94,15 @@ func (*PasskeyAggregate) NotFound() error {
 	return ErrPasskeyNotFound
 }
 
-// State is the passkey as its events add up.
-func (a *PasskeyAggregate) State() Passkey {
-	return a.passkey
+// Credential is the credential record the next sign-in verifies against.
+func (a *PasskeyAggregate) Credential() json.RawMessage {
+	return a.passkey.Credential
+}
+
+// OwnedBy reports whether the passkey is live and userID's: whether userID may use, rename or
+// delete it.
+func (a *PasskeyAggregate) OwnedBy(userID string) bool {
+	return a.Live() && a.passkey.UserID == userID
 }
 
 // Live reports whether the passkey is registered and not deleted: whether it can sign in.
@@ -115,7 +129,7 @@ func (a *PasskeyAggregate) Register(id PasskeyID, userID, name string, credentia
 
 // Rename names userID's passkey. Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
 func (a *PasskeyAggregate) Rename(userID, name string, at time.Time) error {
-	if !a.ownedBy(userID) {
+	if !a.OwnedBy(userID) {
 		return ErrPasskeyNotFound
 	}
 
@@ -129,9 +143,10 @@ func (a *PasskeyAggregate) Rename(userID, name string, at time.Time) error {
 	return nil
 }
 
-// Use records a sign-in with the passkey, and the credential record as the login left it.
-func (a *PasskeyAggregate) Use(credential json.RawMessage, at time.Time) error {
-	if !a.Live() {
+// Use records userID's sign-in with the passkey, and the credential record as the login left it.
+// Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
+func (a *PasskeyAggregate) Use(userID string, credential json.RawMessage, at time.Time) error {
+	if !a.OwnedBy(userID) {
 		return ErrPasskeyNotFound
 	}
 
@@ -142,7 +157,7 @@ func (a *PasskeyAggregate) Use(credential json.RawMessage, at time.Time) error {
 
 // Delete deletes userID's passkey. Another user's passkey, or one that is gone, is ErrPasskeyNotFound.
 func (a *PasskeyAggregate) Delete(userID string, at time.Time) error {
-	if !a.ownedBy(userID) {
+	if !a.OwnedBy(userID) {
 		return ErrPasskeyNotFound
 	}
 
@@ -151,35 +166,29 @@ func (a *PasskeyAggregate) Delete(userID string, at time.Time) error {
 	return nil
 }
 
-func (a *PasskeyAggregate) ownedBy(userID string) bool {
-	return a.Live() && a.passkey.UserID == userID
-}
-
 // Apply -.
 func (a *PasskeyAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case PasskeyRegistered:
-		a.passkey = Passkey{ID: ev.PasskeyID, UserID: ev.UserID, Name: ev.Name, Credential: ev.Credential, CreatedAt: ev.At}
+		a.passkey = passkeyState{ID: ev.PasskeyID, UserID: ev.UserID, Credential: ev.Credential}
 		a.registered, a.deleted = true, false
 	case PasskeyImported:
-		a.passkey = Passkey{
-			ID: ev.PasskeyID, UserID: ev.UserID, Name: ev.Name, Credential: ev.Credential,
-			CreatedAt: ev.CreatedAt, LastUsedAt: ev.LastUsedAt,
-		}
+		a.passkey = passkeyState{ID: ev.PasskeyID, UserID: ev.UserID, Credential: ev.Credential}
 		a.registered, a.deleted = true, false
-	case PasskeyRenamed:
-		a.passkey.Name = ev.Name
+	case PasskeyRenamed: // the name is the read model's; no rule reads it
 	case PasskeyUsed:
-		at := ev.At
-		a.passkey.Credential, a.passkey.LastUsedAt = ev.Credential, &at
+		a.passkey.Credential = ev.Credential
 	case PasskeyDeleted:
 		a.deleted = true
 	}
 }
 
-// passkeySnapshot carries the fields Passkey's JSON leaves out, the owner and the credential.
+// passkeySnapshot is the passkey's state. Its shape is the one snapshots were first stored in, the
+// passkey's ID nested under "passkey", so those still load.
 type passkeySnapshot struct {
-	Passkey    Passkey         `json:"passkey"`
+	Passkey struct {
+		ID PasskeyID `json:"id"`
+	} `json:"passkey"`
 	UserID     string          `json:"user_id"`
 	Credential json.RawMessage `json:"credential"`
 	Registered bool            `json:"registered"`
@@ -193,10 +202,12 @@ func (*PasskeyAggregate) SnapshotVersion() int {
 
 // Snapshot -.
 func (a *PasskeyAggregate) Snapshot() any {
-	return passkeySnapshot{
-		Passkey: a.passkey, UserID: a.passkey.UserID, Credential: a.passkey.Credential,
-		Registered: a.registered, Deleted: a.deleted,
+	s := passkeySnapshot{
+		UserID: a.passkey.UserID, Credential: a.passkey.Credential, Registered: a.registered, Deleted: a.deleted,
 	}
+	s.Passkey.ID = a.passkey.ID
+
+	return s
 }
 
 // RestoreSnapshot -.
@@ -206,8 +217,8 @@ func (a *PasskeyAggregate) RestoreSnapshot(data json.RawMessage) error {
 		return fmt.Errorf("PasskeyAggregate - RestoreSnapshot: %w", err)
 	}
 
-	a.passkey, a.registered, a.deleted = s.Passkey, s.Registered, s.Deleted
-	a.passkey.UserID, a.passkey.Credential = s.UserID, s.Credential
+	a.passkey = passkeyState{ID: s.Passkey.ID, UserID: s.UserID, Credential: s.Credential}
+	a.registered, a.deleted = s.Registered, s.Deleted
 
 	return nil
 }

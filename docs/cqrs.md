@@ -99,9 +99,16 @@ they return carries the ceremony's state.
   methods check the rules and call `entity.Record`, which applies the event and queues it for the
   store. `Apply` changes the state for one event, the same way whether the event was just recorded
   or is being replayed.
-- **The read shapes are separate types.** `entity.Task`, `entity.User`, `entity.Passkey` and
-  `entity.Conversion` are what queries return and the API sends. They are named after the API
-  schema, so the aggregates carry an `Aggregate` suffix.
+- **An aggregate keeps only what its rules need, in a private state.** `TaskAggregate` keeps the
+  task's owner and status, `PasskeyAggregate` its owner and credential record, and `UserAggregate`
+  and `ConversionAggregate`, which are never loaded, keep what their claims and stream need. The
+  read shapes, `entity.Task`, `entity.User`, `entity.Passkey` and `entity.Conversion`, are what
+  queries return and the API sends; renaming one of their fields changes no stored event or
+  snapshot. They are named after the API schema, so the aggregates carry an `Aggregate` suffix.
+- **A snapshot is the private state's JSON.** Only an aggregate that is loaded (task, passkey)
+  snapshots. A field added to the state is missing from older snapshots and reads as its zero
+  value; a change that cannot read the old shape raises `SnapshotVersion`, and older snapshots are
+  then ignored and the stream replayed.
 - **Every event type is registered.** Each one is listed in `entity.EventTypes()`, which the
   store's codec reads.
 
@@ -124,7 +131,8 @@ context carries:
 after it.
 
 Two more features of the store:
-- **Versioning.** Every event has a `SchemaVersion`. When a shape changes, raise the version and add
+- **Versioning.** Every event has its own `SchemaVersion`. When a shape changes, raise that event's
+  version and add
   an `eventstore.Upcast` from the version before to `eventstore.Upcasts()`. Stored events are never
   rewritten; old ones are upcast one version at a time as they load.
 - **Write-side guards.** Claims (`claims` table) keep emails, usernames and SSO identities unique.

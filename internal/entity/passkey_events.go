@@ -5,10 +5,6 @@ import (
 	"time"
 )
 
-// The passkey events, all at schema version 1. Credential is the WebAuthn library's credential
-// record as JSON: the public key, sign count and flags. It never leaves the server.
-const _passkeyEventsVersion = 1
-
 // PasskeyRegistered is a WebAuthn credential a user registered.
 type PasskeyRegistered struct {
 	PasskeyID  PasskeyID       `json:"passkey_id"`
@@ -53,32 +49,32 @@ type PasskeyImported struct {
 // EventType -.
 func (PasskeyRegistered) EventType() string { return "PasskeyRegistered" }
 
-// SchemaVersion -.
-func (PasskeyRegistered) SchemaVersion() int { return _passkeyEventsVersion }
+// SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
+func (PasskeyRegistered) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (PasskeyRenamed) EventType() string { return "PasskeyRenamed" }
 
 // SchemaVersion -.
-func (PasskeyRenamed) SchemaVersion() int { return _passkeyEventsVersion }
+func (PasskeyRenamed) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (PasskeyUsed) EventType() string { return "PasskeyUsed" }
 
 // SchemaVersion -.
-func (PasskeyUsed) SchemaVersion() int { return _passkeyEventsVersion }
+func (PasskeyUsed) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (PasskeyDeleted) EventType() string { return "PasskeyDeleted" }
 
 // SchemaVersion -.
-func (PasskeyDeleted) SchemaVersion() int { return _passkeyEventsVersion }
+func (PasskeyDeleted) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (PasskeyImported) EventType() string { return "PasskeyImported" }
 
 // SchemaVersion -.
-func (PasskeyImported) SchemaVersion() int { return _passkeyEventsVersion }
+func (PasskeyImported) SchemaVersion() int { return 1 }
 
 func passkeyEvents() []Event {
 	return []Event{PasskeyRegistered{}, PasskeyRenamed{}, PasskeyUsed{}, PasskeyDeleted{}, PasskeyImported{}}

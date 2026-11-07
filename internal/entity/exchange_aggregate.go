@@ -12,8 +12,7 @@ func ConversionStreamID(id string) string {
 type ConversionAggregate struct {
 	AggregateBase
 
-	id         string
-	conversion Conversion
+	id string
 }
 
 // NewConversionAggregate records userID's conversion c, validated and with its rate applied.
@@ -48,23 +47,12 @@ func (a *ConversionAggregate) ID() string {
 	return a.id
 }
 
-// State is the conversion.
-func (a *ConversionAggregate) State() Conversion {
-	return a.conversion
-}
-
 // Apply -.
 func (a *ConversionAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case CurrencyConverted:
 		a.id = ev.ConversionID
-		a.conversion = Conversion{
-			From: ev.From, To: ev.To, Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate,
-		}
 	case ConversionImported:
 		a.id = ev.ConversionID
-		a.conversion = Conversion{
-			From: ev.From, To: ev.To, Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate,
-		}
 	}
 }

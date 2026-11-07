@@ -19,8 +19,16 @@ func TaskStreamID(id string) string {
 type TaskAggregate struct {
 	AggregateBase
 
-	task    Task
+	task    taskState
 	deleted bool
+}
+
+// taskState is what the task's rules need. Its JSON is the snapshot's: a field added here is a
+// field old snapshots lack, read as its zero value.
+type taskState struct {
+	ID     string     `json:"id"`
+	UserID string     `json:"user_id"`
+	Status TaskStatus `json:"status"`
 }
 
 var _ Snapshotter = (*TaskAggregate)(nil)
@@ -62,11 +70,6 @@ func (*TaskAggregate) StreamOf(id string) string {
 // NotFound is the error for a task ID with no stream.
 func (*TaskAggregate) NotFound() error {
 	return ErrTaskNotFound
-}
-
-// State is the task as its events add up.
-func (t *TaskAggregate) State() Task {
-	return t.task
 }
 
 // ownedBy is nil when userID owns the live task: a deleted task is ErrTaskNotFound and another
@@ -125,27 +128,20 @@ func (t *TaskAggregate) Delete(userID string, at time.Time) error {
 func (t *TaskAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case TaskCreated:
-		t.task = Task{
-			ID: ev.TaskID, UserID: ev.UserID, Title: ev.Title, Description: ev.Description,
-			Status: TaskStatusTodo, CreatedAt: ev.At, UpdatedAt: ev.At,
-		}
+		t.task = taskState{ID: ev.TaskID, UserID: ev.UserID, Status: TaskStatusTodo}
 	case TaskImported:
-		t.task = Task{
-			ID: ev.TaskID, UserID: ev.UserID, Title: ev.Title, Description: ev.Description,
-			Status: ev.Status, CreatedAt: ev.CreatedAt, UpdatedAt: ev.UpdatedAt,
-		}
-	case TaskUpdated:
-		t.task.Title, t.task.Description, t.task.UpdatedAt = ev.Title, ev.Description, ev.At
+		t.task = taskState{ID: ev.TaskID, UserID: ev.UserID, Status: ev.Status}
+	case TaskUpdated: // the title and description are the read model's; no rule reads them
 	case TaskTransitioned:
-		t.task.Status, t.task.UpdatedAt = ev.To, ev.At
+		t.task.Status = ev.To
 	case TaskDeleted:
 		t.deleted = true
 	}
 }
 
 type taskSnapshot struct {
-	Task    Task `json:"task"`
-	Deleted bool `json:"deleted"`
+	Task    taskState `json:"task"`
+	Deleted bool      `json:"deleted"`
 }
 
 // SnapshotVersion -.

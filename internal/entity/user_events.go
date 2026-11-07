@@ -2,9 +2,6 @@ package entity
 
 import "time"
 
-// The user events, all at schema version 1.
-const _userEventsVersion = 1
-
 // UserIdentity links a user to an identity at an OpenID Connect provider.
 type UserIdentity struct {
 	Issuer    string    `json:"issuer"`
@@ -48,20 +45,20 @@ type UserImported struct {
 // EventType -.
 func (UserRegistered) EventType() string { return "UserRegistered" }
 
-// SchemaVersion -.
-func (UserRegistered) SchemaVersion() int { return _userEventsVersion }
+// SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
+func (UserRegistered) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (UserRegisteredViaOIDC) EventType() string { return "UserRegisteredViaOIDC" }
 
 // SchemaVersion -.
-func (UserRegisteredViaOIDC) SchemaVersion() int { return _userEventsVersion }
+func (UserRegisteredViaOIDC) SchemaVersion() int { return 1 }
 
 // EventType -.
 func (UserImported) EventType() string { return "UserImported" }
 
 // SchemaVersion -.
-func (UserImported) SchemaVersion() int { return _userEventsVersion }
+func (UserImported) SchemaVersion() int { return 1 }
 
 func userEvents() []Event {
 	return []Event{UserRegistered{}, UserRegisteredViaOIDC{}, UserImported{}}
