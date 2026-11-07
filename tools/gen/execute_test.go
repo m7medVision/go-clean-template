@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
-	"github.com/m7medvision/go-clean-template/tools/gen/names"
 	"github.com/m7medvision/go-clean-template/tools/gen/plan"
 	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 	"github.com/stretchr/testify/assert"
@@ -166,7 +165,7 @@ func TestTheUndoRestoresWhatTheWriteAndTheRegeneratorsChanged(t *testing.T) {
 	require.NoError(t, err, string(out))
 
 	// git keeps no file mode but the executable bit, so the tree is compared with what is committed.
-	require.NoError(t, rules.Clean(t.Context(), rules.Open(dir)), "the undo left a change git reports")
+	require.NoError(t, rules.Check(t.Context(), rules.Open(dir), plan.New("x"), nil), "the undo left a change git reports")
 	assert.NoDirExists(t, filepath.Join(dir, "internal", "usecase", "widget"))
 	assert.NoDirExists(t, filepath.Join(dir, "docs"))
 }
@@ -177,11 +176,12 @@ func planned(p *plan.Plan, errs []error) *planner {
 }
 
 // ruleFailure sets up one rule's failure. arrange runs before the tree is fingerprinted: it is
-// the state the user left. run is the command that must fail with want.
+// the state the user left. run is the command that must fail with want, the name the rule is
+// printed with.
 type ruleFailure struct {
 	arrange func(t *testing.T, dir string)
 	run     func(t *testing.T, dir string) error
-	want    error
+	want    string
 }
 
 func ruleFailures() map[string]ruleFailure {
@@ -190,12 +190,12 @@ func ruleFailures() map[string]ruleFailure {
 			t.Helper()
 
 			return newDomain(t.Context(), &domainRequest{root: dir, name: "type"}, &bytes.Buffer{})
-		}, names.ErrInvalid},
+		}, "R1 name: "},
 		"R1 existing domain": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			return newDomain(t.Context(), &domainRequest{root: dir, name: "task"}, &bytes.Buffer{})
-		}, names.ErrInvalid},
+		}, "R1 name: "},
 		"R2 file to create exists": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
@@ -203,7 +203,7 @@ func ruleFailures() map[string]ruleFailure {
 			p.Create("internal/usecase/task/register.go", []byte("package task\n"))
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
-		}, rules.ErrTargets},
+		}, "R2 targets: "},
 		"R3 file to edit is dirty": {func(t *testing.T, dir string) {
 			t.Helper()
 
@@ -214,13 +214,13 @@ func ruleFailures() map[string]ruleFailure {
 			p := widgetPlan()
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
-		}, rules.ErrClean},
+		}, "R3 clean: "},
 		"R4 anchor not found": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(),
 				[]error{fmt.Errorf("%w: buses.go: found func subscribers 0 times", edit.ErrAnchor)}), false, &bytes.Buffer{})
-		}, edit.ErrAnchor},
+		}, "R4 one anchor: "},
 		"R5 edit breaks a file": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
@@ -228,14 +228,14 @@ func ruleFailures() map[string]ruleFailure {
 			p.Edit("internal/app/buses.go", nil, edit.Insertion{Offset: 0, Text: "}"})
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
-		}, plan.ErrInvalid},
+		}, "R5 still valid: "},
 		"R6 write fails part-way": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			root := &failingRename{FS: openRoot(t, dir)}
 
 			return execute(t.Context(), rules.Open(dir), root, planned(widgetPlan(), nil), false, &bytes.Buffer{})
-		}, plan.ErrWrite},
+		}, "R6 all or nothing: "},
 	}
 }
 
@@ -253,7 +253,9 @@ func TestEveryRuleFailureLeavesTheTreeByteIdentical(t *testing.T) {
 
 			before := fingerprint(t, dir)
 
-			require.ErrorIs(t, tc.run(t, dir), tc.want)
+			err := tc.run(t, dir)
+			require.Error(t, err)
+			assert.True(t, strings.HasPrefix(err.Error(), tc.want), "%s is not %s", err, tc.want)
 			assert.Equal(t, before, fingerprint(t, dir))
 		})
 	}

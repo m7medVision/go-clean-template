@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-// ErrWrite is a write that failed part-way. Everything it had done is undone (rule R6).
-var ErrWrite = errors.New("R6 all or nothing")
+// errWrite is a write that failed part-way. Everything it had done is undone (rule R6).
+var errWrite = errors.New("R6 all or nothing")
 
 const (
 	_tmpSuffix = ".gen-tmp"
@@ -38,10 +38,10 @@ func Write(root FS, changes []Change) error {
 
 	if err := w.write(changes); err != nil {
 		if undoErr := w.undo(); undoErr != nil {
-			return fmt.Errorf("%w: %w; undoing it failed too, so the tree is half written: %w", ErrWrite, err, undoErr)
+			return fmt.Errorf("%w: %w; undoing it failed too, so the tree is half written: %w", errWrite, err, undoErr)
 		}
 
-		return fmt.Errorf("%w: %w; everything it wrote was undone", ErrWrite, err)
+		return fmt.Errorf("%w: %w; everything it wrote was undone", errWrite, err)
 	}
 
 	return nil

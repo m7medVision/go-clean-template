@@ -84,7 +84,7 @@ func planResolver(pl *planner, file string) {
 		m + "/pkg/cqrs", "github.com/stretchr/testify/assert", "github.com/stretchr/testify/require",
 	}
 
-	if !pl.exists(test) {
+	if !pl.repo.Exists(test) {
 		pl.createTest(test, pl.data.Name.Pkg, testImports, text)
 
 		return

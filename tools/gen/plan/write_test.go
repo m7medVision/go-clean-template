@@ -121,7 +121,7 @@ func TestWriteUndoesEverythingWhenAStepFails(t *testing.T) {
 			before := fingerprint(t, dir)
 
 			err := plan.Write(&failing{FS: root, failAt: failAt}, changes())
-			require.ErrorIs(t, err, plan.ErrWrite)
+			require.ErrorContains(t, err, "R6 all or nothing: ")
 			require.ErrorIs(t, err, errInjected)
 
 			assert.Equal(t, before, fingerprint(t, dir))

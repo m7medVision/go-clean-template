@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"go/format"
 	"io"
-	"io/fs"
 	"os"
 	"slices"
 	"strconv"
@@ -39,7 +37,7 @@ func usecaseLayers() []layer {
 func newUsecase(ctx context.Context, req *usecaseRequest, stdout io.Writer) error {
 	r := rules.Open(req.root)
 
-	pl, err := planUsecase(ctx, r, templates.FS(), req)
+	pl, err := planUsecase(ctx, r, req)
 	if err != nil {
 		return err
 	}
@@ -53,14 +51,14 @@ func newUsecase(ctx context.Context, req *usecaseRequest, stdout io.Writer) erro
 	return execute(ctx, r, root, pl, req.dryRun, stdout)
 }
 
-// planUsecase plans the use case req asks for on the repository r, rendering the templates in
-// tmpl. Planning needs the names and the domain, so it checks first R1 on both names, the use
-// case's against the app's packages too, then R2 for a use case: the domain exists, it has each
-// transport the use case gets (unless req names them, those rules.UsecaseTransports gives it), and
-// the message is free. Then it checks R1 on the identifiers the plan adds, and last R2 on the
-// message's fields and the REST operation's route and ID, which must be free too. What planning
-// runs into is in the planner's errs, for the rules execute runs.
-func planUsecase(ctx context.Context, r rules.Repo, tmpl fs.FS, req *usecaseRequest) (*planner, error) {
+// planUsecase plans the use case req asks for on the repository r. Planning needs the names and
+// the domain, so it checks first R1 on both names, the use case's against the app's packages too,
+// then R2 for a use case: the domain exists, it has each transport the use case gets (unless req
+// names them, those rules.UsecaseTransports gives it), and the message is free. Then it checks R1
+// on the identifiers the plan adds, and last R2 on the message's fields and the REST operation's
+// route and ID, which must be free too. What planning runs into is in the planner's errs, for the
+// rules execute runs.
+func planUsecase(ctx context.Context, r rules.Repo, req *usecaseRequest) (*planner, error) {
 	n, err := names.Parse(req.name, "")
 	if err != nil {
 		return nil, err
@@ -77,7 +75,9 @@ func planUsecase(ctx context.Context, r rules.Repo, tmpl fs.FS, req *usecaseRequ
 
 	transports := req.transports
 	if transports == nil {
-		transports = rules.UsecaseTransports(r, &domain, req.kind)
+		if transports, err = rules.UsecaseTransports(r, &domain, req.kind); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := rules.UsecaseTargets(r, domain.Pkg, req.kind, &n, transports); err != nil {
@@ -87,15 +87,11 @@ func planUsecase(ctx context.Context, r rules.Repo, tmpl fs.FS, req *usecaseRequ
 	u := &templates.Usecase{Name: n, Kind: req.kind, Method: req.method, Path: req.path}
 	route(u, &domain)
 
-	data := &templates.Data{Name: domain, Transports: transports, Usecase: u}
-	pl := newPlanner(r, tmpl, _usecaseSet, "new-usecase "+domain.Kebab+" "+n.Kebab, data)
-
-	module, err := modulePath(r)
+	pl, err := newPlanner(r, _usecaseSet, "new-usecase "+domain.Kebab+" "+n.Kebab,
+		&templates.Data{Name: domain, Transports: transports, Usecase: u})
 	if err != nil {
-		pl.fail(err)
+		return nil, err
 	}
-
-	data.Module = module
 
 	for _, l := range selectLayers(usecaseLayers(), transports) {
 		l.plan(pl)
@@ -156,7 +152,7 @@ func route(u *templates.Usecase, domain *names.Name) {
 // createTest plans the test file at p, which the domain does not have, in the external test package
 // of pkg: the package clause, the imports specs name, each a path or "alias path" as an import line
 // reads it, and text, the test a layer would append to the file if it had one. The imports are
-// grouped as gci groups them, the standard library's first.
+// grouped as gci groups them, the standard library's first, and the file goes through formatGo.
 func (pl *planner) createTest(p, pkg string, specs []string, text string) {
 	var std, others []string
 
@@ -179,12 +175,7 @@ func (pl *planner) createTest(p, pkg string, specs []string, text string) {
 
 	content := "package " + pkg + "_test\n\nimport (\n" + strings.Join(std, "") + "\n" + strings.Join(others, "") + ")\n\n" + text + "\n"
 
-	formatted, err := format.Source([]byte(content))
-	if err == nil {
-		content = string(formatted)
-	}
-
-	pl.plan.Create(p, []byte(content))
+	pl.plan.Create(p, formatGo([]byte(content)))
 }
 
 // unaliased is an import line's path, without its alias: what gci sorts the line by.

@@ -8,6 +8,7 @@ import (
 	"testing/fstest"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/names"
+	"github.com/m7medvision/go-clean-template/tools/gen/plan"
 	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,14 +155,39 @@ func TestDomainFreeLooksAtTablesProtoServicesGraphQLTypesAndControllerFolders(t 
 	}
 }
 
+// A file the repository, or a domain's own files, cannot be read as cannot say what it declares,
+// so the check fails on it rather than passing as if it declared nothing.
+func TestDomainFreeFailsOnAFileThatDoesNotParse(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range []string{"docs/proto/v1/broken.proto", "internal/controller/graphql/schema/broken.graphqls"} {
+		fsys := fixtureRoot()
+		fsys[p] = &fstest.MapFile{Data: []byte("service {")}
+
+		err := rules.DomainFree(t.Context(), repoOf(fsys), name(t, "invoice"))
+
+		require.Error(t, err, p)
+		require.NotErrorIs(t, err, names.ErrInvalid, p)
+		assert.Contains(t, err.Error(), p)
+	}
+}
+
 func TestCreatableRefusesAFileThatExists(t *testing.T) {
 	t.Parallel()
 
 	r := repoOf(fixtureRoot())
+	creating := func(paths ...string) *plan.Plan {
+		p := plan.New("x")
+		for _, path := range paths {
+			p.Create(path, []byte("package entity\n"))
+		}
 
-	require.NoError(t, rules.Creatable(r, []string{"internal/entity/invoice.go"}))
+		return p
+	}
 
-	err := rules.Creatable(r, []string{"internal/entity/invoice.go", "internal/entity/task.go"})
+	require.NoError(t, rules.Check(t.Context(), r, creating("internal/entity/invoice.go"), nil))
+
+	err := rules.Check(t.Context(), r, creating("internal/entity/invoice.go", "internal/entity/task.go"), nil)
 	require.ErrorIs(t, err, rules.ErrTargets)
 	assert.Contains(t, err.Error(), "internal/entity/task.go")
 }
@@ -171,16 +197,6 @@ func TestReadOfAMissingFileToEditIsR2(t *testing.T) {
 
 	_, err := repoOf(fixtureRoot()).Read("internal/app/missing.go")
 	require.ErrorIs(t, err, rules.ErrTargets)
-}
-
-func TestDomainTransportsListsTheFoldersADomainHas(t *testing.T) {
-	t.Parallel()
-
-	r := repoOf(fixtureRoot())
-
-	assert.Equal(t, []string{"rest", "grpc", "graphql"}, rules.DomainTransports(r, "task"))
-	assert.Equal(t, []string{"rest", "grpc", "graphql"}, rules.DomainTransports(r, "exchange"))
-	assert.Equal(t, []string{"rest", "grpc"}, rules.DomainTransports(r, "user"))
 }
 
 func TestUsecaseTargetsCheckTheDomainTheMessageAndTheTransports(t *testing.T) {
@@ -202,6 +218,13 @@ func TestUsecaseTargetsCheckTheDomainTheMessageAndTheTransports(t *testing.T) {
 		err := rules.UsecaseTargets(r, args.domain, args.kind, name(t, args.msg), args.transports)
 		require.ErrorIs(t, err, rules.ErrTargets, what)
 	}
+
+	fsys := fixtureRoot()
+	fsys["internal/usecase/task/command/broken.go"] = &fstest.MapFile{Data: []byte("package command\n\nfunc {")}
+
+	err := rules.UsecaseTargets(repoOf(fsys), "task", "command", name(t, "archive-task"), nil)
+	require.Error(t, err, "a message file that does not parse cannot say what it declares")
+	assert.Contains(t, err.Error(), "internal/usecase/task/command/broken.go")
 }
 
 // A command on a domain whose GraphQL schema has no Mutation, as exchange's has only Query, gets no
@@ -228,8 +251,29 @@ func TestUsecaseTransportsLeaveOutGraphQLWithoutTheRootType(t *testing.T) {
 		{"exchange", "query", []string{"rest", "grpc", "graphql"}},
 		{"user", "query", []string{"rest", "grpc"}},
 	} {
-		assert.Equal(t, tc.want, rules.UsecaseTransports(r, name(t, tc.domain), tc.kind), tc.domain+" "+tc.kind)
+		got, err := rules.UsecaseTransports(r, name(t, tc.domain), tc.kind)
+		require.NoError(t, err, tc.domain+" "+tc.kind)
+		assert.Equal(t, tc.want, got, tc.domain+" "+tc.kind)
 	}
+}
+
+// A domain with GraphQL controllers needs its schema file to say which root types it has: without
+// one it fails R2, and one that does not parse fails too.
+func TestUsecaseTransportsNeedTheSchemaOfADomainWithGraphQL(t *testing.T) {
+	t.Parallel()
+
+	const schema = "internal/controller/graphql/schema/exchange.graphqls"
+
+	_, err := rules.UsecaseTransports(repoOf(fixtureRoot()), name(t, "exchange"), "query")
+	require.ErrorIs(t, err, rules.ErrTargets)
+	assert.Contains(t, err.Error(), schema)
+
+	fsys := fixtureRoot()
+	fsys[schema] = &fstest.MapFile{Data: []byte("type Conversion {")}
+
+	_, err = rules.UsecaseTransports(repoOf(fsys), name(t, "exchange"), "query")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), schema)
 }
 
 // restOperations is an OpenAPI document with three operations, one of them on a path item that

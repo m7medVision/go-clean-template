@@ -294,29 +294,30 @@ type Embeds struct {
 }
 `)
 
-	got, err := g.FieldOfType("Deps", "repo.*ReadModel")
-	require.NoError(t, err)
-	assert.Equal(t, edit.Field{Name: "History", Type: "repo.ExchangeReadModel"}, got)
-
-	got, err = g.FieldOfType("Deps", "repo.EventStore")
-	require.NoError(t, err)
-	assert.Equal(t, edit.Field{Name: "Store", Type: "repo.EventStore"}, got)
+	for pattern, want := range map[string][2]string{
+		"repo.*ReadModel": {"History", "repo.ExchangeReadModel"},
+		"repo.EventStore": {"Store", "repo.EventStore"},
+	} {
+		field, typ, err := g.FieldOfType("Deps", pattern)
+		require.NoError(t, err, pattern)
+		assert.Equal(t, want, [2]string{field, typ}, pattern)
+	}
 
 	for pattern, why := range map[string]string{
 		"repo.*WebAPI":  "two fields share the type",
 		"repo.Missing":  "no field has the type",
 		"time.Duration": "no field has the type",
 	} {
-		_, err := g.FieldOfType("Deps", pattern)
+		_, _, err := g.FieldOfType("Deps", pattern)
 		require.ErrorIs(t, err, edit.ErrAnchor, why)
 		assert.Contains(t, err.Error(), "a field of Deps of type "+pattern, why)
 	}
 
-	got, err = g.FieldOfType("Embeds", "repo.*ReadModel")
+	field, typ, err := g.FieldOfType("Embeds", "repo.*ReadModel")
 	require.NoError(t, err)
-	assert.Equal(t, edit.Field{Name: "TaskReadModel", Type: "repo.TaskReadModel"}, got, "named after its type")
+	assert.Equal(t, [2]string{"TaskReadModel", "repo.TaskReadModel"}, [2]string{field, typ}, "named after its type")
 
-	_, err = g.FieldOfType("Missing", "repo.EventStore")
+	_, _, err = g.FieldOfType("Missing", "repo.EventStore")
 	require.ErrorIs(t, err, edit.ErrAnchor)
 	assert.Contains(t, err.Error(), "a struct type Missing")
 }

@@ -74,6 +74,32 @@ func TestIdentifiersFreeLooksAtWhatAnEditAdds(t *testing.T) {
 	assert.Contains(t, err.Error(), "internal/entity/errors.go would declare ErrA twice")
 }
 
+// A file the plan leaves broken, created or edited, is R5's to report in its turn, after R2 to R4:
+// it declares nothing here. A file of the package that does not parse cannot say what it
+// declares, so it fails here.
+func TestIdentifiersFreeOnFilesThatDoNotParse(t *testing.T) {
+	t.Parallel()
+
+	created := plan.New("x")
+	created.Create("internal/entity/record.go", []byte("package entity\n\nfunc {"))
+	require.NoError(t, rules.IdentifiersFree(repoOf(entityPackage()), name(t, "record"), created))
+
+	broken := plan.New("x")
+	broken.Edit("internal/entity/errors.go", entityPackage()["internal/entity/errors.go"].Data, edit.Insertion{Offset: 0, Text: "}"})
+	require.NoError(t, rules.IdentifiersFree(repoOf(entityPackage()), name(t, "record"), broken))
+
+	fsys := entityPackage()
+	fsys["internal/entity/broken.go"] = &fstest.MapFile{Data: []byte("package entity\n\nfunc {")}
+
+	valid := plan.New("x")
+	valid.Create("internal/entity/record.go", []byte("package entity\n\ntype Rec struct{}\n"))
+
+	err := rules.IdentifiersFree(repoOf(fsys), name(t, "record"), valid)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "internal/entity/broken.go")
+}
+
 func TestIdentifiersFreeAcceptsDeclarationsThatAreNew(t *testing.T) {
 	t.Parallel()
 

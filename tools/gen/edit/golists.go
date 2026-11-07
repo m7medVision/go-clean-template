@@ -213,23 +213,34 @@ func (g *Go) matchingElements(fn string, m Match) ([]ast.Expr, error) {
 
 // AfterLastStmt inserts text on the line after the last statement of function fn's body that
 // matches m, at that statement's indentation. Only the body's own statements count, not those
-// nested in blocks.
+// nested in blocks. The place is the end of the statements that match, which must be one run, one
+// statement after another, as a router's registrations are: two runs, split by a statement that
+// does not match, would be two places to choose from.
 func (g *Go) AfterLastStmt(fn string, m Match, text string) (Insertion, error) {
 	body, err := g.body(fn)
 	if err != nil {
 		return Insertion{}, err
 	}
 
-	var last ast.Stmt
+	var (
+		last ast.Stmt
+		runs int
+	)
 
-	for _, s := range body.List {
-		if m.ok(s) {
-			last = s
+	for i, s := range body.List {
+		if !m.ok(s) {
+			continue
 		}
+
+		if i == 0 || !m.ok(body.List[i-1]) {
+			runs++
+		}
+
+		last = s
 	}
 
-	if last == nil {
-		return Insertion{}, anchorError(g.path, "a statement in "+fn+" that is "+m.what, 0)
+	if runs != 1 {
+		return Insertion{}, anchorError(g.path, "a run of statements in "+fn+" that are each "+m.what, runs)
 	}
 
 	return g.at(nextLineStart(g.src, g.offset(last.End())), indent(text, lineIndent(g.src, g.offset(last.Pos())))), nil
@@ -255,16 +266,11 @@ func (g *Go) AppendField(name, text string) (Insertion, error) {
 	return g.at(lineStart(g.src, closing), indent(text, lineIndent(g.src, closing)+"\t")), nil
 }
 
-// Field is one field of a struct type: its name and its type as source, as in Tasks and
-// repo.TaskReadModel.
-type Field struct {
-	Name, Type string
-}
-
 // FieldOfType returns the one field of the struct type named name whose type, written as pkg.Type
-// or Type, matches the path.Match pattern, as repo.*ReadModel matches repo.TaskReadModel. An
-// embedded field is named after its type.
-func (g *Go) FieldOfType(name, pattern string) (Field, error) {
+// or Type, matches the path.Match pattern, as repo.*ReadModel matches repo.TaskReadModel: the
+// field's name and its type as source, as in Tasks and repo.TaskReadModel. An embedded field is
+// named after its type.
+func (g *Go) FieldOfType(name, pattern string) (field, typ string, err error) {
 	var structs []*ast.StructType
 
 	for _, ts := range g.typeSpecs() {
@@ -274,31 +280,31 @@ func (g *Go) FieldOfType(name, pattern string) (Field, error) {
 	}
 
 	if len(structs) != 1 {
-		return Field{}, anchorError(g.path, "a struct type "+name, len(structs))
+		return "", "", anchorError(g.path, "a struct type "+name, len(structs))
 	}
 
-	var found []Field
+	var fields, types []string
 
 	for _, f := range structs[0].Fields.List {
-		typ := render(f.Type)
-		if !glob(pattern, typ) {
+		t := render(f.Type)
+		if !glob(pattern, t) {
 			continue
 		}
 
 		if len(f.Names) == 0 {
-			found = append(found, Field{Name: typ[strings.LastIndexByte(typ, '.')+1:], Type: typ})
+			fields, types = append(fields, t[strings.LastIndexByte(t, '.')+1:]), append(types, t)
 		}
 
 		for _, id := range f.Names {
-			found = append(found, Field{Name: id.Name, Type: typ})
+			fields, types = append(fields, id.Name), append(types, t)
 		}
 	}
 
-	if len(found) != 1 {
-		return Field{}, anchorError(g.path, "a field of "+name+" of type "+pattern, len(found))
+	if len(fields) != 1 {
+		return "", "", anchorError(g.path, "a field of "+name+" of type "+pattern, len(fields))
 	}
 
-	return found[0], nil
+	return fields[0], types[0], nil
 }
 
 // typeSpecs returns the file's top-level type declarations.

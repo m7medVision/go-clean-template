@@ -23,24 +23,23 @@ func data(t *testing.T) *templates.Data {
 
 func file(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
 
-func TestRenderRendersThePathAndTheContentWithTheSameData(t *testing.T) {
+func TestGlobRendersThePathAndTheContentWithTheSameData(t *testing.T) {
 	t.Parallel()
 
 	fsys := fstest.MapFS{
 		"domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl": file("package {{.Name.Pkg}} // {{.Module}}\n"),
 	}
 
-	got, err := templates.Render(fsys, "domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl", data(t))
+	got, err := templates.Glob(fsys, "domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl", data(t))
 	require.NoError(t, err)
 
-	assert.Equal(t, templates.File{
-		Template: "domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl",
-		Path:     "internal/lineitem/line_item.go",
-		Content:  []byte("package lineitem // example.com/app\n"),
-	}, got)
+	assert.Equal(t, []templates.File{{
+		Path:    "internal/lineitem/line_item.go",
+		Content: []byte("package lineitem // example.com/app\n"),
+	}}, got)
 }
 
-func TestRenderFailsOnAFieldTheDataLacks(t *testing.T) {
+func TestGlobFailsOnAFieldTheDataLacks(t *testing.T) {
 	t.Parallel()
 
 	for name, fsys := range map[string]fstest.MapFS{
@@ -57,7 +56,7 @@ func TestRenderFailsOnAFieldTheDataLacks(t *testing.T) {
 				tmpl = p
 			}
 
-			_, err := templates.Render(fsys, tmpl, data(t))
+			_, err := templates.Glob(fsys, tmpl, data(t))
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tmpl)
 		})
@@ -71,9 +70,10 @@ func TestDataHasTheChosenTransportsOnly(t *testing.T) {
 		"domain/t.txt.tmpl": file(`{{if .Has "rest"}}rest {{end}}{{if .Has "grpc"}}grpc {{end}}{{if .Has "graphql"}}graphql{{end}}`),
 	}
 
-	got, err := templates.Render(fsys, "domain/t.txt.tmpl", data(t))
+	got, err := templates.Glob(fsys, "domain/t.txt.tmpl", data(t))
 	require.NoError(t, err)
-	assert.Equal(t, "rest graphql", string(got.Content))
+	require.Len(t, got, 1)
+	assert.Equal(t, "rest graphql", string(got[0].Content))
 }
 
 func TestGlobRendersEveryMatchSortedAndFailsOnNone(t *testing.T) {
@@ -92,7 +92,7 @@ func TestGlobRendersEveryMatchSortedAndFailsOnNone(t *testing.T) {
 	assert.Equal(t, "x/line_item_b.go", got[1].Path)
 
 	_, err = templates.Glob(fsys, "domain/z/*.tmpl", data(t))
-	require.ErrorIs(t, err, templates.ErrNoTemplates)
+	assert.ErrorContains(t, err, "no templates match domain/z/*.tmpl")
 }
 
 func TestTextDropsTheFinalNewline(t *testing.T) {
@@ -147,11 +147,12 @@ func TestAUsecaseRendersWithItsDomain(t *testing.T) {
 			"{{.Usecase.Name.Go}} {{.Name.Go}}ID {{.Usecase.Summary}}: {{.Usecase.HTTPMethod}} {{.Usecase.Target \"line-item-1\"}}\n"),
 	}
 
-	got, err := templates.Render(fsys, "usecase/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl", d)
+	got, err := templates.Glob(fsys, "usecase/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl", d)
 	require.NoError(t, err)
-	assert.Equal(t, "lineitem/archive_line_item.go", got.Path)
+	require.Len(t, got, 1)
+	assert.Equal(t, "lineitem/archive_line_item.go", got[0].Path)
 	assert.Equal(t, "ArchiveLineItem LineItemID Archive line item: http.MethodPost /v1/line-items/line-item-1/archive\n",
-		string(got.Content))
+		string(got[0].Content))
 }
 
 func TestAUsecaseActsOnOneRecordWhenItsPathHoldsTheID(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/names"
@@ -40,7 +39,11 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 		return err
 	}
 
-	pl := planDomain(r, templates.FS(), &n, req.transports)
+	pl, err := planDomain(r, &n, req.transports)
+	if err != nil {
+		return err
+	}
+
 	if err := rules.IdentifiersFree(r, &n, pl.plan); err != nil {
 		return err
 	}
@@ -54,18 +57,13 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 	return execute(ctx, r, root, pl, req.dryRun, stdout)
 }
 
-// planDomain plans every layer of the domain n that runs for transports, against the repository r,
-// rendering the templates in tmpl. What it runs into is in the planner's errs, for the rules.
-func planDomain(r rules.Repo, tmpl fs.FS, n *names.Name, transports []string) *planner {
-	data := &templates.Data{Name: *n, Transports: transports}
-	pl := newPlanner(r, tmpl, _domainSet, "new-domain "+n.Kebab, data)
-
-	module, err := modulePath(r)
+// planDomain plans every layer of the domain n that runs for transports, against the repository r.
+// What it runs into is in the planner's errs, for the rules.
+func planDomain(r rules.Repo, n *names.Name, transports []string) (*planner, error) {
+	pl, err := newPlanner(r, _domainSet, "new-domain "+n.Kebab, &templates.Data{Name: *n, Transports: transports})
 	if err != nil {
-		pl.fail(err)
+		return nil, err
 	}
-
-	data.Module = module
 
 	for _, l := range selectLayers(domainLayers(), transports) {
 		l.plan(pl)
@@ -73,5 +71,5 @@ func planDomain(r rules.Repo, tmpl fs.FS, n *names.Name, transports []string) *p
 
 	pl.checklist()
 
-	return pl
+	return pl, nil
 }

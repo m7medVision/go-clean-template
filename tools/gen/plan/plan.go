@@ -74,10 +74,32 @@ func (p *Plan) Edited() []string {
 	return slices.Sorted(maps.Keys(p.edits))
 }
 
-// Changes returns every file's content before and after, created files first, each group sorted
-// by path. An edited Go file goes through go/format, so a template's insertion need not get
-// alignment right; one that breaks the file is ErrInvalid.
+// Changes returns every file's content before and after, as Contents does, with each edited Go
+// file through go/format, so a template's insertion need not get alignment right; one that breaks
+// the file is ErrInvalid.
 func (p *Plan) Changes() ([]Change, error) {
+	changes := p.Contents()
+
+	for i, c := range changes {
+		if c.Old == nil || !strings.HasSuffix(c.Path, ".go") {
+			continue
+		}
+
+		formatted, err := format.Source(c.New)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s after its edits: %w", ErrInvalid, c.Path, err)
+		}
+
+		changes[i].New = formatted
+	}
+
+	return changes, nil
+}
+
+// Contents returns every file's content before and after, created files first, each group sorted
+// by path, with the edits made as they are: what a file declares does not depend on its layout,
+// and a file the plan breaks is left for rule R5 to report, in its turn.
+func (p *Plan) Contents() []Change {
 	changes := make([]Change, 0, len(p.creates)+len(p.edits))
 
 	for _, path := range p.Created() {
@@ -86,19 +108,8 @@ func (p *Plan) Changes() ([]Change, error) {
 
 	for _, path := range p.Edited() {
 		e := p.edits[path]
-		out := edit.Apply(e.src, e.insertions)
-
-		if strings.HasSuffix(path, ".go") {
-			formatted, err := format.Source(out)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %s after its edits: %w", ErrInvalid, path, err)
-			}
-
-			out = formatted
-		}
-
-		changes = append(changes, Change{Path: path, Old: e.src, New: out})
+		changes = append(changes, Change{Path: path, Old: e.src, New: edit.Apply(e.src, e.insertions)})
 	}
 
-	return changes, nil
+	return changes
 }

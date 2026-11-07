@@ -61,7 +61,7 @@ func planOnWidget(t *testing.T, dir string, req *usecaseRequest) *planner {
 
 	req.root = dir
 
-	pl, err := planUsecase(t.Context(), rules.Open(dir), templates.FS(), req)
+	pl, err := planUsecase(t.Context(), rules.Open(dir), req)
 	require.NoError(t, err)
 	require.Empty(t, pl.errs)
 
@@ -107,19 +107,7 @@ func TestEveryUsecaseTemplateReadsAsItsFileForWidget(t *testing.T) {
 	dir := widgetRepo(t)
 
 	for _, req := range goldenUsecases() {
-		pl := planOnWidget(t, dir, req)
-		created := createdFiles(t, pl.plan)
-
-		for tmpl := range pl.used {
-			if strings.HasPrefix(tmpl, path.Join(_usecaseSet, _editsDir)+"/") || tmpl == path.Join(_usecaseSet, _nextTemplate) {
-				continue
-			}
-
-			f, err := templates.Render(templates.FS(), tmpl, pl.data)
-			require.NoError(t, err)
-			assert.Equal(t, string(created[f.Path]), string(f.Content),
-				"%s does not render go/format-clean for %s: write it as the file gofmt would", tmpl, req.name)
-		}
+		readAsTheirFiles(t, planOnWidget(t, dir, req))
 	}
 }
 
@@ -127,21 +115,18 @@ func TestEveryUsecaseTemplateIsUsedByALayer(t *testing.T) {
 	t.Parallel()
 
 	dir := widgetRepo(t)
-	used := map[string]bool{}
+
+	var plans []*planner
 
 	for _, req := range goldenUsecases() {
-		for tmpl := range planOnWidget(t, dir, req).used {
-			used[tmpl] = true
-		}
+		plans = append(plans, planOnWidget(t, dir, req))
 	}
 
-	require.NoError(t, fs.WalkDir(templates.FS(), _usecaseSet, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			assert.True(t, used[p], "no layer of new-usecase uses %s", p)
-		}
+	used := usedTemplates(t, plans...)
 
-		return err
-	}))
+	for _, tmpl := range setTemplates(t, _usecaseSet) {
+		assert.True(t, used[tmpl], "no layer of new-usecase uses %s", tmpl)
+	}
 }
 
 // The hand-written domains name their read models, tags and test helpers their own way, and
@@ -162,7 +147,7 @@ func TestPlanningAUsecaseOnEachDomainOfThisRepositoryPassesEveryRule(t *testing.
 
 			r := thisRepo()
 
-			pl, err := planUsecase(t.Context(), r, templates.FS(), &req)
+			pl, err := planUsecase(t.Context(), r, &req)
 			require.NoError(t, err)
 
 			require.Empty(t, pl.errs)
@@ -183,7 +168,7 @@ func TestPlanningAUsecaseReadsTheHandlersDependencyFromDeps(t *testing.T) {
 		{usecaseRequest{domain: "task", name: "count-tasks", kind: "query"}, "Tasks", "TaskReadModel", "ListAllTasksHandler"},
 		{usecaseRequest{domain: "exchange", name: "count-conversions", kind: "query"}, "History", "ExchangeReadModel", "GetConversionHandler"},
 	} {
-		pl, err := planUsecase(t.Context(), thisRepo(), templates.FS(), &tc.req)
+		pl, err := planUsecase(t.Context(), thisRepo(), &tc.req)
 		require.NoError(t, err)
 
 		u := pl.data.Usecase
@@ -285,7 +270,7 @@ func TestNewUsecaseRefusesWhatARuleForbidsBeforePlanning(t *testing.T) {
 
 			r, req := thisRepo(), tc.req
 
-			pl, err := planUsecase(t.Context(), r, templates.FS(), &req)
+			pl, err := planUsecase(t.Context(), r, &req)
 			if err == nil {
 				err = rules.Check(t.Context(), r, pl.plan, pl.errs)
 			}
@@ -329,7 +314,7 @@ func missingAnchors() map[string]missingAnchor {
 		},
 		"no query handler in Register": {
 			register, "\tcqrs.HandleQuery(", "\t// cqrs.HandleQuery(", "query",
-			register + ": found a statement in Register that is a call to cqrs.HandleQuery 0 times",
+			register + ": found a run of statements in Register that are each a call to cqrs.HandleQuery 0 times",
 		},
 		"no read model in Deps": {
 			register, "repo.WidgetReadModel", "WidgetReadModel", "query",
@@ -546,7 +531,7 @@ func TestAUsecaseEditsTheDomainsFilesOnEachOfItsTransports(t *testing.T) {
 			creates: []string{"internal/controller/grpc/v1/exchange/exchange_test.go"},
 		},
 	} {
-		pl, err := planUsecase(t.Context(), thisRepo(), templates.FS(), &tc.req)
+		pl, err := planUsecase(t.Context(), thisRepo(), &tc.req)
 		require.NoError(t, err)
 		require.Empty(t, pl.errs, tc.req.name)
 
@@ -645,7 +630,7 @@ func TestTheChecklistNamesFilesThatExist(t *testing.T) {
 		{domain: "task", name: "count-tasks", kind: "query"},
 		{domain: "exchange", name: "count-conversions", kind: "query"},
 	} {
-		pl, err := planUsecase(t.Context(), r, templates.FS(), &req)
+		pl, err := planUsecase(t.Context(), r, &req)
 		require.NoError(t, err)
 
 		checkNamedFiles(t, r, pl)

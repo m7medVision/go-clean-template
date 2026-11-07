@@ -44,8 +44,8 @@ var _templates embed.FS
 
 const _suffix = ".tmpl"
 
-// ErrNoTemplates is a pattern no template matches: a layer that names the wrong files.
-var ErrNoTemplates = errors.New("no templates match")
+// errNoTemplates is a pattern no template matches: a layer that names the wrong files.
+var errNoTemplates = errors.New("no templates match")
 
 // FS returns the embedded templates, every set at its root.
 func FS() fs.FS {
@@ -125,16 +125,14 @@ func (d *Data) Has(transport string) bool {
 
 // File is one rendered template.
 type File struct {
-	// Template is the template's path in the FS, as in domain/internal/entity/{{.Name.Snake}}.go.tmpl.
-	Template string
 	// Path is the repository path the template creates, as in internal/entity/widget.go.
 	Path    string
 	Content []byte
 }
 
-// Render renders the template at name in fsys. The file's path is name rendered with data, without
+// render renders the template at name in fsys. The file's path is name rendered with data, without
 // its first element (the set) and its .tmpl suffix.
-func Render(fsys fs.FS, name string, data *Data) (File, error) {
+func render(fsys fs.FS, name string, data *Data) (File, error) {
 	src, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return File{}, fmt.Errorf("read template: %w", err)
@@ -152,11 +150,11 @@ func Render(fsys fs.FS, name string, data *Data) (File, error) {
 
 	_, repoPath, _ := strings.Cut(strings.TrimSuffix(string(p), _suffix), "/")
 
-	return File{Template: name, Path: repoPath, Content: content}, nil
+	return File{Path: repoPath, Content: content}, nil
 }
 
 // Glob renders every template in fsys that matches pattern, which fs.Glob reads, in path order.
-// A pattern that matches none is ErrNoTemplates.
+// A pattern that matches none is an error.
 func Glob(fsys fs.FS, pattern string, data *Data) ([]File, error) {
 	matches, err := fs.Glob(fsys, pattern)
 	if err != nil {
@@ -164,13 +162,13 @@ func Glob(fsys fs.FS, pattern string, data *Data) ([]File, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("%w %s", ErrNoTemplates, pattern)
+		return nil, fmt.Errorf("%w %s", errNoTemplates, pattern)
 	}
 
 	files := make([]File, 0, len(matches))
 
 	for _, m := range matches {
-		f, err := Render(fsys, m, data)
+		f, err := render(fsys, m, data)
 		if err != nil {
 			return nil, err
 		}

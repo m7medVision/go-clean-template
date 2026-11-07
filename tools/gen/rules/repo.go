@@ -4,7 +4,6 @@
 package rules
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"path"
 	"slices"
 	"strings"
 )
@@ -20,6 +18,9 @@ import (
 // ErrTargets is a file to create that exists, a file to edit that does not, or a use case whose
 // domain, message name or transport does not fit (rule R2).
 var ErrTargets = errors.New("R2 targets")
+
+// errPorcelain is git status output that is not what --porcelain -z prints.
+var errPorcelain = errors.New("git status printed an entry it does not document")
 
 // Repo is the repository a plan is made against: its files, read-only, which of them have
 // uncommitted changes, and the names of the app's packages.
@@ -58,42 +59,66 @@ func (r Repo) Read(p string) ([]byte, error) {
 	return src, nil
 }
 
-func (r Repo) exists(p string) bool {
+// Exists reports whether the repository has a file or folder at p.
+func (r Repo) Exists(p string) bool {
 	_, err := fs.Stat(r.FS, p)
 
 	return err == nil
 }
 
 // glob returns the files matching pattern, which path.Match reads.
-func (r Repo) glob(pattern string) []string {
+func (r Repo) glob(pattern string) ([]string, error) {
 	matches, err := fs.Glob(r.FS, pattern)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("glob %s: %w", pattern, err)
 	}
 
-	return matches
+	return matches, nil
 }
 
 // gitDirty runs git status in dir and returns the paths it reports under dir.
 func gitDirty(ctx context.Context, dir string) ([]string, error) {
-	out, err := command(ctx, "git", "-C", dir, "status", "--porcelain", "--untracked-files=all", "--", ".")
+	out, err := command(ctx, "git", "-C", dir, "status", "--porcelain", "-z", "--untracked-files=all", "--", ".")
 	if err != nil {
 		return nil, err
 	}
 
+	return porcelain(out)
+}
+
+// porcelain returns the paths in out, what git status --porcelain -z prints: one "XY path" entry
+// after another, each ended by a NUL, and after a rename or a copy, the path it came from as one
+// more NUL-ended field. Both paths of a rename count. -z prints every path as it is, never quoted.
+func porcelain(out []byte) ([]string, error) {
+	if len(out) == 0 {
+		return nil, nil
+	}
+
 	var dirty []string
 
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		// Each line is "XY path", or "XY old -> new" for a rename.
-		if line := sc.Text(); len(line) > len("XY ") {
-			dirty = append(dirty, path.Clean(line[len("XY "):]))
+	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+
+	for i := 0; i < len(fields); i++ {
+		entry := fields[i]
+		if len(entry) <= len("XY ") {
+			return nil, fmt.Errorf("%w: %q", errPorcelain, entry)
+		}
+
+		dirty = append(dirty, entry[len("XY "):])
+
+		if strings.ContainsAny(entry[:len("XY")], "RC") {
+			i++
+			if i == len(fields) {
+				return nil, fmt.Errorf("%w: %q has no path it came from", errPorcelain, entry)
+			}
+
+			dirty = append(dirty, fields[i])
 		}
 	}
 
 	slices.Sort(dirty)
 
-	return dirty, nil
+	return slices.Compact(dirty), nil
 }
 
 // goPackages runs go list in dir and returns the module's packages by name, each with the import

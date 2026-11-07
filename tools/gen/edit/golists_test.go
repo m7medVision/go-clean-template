@@ -1,6 +1,7 @@
 package edit_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
@@ -206,6 +207,19 @@ func TestAfterLastStmtMatchesAnAssignedCall(t *testing.T) {
 
 	_, err = parseGo(t, registerSrc).AfterLastStmt("registerHandlers", edit.Call("*.Deregister"), "x")
 	require.ErrorIs(t, err, edit.ErrAnchor)
+}
+
+// The matching statements are the place only when they are one run: split in two, the new one
+// could go after either, so the place is found twice.
+func TestAfterLastStmtRefusesMatchesInTwoRuns(t *testing.T) {
+	t.Parallel()
+
+	split := strings.Replace(registerSrc, "\tmail.Register(cmds, mailDeps)\n", "\tlog()\n\tmail.Register(cmds, mailDeps)\n", 1)
+
+	_, err := parseGo(t, split).AfterLastStmt("registerHandlers", edit.Call("*.Register"), "x")
+
+	require.ErrorIs(t, err, edit.ErrAnchor)
+	assert.Contains(t, err.Error(), "found a run of statements in registerHandlers that are each a call to *.Register 2 times")
 }
 
 const resolverSrc = `package graphql

@@ -12,10 +12,10 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/plan"
 )
 
-// Valid checks R5: every file the plan creates or edits parses afterwards, and every Go file it
+// valid checks R5: every file the plan creates or edits parses afterwards, and every Go file it
 // creates is already formatted. An unformatted created file means its template is wrong; edited
 // Go files are formatted by the plan.
-func Valid(p *plan.Plan) error {
+func valid(p *plan.Plan) error {
 	changes, err := p.Changes()
 	if err != nil {
 		return err

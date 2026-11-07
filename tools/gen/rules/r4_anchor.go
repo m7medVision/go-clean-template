@@ -6,9 +6,9 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
 )
 
-// Anchors checks R4: no edit failed to find its place exactly once. It returns every such failure
+// anchors checks R4: no edit failed to find its place exactly once. It returns every such failure
 // among planErrs, joined, so one run names them all.
-func Anchors(planErrs []error) error {
+func anchors(planErrs []error) error {
 	var failed []error
 
 	for _, err := range planErrs {

@@ -23,8 +23,8 @@ func planMessage(pl *planner) {
 
 	editFile(pl, register, edit.ParseGo,
 		func(g *edit.Go) ([]edit.Insertion, error) {
-			dep, err := g.FieldOfType("Deps", depType)
-			u.Dep, u.DepType = dep.Name, strings.TrimPrefix(dep.Type, "repo.")
+			dep, typ, err := g.FieldOfType("Deps", depType)
+			u.Dep, u.DepType = dep, strings.TrimPrefix(typ, "repo.")
 
 			return nil, err
 		},

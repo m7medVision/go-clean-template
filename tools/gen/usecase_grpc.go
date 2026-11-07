@@ -31,8 +31,8 @@ func planRPC(pl *planner) {
 	editFile(pl, dir+"controller.go", edit.ParseGo,
 		func(g *edit.Go) ([]edit.Insertion, error) { return nil, g.RequireFunc("fail") },
 		func(g *edit.Go) ([]edit.Insertion, error) {
-			embed, err := g.FieldOfType("Controller", "*.Unimplemented*ServiceServer")
-			u.GRPCService = strings.TrimSuffix(strings.TrimPrefix(embed.Name, "Unimplemented"), "Server")
+			embed, _, err := g.FieldOfType("Controller", "*.Unimplemented*ServiceServer")
+			u.GRPCService = strings.TrimSuffix(strings.TrimPrefix(embed, "Unimplemented"), "Server")
 
 			return nil, err
 		},
@@ -59,7 +59,13 @@ func planProto(pl *planner) {
 	u := pl.data.Usecase
 	edits := rules.ProtoDir + "/{{.Name.Snake}}.proto."
 
-	files := protoFilesDeclaring(pl, u.GRPCService)
+	files, err := protoFilesDeclaring(pl, u.GRPCService)
+	if err != nil {
+		pl.fail(err)
+
+		return
+	}
+
 	if len(files) != 1 {
 		pl.fail(fmt.Errorf("%w: %s/*.proto: found service %s %d times, want once", edit.ErrAnchor, rules.ProtoDir, u.GRPCService, len(files)))
 
@@ -79,27 +85,32 @@ func planProto(pl *planner) {
 }
 
 // protoFilesDeclaring returns the .proto files in docs/proto/v1 that declare the service called
-// name. One that does not parse declares none here; make proto-v1 reports it.
-func protoFilesDeclaring(pl *planner, name string) []string {
+// name. A file that does not parse cannot say, so it is an error.
+func protoFilesDeclaring(pl *planner, name string) ([]string, error) {
 	var found []string
 
 	files, err := fs.Glob(pl.repo.FS, rules.ProtoDir+"/*.proto")
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("glob %s/*.proto: %w", rules.ProtoDir, err)
 	}
 
 	for _, p := range files {
 		src, err := pl.repo.Read(p)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
-		if proto, err := edit.ParseProto(p, src); err == nil && slices.Contains(proto.Services(), name) {
+		proto, err := edit.ParseProto(p, src)
+		if err != nil {
+			return nil, err
+		}
+
+		if slices.Contains(proto.Services(), name) {
 			found = append(found, p)
 		}
 	}
 
-	return found
+	return found, nil
 }
 
 // planRPCTest plans the method's test at the end of the domain's gRPC test file at p, which
@@ -121,7 +132,7 @@ func planRPCTest(pl *planner, p, messages string) {
 		"google.golang.org/grpc/metadata", "google.golang.org/grpc/status", "google.golang.org/grpc/test/bufconn",
 	}
 
-	if !pl.exists(p) {
+	if !pl.repo.Exists(p) {
 		u.ProtoPkg, u.ControllerPkg = "pb", pl.data.Name.Pkg
 		pl.createTest(p, pl.data.Name.Pkg, append(specs, "pb "+proto, controller), pl.text(text))
 
