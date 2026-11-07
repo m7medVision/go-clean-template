@@ -73,13 +73,25 @@ func (f *fakeQueue) deletedIDs() []int64 {
 }
 
 func newWorker(q worker.Queue) *worker.Worker {
-	return worker.New(
-		slog.New(slog.DiscardHandler),
-		q,
-		worker.PollInterval(_poll),
-		worker.BatchSize(2),
-		worker.ShutdownTimeout(_timeout),
-	)
+	return worker.New(slog.New(slog.DiscardHandler), q, worker.Settings{
+		PollInterval: _poll, VisibilityTimeout: _timeout, BatchSize: 2, ShutdownTimeout: _timeout,
+	})
+}
+
+// run runs w until stop, which returns what Run returned.
+func run(t *testing.T, w *worker.Worker) (stop func() error) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+
+	go func() { done <- w.Run(ctx) }()
+
+	return func() error {
+		cancel()
+
+		return <-done
+	}
 }
 
 func TestWorker_DeletesMessageWhenHandlerSucceeds(t *testing.T) {
@@ -89,10 +101,10 @@ func TestWorker_DeletesMessageWhenHandlerSucceeds(t *testing.T) {
 	w := newWorker(q)
 	w.Handle(_queue, func(context.Context, *worker.Message) error { return nil })
 
-	w.Start()
+	stop := run(t, w)
 
 	require.Eventually(t, func() bool { return len(q.deletedIDs()) == 3 }, _wait, _tick)
-	require.NoError(t, w.Shutdown())
+	require.NoError(t, stop())
 	assert.Equal(t, []int64{1, 2, 3}, q.deletedIDs())
 }
 
@@ -109,9 +121,10 @@ func TestWorker_KeepsMessageWhenHandlerFails(t *testing.T) {
 		return errHandler
 	})
 
-	w.Start()
+	stop := run(t, w)
+
 	<-handled
-	require.NoError(t, w.Shutdown())
+	require.NoError(t, stop())
 
 	assert.Empty(t, q.deletedIDs())
 }
@@ -125,10 +138,10 @@ func TestWorker_KeepsPollingAfterReadError(t *testing.T) {
 	w := newWorker(q)
 	w.Handle(_queue, func(context.Context, *worker.Message) error { return nil })
 
-	w.Start()
+	stop := run(t, w)
 
 	require.Eventually(t, func() bool { return len(q.deletedIDs()) == 1 }, _wait, _tick)
-	require.NoError(t, w.Shutdown())
+	require.NoError(t, stop())
 }
 
 func TestWorker_DispatchesEachQueueToItsOwnHandler(t *testing.T) {
@@ -159,10 +172,10 @@ func TestWorker_DispatchesEachQueueToItsOwnHandler(t *testing.T) {
 	w.Handle("a", record("a"))
 	w.Handle("b", record("b"))
 
-	w.Start()
+	stop := run(t, w)
 
 	require.Eventually(t, func() bool { return len(q.deletedIDs()) == 2 }, _wait, _tick)
-	require.NoError(t, w.Shutdown())
+	require.NoError(t, stop())
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -170,7 +183,7 @@ func TestWorker_DispatchesEachQueueToItsOwnHandler(t *testing.T) {
 	assert.Equal(t, map[string]int64{"a": 1, "b": 2}, got)
 }
 
-func TestWorker_ShutdownWaitsForInFlightHandler(t *testing.T) {
+func TestWorker_StopWaitsForInFlightHandler(t *testing.T) {
 	t.Parallel()
 
 	q := newFakeQueue(worker.Message{ID: 1})
@@ -185,16 +198,17 @@ func TestWorker_ShutdownWaitsForInFlightHandler(t *testing.T) {
 		return nil
 	})
 
-	w.Start()
+	stop := run(t, w)
+
 	<-started
 
 	done := make(chan error)
 
-	go func() { done <- w.Shutdown() }()
+	go func() { done <- stop() }()
 
 	select {
 	case <-done:
-		t.Fatal("Shutdown returned while a handler was still running")
+		t.Fatal("Run returned while a handler was still running")
 	case <-time.After(5 * _poll):
 	}
 
@@ -204,13 +218,15 @@ func TestWorker_ShutdownWaitsForInFlightHandler(t *testing.T) {
 	assert.Equal(t, []int64{1}, q.deletedIDs())
 }
 
-func TestWorker_ShutdownCancelsHandlerAfterTimeout(t *testing.T) {
+func TestWorker_StopCancelsHandlerAfterTimeout(t *testing.T) {
 	t.Parallel()
 
 	q := newFakeQueue(worker.Message{ID: 1})
 	started := make(chan struct{})
 
-	w := worker.New(slog.New(slog.DiscardHandler), q, worker.PollInterval(_poll), worker.ShutdownTimeout(_poll))
+	w := worker.New(slog.New(slog.DiscardHandler), q, worker.Settings{
+		PollInterval: _poll, VisibilityTimeout: _timeout, BatchSize: 1, ShutdownTimeout: _poll,
+	})
 	w.Handle(_queue, func(ctx context.Context, _ *worker.Message) error {
 		close(started)
 		<-ctx.Done()
@@ -218,21 +234,42 @@ func TestWorker_ShutdownCancelsHandlerAfterTimeout(t *testing.T) {
 		return ctx.Err()
 	})
 
-	w.Start()
+	stop := run(t, w)
+
 	<-started
 
-	require.NoError(t, w.Shutdown())
+	require.NoError(t, stop())
 	assert.Empty(t, q.deletedIDs())
 }
 
-func TestWorker_QueuesListsHandledQueuesSorted(t *testing.T) {
+// Past its visibility timeout a message is visible again and another reader may take it, so its
+// handler is canceled then rather than left running beside the next one.
+func TestWorker_HandlerStopsWhenTheMessageIsVisibleAgain(t *testing.T) {
 	t.Parallel()
 
-	w := newWorker(newFakeQueue())
-	noop := func(context.Context, *worker.Message) error { return nil }
+	q := newFakeQueue(worker.Message{ID: 1})
+	ended := make(chan error, 1)
 
-	w.Handle("mail", noop)
-	w.Handle("example", noop)
+	w := worker.New(slog.New(slog.DiscardHandler), q, worker.Settings{
+		PollInterval: _poll, VisibilityTimeout: 5 * _poll, BatchSize: 1, ShutdownTimeout: _timeout,
+	})
+	w.Handle(_queue, func(ctx context.Context, _ *worker.Message) error {
+		<-ctx.Done()
 
-	assert.Equal(t, []string{"example", "mail"}, w.Queues())
+		ended <- ctx.Err()
+
+		return ctx.Err()
+	})
+
+	stop := run(t, w)
+
+	select {
+	case err := <-ended:
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(_wait):
+		t.Fatal("the handler ran past its message's visibility timeout")
+	}
+
+	require.NoError(t, stop())
+	assert.Empty(t, q.deletedIDs())
 }

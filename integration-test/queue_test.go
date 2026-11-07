@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/stretchr/testify/assert"
@@ -14,8 +15,7 @@ import (
 )
 
 const (
-	// exampleQueue is consumed by the worker service; visibilityQueue is read by nobody but the test.
-	exampleQueue    = "example"
+	// visibilityQueue is read by nobody but the test.
 	visibilityQueue = "integration-test-visibility"
 
 	queueWait = 30 * time.Second
@@ -49,19 +49,28 @@ func queueRowExists(ctx context.Context, t *testing.T, pg *postgres.Postgres, id
 	return exists
 }
 
-// The worker service reads the example queue and deletes each message its handler accepts.
-func TestWorkerConsumesExampleQueue(t *testing.T) {
+// The worker service reads the mail queue, delivers what is on it, and deletes the message once
+// its handler accepts it.
+func TestWorkerConsumesTheMailQueue(t *testing.T) {
 	ctx := context.Background()
 	pg := newQueuePostgres(t)
+	name := sanitizeTestName(t)
+	email := name + "@test.com"
 
-	id, err := queue.New(pg).Send(ctx, exampleQueue, json.RawMessage(`{"text":"`+t.Name()+`"}`))
+	body, err := entity.EncodeEmail(entity.WelcomeEmail{To: email, Username: name, LoginURL: "http://localhost/login"})
+	require.NoError(t, err)
+
+	id, err := queue.New(pg).Send(ctx, entity.EmailQueue, body)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool { return !queueRowExists(ctx, t, pg, id) },
 		queueWait, queuePoll, "worker never consumed message %d", id)
+	require.Eventually(t, func() bool { return findMailTo(t, email) != "" },
+		mailWait, mailPoll, "message %d never reached Mailpit", id)
 }
 
 // A read message is hidden for the visibility timeout, then redelivered with a higher read count.
+// Only a delete on its own queue removes it.
 func TestQueueVisibilityTimeoutRedelivers(t *testing.T) {
 	ctx := context.Background()
 	pg := newQueuePostgres(t)
@@ -97,6 +106,9 @@ func TestQueueVisibilityTimeoutRedelivers(t *testing.T) {
 
 		return len(again) == 1
 	}, queueWait, queuePoll, "message %d was never redelivered", id)
+
+	require.NoError(t, q.Delete(ctx, entity.EmailQueue, id))
+	assert.True(t, queueRowExists(ctx, t, pg, id), "a delete on another queue must leave the message")
 
 	require.NoError(t, q.Delete(ctx, visibilityQueue, id))
 	assert.False(t, queueRowExists(ctx, t, pg, id))

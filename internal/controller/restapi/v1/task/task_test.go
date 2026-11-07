@@ -16,12 +16,11 @@ func TestCreateTask(t *testing.T) {
 	t.Parallel()
 
 	token := resttest.Token(t)
-	cfg := resttest.Config(t)
 
 	t.Run("empty title is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeTask{})
+		handler := newRouter(&fakeTask{})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/tasks", token, `{"title":""}`)
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
@@ -30,7 +29,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("invalid json body is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeTask{})
+		handler := newRouter(&fakeTask{})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/tasks", token, "{invalid json}")
 		assert.Equal(t, http.StatusBadRequest, resp.Code)
@@ -39,7 +38,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeTask{
+		handler := newRouter(&fakeTask{
 			stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
 		})
 
@@ -50,7 +49,7 @@ func TestCreateTask(t *testing.T) {
 	t.Run("trailing slash is stripped", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(cfg, &fakeTask{
+		handler := newRouter(&fakeTask{
 			stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
 		})
 
@@ -67,8 +66,7 @@ func TestDeleteTask(t *testing.T) {
 	t.Run("not found maps to 404", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := resttest.Config(t)
-		handler := newRouter(cfg, &fakeTask{err: entity.ErrTaskNotFound})
+		handler := newRouter(&fakeTask{err: entity.ErrTaskNotFound})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
 		assert.Equal(t, http.StatusNotFound, resp.Code)
@@ -77,8 +75,7 @@ func TestDeleteTask(t *testing.T) {
 	t.Run("success maps to 204", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := resttest.Config(t)
-		handler := newRouter(cfg, &fakeTask{})
+		handler := newRouter(&fakeTask{})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
 		assert.Equal(t, http.StatusNoContent, resp.Code)
@@ -88,12 +85,11 @@ func TestDeleteTask(t *testing.T) {
 func TestListAllTasks(t *testing.T) {
 	t.Parallel()
 
-	cfg := resttest.Config(t)
 	tk := &fakeTask{listed: []entity.Task{
 		{ID: "task-1", UserID: "alice", Title: "Alice's", Status: entity.TaskStatusDone},
 		{ID: "task-2", UserID: "bob", Title: "Bob's", Status: entity.TaskStatusDone},
 	}}
-	handler := newRouter(cfg, tk)
+	handler := newRouter(tk)
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/admin/tasks?status=done&limit=5&offset=10", resttest.AdminToken(t), "")
 
@@ -118,8 +114,7 @@ func TestListAllTasks(t *testing.T) {
 func TestListAllTasksAdminRequiredMapsTo403(t *testing.T) {
 	t.Parallel()
 
-	cfg := resttest.Config(t)
-	handler := newRouter(cfg, &fakeTask{err: entity.ErrAdminRequired})
+	handler := newRouter(&fakeTask{err: entity.ErrAdminRequired})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/admin/tasks", resttest.Token(t), "")
 
@@ -130,8 +125,7 @@ func TestListAllTasksAdminRequiredMapsTo403(t *testing.T) {
 func TestListAllTasksRequiresAuth(t *testing.T) {
 	t.Parallel()
 
-	cfg := resttest.Config(t)
-	handler := newRouter(cfg, &fakeTask{})
+	handler := newRouter(&fakeTask{})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/admin/tasks", "", "")
 
@@ -141,8 +135,7 @@ func TestListAllTasksRequiresAuth(t *testing.T) {
 func TestTaskForbiddenMapsTo403(t *testing.T) {
 	t.Parallel()
 
-	cfg := resttest.Config(t)
-	handler := newRouter(cfg, &fakeTask{err: entity.ErrTaskForbidden})
+	handler := newRouter(&fakeTask{err: entity.ErrTaskForbidden})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", resttest.Token(t), "")
 	assert.Equal(t, http.StatusForbidden, resp.Code)
@@ -151,8 +144,7 @@ func TestTaskForbiddenMapsTo403(t *testing.T) {
 func TestInvalidTransitionMapsTo400(t *testing.T) {
 	t.Parallel()
 
-	cfg := resttest.Config(t)
-	handler := newRouter(cfg, &fakeTask{err: entity.ErrInvalidTransition})
+	handler := newRouter(&fakeTask{err: entity.ErrInvalidTransition})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPatch, "/v1/tasks/task-1/status",
 		resttest.Token(t), `{"status":"done"}`)
@@ -162,8 +154,7 @@ func TestInvalidTransitionMapsTo400(t *testing.T) {
 func TestUsecaseFailureMapsTo500(t *testing.T) {
 	t.Parallel()
 
-	cfg := resttest.Config(t)
-	handler := newRouter(cfg, &fakeTask{err: io.EOF})
+	handler := newRouter(&fakeTask{err: io.EOF})
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", resttest.Token(t), "")
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)

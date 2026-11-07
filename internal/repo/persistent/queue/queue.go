@@ -69,10 +69,11 @@ func (r *Repo) Read(ctx context.Context, queue string, vt time.Duration, qty int
 	return msgs, nil
 }
 
-// Delete removes a message for good. A message that is already gone is not an error: with
-// at-least-once delivery another worker may have finished it after its visibility timeout.
-func (r *Repo) Delete(ctx context.Context, _ string, id int64) error {
-	if err := r.q(ctx).DeleteQueueMessage(ctx, id); err != nil {
+// Delete removes a message of queue for good. A message that is already gone, or is on another
+// queue, is not an error: with at-least-once delivery another worker may have finished it after its
+// visibility timeout.
+func (r *Repo) Delete(ctx context.Context, queue string, id int64) error {
+	if err := r.q(ctx).DeleteQueueMessage(ctx, queries.DeleteQueueMessageParams{ID: id, Queue: queue}); err != nil {
 		return fmt.Errorf("queue - Delete - r.q(ctx).DeleteQueueMessage: %w", err)
 	}
 

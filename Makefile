@@ -65,9 +65,9 @@ graphql: ### generate GraphQL server code from schema (gqlgen)
 	cd internal/controller/graphql && go tool gqlgen generate
 .PHONY: graphql
 
-openapi: ### export the REST OpenAPI document (Huma) to docs/openapi/v1.json
+openapi: ### export the REST OpenAPI document (Huma) to docs/openapi/v1.json, stating APP_VERSION
 	mkdir -p docs/openapi
-	go run ./cmd/openapi > docs/openapi/v1.json.tmp
+	go run ./cmd/openapi -version '$(APP_VERSION)' > docs/openapi/v1.json.tmp
 	mv docs/openapi/v1.json.tmp docs/openapi/v1.json
 .PHONY: openapi
 

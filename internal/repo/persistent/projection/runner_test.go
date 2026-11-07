@@ -190,7 +190,29 @@ func (s *fakeStore) AdvanceCheckpoint(ctx context.Context, name string, from, to
 	return true, nil
 }
 
-func (s *fakeStore) Notifications() <-chan struct{} { return s.notify }
+// Notifications passes on what the test sends on s.notify, until ctx ends.
+func (s *fakeStore) Notifications(ctx context.Context) <-chan struct{} {
+	out := make(chan struct{})
+
+	go func() {
+		defer close(out)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.notify:
+				select {
+				case out <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	return out
+}
 
 // recorder is a subscriber that keeps the positions it handled: of Ticked events, or of the types
 // in handles when set. failAt makes it fail once at that position; onHandle runs before it records.
@@ -248,15 +270,20 @@ func (r *recorder) positions() []int64 {
 func start(t *testing.T, s *fakeStore, poll time.Duration, subs ...*recorder) {
 	t.Helper()
 
-	opts := []projection.Option{projection.PollInterval(poll), projection.BatchSize(2)}
-
-	runner := projection.New(slog.New(slog.DiscardHandler), s, opts...)
+	runner := projection.New(slog.New(slog.DiscardHandler), s, poll, 2)
 	for _, sub := range subs {
 		runner.Add(sub)
 	}
 
-	runner.Start()
-	t.Cleanup(runner.Shutdown)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+
+	go func() { done <- runner.Run(ctx) }()
+
+	t.Cleanup(func() {
+		cancel()
+		require.NoError(t, <-done)
+	})
 }
 
 func handledUpTo(s *fakeStore, r *recorder, p int64) func() bool {

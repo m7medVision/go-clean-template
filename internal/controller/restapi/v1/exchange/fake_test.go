@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/exchange"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
@@ -42,6 +42,6 @@ func (f *fakeExchange) buses() cqrs.Buses {
 }
 
 // newRouter serves the REST router over e's buses.
-func newRouter(cfg *config.Config, e *fakeExchange) http.Handler {
-	return resttest.NewRouter(cfg, e.buses())
+func newRouter(e *fakeExchange) http.Handler {
+	return resttest.NewRouter(e.buses(), exchange.NewRoutes)
 }

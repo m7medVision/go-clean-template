@@ -53,11 +53,12 @@ sequenceDiagram
 ## 0. Wiring
 
 Nothing below constructs its own dependencies. [`internal/app/buses.go`](../internal/app/buses.go)
-builds the two buses once, and each domain registers its handlers on them:
+builds the two buses once, and each domain's module registers its handlers on them; for exchange,
+[`internal/app/exchange.go`](../internal/app/exchange.go):
 
 ```go
-exchange.Register(cmds, qs, exchange.Deps{
-	Store: store, Rates: webapi.New(cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(pg),
+exchange.Register(b.Commands, b.Queries, exchange.Deps{
+	Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(d.pg),
 })
 ```
 
@@ -65,9 +66,9 @@ exchange.Register(cmds, qs, exchange.Deps{
 handlers, one line each. The transports get the buses and nothing else:
 
 ```go
-router := restapi.NewRouter(cfg, uc.buses, jwtManager, l) // app.go
-router.Handle("/graphql", graphql.NewHandler(uc.buses, jwtManager, l)) // graphql.go
-grpc.NewRouter(grpcServer.App, uc.buses, l) // grpc.go
+rest: restexchange.NewRoutes, // exchange.go: NewRoutes(api, b, l)
+r.Handle("/graphql", graphql.NewHandler(b, tokens, l)) // http.go
+pb.RegisterExchangeServiceServer(s, grpcexchange.New(b, l)) // exchange.go
 ```
 
 Every handler's dependency is an **interface** from
@@ -77,8 +78,9 @@ got, which is what lets the unit tests hand it the in-memory store and mocks ins
 
 ## 1. Middleware
 
-[`internal/controller/restapi/router.go`](../internal/controller/restapi/router.go) installs chi
-middleware in this order, before any handler runs:
+The app's HTTP mux, [`internal/app/http.go`](../internal/app/http.go), installs chi middleware in
+this order, and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
+which adds `Auth`, before any handler runs:
 
 | Middleware | What it does to this request |
 | --- | --- |

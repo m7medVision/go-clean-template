@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/query"
@@ -39,6 +39,6 @@ func (f *fakeUser) buses() cqrs.Buses {
 }
 
 // newRouter serves the REST router over u's buses; the use cases a user test never reaches are nil.
-func newRouter(cfg *config.Config, u *fakeUser) http.Handler {
-	return resttest.NewRouter(cfg, u.buses())
+func newRouter(u *fakeUser) http.Handler {
+	return resttest.NewRouter(u.buses(), user.NewRoutes)
 }

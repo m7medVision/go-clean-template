@@ -1,20 +1,35 @@
 package main
 
 import (
-	"log"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/app"
 )
 
 func main() {
-	// Configuration
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := run(ctx)
+
+	stop()
+
+	if err != nil {
+		slog.Error("app stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+// run serves the app until SIGINT or SIGTERM.
+func run(ctx context.Context) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("Config error: %s", err)
+		return fmt.Errorf("config: %w", err)
 	}
 
-	if err = app.Run(cfg); err != nil {
-		log.Fatalf("Run error: %s", err)
-	}
+	return app.Run(ctx, cfg)
 }

@@ -10,14 +10,14 @@ Keep `.env` values free of spaces and quotes: both `make` and the shell read tha
 
 ## App
 
-The Default column is the value in `config.go`; "required" means the binary refuses to start without
-it.
+The Default column is the value in `config/`, the only place a default is written: the packages the
+settings reach take them as arguments. "required" means the binary refuses to start without it.
 
 | Env var | Default | |
 | --- | --- | --- |
 | `APP_NAME` | required | |
 | `APP_VERSION` | required | |
-| `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds |
+| `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds; a trailing slash is dropped |
 | `HTTP_PORT` | required | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `GRPC_PORT` | `8081` | the gRPC transport |
@@ -81,7 +81,7 @@ Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.m
 | Env var | Default | |
 | --- | --- | --- |
 | `WORKER_POLL_INTERVAL` | `1s` | sleep after an empty read |
-| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery |
+| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery; its handler's context ends then too |
 | `WORKER_BATCH_SIZE` | `10` | messages per read |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
@@ -92,7 +92,7 @@ required. See [cqrs.md](cqrs.md) for how they behave.
 
 | Env var | Default | |
 | --- | --- | --- |
-| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly) |
+| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly). The HTTP write deadline follows it (3s more) |
 | `EVENTSTORE_SNAPSHOT_EVERY` | `100` | snapshot a stream each time it crosses a multiple of this many events; `0` never snapshots |
 | `PROJECTION_POLL_INTERVAL` | `1s` | how often an idle projection reads the store when no notification arrives |
 | `PROJECTION_BATCH_SIZE` | `100` | events a projection reads at once |
@@ -108,7 +108,7 @@ Also read only by the worker, which sends the email.
 | `MAILPIT_UI_PORT` | `8025` | the port compose publishes Mailpit's inbox UI and API on; the app does not read it |
 | `SMTP_USERNAME` | empty | empty turns auth off; when set, PLAIN auth, sent only over TLS or to localhost |
 | `SMTP_PASSWORD` | empty | |
-| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; `.env.example` uses a bare address because of the no-spaces rule |
+| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address, parsed at startup: anything but exactly one address stops the binary. `.env.example` uses a bare address because of the no-spaces rule |
 
 ## Tracing
 

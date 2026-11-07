@@ -3,26 +3,24 @@ package app
 import (
 	"log/slog"
 
-	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
-	"github.com/m7medvision/go-clean-template/pkg/grpcserver"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	pbgrpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
-// newGRPCServer builds the gRPC server with every v1 service registered.
-func newGRPCServer(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l *slog.Logger) namedServer {
-	grpcServer := grpcserver.New(
-		l,
-		grpcserver.Port(cfg.GRPC.Port),
-		grpcserver.ServerOptions(
-			pbgrpc.UnaryInterceptor(grpcmw.AuthInterceptor(jwtManager)),
-			pbgrpc.StatsHandler(otelgrpc.NewServerHandler()),
-		),
+// newGRPCServer builds the gRPC server with every module's services registered over b, and server
+// reflection.
+func newGRPCServer(b cqrs.Buses, jwtManager *jwt.Manager, l *slog.Logger) *grpc.Server {
+	srv := grpc.NewServer(
+		grpc.UnaryInterceptor(grpcmw.AuthInterceptor(jwtManager)),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	)
-	grpc.NewRouter(grpcServer.App, uc.buses, l)
 
-	return namedServer{name: "grpcServer", server: grpcServer}
+	registerGRPC(srv, b, l)
+	reflection.Register(srv)
+
+	return srv
 }

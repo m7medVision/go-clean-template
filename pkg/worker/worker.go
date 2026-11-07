@@ -9,17 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"maps"
-	"slices"
 	"sync"
 	"time"
-)
-
-const (
-	_defaultPollInterval      = time.Second
-	_defaultVisibilityTimeout = 30 * time.Second
-	_defaultBatchSize         = 10
-	_defaultShutdownTimeout   = 10 * time.Second
 )
 
 // Message is a message read from a queue.
@@ -39,120 +30,104 @@ type Queue interface {
 	Delete(ctx context.Context, queue string, id int64) error
 }
 
+// Settings say how the worker reads its queues.
+type Settings struct {
+	// PollInterval is how long a queue loop sleeps after a read returns no messages.
+	PollInterval time.Duration
+	// VisibilityTimeout is how long a read message stays hidden from other readers. A message whose
+	// handler fails is redelivered once it expires, and a handler's context ends when it does.
+	VisibilityTimeout time.Duration
+	// BatchSize is the most messages read per poll.
+	BatchSize int
+	// ShutdownTimeout is how long Run waits, once its context ends, for the handlers in flight
+	// before it cancels theirs.
+	ShutdownTimeout time.Duration
+}
+
 // HandlerFunc processes one message. Returning nil deletes the message; returning an error leaves
-// it for redelivery.
+// it for redelivery. Its context ends when the message's visibility timeout does, since another
+// reader may take the message from then on.
 type HandlerFunc func(ctx context.Context, msg *Message) error
 
-// Worker -.
+// Worker reads its queues and hands each message to the queue's handler.
 type Worker struct {
 	queue    Queue
 	handlers map[string]HandlerFunc
-	wg       sync.WaitGroup
-
-	// pollCtx stops the read loops; handlerCtx is canceled only once ShutdownTimeout expires, so
-	// in-flight handlers get a chance to finish.
-	pollCtx      context.Context
-	stopPolling  context.CancelFunc
-	handlerCtx   context.Context
-	stopHandlers context.CancelFunc
-
-	pollInterval      time.Duration
-	visibilityTimeout time.Duration
-	batchSize         int
-	shutdownTimeout   time.Duration
-
-	logger *slog.Logger
+	settings Settings
+	logger   *slog.Logger
 }
 
-// New -.
-func New(l *slog.Logger, q Queue, opts ...Option) *Worker {
-	pollCtx, stopPolling := context.WithCancel(context.Background())
-	handlerCtx, stopHandlers := context.WithCancel(context.Background())
-
-	w := &Worker{
-		queue:             q,
-		handlers:          make(map[string]HandlerFunc),
-		pollCtx:           pollCtx,
-		stopPolling:       stopPolling,
-		handlerCtx:        handlerCtx,
-		stopHandlers:      stopHandlers,
-		pollInterval:      _defaultPollInterval,
-		visibilityTimeout: _defaultVisibilityTimeout,
-		batchSize:         _defaultBatchSize,
-		shutdownTimeout:   _defaultShutdownTimeout,
-		logger:            l,
-	}
-
-	// Custom options
-	for _, opt := range opts {
-		opt(w)
-	}
-
-	return w
+// New returns a worker reading q with s.
+func New(l *slog.Logger, q Queue, s Settings) *Worker {
+	return &Worker{queue: q, handlers: make(map[string]HandlerFunc), settings: s, logger: l}
 }
 
-// Handle registers the handler for a queue. Call it before Start.
+// Handle registers the handler for a queue. Call it before Run.
 func (w *Worker) Handle(queue string, h HandlerFunc) {
 	w.handlers[queue] = h
 }
 
-// Queues lists the queues that have a handler, sorted.
-func (w *Worker) Queues() []string {
-	return slices.Sorted(maps.Keys(w.handlers))
-}
+// Run polls every queue that has a handler until ctx ends. Then it waits for the handlers in
+// flight, and cancels their context once ShutdownTimeout passes. It returns nil: a failed read or
+// handler is logged and retried, never fatal.
+func (w *Worker) Run(ctx context.Context) error {
+	// Handlers keep ctx's values but not its end, so they get ShutdownTimeout to finish.
+	handlerCtx, stopHandlers := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopHandlers()
 
-// Start starts one poll loop per registered queue.
-func (w *Worker) Start() {
+	var wg sync.WaitGroup
+
 	for queue, h := range w.handlers {
-		w.wg.Go(func() { w.poll(queue, h) })
+		wg.Go(func() { w.poll(ctx, handlerCtx, queue, h) })
 	}
 
-	w.logger.Info("worker - Worker - Started")
-}
+	w.logger.Info("worker - started", "queues", len(w.handlers))
 
-// Shutdown stops polling and waits for in-flight handlers, canceling them after ShutdownTimeout.
-func (w *Worker) Shutdown() error {
-	w.stopPolling()
+	<-ctx.Done()
 
 	done := make(chan struct{})
 
 	go func() {
-		w.wg.Wait()
+		wg.Wait()
 		close(done)
 	}()
 
 	select {
 	case <-done:
-	case <-time.After(w.shutdownTimeout):
-		w.logger.Warn("worker - Worker - Shutdown - timeout, canceling in-flight handlers")
-		w.stopHandlers()
+	case <-time.After(w.settings.ShutdownTimeout):
+		w.logger.Warn("worker - shutdown timeout, canceling in-flight handlers")
+		stopHandlers()
 		<-done
 	}
 
-	w.stopHandlers()
-	w.logger.Info("worker - Worker - Shutdown")
+	w.logger.Info("worker - stopped")
 
 	return nil
 }
 
-func (w *Worker) poll(queue string, h HandlerFunc) {
-	for w.pollCtx.Err() == nil {
-		if w.readBatch(queue, h) > 0 {
+// poll reads queue until ctx ends, and hands each message to h under handlerCtx.
+func (w *Worker) poll(ctx, handlerCtx context.Context, queue string, h HandlerFunc) {
+	for ctx.Err() == nil {
+		if w.readBatch(ctx, handlerCtx, queue, h) > 0 {
 			continue
 		}
 
 		select {
-		case <-w.pollCtx.Done():
-		case <-time.After(w.pollInterval):
+		case <-ctx.Done():
+		case <-time.After(w.settings.PollInterval):
 		}
 	}
 }
 
 // readBatch handles one batch and returns how many messages it read.
-func (w *Worker) readBatch(queue string, h HandlerFunc) int {
-	msgs, err := w.queue.Read(w.pollCtx, queue, w.visibilityTimeout, w.batchSize)
+func (w *Worker) readBatch(ctx, handlerCtx context.Context, queue string, h HandlerFunc) int {
+	// The batch reappears to other readers once its visibility timeout passes, counted from the
+	// read; taking the time before the read keeps this deadline on the early side.
+	deadline := time.Now().Add(w.settings.VisibilityTimeout)
+
+	msgs, err := w.queue.Read(ctx, queue, w.settings.VisibilityTimeout, w.settings.BatchSize)
 	if err != nil {
-		if w.pollCtx.Err() == nil {
+		if ctx.Err() == nil {
 			w.logger.Error("worker - read a batch", "queue", queue, "error", err)
 		}
 
@@ -161,24 +136,31 @@ func (w *Worker) readBatch(queue string, h HandlerFunc) int {
 
 	for i := range msgs {
 		// Messages left in the batch become visible again once their timeout expires.
-		if w.pollCtx.Err() != nil {
+		if ctx.Err() != nil || !time.Now().Before(deadline) {
 			break
 		}
 
-		w.process(queue, h, &msgs[i])
+		w.process(handlerCtx, deadline, queue, h, &msgs[i])
 	}
 
 	return len(msgs)
 }
 
-func (w *Worker) process(queue string, h HandlerFunc, msg *Message) {
-	if err := h(w.handlerCtx, msg); err != nil {
+// process hands msg to h, which must finish by deadline: past it the message is visible again, and
+// another reader may be handling it.
+func (w *Worker) process(ctx context.Context, deadline time.Time, queue string, h HandlerFunc, msg *Message) {
+	handleCtx, cancel := context.WithDeadline(ctx, deadline)
+	err := h(handleCtx, msg)
+
+	cancel()
+
+	if err != nil {
 		w.logger.Error("worker - handle a message", "queue", queue, "message", msg.ID, "error", err)
 
 		return
 	}
 
-	if err := w.queue.Delete(w.handlerCtx, queue, msg.ID); err != nil {
+	if err := w.queue.Delete(ctx, queue, msg.ID); err != nil {
 		w.logger.Error("worker - delete a message", "queue", queue, "message", msg.ID, "error", err)
 	}
 }

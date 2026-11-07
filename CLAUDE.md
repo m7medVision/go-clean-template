@@ -119,9 +119,16 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   nothing in the app imports it: `go build ./...`, `make test`, the binaries and the image never
   include it, so `make gen-check` is what lints and tests it. See `docs/generator.md`.
 
-Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: `buses.go`
-(`newBuses`, `registerHandlers`, `projectors`, `eventHandlers`), `backfill.go` (`importers`) and `app.go`
-(`initUseCases`, `initServers`).
+Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: one file per
+domain (`task.go`, `user.go`, …) returns its `module` (handlers, importer, REST and gRPC
+registration, projector, event handlers, queues), `modules.go` lists the modules and is the only
+domain list besides `graphql/resolver.go`; `buses.go` (`newBuses`), `bootstrap.go` (what both
+binaries start from), `http.go` (the one chi mux: REST and GraphQL mounted side by side) and
+`app.go` / `worker.go` (`Run`, `RunWorker`). Each binary installs only the module parts it runs: the
+worker the projectors, event handlers and queues (mail delivery), the app everything else.
+Every long-running part (the HTTP and gRPC servers, the queue worker, the projection runner) is a
+`Run(ctx) error` under one errgroup, on the context `signal.NotifyContext` gives each `main`;
+nothing calls `Fatal` or `os.Exit` below `main`.
 
 ## Where code goes
 
@@ -133,15 +140,15 @@ Decide by asking what the code knows about:
 | a state change and its rules | `internal/entity/<name>_aggregate.go`, events in `<name>_events.go` | aggregate method that checks the rule and calls `entity.Record`; every event type listed in `EventTypes()` |
 | one change a caller asks for | `internal/usecase/<domain>/command/<name>.go` | command type + handler returning `entity.Written`, one line in `register.go` |
 | one thing a caller reads | `internal/usecase/<domain>/query/<name>.go` | query type + handler reading a read model, one line in `register.go` |
-| a side effect that follows an event | `internal/usecase/<domain>/event/<name>.go` | `repo.Subscriber` (`Name`, `Handles`, `Handle`), listed in `eventHandlers` (`internal/app/buses.go`) |
+| a side effect that follows an event | `internal/usecase/<domain>/event/<name>.go` | `repo.Subscriber` (`Name`, `Handles`, `Handle`), returned by its module's `eventHandlers` (`internal/app/<domain>.go`) |
 | a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a read-model table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | read-model method calling the generated query |
-| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event its `Handles` lists, listed in `projectors` |
-| rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, listed in `importers` (`internal/app/backfill.go`) |
+| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event its `Handles` lists, returned by its module's `projector` |
+| rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, returned by its module's `importer` (`internal/app/<domain>.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<operation>.go` (GraphQL: `graphql/<domain>/<field>.go`) | handler |
-| a queue message (decode, send a command, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc`, registered in `v1/router.go` |
+| a queue message (decode, send a command, ack or retry) | `internal/controller/worker/v1/<name>.go` | `HandlerFunc` and the function that registers it, called by the worker in `internal/app` |
 | the data an email shows | `internal/entity/email_<name>.go` | struct with `Template()`/`Recipient()`, plus an entry in `EmailTypes()` (`email.go`) |
 | an email's wording and markup | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl` | `content`, and `subject` + `text`; fixture and golden in `mailtmpl_test.go` |
 | a server, pool, client or middleware with no domain knowledge | `pkg/<name>/` | reusable package |
@@ -176,8 +183,7 @@ domain folders inside.
 restapi/v1/<domain>/   controller.go (struct, NewRoutes, helpers several ops share), one file per
                        Huma op named after its operation ID (create_task.go: the op, its own
                        input/output structs), request.go and response.go (DTOs, and the input/
-                       output structs several ops share), <domain>_test.go, fake_test.go,
-                       main_test.go
+                       output structs several ops share), <domain>_test.go, fake_test.go
 grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface, shared
                        helpers), one file per RPC (create_task.go), request.go, response.go, tests
 graphql/<domain>/      resolver.go (Query/Mutation, New, shared helpers), one file per field
@@ -191,13 +197,17 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
   package in that transport: REST `v1/response/` (`Token`) and `v1/apidoc/` (the `BearerAuth`
   scheme, the `auth` tag); gRPC `v1/response/` (timestamps and counts as proto fields); GraphQL
   `middleware/` and `gqlerr/`.
-- Each version's `router.go` (`restapi/v1`, `grpc/v1`) is the only file that lists the domains: one
-  call per domain, each passed the `cqrs.Buses`. `restapi/router.go`, `grpc/router.go` and `docs/api.md`'s v2 examples call it.
+- No transport lists the domains (GraphQL's `resolver.go` aside): each domain's module in
+  `internal/app/<domain>.go` registers its REST operations (`NewRoutes`) and gRPC services, passed
+  the `cqrs.Buses`, and `docs/api.md`'s v2 examples register there too. `restapi.NewHandler` is the
+  REST API (Huma, its docs, the token check); `restapi.Document` exports its OpenAPI document from
+  the same registration, which is what `cmd/openapi` prints.
 - Tests go through the real server and real buses, with fake handlers registered for the domain's
-  messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (`TestMain` calls
-  `resttest.Main`, which sets the env the config reads), GraphQL with `graphql/graphqltest`, gRPC over
-  `bufconn` in the test itself. Router-wide tests (public routes,
-  auth exemption, panics, the OpenAPI export) stay in `restapi/router_test.go`.
+  messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (it sets no env:
+  no controller reads config), GraphQL with `graphql/graphqltest`, gRPC over
+  `bufconn` in the test itself. REST-wide tests (docs, auth exemption) stay in
+  `restapi/router_test.go`; tests of the whole HTTP mux (public routes, panics, metrics, GraphQL
+  beside REST) and of the exported OpenAPI document are in `internal/app`.
 - **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
   renaming one changes `docs/openapi/v1.json` and the web client's types. A name that repeats its
   folder (`task.TaskList`) carries a `//nolint:revive` saying so.
@@ -226,8 +236,8 @@ shape from a neighbouring handler in the same transport.
    message's `Validate()`, built from an `entity` function or constant (`entity.ValidateTaskText`,
    `entity.ValidateSignUp`, `entity.Page`), and the buses' validate step runs it for every
    transport. REST still writes the same limits as Huma tags, because they are the API's
-   documentation and reject a bad request before it is decoded; `restapi/router_test.go` pins those
-   tags to the entity constants. gRPC and GraphQL check nothing of their own. A rule about the
+   documentation and reject a bad request before it is decoded; `internal/app/openapi_test.go` pins
+   those tags to the entity constants. gRPC and GraphQL check nothing of their own. A rule about the
    record's state, like a status transition, lives on the aggregate.
 4. **Send the command or query** with the request context:
    `cqrs.SendCommand(ctx, r.cmds, command.CreateTask{...})` or
@@ -294,7 +304,11 @@ through `sql.Scanner`/`driver.Valuer`. Transports carry decimals as strings: Hum
 schema for `decimal.Decimal`, so REST returns the `Conversion` DTO (`restapi/v1/exchange/response.go`),
 not the entity.
 
-**Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env`. A new
+**Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env` into
+exported sections (`config.OIDC`, `config.Worker`, …). Pass a part the section or the values it
+reads, never `*config.Config`; no controller imports `config`. Defaults are written only in
+`config/`: a `pkg/` constructor takes explicit values (a `pkg` type with a section's fields converts
+from it, as `worker.Settings(cfg.Worker)`). A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
 startup. `.env.example` is read both by `make` (`include`) and by the shell in CI
@@ -338,7 +352,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   inserts claims and events; then `NOTIFY events`. Keep that lock: without it a projector can pass a
   position whose earlier neighbour commits later, and never see it.
 - **Projections run in the worker** (`internal/repo/persistent/projection`): one loop per
-  subscriber (`projectors` and `eventHandlers`), each event of a type it `Handles` handled in one
+  subscriber (the modules' projectors and event handlers), each event of a type it `Handles` handled in one
   transaction with its checkpoint's move.
   A subscriber writes through `pg.Executor(ctx)` (`pkg/postgres`) so its rows join that
   transaction; anything else (a second pool, a goroutine) breaks exactly-once.
@@ -372,10 +386,11 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   `worker.Queue` with no adapter (`var _ worker.Queue` in `queue.go`). The queue maps each sqlc row
   to it field by field, so the table's column order never shapes a `pkg/` type.
 - `pkg/worker` is at-least-once: a handler returning `nil` deletes the message; an error leaves it
-  to reappear after `WORKER_VISIBILITY_TIMEOUT`. Handlers must be idempotent; a body that can never
+  to reappear after `WORKER_VISIBILITY_TIMEOUT`, which also ends the handler's context. Handlers must be idempotent; a body that can never
   decode should be logged and acknowledged (`return nil`), or it redelivers forever.
 - The worker is wired in `internal/app/worker.go` (`RunWorker`): the projection runner and the queue
-  consumer. Queue handlers send commands on the buses from `initUseCases`, like the servers. The
+  consumer. Queue handlers send commands on the worker's buses, which hold only what the modules'
+  `queues` register (mail delivery). The
   Dockerfile builds `/app` and `/worker` into one image; the compose `worker` service runs
   `/worker`. Only the app applies the schema.
 - A handler enqueues through a port that hides the queue, whose implementation calls the queue's
@@ -387,8 +402,8 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
   It sends the `DeliverEmail` command (`internal/usecase/mail`), whose handler renders with
   `internal/repo/mailtmpl` into a `repo.RenderedEmail` and sends through `internal/repo/mailer`,
-  which hands it to `pkg/smtp`; only the worker sends it. `initUseCases`
-  registers it for both binaries, and fails if a template is broken.
+  which hands it to `pkg/smtp`; only the worker sends it, and only the worker builds it
+  (`internal/app/mail.go`), failing at startup if a template or `MAIL_FROM` is broken.
 - Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
   integration stack.
   `integration-test/mail_test.go` asserts on what reaches it.
@@ -585,13 +600,14 @@ generated files copy — read it before writing. The steps are what the generate
 5. **Commands, queries and event handlers** — `internal/usecase/<domain>/command/`, `query/` and,
    for side effects, `event/`, one file per message with its test (see the recipe above), and
    `register.go` with the domain's `Deps` and `Register`.
-6. **Wiring** — in `internal/app/buses.go`: a `<domain>.Register(...)` call in `registerHandlers`,
-   the projector in `projectors` (and any event handler in `eventHandlers`). The transports already receive the
-   buses through `initServers`.
+6. **Wiring** — `internal/app/<domain>.go` returning the domain's `module`: `handlers` (a
+   `<domain>.Register(...)` call), `importer` when it has rows from before event sourcing,
+   `projector`, any `eventHandlers`, and `rest` and `grpc` (step 7); then the module in `modules()`
+   (`internal/app/modules.go`).
 7. **Transports** — for each one, a new domain folder (see **Controller layout**):
    `<transport>/v1/<domain>/` with its `controller.go`, one file per operation, `request.go`,
-   `response.go` and tests (with a `fake_test.go` registering fake handlers), plus one call in that
-   transport's `v1/router.go` that registers it.
+   `response.go` and tests (with a `fake_test.go` registering fake handlers), registered by the
+   domain's module (`rest: <domain>.NewRoutes`, `grpc` registering its service).
    gRPC also needs `docs/proto/v1/<domain>.proto` and `make proto-v1`.
    GraphQL instead gets `schema/<domain>_types.graphqls` and a schema file per field, a
    `graphql/<domain>/` folder, and an alias plus an embed for its `Query`/`Mutation` in
@@ -604,9 +620,9 @@ generated files copy — read it before writing. The steps are what the generate
 ## API versioning
 
 Routes are grouped under a version package (`<transport>/v1/`). A v2 means a new sibling package
-with the same layout, registered alongside v1 in the transport's top-level `router.go` — REST adds
-operations under the new `/v2/...` paths from a `v2.NewRoutes(api, b, l)` in `restapi/router.go`.
-gRPC calls a second `v2.NewRoutes(app, b, l)` in `grpc/router.go`. Both versions send the same
+with the same layout, registered alongside v1 in the domain's module (`internal/app/<domain>.go`) —
+REST adds operations under the new `/v2/...` paths with the v2 folder's `NewRoutes(api, b, l)` next
+to v1's in `rest`; gRPC registers the v2 service next to v1's in `grpc`. Both versions send the same
 commands and queries.
 v1 stays untouched. `docs/api.md` documents this
 with worked examples per transport; follow it rather than inventing a scheme.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/descope/virtualwebauthn"
 	"github.com/google/uuid"
+	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
@@ -23,10 +24,10 @@ var errRead = errors.New("read failed")
 func newCeremony(t *testing.T) *ceremony.Ceremony {
 	t.Helper()
 
-	c, err := ceremony.New(ceremonytest.SigningKey, &ceremony.Config{
+	c, err := ceremony.New(ceremonytest.SigningKey, config.WebAuthn{
 		RPID: ceremonytest.RPID, RPName: ceremonytest.RPName, RPOrigins: []string{ceremonytest.RPOrigin},
-		Timeout: ceremonytest.CeremonyTimeout, ReauthMaxAge: ceremonytest.ReauthMaxAge,
-	})
+		CeremonyTimeout: ceremonytest.CeremonyTimeout, ReauthMaxAge: ceremonytest.ReauthMaxAge,
+	}, time.Now)
 	require.NoError(t, err)
 
 	return c

@@ -12,11 +12,16 @@ import (
 
 const deleteQueueMessage = `-- name: DeleteQueueMessage :exec
 DELETE FROM queue_messages
-WHERE id = $1
+WHERE id = $1 AND queue = $2
 `
 
-func (q *Queries) DeleteQueueMessage(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteQueueMessage, id)
+type DeleteQueueMessageParams struct {
+	ID    int64
+	Queue string
+}
+
+func (q *Queries) DeleteQueueMessage(ctx context.Context, arg DeleteQueueMessageParams) error {
+	_, err := q.db.Exec(ctx, deleteQueueMessage, arg.ID, arg.Queue)
 	return err
 }
 

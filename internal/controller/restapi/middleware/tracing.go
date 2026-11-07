@@ -10,7 +10,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const _tracerName = "rest-api"
+const (
+	_tracerName = "rest-api"
+	// _mountPattern is the pattern of a router mounted at the root, as chi reports it.
+	_mountPattern = "/*"
+)
 
 // Tracing returns a middleware that opens an OTel span for the versioned API
 // routes only, keeping the internal routes (health, metrics, docs) untraced.
@@ -50,11 +54,17 @@ func nameSpanByRoute(next http.Handler) http.Handler {
 	})
 }
 
+// routePattern is the pattern of the route that served r, or empty when none did. A request no
+// route matched still carries the catch-all of the mount it went through.
 func routePattern(r *http.Request) string {
 	rctx := chi.RouteContext(r.Context())
 	if rctx == nil {
 		return ""
 	}
 
-	return rctx.RoutePattern()
+	if p := rctx.RoutePattern(); p != _mountPattern {
+		return p
+	}
+
+	return ""
 }
