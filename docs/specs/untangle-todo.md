@@ -151,9 +151,9 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** none. **Size:** L (deletions)
 
 ### 20. Contracts per domain; one way to join a transaction  (J)
-- [ ] `repo` contracts split per domain with mocks per file; unused mocks gone; contracts import no
+- [x] `repo` contracts split per domain with mocks per file; unused mocks gone; contracts import no
       `pkg/worker`/`pkg/smtp`; sentinels in each domain's entity file.
-- [ ] Every read model reads through `Executor(ctx)`; `Pool` unexported; the queue maps rows itself;
+- [x] Every read model reads through `Executor(ctx)`; `Pool` unexported; the queue maps rows itself;
       `safeIntToInt32` clamps.
 
 **Verify:** G1. **Depends on:** 19. **Size:** L
@@ -215,7 +215,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 7: Backfill
 
 ### 28. The backfill, isolated  (L)
-- [ ] Markers in their own table; checkpoint queries lose the `_` filter for markers; one generic
+- [x] Markers in their own table; checkpoint queries lose the `_` filter for markers; one generic
       import loop with skip-on-conflict in `eventstore.Backfill`; importers export nothing for tests;
       `Rebuild` refuses while an import is pending.
 
