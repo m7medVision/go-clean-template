@@ -3,7 +3,6 @@ package passkey
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/authn"
@@ -34,7 +33,8 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		// IssuedAt is when the caller last signed in: the use case asks a stale one to sign in again.
 		caller := authn.MustCaller(ctx)
 
-		started, err := r.beginRegistration(ctx, caller.UserID, caller.IssuedAt)
+		started, err := cqrs.SendQuery(ctx, r.qs,
+			query.BeginPasskeyRegistration{UserID: caller.UserID, AuthTime: caller.IssuedAt})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyRegistration")
 		}
@@ -44,8 +44,4 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 			CeremonyToken: started.Token,
 		}}, nil
 	})
-}
-
-func (r *controller) beginRegistration(ctx context.Context, userID string, authTime time.Time) (entity.CeremonyStarted, error) {
-	return cqrs.SendQuery(ctx, r.qs, query.BeginPasskeyRegistration{UserID: userID, AuthTime: authTime})
 }

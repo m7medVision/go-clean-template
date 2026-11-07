@@ -35,17 +35,11 @@ func (r *controller) deletePasskey(api huma.API) {
 	}, func(ctx context.Context, input *passkeyPathInput) (*deletePasskeyOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 
-		err := r.delete(ctx, userID, input.ID)
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.DeletePasskey{UserID: userID, ID: input.ID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "deletePasskey")
 		}
 
 		return &deletePasskeyOutput{Status: http.StatusNoContent}, nil
 	})
-}
-
-func (r *controller) delete(ctx context.Context, userID, id string) error {
-	_, err := cqrs.SendCommand(ctx, r.cmds, command.DeletePasskey{UserID: userID, ID: id})
-
-	return err
 }

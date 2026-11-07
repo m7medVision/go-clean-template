@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -35,21 +34,18 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 	}, func(ctx context.Context, input *finishPasskeyRegistrationInput) (*passkeyOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 
-		passkey, err := r.finishRegistration(ctx, userID, input.CeremonyToken, input.Name, input.Body)
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.FinishPasskeyRegistration{
+			UserID: userID, Token: input.CeremonyToken, Name: input.Name, Body: input.Body,
+		})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "finishPasskeyRegistration")
+		}
+
+		passkey, err := cqrs.SendQuery(ctx, r.qs, query.GetPasskey{UserID: userID, ID: written.ID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "finishPasskeyRegistration")
 		}
 
 		return &passkeyOutput{Body: passkey}, nil
 	})
-}
-
-func (r *controller) finishRegistration(ctx context.Context, userID, token, name string, body []byte) (entity.Passkey, error) {
-	written, err := cqrs.SendCommand(ctx, r.cmds,
-		command.FinishPasskeyRegistration{UserID: userID, Token: token, Name: name, Body: body})
-	if err != nil {
-		return entity.Passkey{}, err
-	}
-
-	return cqrs.SendQuery(ctx, r.qs, query.GetPasskey{UserID: userID, ID: written.ID})
 }

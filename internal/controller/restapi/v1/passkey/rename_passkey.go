@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -32,20 +31,17 @@ func (r *controller) renamePasskey(api huma.API) {
 	}, func(ctx context.Context, input *renamePasskeyInput) (*passkeyOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 
-		passkey, err := r.rename(ctx, userID, input.ID, input.Body.Name)
+		written, err := cqrs.SendCommand(ctx, r.cmds,
+			command.RenamePasskey{UserID: userID, ID: input.ID, Name: input.Body.Name})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "renamePasskey")
+		}
+
+		passkey, err := cqrs.SendQuery(ctx, r.qs, query.GetPasskey{UserID: userID, ID: written.ID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "renamePasskey")
 		}
 
 		return &passkeyOutput{Body: passkey}, nil
 	})
-}
-
-func (r *controller) rename(ctx context.Context, userID, id, name string) (entity.Passkey, error) {
-	written, err := cqrs.SendCommand(ctx, r.cmds, command.RenamePasskey{UserID: userID, ID: id, Name: name})
-	if err != nil {
-		return entity.Passkey{}, err
-	}
-
-	return cqrs.SendQuery(ctx, r.qs, query.GetPasskey{UserID: userID, ID: written.ID})
 }

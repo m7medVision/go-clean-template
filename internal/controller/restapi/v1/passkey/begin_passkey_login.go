@@ -7,7 +7,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
@@ -26,7 +25,7 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 		Tags:   []string{apidoc.AuthTag},
 		Errors: apierr.QueryErrors(),
 	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*ceremonyOutput, error) {
-		started, err := r.beginLogin(ctx)
+		started, err := cqrs.SendQuery(ctx, r.qs, query.BeginPasskeyLogin{})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyLogin")
 		}
@@ -36,8 +35,4 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 			CeremonyToken: started.Token,
 		}}, nil
 	})
-}
-
-func (r *controller) beginLogin(ctx context.Context) (entity.CeremonyStarted, error) {
-	return cqrs.SendQuery(ctx, r.qs, query.BeginPasskeyLogin{})
 }

@@ -33,17 +33,12 @@ func (r *controller) finishPasskeyLogin(api huma.API) {
 		Tags:   []string{apidoc.AuthTag},
 		Errors: apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict),
 	}, func(ctx context.Context, input *finishPasskeyLoginInput) (*finishPasskeyLoginOutput, error) {
-		token, err := r.finishLogin(ctx, input.CeremonyToken, input.Body)
+		signedIn, err := cqrs.SendCommand(ctx, r.cmds,
+			command.FinishPasskeyLogin{Token: input.CeremonyToken, Body: input.Body})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "finishPasskeyLogin")
 		}
 
-		return &finishPasskeyLoginOutput{Body: response.Token{Token: token}}, nil
+		return &finishPasskeyLoginOutput{Body: response.Token{Token: signedIn.Token}}, nil
 	})
-}
-
-func (r *controller) finishLogin(ctx context.Context, token string, body []byte) (string, error) {
-	signedIn, err := cqrs.SendCommand(ctx, r.cmds, command.FinishPasskeyLogin{Token: token, Body: body})
-
-	return signedIn.Token, err
 }
