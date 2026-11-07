@@ -63,6 +63,16 @@ comments in new code unless important. Sizes: S = 1–2 files, M = 3–5.
 **Size:** M
 
 ### Checkpoint
-- [ ] G3 green on the branch head.
-- [ ] Spec success criteria 1–6 checked one by one.
+- [x] G3 green on the branch head: 39 of 39 integration tests in an isolated compose project at
+      `4517b7d`; the one commit after it changes only docs.
+- [x] Spec success criteria checked one by one:
+  1. `TestTheAppRefusesToStartWithoutAJWTSecretOrAValkeyURL` passes.
+  2. With Valkey stopped, `make run` exits with `app - Run - valkey.New: valkey - New -
+     valkeyotel.NewClient: dial tcp [::1]:6379: connect: connection refused`.
+  3. The integration stack (compose with the integration overrides) and `make run` against
+     `db` and `valkey` reach Valkey; `make dev` and `make compose-up-all` start the same
+     services from the same definitions and were not launched themselves.
+  4. **Open:** CI runs at G4, after the push.
+  5. The worker starts and runs with `VALKEY_URL` empty.
+  6. G1 passed at every commit; the docs say what changed.
 - [ ] Then the `exchange-cache` spec.
