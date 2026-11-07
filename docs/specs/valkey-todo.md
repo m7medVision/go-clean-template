@@ -18,14 +18,14 @@ comments in new code unless important. Sizes: S = 1–2 files, M = 3–5.
 **Verify:** G1. **Depends on:** none. **Size:** M
 
 ### 2. Valkey in every stack
-- [ ] `docker-compose.yml`: a `valkey` service (`valkey/valkey:9.1.3-alpine`,
+- [x] `docker-compose.yml`: a `valkey` service (`valkey/valkey:9.1.3-alpine`,
       `--save "" --appendonly no`, host port `${VALKEY_PORT:-6379}`, a `valkey-cli ping`
       healthcheck, alias `valkey.lvh.me`); `VALKEY_URL: "valkey://valkey:6379/0"` in the backend
       environment; `app` waits for `valkey` to be healthy.
-- [ ] `docker-compose-integration-test.yml`: `VALKEY_URL` for the `integration-test` service.
-- [ ] `Makefile`: `valkey` in `COMPOSE_SERVICES`, so `make compose-up` and `make dev` start it.
-- [ ] `.env.example`: `VALKEY_PORT=6379`, `VALKEY_URL=valkey://localhost:${VALKEY_PORT}/0`.
-- [ ] `ci.yml` integration job: `docker run` Valkey on 6379 and wait for `valkey-cli ping`.
+- [x] `docker-compose-integration-test.yml`: `VALKEY_URL` for the `integration-test` service.
+- [x] `Makefile`: `valkey` in `COMPOSE_SERVICES`, so `make compose-up` and `make dev` start it.
+- [x] `.env.example`: `VALKEY_PORT=6379`, `VALKEY_URL=valkey://localhost:${VALKEY_PORT}/0`.
+- [x] `ci.yml` integration job: `docker run` Valkey on 6379 and wait for `valkey-cli ping`.
 
 **Files:** `docker-compose.yml`, `docker-compose-integration-test.yml`, `Makefile`, `.env.example`,
 `.github/workflows/ci.yml`.

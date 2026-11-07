@@ -25,6 +25,7 @@ services:
     environment:
       # Read by queue_test.go to check what the worker consumed.
       PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db?sslmode=disable"
+      VALKEY_URL: "valkey://valkey:6379/0"
     depends_on:
       app:
         condition: service_started
