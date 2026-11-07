@@ -8,12 +8,10 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
 // passkeyModule is the passkey domain: WebAuthn registration and sign-in, which reads the users'
@@ -37,6 +35,6 @@ func passkeyModule() module {
 		},
 		importer:  func(d *deps) eventstore.Importer { return persistPasskeyRepo.NewImporter(d.pg) },
 		rest:      restpasskey.NewRoutes,
-		projector: func(pg *postgres.Postgres) projection.Projector { return persistPasskeyRepo.NewProjector(pg) },
+		projector: persistPasskeyRepo.NewProjector,
 	}
 }

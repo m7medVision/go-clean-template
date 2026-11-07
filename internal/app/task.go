@@ -7,11 +7,9 @@ import (
 	grpctask "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
 	resttask "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
 )
 
@@ -29,6 +27,6 @@ func taskModule() module {
 		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 			pb.RegisterTaskServiceServer(s, grpctask.New(b, l))
 		},
-		projector: func(pg *postgres.Postgres) projection.Projector { return persistTaskRepo.NewProjector(pg) },
+		projector: persistTaskRepo.NewProjector,
 	}
 }

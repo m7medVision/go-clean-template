@@ -8,11 +8,9 @@ import (
 	restexchange "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/exchange"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
 )
 
@@ -32,6 +30,6 @@ func exchangeModule() module {
 		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 			pb.RegisterExchangeServiceServer(s, grpcexchange.New(b, l))
 		},
-		projector: func(pg *postgres.Postgres) projection.Projector { return persistExchangeRepo.NewProjector(pg) },
+		projector: persistExchangeRepo.NewProjector,
 	}
 }

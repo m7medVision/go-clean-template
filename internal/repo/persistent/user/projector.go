@@ -2,66 +2,34 @@ package user
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Projector keeps the user read model, the users and user_identities tables, up to date from the
-// user events. The worker runs it; it writes through the transaction the runner's context carries.
-type Projector struct {
-	pg *postgres.Postgres
+// NewProjector keeps the user read model, the users and user_identities tables, up to date from the
+// user events. The worker runs it.
+func NewProjector(pg *postgres.Postgres) projection.Projector {
+	return projection.NewProjector("user", []string{"user_identities", "users"}, entity.UserEvents(), pg, project)
 }
 
-var _ repo.Subscriber = (*Projector)(nil)
-
-func NewProjector(pg *postgres.Postgres) *Projector {
-	return &Projector{pg: pg}
-}
-
-func (*Projector) Name() string {
-	return "user"
-}
-
-// Tables are what a rebuild empties.
-func (*Projector) Tables() []string {
-	return []string{"user_identities", "users"}
-}
-
-func (*Projector) Handles() []entity.Event {
-	return entity.UserEvents()
-}
-
-func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
-	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
-}
-
-// Project applies one event to the user tables through q.
-func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
-	var err error
-
+// project applies one event to the user tables through q.
+func project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	switch ev := e.Event.(type) {
 	case entity.UserRegistered:
-		err = q.InsertUserRow(ctx, queries.InsertUserRowParams{
+		return q.InsertUserRow(ctx, queries.InsertUserRowParams{
 			ID: ev.UserID, Username: ev.Username, Email: ev.Email, PasswordHash: ev.PasswordHash,
 			CreatedAt: ev.At, UpdatedAt: ev.At,
 		})
 	case entity.UserRegisteredViaOIDC:
-		err = projectOIDCUser(ctx, q, &ev)
+		return projectOIDCUser(ctx, q, &ev)
 	case entity.UserImported:
-		err = projectImport(ctx, q, &ev)
+		return projectImport(ctx, q, &ev)
 	default:
-		err = entity.ErrUnhandledEvent
+		return entity.ErrUnhandledEvent
 	}
-
-	if err != nil {
-		return fmt.Errorf("UserProjector - %s at %d: %w", e.Event.EventType(), e.Position, err)
-	}
-
-	return nil
 }
 
 func projectOIDCUser(ctx context.Context, q queries.Querier, ev *entity.UserRegisteredViaOIDC) error {

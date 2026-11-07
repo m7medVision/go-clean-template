@@ -233,10 +233,13 @@ database with a running worker.
   `SchemaVersion()`, add it to the domain's list in `EventTypes()`, and handle it in the aggregate's
   `Apply` and in the projector.
 - **A changed event.** Raise its `SchemaVersion` and add the upcast from the previous version.
-- **A projector.** Add `internal/repo/persistent/<domain>/projector.go`. It needs `Name`, `Tables`,
-  `Handles` (its domain's event list, such as `entity.TaskEvents()`) and a `Project` function, with a
-  `default` case answering `entity.ErrUnhandledEvent`, tested against a fake of sqlc's `Querier`.
-  Return it from the `projector` of the domain's module (`internal/app/<domain>.go`).
+- **A projector.** Add `internal/repo/persistent/<domain>/projector.go`: a `NewProjector(pg)` that
+  returns `projection.NewProjector(name, tables, handles, pg, project)`, with its name, the tables a
+  rebuild empties, the events it `Handles` (its domain's event list, such as `entity.TaskEvents()`)
+  and an unexported `project` function: one case per event, writing through the `queries.Querier` it
+  is handed, and a `default` case answering `entity.ErrUnhandledEvent`. Test `project` against a fake
+  of sqlc's `Querier`, through the package's `export_test.go`. Return the projector from the
+  `projector` of the domain's module (`internal/app/<domain>.go`).
 - **An event handler.** Add `internal/usecase/<domain>/event/<name>.go`, with a `Name`, the events it
   `Handles` and a `Handle` that does its work through repositories that join the context's
   transaction. Add it to `eventHandlers`.

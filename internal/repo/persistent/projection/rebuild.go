@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
@@ -17,13 +16,6 @@ import (
 // ErrUnknownProjector is a rebuild of a name no projector has. An event handler is never rebuilt:
 // replaying it would repeat its side effects, such as sending every welcome email again.
 var ErrUnknownProjector = errors.New("projection: unknown projector")
-
-// Projector is a subscriber that writes nothing but its own read-model tables, so writes wait for
-// it and it can be rebuilt from the first event.
-type Projector interface {
-	repo.Subscriber
-	Tables() []string
-}
 
 // Rebuild empties the tables of the projector called name and resets its checkpoint, in one
 // transaction, and wakes the worker running it, which then replays every event into them. Until it

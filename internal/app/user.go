@@ -9,14 +9,12 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
 	userevent "github.com/m7medvision/go-clean-template/internal/usecase/user/event"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
 )
 
@@ -37,7 +35,7 @@ func userModule() module {
 			pb.RegisterAuthServiceServer(s, grpcuser.New(b, l))
 		},
 		grpcPublic: grpcuser.PublicMethods(),
-		projector:  func(pg *postgres.Postgres) projection.Projector { return persistUserRepo.NewProjector(pg) },
+		projector:  persistUserRepo.NewProjector,
 		eventHandlers: func(d *deps) []repo.Subscriber {
 			loginURL := d.cfg.App.BaseURL + "/login"
 

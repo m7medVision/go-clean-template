@@ -146,7 +146,7 @@ Decide by asking what the code knows about:
 | a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a read-model table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | read-model method calling the generated query |
-| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | one case per event its `Handles` lists, returned by its module's `projector` |
+| how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | `NewProjector` returning `projection.NewProjector(name, tables, handles, pg, project)`, one case per event in the unexported `project`; returned by its module's `projector` |
 | rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, returned by its module's `importer` (`internal/app/<domain>.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
 | a transport status or error code, a message envelope | `internal/controller/<transport>/v1/<domain>/<operation>.go` (GraphQL: `graphql/<domain>/<field>.go`) | handler |
@@ -165,8 +165,8 @@ Layout rules:
   package of the same domain, so `internal/app` imports the repositories under aliases
   (`persistTaskRepo`, …).
 - Repository constructors take their dependencies as arguments. `NewReadModel` returns the
-  *interface* from its contract file; `NewProjector` and `NewImporter`
-  return their struct, which `internal/app` lists as a `repo.Subscriber` or `eventstore.Importer`.
+  *interface* from its contract file; `NewProjector` returns a `projection.Projector` and
+  `NewImporter` its struct, which `internal/app` lists as an `eventstore.Importer`.
   Every repository queries through `pg.Executor(ctx)`, so it joins the transaction the context
   carries; the pool itself is unexported. A handler is a struct
   whose exported fields are its dependencies, filled in by `register.go`. No package-level state —
@@ -614,8 +614,10 @@ generated files copy — read it before writing. The steps are what the generate
 4. **Read model and projector** — in `internal/repo/persistent/<domain>/`: `<domain>.go` (`package
    <domain>`, the read-model methods calling the sqlc queries from `queries/<domain>.sql`, driver
    errors mapped to sentinels, `NewReadModel` returning the interface), and `projector.go`
-   (`NewProjector`, `Name`, `Tables`, one case per event
-   in `Handle`, writing through `pg.Executor(ctx)`), each with its test.
+   (`NewProjector` returning `projection.NewProjector` with the projector's name, the tables a
+   rebuild empties, the events it `Handles`, and an unexported `project` with one case per event,
+   writing through the `queries.Querier` it is handed), each with its test; `project` is tested
+   through `export_test.go`.
 5. **Commands, queries and event handlers** — `internal/usecase/<domain>/command/`, `query/` and,
    for side effects, `event/`, one file per message with its test (see the recipe above), and
    `register.go` with the domain's `Deps` and `Register`.

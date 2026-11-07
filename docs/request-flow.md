@@ -287,12 +287,13 @@ The worker runs one loop per projector
 ([`internal/repo/persistent/projection/runner.go`](../internal/repo/persistent/projection/runner.go)).
 The `NOTIFY` wakes the exchange projector's loop, which:
 1. reads the events after its checkpoint;
-2. hands `CurrencyConverted` to
-   [`persistent/exchange/projector.go`](../internal/repo/persistent/exchange/projector.go):
+2. hands `CurrencyConverted` to the projector's `project` in
+   [`persistent/exchange/projector.go`](../internal/repo/persistent/exchange/projector.go), through
+   queries that write in the loop's transaction:
 
    ```go
    case entity.CurrencyConverted:
-   	err = q.InsertConversionRow(ctx, queries.InsertConversionRowParams{
+   	return q.InsertConversionRow(ctx, queries.InsertConversionRowParams{
    		ConversionID: &ev.ConversionID, UserID: ev.UserID, FromCurrency: ev.From, ToCurrency: ev.To,
    		Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate, CreatedAt: ev.At,
    	})
