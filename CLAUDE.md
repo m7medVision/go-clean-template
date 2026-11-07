@@ -343,7 +343,7 @@ startup. `.env.example` is read both by `make` (`include`) and by the shell in C
 **The linter is strict and non-obvious.** `.golangci.yml` enables ~45 linters. The ones that
 reject otherwise-fine code: `wsl_v5` and `nlreturn` (blank line required before `return` and
 around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` (15), `mnd`,
-`gochecknoglobals`, `exhaustive` (switches over enum types need every case or a `default`), `dupl`
+`gochecknoglobals`, `exhaustive` (switches over enum types need every case; a `default` does not count), `dupl`
 (threshold 100 — copy-pasting a handler across transports trips it).
 
 ## Generated files — do not hand-edit

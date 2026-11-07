@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// An ID that is not a UUID as the app writes it is not found before the read model touches the database, which this one
-// does not have.
+// An ID that is not a UUID as the app writes it is not found before the read model touches the
+// database, which this one does not have.
 func TestGetOfAnIDThatIsNotAUUIDIsNotFound(t *testing.T) {
 	t.Parallel()
 

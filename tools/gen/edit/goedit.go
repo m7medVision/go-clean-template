@@ -207,9 +207,10 @@ func (g *Go) body(fn string) (*ast.BlockStmt, error) {
 	return found[0].Body, nil
 }
 
-// Import returns the insertion that imports path, or none when the file already does. It goes into its group, the standard library's or the other imports', in
-// path order, the way gci sorts them. A file with no standard import starts that group ahead of
-// the others, and one with no other import starts theirs after it.
+// Import returns the insertion that imports path, or none when the file already does. It goes
+// into its group, the standard library's or the other imports', in path order, the way gci sorts
+// them. A file with no standard import starts that group ahead of the others, and one with no
+// other import starts theirs after it.
 func (g *Go) Import(path string) ([]Insertion, error) {
 	block, err := g.importBlock()
 	if err != nil {
@@ -254,8 +255,8 @@ func (g *Go) importBlock() (*ast.GenDecl, error) {
 	return found[0], nil
 }
 
-// imported reports whether block imports path under alias. Importing it under another alias is
-// an error: the generated code would not compile against it. So is another import that binds the
+// imported reports whether block imports path, with no alias. Importing it under an alias is an
+// error: the generated code would not compile against it. So is another import that binds the
 // name path would be imported as.
 func (g *Go) imported(block *ast.GenDecl, path string) (bool, error) {
 	name := importName(path, "")

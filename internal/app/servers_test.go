@@ -149,8 +149,9 @@ func TestServeHTTPDropsARequestThatOutlastsTheDrain(t *testing.T) {
 	assert.Contains(t, logs.String(), `"server":"http"`)
 }
 
-// The app's gRPC server serves reflection, whose stream a client such as grpcui holds open for as
-// long as it runs: the server still stops once the drain is over, and cleanly.
+// With docs on, as here, the app's gRPC server serves reflection, whose stream a client such as
+// grpcui holds open for as long as it runs: the server still stops once the drain is over, and
+// cleanly.
 func TestServeGRPCDropsAStreamThatOutlastsTheDrain(t *testing.T) {
 	t.Parallel()
 
