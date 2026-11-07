@@ -38,7 +38,7 @@ SET visible_at = now() + make_interval(secs => $1::double precision),
     read_count = m.read_count + 1
 FROM due
 WHERE m.id = due.id
-RETURNING m.id, m.queue, m.body, m.read_count
+RETURNING m.id, m.body, m.read_count
 `
 
 type ReadQueueMessagesParams struct {
@@ -49,7 +49,6 @@ type ReadQueueMessagesParams struct {
 
 type ReadQueueMessagesRow struct {
 	ID        int64
-	Queue     string
 	Body      json.RawMessage
 	ReadCount int32
 }
@@ -65,12 +64,7 @@ func (q *Queries) ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesPa
 	var items []ReadQueueMessagesRow
 	for rows.Next() {
 		var i ReadQueueMessagesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Queue,
-			&i.Body,
-			&i.ReadCount,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Body, &i.ReadCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

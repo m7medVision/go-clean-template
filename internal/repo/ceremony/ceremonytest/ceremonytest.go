@@ -18,7 +18,6 @@ const (
 	RPID            = "localhost"
 	RPName          = "Go Clean Template"
 	RPOrigin        = "http://localhost:8080"
-	CeremonyPurpose = "webauthn-ceremony"
 	CeremonyTimeout = 5 * time.Minute
 	ReauthMaxAge    = 5 * time.Minute
 	SigningKey      = "test-secret"

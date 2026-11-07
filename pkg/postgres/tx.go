@@ -29,15 +29,15 @@ func (p *Postgres) InTx(ctx context.Context, fn func(ctx context.Context) error)
 
 // Executor returns the transaction ctx carries, or the pool when it carries none.
 func (p *Postgres) Executor(ctx context.Context) DBTX {
-	if tx, ok := TxFrom(ctx); ok {
+	if tx, ok := txFrom(ctx); ok {
 		return tx
 	}
 
 	return p.pool
 }
 
-// TxFrom returns the transaction ctx carries.
-func TxFrom(ctx context.Context) (pgx.Tx, bool) {
+// txFrom returns the transaction ctx carries.
+func txFrom(ctx context.Context) (pgx.Tx, bool) {
 	tx, ok := ctx.Value(txKey{}).(pgx.Tx)
 
 	return tx, ok
@@ -46,7 +46,7 @@ func TxFrom(ctx context.Context) (pgx.Tx, bool) {
 func inTx(
 	ctx context.Context, begin func(context.Context) (pgx.Tx, error), fn func(context.Context) error,
 ) error {
-	if _, ok := TxFrom(ctx); ok {
+	if _, ok := txFrom(ctx); ok {
 		return fn(ctx)
 	}
 

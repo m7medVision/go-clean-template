@@ -16,8 +16,8 @@ var (
 	ErrUnprojectedEvent = errors.New("projection: an event type no projector handles")
 )
 
-// Names lists the projectors' names: the ones a rebuild knows.
-func Names(projectors []Projector) []string {
+// projectorNames lists the projectors' names: the ones a rebuild knows.
+func projectorNames(projectors []Projector) []string {
 	names := make([]string, len(projectors))
 	for i, p := range projectors {
 		names[i] = p.Name()

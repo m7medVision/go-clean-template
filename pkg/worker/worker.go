@@ -17,7 +17,6 @@ import (
 // this delivery included.
 type Message struct {
 	ID        int64
-	Queue     string
 	Body      json.RawMessage
 	ReadCount int32
 }

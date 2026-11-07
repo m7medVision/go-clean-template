@@ -28,7 +28,7 @@ func Rebuild(
 ) error {
 	i := slices.IndexFunc(projectors, func(p Projector) bool { return p.Name() == name })
 	if i < 0 {
-		return fmt.Errorf("%w: %q; known: %s", ErrUnknownProjector, name, strings.Join(Names(projectors), ", "))
+		return fmt.Errorf("%w: %q; known: %s", ErrUnknownProjector, name, strings.Join(projectorNames(projectors), ", "))
 	}
 
 	if err := eventstore.RequireImported(ctx, pg, importers...); err != nil {

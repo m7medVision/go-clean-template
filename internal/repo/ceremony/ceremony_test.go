@@ -325,7 +325,6 @@ func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, acc.user.ID, login.UserID)
-	assert.Equal(t, acc.passkey.ID, login.PasskeyID)
 	assert.WithinDuration(t, before.Add(ceremonytest.CeremonyTimeout), login.ExpiresAt, time.Minute)
 
 	var record webauthn.Credential

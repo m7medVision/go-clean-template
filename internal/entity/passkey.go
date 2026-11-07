@@ -89,7 +89,6 @@ type CeremonyStarted struct {
 // sign-in completes once.
 type PasskeyLogin struct {
 	UserID        string
-	PasskeyID     PasskeyID
 	Credential    json.RawMessage
 	ChallengeHash []byte
 	ExpiresAt     time.Time

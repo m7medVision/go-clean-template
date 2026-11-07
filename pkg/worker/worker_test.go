@@ -148,8 +148,8 @@ func TestWorker_DispatchesEachQueueToItsOwnHandler(t *testing.T) {
 	t.Parallel()
 
 	q := &fakeQueue{pending: map[string][]worker.Message{
-		"a": {{ID: 1, Queue: "a"}},
-		"b": {{ID: 2, Queue: "b"}},
+		"a": {{ID: 1}},
+		"b": {{ID: 2}},
 	}}
 
 	var (

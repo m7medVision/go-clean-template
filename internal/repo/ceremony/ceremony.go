@@ -225,7 +225,7 @@ func (c *Ceremony) FinishLogin(
 	hash := sha256.Sum256([]byte(session.Challenge))
 
 	return entity.PasskeyLogin{
-		UserID: owner.id, PasskeyID: credential.ID, Credential: record, ChallengeHash: hash[:], ExpiresAt: expiresAt.UTC(),
+		UserID: owner.id, Credential: record, ChallengeHash: hash[:], ExpiresAt: expiresAt.UTC(),
 	}, nil
 }
 
