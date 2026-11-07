@@ -26,7 +26,7 @@ func newSSO(t *testing.T, idp *ssotest.IDP, configure ...func(*config.OIDC)) *ss
 		c(&cfg)
 	}
 
-	s, err := sso.New("test-secret", cfg, ssotest.BaseURL)
+	s, err := sso.New("test-secret", cfg, ssotest.RedirectURL)
 	require.NoError(t, err)
 
 	return s
@@ -203,7 +203,7 @@ func TestNewRefusesARoleTheAppDoesNotHave(t *testing.T) {
 		_, err := sso.New("test-secret", config.OIDC{
 			Issuer:  "https://idp.example",
 			RoleMap: map[string]string{"app-user": "user", "root": value},
-		}, ssotest.BaseURL)
+		}, ssotest.RedirectURL)
 		require.ErrorIs(t, err, sso.ErrUnknownRole, "role %q", value)
 	}
 }

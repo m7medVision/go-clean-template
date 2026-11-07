@@ -81,6 +81,24 @@ type (
 	}
 )
 
+// The web client's routes the app links to. web/src/routes/ defines them; this is the one place the
+// Go code names them.
+const (
+	_loginPath       = "/login"
+	_ssoCallbackPath = "/sso/callback"
+)
+
+// LoginURL is the web client's sign-in page, which the welcome email links to.
+func (a App) LoginURL() string {
+	return a.BaseURL + _loginPath
+}
+
+// SSOCallbackURL is the web client's route the OIDC provider sends the browser back to; it must be a
+// redirect URI of the provider's client.
+func (a App) SSOCallbackURL() string {
+	return a.BaseURL + _ssoCallbackPath
+}
+
 func NewConfig() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {

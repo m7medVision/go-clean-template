@@ -38,9 +38,7 @@ func userModule() module {
 		grpcPublic: grpcuser.PublicMethods(),
 		projector:  persistUserRepo.NewProjector,
 		eventHandlers: func(d *deps) []repo.Subscriber {
-			loginURL := d.cfg.App.BaseURL + "/login"
-
-			return []repo.Subscriber{userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(d.pg), loginURL)}}
+			return []repo.Subscriber{userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(d.pg), d.cfg.App.LoginURL())}}
 		},
 	}
 }

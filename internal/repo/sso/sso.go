@@ -30,8 +30,6 @@ const (
 	_stateScope = "oidc-state"
 	// _stateTimeout is how long a user has to sign in at the provider.
 	_stateTimeout = 10 * time.Minute
-	// _callbackPath is the web client's route the provider redirects the browser back to.
-	_callbackPath = "/sso/callback"
 )
 
 // ceremony is the state a sign-in carries from Begin to Verify inside the signed token.
@@ -60,12 +58,12 @@ type SSO struct {
 
 var _ repo.SSOProvider = (*SSO)(nil)
 
-// New returns the sign-in at cfg's provider, which redirects back to the app at baseURL. Its
-// state token is signed with a key derived from secret. The provider is discovered on the first
-// sign-in, so New never fails on it. An empty cfg.Issuer turns SSO off. A cfg.RoleMap value that is
-// no app role is ErrUnknownRole, so a typo stops the app at startup instead of granting nothing on
-// every sign-in.
-func New(secret string, cfg config.OIDC, baseURL string) (*SSO, error) {
+// New returns the sign-in at cfg's provider, which sends the browser back to redirectURL (the web
+// client's callback, config.App.SSOCallbackURL). Its state token is signed with a key derived from
+// secret. The provider is discovered on the first sign-in, so New never fails on it. An empty
+// cfg.Issuer turns SSO off. A cfg.RoleMap value that is no app role is ErrUnknownRole, so a typo
+// stops the app at startup instead of granting nothing on every sign-in.
+func New(secret string, cfg config.OIDC, redirectURL string) (*SSO, error) {
 	roles, err := parseRoleMap(cfg.RoleMap)
 	if err != nil {
 		return nil, fmt.Errorf("sso - New: %w", err)
@@ -76,7 +74,7 @@ func New(secret string, cfg config.OIDC, baseURL string) (*SSO, error) {
 		return nil, fmt.Errorf("sso - New - jwt.NewScoped: %w", err)
 	}
 
-	return &SSO{state: state, cfg: cfg, roles: roles, redirectURL: baseURL + _callbackPath}, nil
+	return &SSO{state: state, cfg: cfg, roles: roles, redirectURL: redirectURL}, nil
 }
 
 // parseRoleMap turns each provider-name:app-role pair into an app role, refusing a role the app does

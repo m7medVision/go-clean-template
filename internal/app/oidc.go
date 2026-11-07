@@ -16,7 +16,7 @@ func oidcModule() module {
 	return module{
 		handlers: func(d *deps, b cqrs.Buses) error {
 			// The provider is discovered on the first sign-in, so the app starts while it is down.
-			s, err := sso.New(d.cfg.JWT.Secret, d.cfg.OIDC, d.cfg.App.BaseURL)
+			s, err := sso.New(d.cfg.JWT.Secret, d.cfg.OIDC, d.cfg.App.SSOCallbackURL())
 			if err != nil {
 				return fmt.Errorf("oidc - sso.New: %w", err)
 			}

@@ -48,3 +48,13 @@ func TestNewConfig_BaseURLLosesItsTrailingSlash(t *testing.T) {
 
 	assert.Equal(t, "https://app.example.com", cfg.App.BaseURL)
 }
+
+// The links to the web client's routes are built in one place, under APP_BASE_URL.
+func TestApp_WebClientURLs(t *testing.T) {
+	t.Parallel()
+
+	a := config.App{BaseURL: "https://app.example.com"}
+
+	assert.Equal(t, "https://app.example.com/login", a.LoginURL())
+	assert.Equal(t, "https://app.example.com/sso/callback", a.SSOCallbackURL())
+}
