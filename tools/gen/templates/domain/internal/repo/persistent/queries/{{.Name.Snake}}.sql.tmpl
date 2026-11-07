@@ -9,7 +9,7 @@ WHERE user_id = $1;
 -- name: List{{.Name.Plural.Go}} :many
 SELECT * FROM {{.Name.Plural.Snake}}
 WHERE user_id = sqlc.arg('user_id')
-ORDER BY created_at DESC, id
+ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
 
 -- The {{.Name.Words}} projector's writes. Insert{{.Name.Go}}Row leaves an existing row alone, so replaying
