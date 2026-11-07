@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -11,8 +12,8 @@ var (
 	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
 	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
 	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")
-	ErrInvalidAmount       = newError(KindInvalid,
-		"amount must be positive, with at most 15 digits before the point and 8 after it")
+	ErrInvalidAmount       = newError(KindInvalid, fmt.Sprintf(
+		"amount must be positive, with at most %d digits before the point and %d after it", MaxAmountDigits, MaxAmountScale))
 )
 
 const (

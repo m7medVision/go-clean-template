@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 )
 
@@ -76,7 +77,8 @@ var (
 	// ErrAdminRequired is a request only a caller holding RoleAdmin may make.
 	ErrAdminRequired = newError(KindForbidden, "admin role required")
 	// ErrInvalidPage is a list asked for with a negative offset or a limit outside 0–MaxPageLimit.
-	ErrInvalidPage = newError(KindInvalid, "limit must be 1–100 and offset at least 0")
+	ErrInvalidPage = newError(KindInvalid,
+		fmt.Sprintf("limit must be 0–%d (0 means %d) and offset at least 0", MaxPageLimit, DefaultPageLimit))
 	// ErrConcurrencyConflict is an append whose stream moved on since the aggregate was loaded:
 	// another write got there first. The command bus retries the command before giving up.
 	ErrConcurrencyConflict = newError(KindConflict, "the record changed while this request ran: try again")

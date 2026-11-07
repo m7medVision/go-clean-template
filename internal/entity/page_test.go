@@ -18,6 +18,9 @@ func TestPageAcceptsAnUnsetOrBoundedLimit(t *testing.T) {
 	for _, p := range []entity.Page{{Limit: -1}, {Limit: entity.MaxPageLimit + 1}, {Offset: -1}} {
 		require.ErrorIs(t, p.Validate(), entity.ErrInvalidPage, p)
 	}
+
+	assert.Equal(t, "limit must be 0–100 (0 means 10) and offset at least 0", entity.ErrInvalidPage.Error(),
+		"the caller is told a limit of 0 is accepted")
 }
 
 func TestAnUnsetLimitIsTheDefaultPage(t *testing.T) {

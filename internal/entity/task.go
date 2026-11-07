@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"fmt"
 	"time"
 	"unicode/utf8"
 )
@@ -8,8 +9,8 @@ import (
 var (
 	ErrTaskNotFound           = newError(KindNotFound, "task not found")
 	ErrTaskForbidden          = newError(KindForbidden, "forbidden")
-	ErrInvalidTaskTitle       = newError(KindInvalid, "title must be 1–255 characters")
-	ErrInvalidTaskDescription = newError(KindInvalid, "description must be at most 1000 characters")
+	ErrInvalidTaskTitle       = newError(KindInvalid, fmt.Sprintf("title must be 1–%d characters", MaxTaskTitleLen))
+	ErrInvalidTaskDescription = newError(KindInvalid, fmt.Sprintf("description must be at most %d characters", MaxTaskDescriptionLen))
 	ErrInvalidTaskStatus      = newError(KindInvalid, "invalid task status")
 	ErrInvalidTransition      = newError(KindInvalid, "invalid status transition")
 )

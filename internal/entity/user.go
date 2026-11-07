@@ -16,9 +16,9 @@ var (
 	// user for: the race's loser signs in to the winner's user.
 	ErrOIDCIdentityTaken  = newError(KindExists, "user already exists")
 	ErrInvalidCredentials = newError(KindUnauthenticated, "invalid credentials")
-	ErrInvalidUsername    = newError(KindInvalid, "username must be 3–255 characters")
+	ErrInvalidUsername    = newError(KindInvalid, fmt.Sprintf("username must be %d–%d characters", MinUsernameLen, MaxUsernameLen))
 	ErrInvalidEmail       = newError(KindInvalid, "email must be an address such as name@example.com")
-	ErrWeakPassword       = newError(KindInvalid, "password must be at least 6 characters")
+	ErrWeakPassword       = newError(KindInvalid, fmt.Sprintf("password must be at least %d characters", MinPasswordLen))
 	// ErrOIDCDisabled is an SSO request to an app with no OpenID Connect provider configured.
 	ErrOIDCDisabled = newError(KindNotFound, "sso sign-in is not configured")
 	// ErrOIDCUnavailable is an SSO sign-in while the OpenID Connect provider cannot be reached.

@@ -3,11 +3,12 @@ package entity
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
 var (
-	ErrInvalidPasskeyName = newError(KindInvalid, "passkey name must be at most 64 characters")
+	ErrInvalidPasskeyName = newError(KindInvalid, fmt.Sprintf("passkey name must be at most %d characters", MaxPasskeyNameLen))
 	ErrPasskeyNotFound    = newError(KindNotFound, "passkey not found")
 	ErrPasskeyExists      = newError(KindExists, "passkey already registered")
 	// ErrPasskeyCeremonyInvalid is a WebAuthn registration that cannot complete: a bad, expired or
