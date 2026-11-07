@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"strings"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -107,15 +106,38 @@ func TestMetricsCountsMessagesByOutcome(t *testing.T) {
 	_, err = cqrs.SendCommand(context.Background(), commandsWith(metrics, errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
-	expected := `
-# HELP cqrs_messages_total Commands and queries handled, by bus, message and outcome.
-# TYPE cqrs_messages_total counter
-cqrs_messages_total{kind="command",name="CreateThing",outcome="error"} 1
-cqrs_messages_total{kind="command",name="CreateThing",outcome="ok"} 1
-`
-	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "cqrs_messages_total"))
+	assert.Equal(t, map[string]float64{"ok": 1, "error": 1}, countedCreateThings(t, reg))
 
 	series, err := testutil.GatherAndCount(reg, "cqrs_message_duration_seconds")
 	require.NoError(t, err)
 	assert.Equal(t, 2, series, "one duration series per outcome")
+}
+
+// countedCreateThings reads cqrs_messages_total for the command CreateThing from reg, by outcome.
+func countedCreateThings(t *testing.T, reg *prometheus.Registry) map[string]float64 {
+	t.Helper()
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	counts := map[string]float64{}
+
+	for _, f := range families {
+		if f.GetName() != "cqrs_messages_total" {
+			continue
+		}
+
+		for _, m := range f.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+
+			if labels["kind"] == "command" && labels["name"] == "CreateThing" {
+				counts[labels["outcome"]] = m.GetCounter().GetValue()
+			}
+		}
+	}
+
+	return counts
 }

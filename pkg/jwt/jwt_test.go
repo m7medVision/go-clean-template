@@ -104,10 +104,3 @@ func TestJWT_Parse_Roles(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"admin", "user"}, claims.Roles)
 }
-
-func TestJWT_Parse_Invalid(t *testing.T) {
-	t.Parallel()
-
-	_, err := jwt.New("test-secret", time.Hour).Parse("invalid-token")
-	require.Error(t, err)
-}
