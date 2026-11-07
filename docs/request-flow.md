@@ -257,8 +257,8 @@ implements `repo.ExchangeWebAPI` against the
 - **The date is the provider's.** `time_last_update_unix` is truncated to a UTC date and returned with
   the rate, so the response says which day's rate it used, not when the request ran.
 - **It joins the trace.** The `http.Client` uses an `otelhttp` transport, so the outbound GET is a
-  child span of the `command ConvertCurrency` span and sends `traceparent` onward. It has a 5-second timeout and
-  uses the request's `ctx`, so a client disconnect cancels it.
+  child span of the `command ConvertCurrency` span and sends `traceparent` onward. It has a 5-second timeout
+  (`webapi.Timeout`, which the app's HTTP write deadline leaves room for) and uses the request's `ctx`, so a client disconnect cancels it.
 
 This is the only file that knows the provider's URL layout or JSON shape. Switching providers means a
 new implementation of the same interface. The command handler doesn't change.

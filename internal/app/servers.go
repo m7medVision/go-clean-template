@@ -9,27 +9,28 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"google.golang.org/grpc"
 )
 
 const (
 	_readTimeout = 5 * time.Second
-	// _writeMargin is how much longer than the consistency timeout a response may take: a write
-	// waits that long for its projections, then still has to answer.
+	// _writeMargin is how much longer than its waits a response may take: the slowest write still has
+	// to save and answer once it has its rate and its projections.
 	_writeMargin = 3 * time.Second
 	// _shutdownTimeout bounds how long the HTTP server finishes the requests in flight.
 	_shutdownTimeout = 3 * time.Second
 )
 
-// newHTTPServer serves h on port. A write waits up to consistencyTimeout for its projections, so
-// the write deadline is that plus a margin: a fixed one would cut off the answer of any write that
-// waits longer.
+// newHTTPServer serves h on port. The slowest write, a conversion, waits up to webapi.Timeout for
+// its rate and then up to consistencyTimeout for its projections, so the write deadline is both
+// plus a margin: a shorter one would cut off the answer of a write that waits its full time.
 func newHTTPServer(port string, h http.Handler, consistencyTimeout time.Duration) *http.Server {
 	return &http.Server{
 		Addr:         net.JoinHostPort("", port),
 		Handler:      h,
 		ReadTimeout:  _readTimeout,
-		WriteTimeout: consistencyTimeout + _writeMargin,
+		WriteTimeout: webapi.Timeout + consistencyTimeout + _writeMargin,
 	}
 }
 

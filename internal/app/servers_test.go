@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -115,13 +116,13 @@ func TestServeFailsWhenItCannotListen(t *testing.T) {
 	require.Error(t, serveGRPC(t.Context(), grpc.NewServer(), port, slog.New(slog.DiscardHandler)))
 }
 
-// A write waits up to the consistency timeout for its projections, so its answer must still fit in
-// the write deadline.
-func TestTheWriteDeadlineOutlastsTheConsistencyTimeout(t *testing.T) {
+// A conversion waits up to the rate API's timeout for its rate, then up to the consistency timeout
+// for its projections, so its answer must still fit in the write deadline.
+func TestTheWriteDeadlineOutlastsTheSlowestWrite(t *testing.T) {
 	t.Parallel()
 
 	for _, timeout := range []time.Duration{time.Second, 2 * time.Second, time.Minute} {
 		srv := newHTTPServer("0", http.NotFoundHandler(), timeout)
-		assert.Greater(t, srv.WriteTimeout, timeout)
+		assert.Greater(t, srv.WriteTimeout, webapi.Timeout+timeout)
 	}
 }

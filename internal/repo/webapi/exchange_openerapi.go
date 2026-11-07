@@ -17,9 +17,11 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const (
-	_timeout = 5 * time.Second
+// Timeout bounds one rate request. The app's HTTP write deadline leaves room for it, since a
+// conversion waits for its rate before it is saved.
+const Timeout = 5 * time.Second
 
+const (
 	_resultSuccess   = "success"
 	_unsupportedCode = "unsupported-code"
 )
@@ -51,7 +53,7 @@ type latestResponse struct {
 func New(baseURL string) repo.ExchangeWebAPI {
 	return &ExchangeWebAPI{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
-		client:  &http.Client{Timeout: _timeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		client:  &http.Client{Timeout: Timeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 
