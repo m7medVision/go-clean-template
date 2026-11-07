@@ -25,11 +25,6 @@ func Unauthenticated() error {
 	return newError(_codeUnauthenticated, "unauthorized")
 }
 
-// InvalidInput is the error for arguments that fail a resolver's checks.
-func InvalidInput() error {
-	return newError(_codeBadUserInput, "invalid input")
-}
-
 // Internal is the error for a failure whose details the caller must not see.
 func Internal() error {
 	return newError(_codeInternal, "internal server error")
