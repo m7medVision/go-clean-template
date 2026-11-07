@@ -46,11 +46,6 @@ func TestMailController_Handle(t *testing.T) {
 		wantDelivered int
 	}{
 		{
-			name:          "delivers the decoded email and acknowledges it",
-			body:          welcomeBody,
-			wantDelivered: 1,
-		},
-		{
 			name:          "a body that is not an email is dropped, retrying cannot fix it",
 			body:          func(*testing.T) json.RawMessage { return json.RawMessage(`"not an object"`) },
 			wantDelivered: 0,

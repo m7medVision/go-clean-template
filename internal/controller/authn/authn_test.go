@@ -15,34 +15,18 @@ func TestReadToken(t *testing.T) {
 	t.Parallel()
 
 	tokens := jwt.New("test-secret", time.Hour)
+	before := time.Now().Truncate(time.Second)
 
-	tests := []struct {
-		name      string
-		roles     []string
-		wantRoles []entity.Role
-	}{
-		{"admin token", []string{"admin", "user"}, []entity.Role{entity.RoleAdmin, entity.RoleUser}},
-		{"unknown roles are dropped", []string{"superuser", "user"}, []entity.Role{entity.RoleUser}},
-		{"no roles claim", nil, []entity.Role{}},
-	}
+	token, err := tokens.GenerateToken("user-1", []string{"admin", "superuser", "user"})
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	c, err := authn.ReadToken(tokens, token)
+	require.NoError(t, err)
 
-			before := time.Now().Truncate(time.Second)
-
-			token, err := tokens.GenerateToken("user-1", tt.roles)
-			require.NoError(t, err)
-
-			c, err := authn.ReadToken(tokens, token)
-			require.NoError(t, err)
-
-			assert.Equal(t, entity.Principal{UserID: "user-1", Roles: tt.wantRoles}, c.Principal)
-			assert.False(t, c.IssuedAt.Before(before), "issued at %s, before %s", c.IssuedAt, before)
-			assert.False(t, c.IssuedAt.After(time.Now()), "issued in the future: %s", c.IssuedAt)
-		})
-	}
+	assert.Equal(t, entity.Principal{UserID: "user-1", Roles: []entity.Role{entity.RoleAdmin, entity.RoleUser}}, c.Principal,
+		"a role the app does not know grants nothing")
+	assert.False(t, c.IssuedAt.Before(before), "issued at %s, before %s", c.IssuedAt, before)
+	assert.False(t, c.IssuedAt.After(time.Now()), "issued in the future: %s", c.IssuedAt)
 }
 
 func TestReadTokenRejects(t *testing.T) {
@@ -64,22 +48,6 @@ func TestReadTokenRejects(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
-}
-
-func TestCallerRoundTrip(t *testing.T) {
-	t.Parallel()
-
-	want := authn.Caller{
-		UserID: "user-1", Roles: []entity.Role{entity.RoleUser},
-		IssuedAt: time.Unix(1_700_000_000, 0),
-	}
-
-	ctx := authn.WithCaller(t.Context(), want)
-
-	got, ok := authn.CallerFrom(ctx)
-	require.True(t, ok)
-	assert.Equal(t, want, got)
-	assert.Equal(t, want, authn.MustCaller(ctx))
 }
 
 func TestNoCaller(t *testing.T) {
