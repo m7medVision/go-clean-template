@@ -18,7 +18,7 @@ func TestGetConversionReadsTheCallersConversionOnly(t *testing.T) {
 	want := entity.Conversion{UserID: "u1", From: "EUR", To: "USD"}
 	history := repomock.NewMockExchangeReadModel(gomock.NewController(t))
 	history.EXPECT().Conversion(gomock.Any(), "c1").Return(want, nil).Times(2)
-	h := query.GetConversionHandler{History: history}
+	h := query.GetConversionHandler{Exchanges: history}
 
 	got, err := h.Handle(context.Background(), query.GetConversion{UserID: "u1", ConversionID: "c1"})
 	require.NoError(t, err)
