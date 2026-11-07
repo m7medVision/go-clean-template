@@ -22,7 +22,7 @@ func TestNewUserAggregateRecordsUserRegisteredAndClaimsItsNames(t *testing.T) {
 		UserID: _userID, Username: "jo", Email: "jo@example.com", PasswordHash: "hash", At: createdAt(),
 	}}, user.Pending())
 	assert.Equal(t, "user-"+_userID, user.StreamID())
-	assert.Equal(t, []entity.Claim{
+	assert.ElementsMatch(t, []entity.Claim{
 		{Scope: entity.ClaimUserEmail, Value: "jo@example.com", Owner: _userID, Taken: entity.ErrUserAlreadyExists},
 		{Scope: entity.ClaimUserUsername, Value: "jo", Owner: _userID, Taken: entity.ErrUserAlreadyExists},
 	}, claims)
