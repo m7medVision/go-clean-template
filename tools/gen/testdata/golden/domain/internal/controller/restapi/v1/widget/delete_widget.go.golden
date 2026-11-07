@@ -12,10 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-type deleteWidgetOutput struct {
-	Status int
-}
-
 func (r *controller) deleteWidget(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-widget",
@@ -27,7 +23,7 @@ func (r *controller) deleteWidget(api huma.API) {
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound, http.StatusNotImplemented),
-	}, func(ctx context.Context, input *widgetPathInput) (*deleteWidgetOutput, error) {
+	}, func(ctx context.Context, input *widgetPathInput) (*struct{}, error) {
 		userID := authn.MustCaller(ctx).UserID
 
 		_, err := cqrs.SendCommand(ctx, r.cmds, command.DeleteWidget{UserID: userID, WidgetID: input.ID})
@@ -35,6 +31,6 @@ func (r *controller) deleteWidget(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "deleteWidget")
 		}
 
-		return &deleteWidgetOutput{Status: http.StatusNoContent}, nil
+		return &struct{}{}, nil
 	})
 }

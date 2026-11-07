@@ -12,10 +12,6 @@ import (
 	"{{.Module}}/pkg/cqrs"
 )
 
-type delete{{.Name.Go}}Output struct {
-	Status int
-}
-
 func (r *controller) delete{{.Name.Go}}(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID:   "delete-{{.Name.Kebab}}",
@@ -27,7 +23,7 @@ func (r *controller) delete{{.Name.Go}}(api huma.API) {
 		Security:      []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound, http.StatusNotImplemented),
-	}, func(ctx context.Context, input *{{.Name.Lower}}PathInput) (*delete{{.Name.Go}}Output, error) {
+	}, func(ctx context.Context, input *{{.Name.Lower}}PathInput) (*struct{}, error) {
 		userID := authn.MustCaller(ctx).UserID
 
 		_, err := cqrs.SendCommand(ctx, r.cmds, command.Delete{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: input.ID})
@@ -35,6 +31,6 @@ func (r *controller) delete{{.Name.Go}}(api huma.API) {
 			return nil, apierr.Problem(ctx, r.l, err, "delete{{.Name.Go}}")
 		}
 
-		return &delete{{.Name.Go}}Output{Status: http.StatusNoContent}, nil
+		return &struct{}{}, nil
 	})
 }
