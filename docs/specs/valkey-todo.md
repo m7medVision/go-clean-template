@@ -45,7 +45,7 @@ comments in new code unless important. Sizes: S = 1–2 files, M = 3–5.
 **Depends on:** 1, 2. **Size:** M
 
 ### 4. The integration suite reaches Valkey
-- [ ] `integration-test/valkey_test.go`: `valkey.New` with the `VALKEY_URL` the stack gives, then
+- [x] `integration-test/valkey_test.go`: `valkey.New` with the `VALKEY_URL` the stack gives, then
       set, read and delete a key under `_test:`.
 
 **Files:** `integration-test/valkey_test.go`.
