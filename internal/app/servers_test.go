@@ -155,7 +155,7 @@ func TestServeGRPCDropsAStreamThatOutlastsTheDrain(t *testing.T) {
 	t.Parallel()
 
 	port := freePort(t)
-	srv := newGRPCServer(newTestBuses(), jwt.New("test-secret", time.Hour), newMetrics(), slog.New(slog.DiscardHandler))
+	srv := newGRPCServer(newTestBuses(), jwt.New("test-secret", time.Hour), newMetrics(), true, slog.New(slog.DiscardHandler))
 
 	var logs bytes.Buffer
 

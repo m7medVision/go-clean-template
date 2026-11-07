@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	reflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 )
@@ -31,7 +32,7 @@ func dialGRPC(t *testing.T, b cqrs.Buses, tokens *jwt.Manager) *grpc.ClientConn 
 	t.Helper()
 
 	lis := bufconn.Listen(_bufSize)
-	srv := newGRPCServer(b, tokens, newMetrics(), slog.New(slog.DiscardHandler))
+	srv := newGRPCServer(b, tokens, newMetrics(), false, slog.New(slog.DiscardHandler))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -93,4 +94,20 @@ func TestGRPCRecoversFromAPanic(t *testing.T) {
 		assert.Equal(t, codes.Internal, status.Code(err))
 		assert.Equal(t, "internal server error", status.Convert(err).Message())
 	}
+}
+
+// Reflection is the gRPC API's reference, so with docs off, as here, the server does not serve it.
+func TestGRPCServesNoReflectionWithoutDocs(t *testing.T) {
+	t.Parallel()
+
+	conn := dialGRPC(t, newTestBuses(), jwt.New("test-secret", time.Hour))
+
+	stream, err := reflectionpb.NewServerReflectionClient(conn).ServerReflectionInfo(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(&reflectionpb.ServerReflectionRequest{
+		MessageRequest: &reflectionpb.ServerReflectionRequest_ListServices{},
+	}))
+
+	_, err = stream.Recv()
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }

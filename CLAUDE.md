@@ -193,7 +193,7 @@ restapi/v1/<domain>/   controller.go (struct, NewRoutes, the _tag its ops carry,
 grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface, shared
                        helpers), one file per RPC (create_task.go), response.go, tests
 graphql/<domain>/      resolver.go (Query/Mutation, New, shared helpers), one file per field
-                       (create_task.go resolves createTask), input.go or response.go, tests
+                       (create_task.go resolves createTask), response.go where a field reshapes the entity, tests
 graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_types.graphqls
                        (a domain's types), one file per field (create_task.graphqls: extend type
                        Mutation, plus an input type only that field takes)

@@ -13,8 +13,9 @@ import (
 )
 
 // newGRPCServer counts and times every unary call on metrics. It only traces and recovers
-// streaming calls: server reflection, the one streaming service, needs no token.
-func newGRPCServer(b cqrs.Buses, jwtManager *jwt.Manager, metrics prometheus.Registerer, l *slog.Logger) *grpc.Server {
+// streaming calls: server reflection, the one streaming service, needs no token. Reflection is the
+// gRPC API's reference, so it is served only with docs, as REST's and GraphQL's are.
+func newGRPCServer(b cqrs.Buses, jwtManager *jwt.Manager, metrics prometheus.Registerer, docs bool, l *slog.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.ChainUnaryInterceptor(
@@ -27,7 +28,10 @@ func newGRPCServer(b cqrs.Buses, jwtManager *jwt.Manager, metrics prometheus.Reg
 	)
 
 	registerGRPC(srv, b, l)
-	reflection.Register(srv)
+
+	if docs {
+		reflection.Register(srv)
+	}
 
 	return srv
 }

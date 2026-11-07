@@ -171,8 +171,8 @@ in `<domain>_types.graphqls`, and each field in its own file, named after it
 ## gRPC
 
 Services are defined in [auth.proto](proto/v1/auth.proto), [task.proto](proto/v1/task.proto) and
-[exchange.proto](proto/v1/exchange.proto); `make proto-v1` regenerates the Go code beside them. Server
-reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
+[exchange.proto](proto/v1/exchange.proto); `make proto-v1` regenerates the Go code beside them. With
+`DOCS_ENABLED`, server reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 
 | Operation | Method |
 | --- | --- |
