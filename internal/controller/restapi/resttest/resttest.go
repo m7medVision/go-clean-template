@@ -14,8 +14,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/httpmw"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
@@ -39,7 +39,7 @@ func NewRouter(b cqrs.Buses, routes ...Routes) http.Handler {
 	})
 
 	r := chi.NewRouter()
-	r.Use(chimw.StripSlashes, middleware.Recovery(l))
+	r.Use(chimw.StripSlashes, httpmw.Recovery(l))
 	r.Mount("/", rest)
 
 	return r

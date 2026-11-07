@@ -79,7 +79,9 @@ got, which is what lets the unit tests hand it the in-memory store and mocks ins
 ## 1. Middleware
 
 The app's HTTP mux, [`internal/app/http.go`](../internal/app/http.go), installs chi middleware in
-this order, and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
+this order (chi's `StripSlashes`, then the rest from
+[`internal/controller/httpmw`](../internal/controller/httpmw), which wraps GraphQL, the docs and
+`/healthz` as it wraps REST), and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
 whose Huma middleware `Auth` runs once the request has matched an operation, before any handler:
 
 | Middleware | What it does to this request |

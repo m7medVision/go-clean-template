@@ -1,4 +1,7 @@
-package middleware
+// Package httpmw is the middleware the app's HTTP mux wraps every request in, whatever serves it
+// (REST, GraphQL, the docs, /healthz, /metrics): the request log, tracing, metrics and panic
+// recovery. REST's own Huma middleware, the token check, is in restapi/middleware.
+package httpmw
 
 import (
 	"log/slog"

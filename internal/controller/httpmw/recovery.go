@@ -1,4 +1,4 @@
-package middleware
+package httpmw
 
 import (
 	"errors"
@@ -34,7 +34,7 @@ func Recovery(l *slog.Logger) func(http.Handler) http.Handler {
 					panic(http.ErrAbortHandler)
 				}
 
-				writeProblem(l, rec, http.StatusInternalServerError, "internal server error")
+				WriteProblem(l, rec, http.StatusInternalServerError, "internal server error")
 			}()
 
 			next.ServeHTTP(rec, r)

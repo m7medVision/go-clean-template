@@ -1,7 +1,8 @@
+// Package middleware is REST's own middleware: Auth, the Huma middleware that enforces each
+// operation's Security. What wraps every HTTP request is in internal/controller/httpmw.
 package middleware
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -9,20 +10,11 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/httpmw"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 )
 
-const (
-	_bearerParts      = 2
-	_problemTypeBlank = "about:blank"
-)
-
-type problem struct {
-	Type   string `json:"type"`
-	Title  string `json:"title"`
-	Status int    `json:"status"`
-	Detail string `json:"detail"`
-}
+const _bearerParts = 2
 
 // Auth returns the Huma middleware that enforces each operation's declared Security. An operation
 // that declares a requirement runs with the caller of the request's bearer token, which its handler
@@ -41,7 +33,7 @@ func Auth(tokens *jwt.Manager, l *slog.Logger) func(ctx huma.Context, next func(
 		c, failure := readCaller(tokens, ctx.Header("Authorization"))
 		if failure != "" {
 			_, w := humachi.Unwrap(ctx)
-			writeProblem(l, w, http.StatusUnauthorized, failure)
+			httpmw.WriteProblem(l, w, http.StatusUnauthorized, failure)
 
 			return
 		}
@@ -66,26 +58,4 @@ func readCaller(tokens *jwt.Manager, header string) (c authn.Caller, failure str
 	}
 
 	return c, ""
-}
-
-// writeProblem writes an RFC 9457 problem response on the auth failures and on a panic.
-func writeProblem(l *slog.Logger, w http.ResponseWriter, status int, detail string) {
-	body, err := json.Marshal(problem{
-		Type:   _problemTypeBlank,
-		Title:  http.StatusText(status),
-		Status: status,
-		Detail: detail,
-	})
-	if err != nil {
-		l.Error("restapi - middleware - write a problem", "error", err)
-
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-
-	if _, err := w.Write(body); err != nil {
-		l.Error("restapi - middleware - write a problem", "error", err)
-	}
 }

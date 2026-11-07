@@ -8,8 +8,8 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql"
+	"github.com/m7medvision/go-clean-template/internal/controller/httpmw"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/prometheus/client_golang/prometheus"
@@ -28,10 +28,10 @@ func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, metri
 	r := chi.NewRouter()
 
 	r.Use(chimw.StripSlashes)
-	r.Use(middleware.Logger(l))
-	r.Use(middleware.Tracing(_healthzPath, _metricsPath))
-	r.Use(middleware.NewMetrics(metrics).Middleware)
-	r.Use(middleware.Recovery(l))
+	r.Use(httpmw.Logger(l))
+	r.Use(httpmw.Tracing(_healthzPath, _metricsPath))
+	r.Use(httpmw.NewMetrics(metrics).Middleware)
+	r.Use(httpmw.Recovery(l))
 
 	if cfg.Metrics.Enabled {
 		r.Get(_metricsPath, promhttp.InstrumentMetricHandler(metrics, promhttp.HandlerFor(metrics, promhttp.HandlerOpts{})).ServeHTTP)

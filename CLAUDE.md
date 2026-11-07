@@ -112,7 +112,9 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   that domain's handlers, DTOs and tests (GraphQL has no `v1/`). A controller takes `cqrs.Buses` and
   imports its domain's `command`/`query` packages only for the message types. Controllers never
   import each other, except `internal/controller/authn` (the caller of a request, read from its
-  token), which every transport imports and which imports none; see **Controller layout** below.
+  token), which every transport imports and which imports none, and `internal/controller/httpmw`
+  (the middleware around every HTTP request: log, tracing, metrics, recovery), which REST's `Auth`
+  borrows its problem writer from; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, tracing). Logging is
   `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
