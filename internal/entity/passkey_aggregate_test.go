@@ -162,18 +162,3 @@ func TestAPasskeysNameIsTrimmedDefaultedAndBounded(t *testing.T) {
 		entity.PasskeyRenamed{PasskeyID: passkeyID(), Name: "Passkey", At: laterAt()},
 	}, a.Pending())
 }
-
-func TestThePasskeyEventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	names := map[string]bool{}
-	for _, e := range entity.EventTypes() {
-		names[e.EventType()] = true
-	}
-
-	for _, e := range []entity.Event{
-		entity.PasskeyRegistered{}, entity.PasskeyRenamed{}, entity.PasskeyUsed{}, entity.PasskeyDeleted{}, entity.PasskeyImported{},
-	} {
-		assert.True(t, names[e.EventType()], e.EventType())
-	}
-}

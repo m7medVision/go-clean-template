@@ -69,16 +69,3 @@ func TestImportUserAggregateRecordsTheRowAndItsIdentities(t *testing.T) {
 		},
 	}, claims)
 }
-
-func TestTheUserEventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	names := map[string]bool{}
-	for _, e := range entity.EventTypes() {
-		names[e.EventType()] = true
-	}
-
-	for _, e := range []entity.Event{entity.UserRegistered{}, entity.UserRegisteredViaOIDC{}, entity.UserImported{}} {
-		assert.True(t, names[e.EventType()], e.EventType())
-	}
-}

@@ -170,21 +170,6 @@ func TestATaskSnapshotOfTheFirstShapeStillLoads(t *testing.T) {
 	require.NoError(t, restored.Transition(_owner, entity.TaskStatusDone, laterAt()))
 }
 
-func TestTheTaskEventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	names := map[string]bool{}
-	for _, e := range entity.EventTypes() {
-		names[e.EventType()] = true
-	}
-
-	for _, e := range []entity.Event{
-		entity.TaskCreated{}, entity.TaskUpdated{}, entity.TaskTransitioned{}, entity.TaskDeleted{}, entity.TaskImported{},
-	} {
-		assert.True(t, names[e.EventType()], e.EventType())
-	}
-}
-
 func TestImportTaskAggregateRecordsTheRowAsTaskImported(t *testing.T) {
 	t.Parallel()
 

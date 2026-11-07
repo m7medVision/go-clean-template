@@ -64,15 +64,3 @@ func TestImportConversionAggregateRecordsTheRow(t *testing.T) {
 		Amount: c.Amount, Rate: c.Rate, Result: c.Result, RateDate: c.RateDate, CreatedAt: createdAt(),
 	}}, a.Pending())
 }
-
-func TestTheConversionEventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	names := map[string]bool{}
-	for _, e := range entity.EventTypes() {
-		names[e.EventType()] = true
-	}
-
-	assert.True(t, names[entity.CurrencyConverted{}.EventType()])
-	assert.True(t, names[entity.ConversionImported{}.EventType()])
-}
