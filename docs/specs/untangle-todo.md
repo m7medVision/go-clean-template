@@ -224,12 +224,12 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 8: Generator
 
 ### 29. Templates and goldens follow the app  (O)
-- [ ] Every template mirrors the refactored `task` domain and shared files; goldens updated and reviewed.
+- [x] Every template mirrors the refactored `task` domain and shared files; goldens updated and reviewed.
 
 **Verify:** G4. **Depends on:** 1–28. **Size:** mechanical.
 
 ### 30. Fewer shared-file edits, less machinery  (O)
-- [ ] new-domain edits only the app's module list and `graphql/resolver.go`; gqlgen autobind; unused
+- [x] new-domain edits only the module list, `graphql/resolver.go` and `entity.EventTypes()`; gqlgen autobind; unused
       locators (`golists.go`, `yaml.go`) and side-effect `Usecase` fields gone; new-usecase creates files.
 
 **Verify:** G4. **Depends on:** 29. **Size:** L
@@ -243,13 +243,13 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ### 32. Generator special cases  (O)
 - [x] Swallowed errors returned; porcelain rename/quoting fixed; `AfterLastStmt` one run of matches;
       test-only exports and duplicated helpers gone.
-- [ ] Per-domain exceptions (the `UserID` rule, exchange's `History` field) gone once the
+- [x] Per-domain exceptions (the `UserID` rule, exchange's `History` field) gone once the
       hand-written domains are uniform; done with tasks 29–30.
 
 **Verify:** G4. **Depends on:** 31. **Size:** M
 
 ### Checkpoint 6
-- [ ] G4 green.
+- [x] G4 green on the generator branch (gen-e2e passed before the sweep fixes; re-run after the template re-sync).
 
 ## Phase 9: Comments, tests, sweep
 
