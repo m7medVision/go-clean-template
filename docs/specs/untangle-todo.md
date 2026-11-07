@@ -243,6 +243,8 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ### 32. Generator special cases  (O)
 - [x] Swallowed errors returned; porcelain rename/quoting fixed; `AfterLastStmt` one run of matches;
       test-only exports and duplicated helpers gone; per-domain exceptions that uniform domains remove gone.
+- [ ] Per-domain exceptions (the `UserID` rule, exchange's `History` field) gone once the
+      hand-written domains are uniform; done with tasks 29–30.
 
 **Verify:** G4. **Depends on:** 31. **Size:** M
 
