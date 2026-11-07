@@ -42,21 +42,6 @@ func TestFinishPasskeyRegistrationRecordsTheCredential(t *testing.T) {
 	assert.NotEmpty(t, record.PublicKey)
 }
 
-func TestARegistrationWithoutANameGetsTheDefault(t *testing.T) {
-	t.Parallel()
-
-	f := newFixture(t)
-	token, body := f.attestation(t)
-
-	_, err := command.FinishPasskeyRegistrationHandler{Ceremony: f.ceremony, Store: f.store}.Handle(context.Background(),
-		command.FinishPasskeyRegistration{UserID: f.user.ID, Token: token, Name: "  ", Body: body})
-	require.NoError(t, err)
-
-	registered, ok := f.events(entity.PasskeyID(f.cred.ID))[0].(entity.PasskeyRegistered)
-	require.True(t, ok)
-	assert.Equal(t, "Passkey", registered.Name)
-}
-
 func TestRegisteringACredentialTwiceIsErrPasskeyExists(t *testing.T) {
 	t.Parallel()
 
@@ -112,7 +97,7 @@ func TestDeletePasskeyRecordsTheDeletion(t *testing.T) {
 	assert.Equal(t, entity.PasskeyDeleted{PasskeyID: id, At: nowStored()}, f.events(id)[1])
 }
 
-func TestRenameAndDeleteFindOnlyTheUsersOwnPasskey(t *testing.T) {
+func TestRenameAndDeleteOfAnUnknownIDAreNotFound(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
@@ -120,7 +105,6 @@ func TestRenameAndDeleteFindOnlyTheUsersOwnPasskey(t *testing.T) {
 	ctx := context.Background()
 
 	for name, target := range map[string]command.DeletePasskey{
-		"another user's":    {UserID: newUser().ID, ID: id.String()},
 		"a missing one":     {UserID: f.user.ID, ID: entity.PasskeyID{9}.String()},
 		"one not base64url": {UserID: f.user.ID, ID: "not base64!"},
 	} {

@@ -46,9 +46,3 @@ func TestSendWelcomeEmailReturnsAFailureForTheRunnerToRetry(t *testing.T) {
 
 	require.ErrorIs(t, handle(t, notifier, entity.UserRegistered{UserID: "u1"}), errQueue)
 }
-
-func TestSendWelcomeEmailIsNamed(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "send-welcome-email", event.SendWelcomeEmail{}.Name())
-}

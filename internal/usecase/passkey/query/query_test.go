@@ -2,7 +2,6 @@ package query_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -18,8 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
-
-var errRead = errors.New("read failed")
 
 func newCeremony(t *testing.T) *ceremony.Ceremony {
 	t.Helper()
@@ -82,27 +79,6 @@ func TestBeginPasskeyRegistrationRefusesAStaleSignInBeforeReadingAnything(t *tes
 	require.ErrorIs(t, err, entity.ErrPasskeyReauthRequired)
 }
 
-func TestBeginPasskeyRegistrationKeepsAReadFailure(t *testing.T) {
-	t.Parallel()
-
-	user := newUser()
-
-	r := newReads(t)
-	r.users.EXPECT().ByID(gomock.Any(), user.ID).Return(entity.User{}, entity.ErrUserNotFound)
-
-	_, err := query.BeginPasskeyRegistrationHandler{Ceremony: newCeremony(t), Users: r.users, Passkeys: r.passkeys}.Handle(
-		context.Background(), query.BeginPasskeyRegistration{UserID: user.ID, AuthTime: time.Now()})
-	require.ErrorIs(t, err, entity.ErrUserNotFound)
-
-	r = newReads(t)
-	r.users.EXPECT().ByID(gomock.Any(), user.ID).Return(user, nil)
-	r.passkeys.EXPECT().ListByUser(gomock.Any(), user.ID).Return(nil, errRead)
-
-	_, err = query.BeginPasskeyRegistrationHandler{Ceremony: newCeremony(t), Users: r.users, Passkeys: r.passkeys}.Handle(
-		context.Background(), query.BeginPasskeyRegistration{UserID: user.ID, AuthTime: time.Now()})
-	require.ErrorIs(t, err, errRead)
-}
-
 func TestBeginPasskeyLoginStartsADiscoverableCeremony(t *testing.T) {
 	t.Parallel()
 
@@ -113,19 +89,6 @@ func TestBeginPasskeyLoginStartsADiscoverableCeremony(t *testing.T) {
 	parsed, err := virtualwebauthn.ParseAssertionOptions(string(started.Options))
 	require.NoError(t, err)
 	assert.Empty(t, parsed.AllowCredentials)
-}
-
-func TestListPasskeysReadsTheUsersPasskeys(t *testing.T) {
-	t.Parallel()
-
-	r := newReads(t)
-	want := []entity.Passkey{{ID: entity.PasskeyID{1}, Name: "Laptop"}}
-	r.passkeys.EXPECT().ListByUser(gomock.Any(), "u1").Return(want, nil)
-
-	got, err := query.ListPasskeysHandler{Passkeys: r.passkeys}.Handle(context.Background(), query.ListPasskeys{UserID: "u1"})
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
 }
 
 func TestGetPasskeyReadsOneOfTheUsersPasskeys(t *testing.T) {

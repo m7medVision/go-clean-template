@@ -28,6 +28,7 @@ func TestSaveSavesANewAggregate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "t1", written.ID)
 	assert.Positive(t, written.Position)
+	assert.Equal(t, []string{"TaskCreated"}, written.Events, "the wait step waits on the projectors of these")
 	assert.Len(t, store.Events(entity.TaskStreamID("t1")), 1)
 }
 

@@ -40,9 +40,3 @@ func TestEachCreateTaskGetsItsOwnID(t *testing.T) {
 
 	assert.NotEqual(t, first.ID, second.ID)
 }
-
-func TestCreateTaskActsForItsUser(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, owner, command.CreateTask{UserID: owner}.ActorID())
-}

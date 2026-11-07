@@ -3,7 +3,6 @@ package behavior_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -55,28 +54,24 @@ type ListEverything struct {
 func (ListEverything) AdminOnly()                 {}
 func (q ListEverything) Caller() entity.Principal { return q.By }
 
-// fakeCheckpoints reports the projectors as caught up once position reaches at.
+// fakeCheckpoints reports the projectors at position 0 for the first behind asks, and at
+// position at from then on, so a test decides when they catch up without a clock.
 type fakeCheckpoints struct {
-	mu    sync.Mutex
-	at    int64
-	err   error
-	asked [][]string
+	at     int64
+	behind int
+	err    error
+	asked  [][]string
 }
 
 func (f *fakeCheckpoints) Reached(_ context.Context, names []string, position int64) (bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
 	f.asked = append(f.asked, names)
 
-	return f.at >= position, f.err
-}
+	var at int64
+	if len(f.asked) > f.behind {
+		at = f.at
+	}
 
-func (f *fakeCheckpoints) catchUp(p int64) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	f.at = p
+	return at >= position, f.err
 }
 
 func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[WriteThing, entity.Written], cmd WriteThing) (entity.Written, error) {
@@ -123,16 +118,14 @@ func writes(position int64) cqrs.HandlerFunc[WriteThing, entity.Written] {
 func TestWaitReturnsOnceTheProjectorsReachTheWrite(t *testing.T) {
 	t.Parallel()
 
-	cp := &fakeCheckpoints{}
-
-	time.AfterFunc(5*_tick, func() { cp.catchUp(7) })
+	cp := &fakeCheckpoints{at: 7, behind: 2}
 
 	written, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, task(), time.Second, _tick)},
 		writes(7), WriteThing{Title: "a"})
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), written.Position)
-	assert.Equal(t, []string{"task"}, cp.asked[len(cp.asked)-1])
+	assert.Equal(t, [][]string{{"task"}, {"task"}, {"task"}}, cp.asked, "asked until the projector reached 7, then stopped")
 }
 
 func TestWaitGivesUpWithErrReadModelBehind(t *testing.T) {
@@ -175,19 +168,17 @@ func TestWaitSkipsWhatWroteNothingAndWhenNothingIsProjected(t *testing.T) {
 func TestWaitWaitsOnlyForTheProjectorsOfWhatWasWritten(t *testing.T) {
 	t.Parallel()
 
-	cp := &fakeCheckpoints{}
+	cp := &fakeCheckpoints{at: 7}
 	projectors := []repo.Subscriber{
 		projector{name: "task", handles: []entity.Event{thingWritten{}}},
 		projector{name: "stuck", handles: []entity.Event{otherWritten{}}},
 	}
 
-	time.AfterFunc(5*_tick, func() { cp.catchUp(7) })
-
 	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, projectors, time.Second, _tick)},
 		writes(7), WriteThing{Title: "a"})
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"task"}, cp.asked[len(cp.asked)-1])
+	assert.Equal(t, [][]string{{"task"}}, cp.asked)
 }
 
 func TestRetryRunsTheHandlerAgainOnAConflict(t *testing.T) {

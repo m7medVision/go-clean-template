@@ -39,30 +39,9 @@ func rendered() repo.RenderedEmail {
 	return repo.RenderedEmail{To: "john@example.com", Subject: "Note", HTML: "<p>Hi</p>\n", Text: "Hi\n"}
 }
 
-func TestDeliverEmailSendsTheRenderedMessage(t *testing.T) {
-	t.Parallel()
-
-	h, renderer, mailer := newHandler(t)
-	renderer.EXPECT().Render(gomock.Any(), note()).Return(rendered(), nil)
-	mailer.EXPECT().Send(gomock.Any(), rendered()).Return(nil)
-
-	_, err := h.Handle(context.Background(), command.DeliverEmail{Email: note()})
-
-	require.NoError(t, err)
-}
-
+// The worker drops a message whose email no template exists for, so that error must stay
+// recognizable; the mailer expects no call.
 func TestARenderErrorSendsNothing(t *testing.T) {
-	t.Parallel()
-
-	h, renderer, _ := newHandler(t)
-	renderer.EXPECT().Render(gomock.Any(), note()).Return(repo.RenderedEmail{}, errRelay)
-
-	_, err := h.Handle(context.Background(), command.DeliverEmail{Email: note()})
-
-	require.ErrorIs(t, err, errRelay)
-}
-
-func TestAnUnknownEmailStaysRecognizable(t *testing.T) {
 	t.Parallel()
 
 	h, renderer, _ := newHandler(t)

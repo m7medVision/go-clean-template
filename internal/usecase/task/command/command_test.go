@@ -12,7 +12,6 @@ import (
 
 const (
 	owner  = "user-1"
-	other  = "user-2"
 	taskID = "task-1"
 )
 

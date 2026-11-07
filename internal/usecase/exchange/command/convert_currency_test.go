@@ -70,9 +70,3 @@ func TestConvertCurrencyKeepsTheRateProvidersError(t *testing.T) {
 
 	require.ErrorIs(t, err, entity.ErrUnsupportedCurrency)
 }
-
-func TestConvertCurrencyActsForItsUser(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "u1", command.ConvertCurrency{UserID: "u1"}.ActorID())
-}

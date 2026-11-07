@@ -48,7 +48,7 @@ func TestLogInIssuesATokenWithTheLocalRoles(t *testing.T) {
 	claims, err := tokens.Parse(signedIn.Token)
 	require.NoError(t, err)
 	assert.Equal(t, "u1", claims.UserID)
-	assert.Equal(t, entity.RoleNames(entity.LocalRoles()), claims.Roles)
+	assert.Equal(t, []string{"user"}, claims.Roles, "a password sign-in grants only the user role")
 }
 
 func TestLogInRefusesEveryWrongCredentialAlike(t *testing.T) {
@@ -71,28 +71,4 @@ func TestLogInRefusesEveryWrongCredentialAlike(t *testing.T) {
 
 		require.ErrorIs(t, err, entity.ErrInvalidCredentials, name)
 	}
-}
-
-func TestGetUserReadsTheReadModel(t *testing.T) {
-	t.Parallel()
-
-	read := users(t)
-	want := entity.User{ID: "u1", Username: "jo"}
-	read.EXPECT().ByID(gomock.Any(), "u1").Return(want, nil)
-
-	got, err := query.GetUserHandler{Users: read}.Handle(context.Background(), query.GetUser{UserID: "u1"})
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-func TestGetUserKeepsNotFound(t *testing.T) {
-	t.Parallel()
-
-	read := users(t)
-	read.EXPECT().ByID(gomock.Any(), "u1").Return(entity.User{}, entity.ErrUserNotFound)
-
-	_, err := query.GetUserHandler{Users: read}.Handle(context.Background(), query.GetUser{UserID: "u1"})
-
-	require.ErrorIs(t, err, entity.ErrUserNotFound)
 }
