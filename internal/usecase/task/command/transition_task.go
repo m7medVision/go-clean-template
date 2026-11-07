@@ -14,13 +14,12 @@ import (
 // TransitionTask moves UserID's task to Status. A move the task's status does not allow is
 // entity.ErrInvalidTransition.
 type TransitionTask struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	TaskID string
 	Status entity.TaskStatus
 }
-
-// CommandName -.
-func (TransitionTask) CommandName() string { return "TransitionTask" }
 
 // ActorID -.
 func (c TransitionTask) ActorID() string { return c.UserID }

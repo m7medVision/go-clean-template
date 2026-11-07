@@ -30,5 +30,5 @@ func New(b cqrs.Buses, l *slog.Logger) (Query, Mutation) {
 
 // readBack reads the task a command just wrote, for the mutation's result.
 func (m Mutation) readBack(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	return cqrs.SendQuery[entity.Task](ctx, m.qs, query.GetTask{UserID: userID, TaskID: taskID})
+	return cqrs.SendQuery(ctx, m.qs, query.GetTask{UserID: userID, TaskID: taskID})
 }

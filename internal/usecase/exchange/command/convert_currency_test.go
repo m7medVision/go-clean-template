@@ -75,5 +75,4 @@ func TestConvertCurrencyActsForItsUser(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, "u1", command.ConvertCurrency{UserID: "u1"}.ActorID())
-	assert.Equal(t, "ConvertCurrency", command.ConvertCurrency{}.CommandName())
 }

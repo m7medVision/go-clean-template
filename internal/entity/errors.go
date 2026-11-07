@@ -40,8 +40,7 @@ func (e *Error) Kind() Kind { return e.kind }
 
 // KindOf is the kind of the first *Error in err's chain, or KindInternal.
 func KindOf(err error) Kind {
-	var e *Error
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*Error](err); ok {
 		return e.kind
 	}
 

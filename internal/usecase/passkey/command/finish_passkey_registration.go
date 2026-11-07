@@ -19,14 +19,13 @@ import (
 // that does not complete the ceremony is entity.ErrPasskeyCeremonyInvalid, and a credential that is
 // registered already entity.ErrPasskeyExists.
 type FinishPasskeyRegistration struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	Token  string
 	Name   string
 	Body   []byte
 }
-
-// CommandName -.
-func (FinishPasskeyRegistration) CommandName() string { return "FinishPasskeyRegistration" }
 
 // ActorID -.
 func (c FinishPasskeyRegistration) ActorID() string { return c.UserID }

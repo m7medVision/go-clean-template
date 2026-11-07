@@ -24,15 +24,16 @@ var (
 	errCheckpoint = errors.New("checkpoint read failed")
 )
 
-type writeThing struct {
+type WriteThing struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	Title  string
 }
 
-func (writeThing) CommandName() string { return "WriteThing" }
-func (c writeThing) ActorID() string   { return c.UserID }
+func (c WriteThing) ActorID() string { return c.UserID }
 
-func (c writeThing) Validate() error {
+func (c WriteThing) Validate() error {
 	if c.Title == "" {
 		return errInvalid
 	}
@@ -40,13 +41,18 @@ func (c writeThing) Validate() error {
 	return nil
 }
 
-type listEverything struct {
+type SignInThing struct {
+	cqrs.Command[signedIn]
+}
+
+type ListEverything struct {
+	cqrs.Query[[]string]
+
 	By entity.Principal
 }
 
-func (listEverything) QueryName() string          { return "ListEverything" }
-func (listEverything) AdminOnly()                 {}
-func (q listEverything) Caller() entity.Principal { return q.By }
+func (ListEverything) AdminOnly()                 {}
+func (q ListEverything) Caller() entity.Principal { return q.By }
 
 // fakeCheckpoints reports the projectors as caught up once position reaches at.
 type fakeCheckpoints struct {
@@ -72,17 +78,17 @@ func (f *fakeCheckpoints) catchUp(p int64) {
 	f.at = p
 }
 
-func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[writeThing, cqrs.Written], cmd writeThing) (cqrs.Written, error) {
+func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[WriteThing, cqrs.Written], cmd WriteThing) (cqrs.Written, error) {
 	t.Helper()
 
 	cmds := cqrs.NewCommands(steps...)
 	cqrs.HandleCommand(cmds, h)
 
-	return cqrs.SendCommand[cqrs.Written](context.Background(), cmds, cmd)
+	return cqrs.SendCommand(context.Background(), cmds, cmd)
 }
 
-func writes(position int64) cqrs.HandlerFunc[writeThing, cqrs.Written] {
-	return func(context.Context, writeThing) (cqrs.Written, error) {
+func writes(position int64) cqrs.HandlerFunc[WriteThing, cqrs.Written] {
+	return func(context.Context, WriteThing) (cqrs.Written, error) {
 		return cqrs.Written{ID: "t1", Position: position}, nil
 	}
 }
@@ -95,7 +101,7 @@ func TestWaitReturnsOnceTheProjectorsReachTheWrite(t *testing.T) {
 	time.AfterFunc(5*_tick, func() { cp.catchUp(7) })
 
 	written, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, []string{"task"}, time.Second, _tick)},
-		writes(7), writeThing{Title: "a"})
+		writes(7), WriteThing{Title: "a"})
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), written.Position)
@@ -106,7 +112,7 @@ func TestWaitGivesUpWithErrReadModelBehind(t *testing.T) {
 	t.Parallel()
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(&fakeCheckpoints{}, []string{"task"}, _timeout, _tick)},
-		writes(7), writeThing{Title: "a"})
+		writes(7), WriteThing{Title: "a"})
 
 	require.ErrorIs(t, err, entity.ErrReadModelBehind)
 }
@@ -117,7 +123,7 @@ func TestWaitReturnsACheckpointFailure(t *testing.T) {
 	cp := &fakeCheckpoints{err: errCheckpoint}
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, []string{"task"}, _timeout, _tick)},
-		writes(7), writeThing{Title: "a"})
+		writes(7), WriteThing{Title: "a"})
 
 	require.ErrorIs(t, err, errCheckpoint)
 }
@@ -128,10 +134,10 @@ func TestWaitSkipsWhatWroteNothingAndWhenNothingIsProjected(t *testing.T) {
 	cp := &fakeCheckpoints{}
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, []string{"task"}, _timeout, _tick)},
-		writes(0), writeThing{Title: "a"})
+		writes(0), WriteThing{Title: "a"})
 	require.NoError(t, err)
 
-	_, err = sendWrite(t, []cqrs.Step{behavior.Wait(cp, nil, _timeout, _tick)}, writes(7), writeThing{Title: "a"})
+	_, err = sendWrite(t, []cqrs.Step{behavior.Wait(cp, nil, _timeout, _tick)}, writes(7), WriteThing{Title: "a"})
 	require.NoError(t, err)
 
 	assert.Empty(t, cp.asked)
@@ -141,7 +147,7 @@ func TestRetryRunsTheHandlerAgainOnAConflict(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	h := func(context.Context, writeThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (cqrs.Written, error) {
 		calls++
 		if calls < 3 {
 			return cqrs.Written{}, entity.ErrConcurrencyConflict
@@ -150,7 +156,7 @@ func TestRetryRunsTheHandlerAgainOnAConflict(t *testing.T) {
 		return cqrs.Written{ID: "t1"}, nil
 	}
 
-	written, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, writeThing{Title: "a"})
+	written, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, WriteThing{Title: "a"})
 
 	require.NoError(t, err)
 	assert.Equal(t, "t1", written.ID)
@@ -161,13 +167,13 @@ func TestRetryGivesUpAfterItsAttempts(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	h := func(context.Context, writeThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (cqrs.Written, error) {
 		calls++
 
 		return cqrs.Written{}, entity.ErrConcurrencyConflict
 	}
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, writeThing{Title: "a"})
+	_, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, WriteThing{Title: "a"})
 
 	require.ErrorIs(t, err, entity.ErrConcurrencyConflict)
 	assert.Equal(t, 3, calls)
@@ -177,13 +183,13 @@ func TestRetryLeavesOtherFailuresAlone(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	h := func(context.Context, writeThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (cqrs.Written, error) {
 		calls++
 
 		return cqrs.Written{}, entity.ErrTaskNotFound
 	}
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, writeThing{Title: "a"})
+	_, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, WriteThing{Title: "a"})
 
 	require.ErrorIs(t, err, entity.ErrTaskNotFound)
 	assert.Equal(t, 1, calls)
@@ -193,16 +199,16 @@ func TestAuthorizeStopsACallerWithoutTheRole(t *testing.T) {
 	t.Parallel()
 
 	qs := cqrs.NewQueries(behavior.Authorize())
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[listEverything, []string](
-		func(context.Context, listEverything) ([]string, error) { return []string{"all"}, nil },
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[ListEverything, []string](
+		func(context.Context, ListEverything) ([]string, error) { return []string{"all"}, nil },
 	))
 
-	_, err := cqrs.SendQuery[[]string](context.Background(), qs,
-		listEverything{By: entity.Principal{UserID: "u1", Roles: []entity.Role{entity.RoleUser}}})
+	_, err := cqrs.SendQuery(context.Background(), qs,
+		ListEverything{By: entity.Principal{UserID: "u1", Roles: []entity.Role{entity.RoleUser}}})
 	require.ErrorIs(t, err, entity.ErrAdminRequired)
 
-	got, err := cqrs.SendQuery[[]string](context.Background(), qs,
-		listEverything{By: entity.Principal{UserID: "a1", Roles: []entity.Role{entity.RoleAdmin}}})
+	got, err := cqrs.SendQuery(context.Background(), qs,
+		ListEverything{By: entity.Principal{UserID: "a1", Roles: []entity.Role{entity.RoleAdmin}}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"all"}, got)
 }
@@ -211,13 +217,13 @@ func TestValidateStopsAnInvalidMessage(t *testing.T) {
 	t.Parallel()
 
 	called := false
-	h := func(context.Context, writeThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (cqrs.Written, error) {
 		called = true
 
 		return cqrs.Written{}, nil
 	}
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Validate()}, h, writeThing{})
+	_, err := sendWrite(t, []cqrs.Step{behavior.Validate()}, h, WriteThing{})
 
 	require.ErrorIs(t, err, errInvalid)
 	assert.False(t, called)
@@ -228,13 +234,13 @@ func TestStampPutsTheActorAndTheMessageInTheMetadata(t *testing.T) {
 
 	var md entity.Metadata
 
-	h := func(ctx context.Context, _ writeThing) (cqrs.Written, error) {
+	h := func(ctx context.Context, _ WriteThing) (cqrs.Written, error) {
 		md = entity.MetadataFromContext(ctx)
 
 		return cqrs.Written{}, nil
 	}
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Stamp()}, h, writeThing{UserID: "u1", Title: "a"})
+	_, err := sendWrite(t, []cqrs.Step{behavior.Stamp()}, h, WriteThing{UserID: "u1", Title: "a"})
 
 	require.NoError(t, err)
 	assert.Equal(t, entity.Metadata{UserID: "u1", CausationID: "command WriteThing"}, md)
@@ -251,12 +257,12 @@ func TestWaitAlsoWaitsForAResultThatEmbedsWritten(t *testing.T) {
 	t.Parallel()
 
 	cmds := cqrs.NewCommands(behavior.Wait(&fakeCheckpoints{}, []string{"task"}, _timeout, _tick))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[writeThing, signedIn](
-		func(context.Context, writeThing) (signedIn, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[SignInThing, signedIn](
+		func(context.Context, SignInThing) (signedIn, error) {
 			return signedIn{ID: "u1", Position: 7, Token: "t"}, nil
 		}))
 
-	_, err := cqrs.SendCommand[signedIn](context.Background(), cmds, writeThing{Title: "a"})
+	_, err := cqrs.SendCommand(context.Background(), cmds, SignInThing{})
 
 	require.ErrorIs(t, err, entity.ErrReadModelBehind)
 }

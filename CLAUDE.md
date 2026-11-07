@@ -215,8 +215,9 @@ shape from a neighbouring handler in the same transport.
    Domain validation — anything that needs to know the rules, like a status transition —
    lives on the aggregate or in the handler and must not be duplicated in the controller.
 4. **Send the command or query** with the request context:
-   `cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.CreateTask{...})` or
-   `cqrs.SendQuery[entity.Task](ctx, r.qs, query.GetTask{...})`, with the Huma handler's `ctx` on REST
+   `cqrs.SendCommand(ctx, r.cmds, command.CreateTask{...})` or
+   `cqrs.SendQuery(ctx, r.qs, query.GetTask{...})` (the message's embedded `cqrs.Command[R]` or
+   `cqrs.Query[R]` gives the result type), with the Huma handler's `ctx` on REST
    (do not build a second context) and the handler's `ctx` everywhere else. Build the message from the
    DTO's fields; never put a DTO in it. A command answers only `cqrs.Written` (or a result embedding
    it, such as a sign-in's token): a transport that returns the resource sends a query for it next.
@@ -487,13 +488,14 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
      (`EventType()`, `SchemaVersion()`), list it in `EventTypes()`, give the aggregate in
      `<domain>_aggregate.go` a behavior method that checks the rule and calls `entity.Record`, and
      a case in its `Apply`. Test it in `internal/entity`.
-   - Add `internal/usecase/<domain>/command/<name>.go`: the command type (`CommandName()`, and
-     `ActorID()` when it acts for a user, `AdminOnly()` when only an admin may send it, `Validate()` for
+   - Add `internal/usecase/<domain>/command/<name>.go`: the command type (embedding
+     `cqrs.Command[cqrs.Written]`, with `ActorID()` when it acts for a user, `AdminOnly()` when only an admin may send it, `Validate()` for
      domain checks) and its handler, which goes through `aggregate.Create` or `aggregate.Change` and
      returns `cqrs.Written`. Test it beside it against `internal/repo/memstore`.
    - Handle the new event in the domain's projector (`internal/repo/persistent/<domain>/projector.go`),
      with any new SQL in `queries/<domain>.sql` and `make sqlc`; test it against the fake `Querier`.
-2. **A query:** add `internal/usecase/<domain>/query/<name>.go`: the query type (`QueryName()`) and
+2. **A query:** add `internal/usecase/<domain>/query/<name>.go`: the query type (embedding
+   `cqrs.Query[R]`, R being what it answers) and
    its handler, which reads only the domain's read model. A new read-model method goes in
    `internal/repo/contracts.go`, `internal/repo/persistent/<domain>/<domain>.go` and that package's
    `tracing.go`, with its SQL in `queries/<domain>.sql` and `make sqlc`; then `make mock`. Test the

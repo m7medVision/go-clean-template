@@ -6,20 +6,20 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // ListAllTasks lists every user's tasks, as ListTasks pages them. Only a caller holding
 // entity.RoleAdmin may send it: the query bus's authorize step stops anyone else with
 // entity.ErrAdminRequired.
 type ListAllTasks struct {
+	cqrs.Query[TaskPage]
+
 	Principal entity.Principal
 	Status    *entity.TaskStatus
 	Limit     int
 	Offset    int
 }
-
-// QueryName -.
-func (ListAllTasks) QueryName() string { return "ListAllTasks" }
 
 // AdminOnly -.
 func (ListAllTasks) AdminOnly() {}

@@ -48,14 +48,14 @@ func (r *controller) register(api huma.API) {
 		DefaultStatus: http.StatusCreated,
 		Errors:        apierr.CommandErrors(http.StatusConflict),
 	}, func(ctx context.Context, input *registerInput) (*registerOutput, error) {
-		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.RegisterUser{
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.RegisterUser{
 			Username: input.Body.Username, Email: input.Body.Email, Password: input.Body.Password,
 		})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "register")
 		}
 
-		user, err := cqrs.SendQuery[entity.User](ctx, r.qs, query.GetUser{UserID: written.ID})
+		user, err := cqrs.SendQuery(ctx, r.qs, query.GetUser{UserID: written.ID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "register")
 		}
@@ -74,7 +74,7 @@ func (r *controller) login(api huma.API) {
 		Tags:        []string{apidoc.AuthTag},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *loginInput) (*loginOutput, error) {
-		token, err := cqrs.SendQuery[string](ctx, r.qs, query.LogIn{Email: input.Body.Email, Password: input.Body.Password})
+		token, err := cqrs.SendQuery(ctx, r.qs, query.LogIn{Email: input.Body.Email, Password: input.Body.Password})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "login")
 		}
@@ -99,7 +99,7 @@ func (r *controller) profile(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		user, err := cqrs.SendQuery[entity.User](ctx, r.qs, query.GetUser{UserID: userID})
+		user, err := cqrs.SendQuery(ctx, r.qs, query.GetUser{UserID: userID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "profile")
 		}

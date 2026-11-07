@@ -86,7 +86,7 @@ func (r *controller) createTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.CreateTask{
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.CreateTask{
 			UserID: userID, Title: input.Body.Title, Description: input.Body.Description,
 		})
 		if err != nil {
@@ -187,7 +187,7 @@ func (r *controller) updateTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.UpdateTask{
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.UpdateTask{
 			UserID: userID, TaskID: input.ID, Title: input.Body.Title, Description: input.Body.Description,
 		})
 		if err != nil {
@@ -219,7 +219,7 @@ func (r *controller) transitionTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.TransitionTask{
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.TransitionTask{
 			UserID: userID, TaskID: input.ID, Status: input.Body.Status,
 		})
 		if err != nil {
@@ -252,7 +252,7 @@ func (r *controller) deleteTask(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.DeleteTask{UserID: userID, TaskID: input.ID})
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.DeleteTask{UserID: userID, TaskID: input.ID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "deleteTask")
 		}

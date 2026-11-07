@@ -15,11 +15,10 @@ import (
 // delivery is the side effect. A render error will not go away on a retry; the caller tells it apart
 // with errors.Is(err, entity.ErrUnknownEmail) for an email no template exists for.
 type DeliverEmail struct {
+	cqrs.Command[cqrs.Written]
+
 	Email entity.Email
 }
-
-// CommandName -.
-func (DeliverEmail) CommandName() string { return "DeliverEmail" }
 
 // DeliverEmailHandler handles DeliverEmail.
 type DeliverEmailHandler struct {

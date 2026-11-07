@@ -14,13 +14,12 @@ import (
 // RenamePasskey names UserID's passkey ID (base64url): trimmed, and a blank name the default. Any
 // other ID, including another user's passkey, is entity.ErrPasskeyNotFound.
 type RenamePasskey struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	ID     string
 	Name   string
 }
-
-// CommandName -.
-func (RenamePasskey) CommandName() string { return "RenamePasskey" }
 
 // ActorID -.
 func (c RenamePasskey) ActorID() string { return c.UserID }

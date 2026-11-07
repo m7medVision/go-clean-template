@@ -22,8 +22,8 @@ import (
 // success).
 func commandsWith(step cqrs.Step, err error) *cqrs.Commands {
 	cmds := cqrs.NewCommands(step)
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[createThing, cqrs.Written](
-		func(context.Context, createThing) (cqrs.Written, error) { return cqrs.Written{}, err },
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, cqrs.Written](
+		func(context.Context, CreateThing) (cqrs.Written, error) { return cqrs.Written{}, err },
 	))
 
 	return cmds
@@ -35,7 +35,7 @@ func TestTraceOpensOneSpanPerMessage(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Trace(tp), nil), createThing{})
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(cqrs.Trace(tp), nil), CreateThing{})
 	require.NoError(t, err)
 
 	spans := exporter.GetSpans()
@@ -50,7 +50,7 @@ func TestTraceMarksAFailedMessage(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Trace(tp), errHandler), createThing{})
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(cqrs.Trace(tp), errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
 	spans := exporter.GetSpans()
@@ -66,10 +66,10 @@ func TestLogRecordsTheMessageAndItsOutcome(t *testing.T) {
 
 	l := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Log(l), nil), createThing{})
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(cqrs.Log(l), nil), CreateThing{})
 	require.NoError(t, err)
 
-	_, err = cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Log(l), errHandler), createThing{})
+	_, err = cqrs.SendCommand(context.Background(), commandsWith(cqrs.Log(l), errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
 	var records []map[string]any
@@ -99,10 +99,12 @@ func TestMetricsCountsMessagesByOutcome(t *testing.T) {
 
 	reg := prometheus.NewRegistry()
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Metrics(reg), nil), createThing{})
+	metrics := cqrs.Metrics(reg)
+
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(metrics, nil), CreateThing{})
 	require.NoError(t, err)
 
-	_, err = cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Metrics(reg), errHandler), createThing{})
+	_, err = cqrs.SendCommand(context.Background(), commandsWith(metrics, errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
 	expected := `

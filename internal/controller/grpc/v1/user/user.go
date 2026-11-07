@@ -6,7 +6,6 @@ import (
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -16,14 +15,14 @@ import (
 
 // Register -.
 func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1.RegisterResponse, error) {
-	written, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.RegisterUser{
+	written, err := cqrs.SendCommand(ctx, c.cmds, command.RegisterUser{
 		Username: req.GetUsername(), Email: req.GetEmail(), Password: req.GetPassword(),
 	})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "Register")
 	}
 
-	user, err := cqrs.SendQuery[entity.User](ctx, c.qs, query.GetUser{UserID: written.ID})
+	user, err := cqrs.SendQuery(ctx, c.qs, query.GetUser{UserID: written.ID})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "Register")
 	}
@@ -33,7 +32,7 @@ func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1
 
 // Login -.
 func (c *Controller) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
-	token, err := cqrs.SendQuery[string](ctx, c.qs, query.LogIn{Email: req.GetEmail(), Password: req.GetPassword()})
+	token, err := cqrs.SendQuery(ctx, c.qs, query.LogIn{Email: req.GetEmail(), Password: req.GetPassword()})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "Login")
 	}
@@ -48,7 +47,7 @@ func (c *Controller) GetProfile(ctx context.Context, _ *v1.GetProfileRequest) (*
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	user, err := cqrs.SendQuery[entity.User](ctx, c.qs, query.GetUser{UserID: userID})
+	user, err := cqrs.SendQuery(ctx, c.qs, query.GetUser{UserID: userID})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "GetProfile")
 	}

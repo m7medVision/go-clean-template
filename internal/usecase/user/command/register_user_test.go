@@ -52,9 +52,3 @@ func TestRegisterUserRefusesATakenEmailOrUsername(t *testing.T) {
 	_, err = h.Handle(context.Background(), command.RegisterUser{Username: "jo", Email: "other@example.com", Password: "p"})
 	require.ErrorIs(t, err, entity.ErrUserAlreadyExists)
 }
-
-func TestRegisterUserIsNamed(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "RegisterUser", command.RegisterUser{}.CommandName())
-}

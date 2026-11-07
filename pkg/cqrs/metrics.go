@@ -2,7 +2,6 @@ package cqrs
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,21 +13,23 @@ const (
 )
 
 // Metrics counts every message by bus, name and outcome (cqrs_messages_total) and times it
-// (cqrs_message_duration_seconds). Registering on a registerer that already has the collectors
-// reuses them, so building several buses in one process stays safe.
+// (cqrs_message_duration_seconds). It registers both on reg, so build it once and give the same
+// step to both buses.
 func Metrics(reg prometheus.Registerer) Step {
 	labels := []string{"kind", "name", "outcome"}
 
-	messages := registerCollector(reg, prometheus.NewCounterVec(prometheus.CounterOpts{
+	messages := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "cqrs_messages_total",
 		Help: "Commands and queries handled, by bus, message and outcome.",
-	}, labels))
+	}, labels)
 
-	durations := registerCollector(reg, prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	durations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "cqrs_message_duration_seconds",
 		Help:    "Time to handle a command or query, by bus, message and outcome.",
 		Buckets: prometheus.DefBuckets,
-	}, labels))
+	}, labels)
+
+	reg.MustRegister(messages, durations)
 
 	return func(ctx context.Context, msg Message, next Next) (any, error) {
 		start := time.Now()
@@ -45,20 +46,4 @@ func Metrics(reg prometheus.Registerer) Step {
 
 		return out, err
 	}
-}
-
-// registerCollector returns c registered on reg, or the collector already registered under its name.
-func registerCollector[T prometheus.Collector](reg prometheus.Registerer, c T) T {
-	err := reg.Register(c)
-	if err == nil {
-		return c
-	}
-
-	if already, ok := errors.AsType[prometheus.AlreadyRegisteredError](err); ok {
-		if existing, isType := already.ExistingCollector.(T); isType {
-			return existing
-		}
-	}
-
-	panic(err)
 }

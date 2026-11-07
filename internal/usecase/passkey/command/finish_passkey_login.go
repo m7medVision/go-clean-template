@@ -23,12 +23,11 @@ import (
 // signature from a registered passkey can consume a challenge, so a captured token with a forged body
 // cannot burn a ceremony its owner is still completing. The burn and the use commit together.
 type FinishPasskeyLogin struct {
+	cqrs.Command[SignedIn]
+
 	Token string
 	Body  []byte
 }
-
-// CommandName -.
-func (FinishPasskeyLogin) CommandName() string { return "FinishPasskeyLogin" }
 
 // SignedIn is a sign-in's result: the passkey it recorded the use of, and the auth token.
 type SignedIn struct {

@@ -15,12 +15,11 @@ import (
 // passkey is allowed, since every account still has its password. Any other ID, including another
 // user's passkey, is entity.ErrPasskeyNotFound.
 type DeletePasskey struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	ID     string
 }
-
-// CommandName -.
-func (DeletePasskey) CommandName() string { return "DeletePasskey" }
 
 // ActorID -.
 func (c DeletePasskey) ActorID() string { return c.UserID }

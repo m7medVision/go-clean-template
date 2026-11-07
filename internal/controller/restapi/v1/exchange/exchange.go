@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -53,14 +52,14 @@ func (r *controller) convert(api huma.API) {
 			return nil, huma.Error422UnprocessableEntity("invalid amount")
 		}
 
-		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.ConvertCurrency{
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.ConvertCurrency{
 			UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
 		})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "convert")
 		}
 
-		conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,
+		conversion, err := cqrs.SendQuery(ctx, r.qs,
 			query.GetConversion{UserID: userID, ConversionID: written.ID})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "convert")
@@ -86,7 +85,7 @@ func (r *controller) exchangeHistory(api huma.API) {
 			return nil, huma.Error401Unauthorized("unauthorized")
 		}
 
-		history, err := cqrs.SendQuery[entity.ExchangeHistory](ctx, r.qs,
+		history, err := cqrs.SendQuery(ctx, r.qs,
 			query.GetExchangeHistory{UserID: userID, Limit: input.Limit, Offset: input.Offset})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "exchangeHistory")

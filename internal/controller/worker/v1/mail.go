@@ -44,7 +44,7 @@ func (c *MailController) Handle(ctx context.Context, msg *worker.Message) error 
 		return nil
 	}
 
-	_, err = cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeliverEmail{Email: email})
+	_, err = cqrs.SendCommand(ctx, c.cmds, command.DeliverEmail{Email: email})
 	if errors.Is(err, entity.ErrUnknownEmail) {
 		c.l.Error("worker - v1 - mail - deliver", "message", msg.ID, "error", err)
 

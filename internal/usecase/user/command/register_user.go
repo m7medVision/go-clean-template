@@ -17,13 +17,12 @@ import (
 // RegisterUser registers a user with a password. An email or username already taken is
 // entity.ErrUserAlreadyExists. The welcome email follows from the UserRegistered event.
 type RegisterUser struct {
+	cqrs.Command[cqrs.Written]
+
 	Username string
 	Email    string
 	Password string
 }
-
-// CommandName -.
-func (RegisterUser) CommandName() string { return "RegisterUser" }
 
 // RegisterUserHandler handles RegisterUser. Now is the clock (time.Now when nil).
 type RegisterUserHandler struct {

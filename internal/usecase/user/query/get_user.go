@@ -6,15 +6,15 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // GetUser reads a user: entity.ErrUserNotFound when there is none.
 type GetUser struct {
+	cqrs.Query[entity.User]
+
 	UserID string
 }
-
-// QueryName -.
-func (GetUser) QueryName() string { return "GetUser" }
 
 // GetUserHandler handles GetUser.
 type GetUserHandler struct {

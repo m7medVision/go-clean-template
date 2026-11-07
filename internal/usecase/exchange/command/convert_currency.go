@@ -18,14 +18,13 @@ import (
 // records it in UserID's history. An invalid request is entity.ErrInvalidConversion, and a currency
 // the rate provider does not know entity.ErrUnsupportedCurrency.
 type ConvertCurrency struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	From   string
 	To     string
 	Amount decimal.Decimal
 }
-
-// CommandName -.
-func (ConvertCurrency) CommandName() string { return "ConvertCurrency" }
 
 // ActorID -.
 func (c ConvertCurrency) ActorID() string { return c.UserID }

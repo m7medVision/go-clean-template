@@ -33,8 +33,11 @@ controller ─SendQuery──▶ query bus ─▶ steps ─▶ query handler ─
 
 ### Buses and steps (`pkg/cqrs`, `internal/usecase/behavior`)
 
-- `cqrs.SendCommand[R](ctx, cmds, cmd)` and `cqrs.SendQuery[R](ctx, qs, q)` find the one handler
-  registered for the message's type and run it through the bus's steps.
+- A message type embeds `cqrs.Command[R]` or `cqrs.Query[R]`, naming what it answers. `cqrs.SendCommand(ctx,
+  cmds, cmd)` and `cqrs.SendQuery(ctx, qs, q)` find the one handler registered for the message's type,
+  run it through the bus's steps and return an `R`: a sender never restates the result type, and a
+  handler that answers another type does not compile. The type's Go name labels the message in
+  traces, logs, metrics and the events' causation metadata.
 - A message type with no handler is `cqrs.ErrNoHandler`.
 - A second handler for one type panics at startup.
 - The two buses are separate types, so a query can never be sent where a command belongs.
@@ -189,8 +192,9 @@ database with a running worker.
 
 ## Adding to it
 
-- **A command.** Add `internal/usecase/<domain>/command/<name>.go`, holding the type with
-  `CommandName()` (and `ActorID()` when it acts for a user) and a handler returning `cqrs.Written`.
+- **A command.** Add `internal/usecase/<domain>/command/<name>.go`, holding the type, which embeds
+  `cqrs.Command[cqrs.Written]` (and has `ActorID()` when it acts for a user), and a handler returning
+  `cqrs.Written`.
   Put its test beside it, against `internal/repo/memstore`. Add one line to the domain's
   `register.go`. Then send it from each transport.
 - **A query.** Add `internal/usecase/<domain>/query/<name>.go` and a test against

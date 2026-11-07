@@ -6,15 +6,15 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // ListPasskeys reads UserID's passkeys, oldest first.
 type ListPasskeys struct {
+	cqrs.Query[[]entity.Passkey]
+
 	UserID string
 }
-
-// QueryName -.
-func (ListPasskeys) QueryName() string { return "ListPasskeys" }
 
 // ListPasskeysHandler handles ListPasskeys.
 type ListPasskeysHandler struct {

@@ -138,17 +138,17 @@ if err != nil {
 	return nil, huma.Error422UnprocessableEntity("invalid amount")
 }
 
-written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.ConvertCurrency{  // 3. the write
+written, err := cqrs.SendCommand(ctx, r.cmds, command.ConvertCurrency{  // 3. the write
 	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
 })
 if err != nil {
-	return nil, apierr.Problem(r.l, err, "convert")  // 4. error kind → status
+	return nil, apierr.Problem(ctx, r.l, err, "convert")  // 4. error kind → status
 }
 
-conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,  // 5. read it back
+conversion, err := cqrs.SendQuery(ctx, r.qs,  // 5. read it back
 	query.GetConversion{UserID: userID, ConversionID: written.ID})
 if err != nil {
-	return nil, apierr.Problem(r.l, err, "convert")
+	return nil, apierr.Problem(ctx, r.l, err, "convert")
 }
 
 return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO

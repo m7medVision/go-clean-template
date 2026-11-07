@@ -6,17 +6,17 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // GetConversion reads one of UserID's conversions: what a transport answers ConvertCurrency with.
 // A missing one, or another user's, is entity.ErrConversionNotFound.
 type GetConversion struct {
+	cqrs.Query[entity.Conversion]
+
 	UserID       string
 	ConversionID string
 }
-
-// QueryName -.
-func (GetConversion) QueryName() string { return "GetConversion" }
 
 // GetConversionHandler handles GetConversion.
 type GetConversionHandler struct {

@@ -45,5 +45,4 @@ func TestCreateTaskActsForItsUser(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, owner, command.CreateTask{UserID: owner}.ActorID())
-	assert.Equal(t, "CreateTask", command.CreateTask{}.CommandName())
 }

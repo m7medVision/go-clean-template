@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
@@ -29,7 +28,7 @@ func New(b cqrs.Buses, l *slog.Logger) v1.TaskServiceServer {
 
 // readBack reads the task a command just wrote, for the response.
 func (c *Controller) readBack(ctx context.Context, userID, taskID string) (*v1.TaskResponse, error) {
-	task, err := cqrs.SendQuery[entity.Task](ctx, c.qs, query.GetTask{UserID: userID, TaskID: taskID})
+	task, err := cqrs.SendQuery(ctx, c.qs, query.GetTask{UserID: userID, TaskID: taskID})
 	if err != nil {
 		return nil, err
 	}

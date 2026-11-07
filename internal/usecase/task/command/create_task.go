@@ -15,13 +15,12 @@ import (
 
 // CreateTask creates a task owned by UserID, in status todo.
 type CreateTask struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID      string
 	Title       string
 	Description string
 }
-
-// CommandName -.
-func (CreateTask) CommandName() string { return "CreateTask" }
 
 // ActorID -.
 func (c CreateTask) ActorID() string { return c.UserID }

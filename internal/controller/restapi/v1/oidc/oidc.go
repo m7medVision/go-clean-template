@@ -40,7 +40,7 @@ func (r *controller) oidcStatus(api huma.API) {
 		Path:        "/v1/auth/oidc",
 		Tags:        []string{apidoc.AuthTag},
 	}, func(ctx context.Context, _ *struct{}) (*oidcStatusOutput, error) {
-		enabled, err := cqrs.SendQuery[bool](ctx, r.qs, query.GetOIDCStatus{})
+		enabled, err := cqrs.SendQuery(ctx, r.qs, query.GetOIDCStatus{})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "oidcStatus")
 		}
@@ -60,7 +60,7 @@ func (r *controller) beginOIDC(api huma.API) {
 		Tags:   []string{apidoc.AuthTag},
 		Errors: apierr.QueryErrors(http.StatusNotFound, http.StatusBadGateway),
 	}, func(ctx context.Context, _ *struct{}) (*beginOIDCOutput, error) {
-		started, err := cqrs.SendQuery[query.Started](ctx, r.qs, query.BeginOIDCLogin{})
+		started, err := cqrs.SendQuery(ctx, r.qs, query.BeginOIDCLogin{})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "beginOIDC")
 		}
@@ -80,7 +80,7 @@ func (r *controller) finishOIDC(api huma.API) {
 		Tags:   []string{apidoc.AuthTag},
 		Errors: apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict, http.StatusBadGateway),
 	}, func(ctx context.Context, input *finishOIDCInput) (*finishOIDCOutput, error) {
-		signedIn, err := cqrs.SendCommand[command.SignedIn](ctx, r.cmds, command.FinishOIDCLogin{
+		signedIn, err := cqrs.SendCommand(ctx, r.cmds, command.FinishOIDCLogin{
 			Code: input.Body.Code, State: input.Body.State, Token: input.CeremonyToken,
 		})
 		if err != nil {

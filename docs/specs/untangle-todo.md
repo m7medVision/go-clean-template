@@ -43,9 +43,9 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2. **Depends on:** 3. **Size:** L
 
 ### 5. Messages declare their result type; names come from the type  (D)
-- [ ] `cqrs.Command[R]`/`cqrs.Query[R]` markers; `cqrs.SendCommand`/`SendQuery` infer `R`; no
+- [x] `cqrs.Command[R]`/`cqrs.Query[R]` markers; `cqrs.SendCommand`/`SendQuery` infer `R`; no
       `CommandName`/`QueryName` methods; log/metric names unchanged.
-- [ ] Unreachable bus code and the metrics `AlreadyRegistered` path removed.
+- [x] Unreachable bus code and the metrics `AlreadyRegistered` path removed.
 
 **Verify:** G1. **Depends on:** none. **Size:** mechanical sweep.
 

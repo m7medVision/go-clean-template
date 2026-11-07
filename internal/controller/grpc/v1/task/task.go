@@ -21,7 +21,7 @@ func (c *Controller) CreateTask(ctx context.Context, req *v1.CreateTaskRequest) 
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	written, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.CreateTask{
+	written, err := cqrs.SendCommand(ctx, c.cmds, command.CreateTask{
 		UserID: userID, Title: req.GetTitle(), Description: req.GetDescription(),
 	})
 	if err != nil {
@@ -86,8 +86,8 @@ func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest)
 }
 
 // listPage sends a list query and answers with its page.
-func listPage[Q cqrs.Query](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
-	page, err := cqrs.SendQuery[query.TaskPage](ctx, c.qs, q)
+func listPage[Q cqrs.QueryOf[query.TaskPage]](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
+	page, err := cqrs.SendQuery(ctx, c.qs, q)
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, op)
 	}
@@ -102,7 +102,7 @@ func (c *Controller) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) 
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.UpdateTask{
+	_, err := cqrs.SendCommand(ctx, c.cmds, command.UpdateTask{
 		UserID: userID, TaskID: req.GetId(), Title: req.GetTitle(), Description: req.GetDescription(),
 	})
 	if err != nil {
@@ -124,7 +124,7 @@ func (c *Controller) TransitionTask(ctx context.Context, req *v1.TransitionTaskR
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.TransitionTask{
+	_, err := cqrs.SendCommand(ctx, c.cmds, command.TransitionTask{
 		UserID: userID, TaskID: req.GetId(), Status: entity.TaskStatus(req.GetStatus()),
 	})
 	if err != nil {
@@ -146,7 +146,7 @@ func (c *Controller) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) 
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeleteTask{UserID: userID, TaskID: req.GetId()})
+	_, err := cqrs.SendCommand(ctx, c.cmds, command.DeleteTask{UserID: userID, TaskID: req.GetId()})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "DeleteTask")
 	}

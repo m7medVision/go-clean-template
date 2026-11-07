@@ -10,6 +10,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // BeginPasskeyRegistration returns the creation options for navigator.credentials.create, excluding
@@ -17,12 +18,11 @@ import (
 // auth token was issued: one older than the reauth max age (or zero) is
 // entity.ErrPasskeyReauthRequired.
 type BeginPasskeyRegistration struct {
+	cqrs.Query[ceremony.Started]
+
 	UserID   string
 	AuthTime time.Time
 }
-
-// QueryName -.
-func (BeginPasskeyRegistration) QueryName() string { return "BeginPasskeyRegistration" }
 
 // BeginPasskeyRegistrationHandler handles BeginPasskeyRegistration.
 type BeginPasskeyRegistrationHandler struct {

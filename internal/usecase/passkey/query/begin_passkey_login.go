@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // BeginPasskeyLogin returns the request options for a discoverable navigator.credentials.get and the
 // token FinishPasskeyLogin needs.
-type BeginPasskeyLogin struct{}
-
-// QueryName -.
-func (BeginPasskeyLogin) QueryName() string { return "BeginPasskeyLogin" }
+type BeginPasskeyLogin struct {
+	cqrs.Query[ceremony.Started]
+}
 
 // BeginPasskeyLoginHandler handles BeginPasskeyLogin.
 type BeginPasskeyLoginHandler struct {

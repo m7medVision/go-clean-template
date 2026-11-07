@@ -24,13 +24,12 @@ import (
 // an identity finds its user even before the user read model has it. An email or username another
 // account holds is entity.ErrAccountConflict: accounts are never linked by email.
 type FinishOIDCLogin struct {
+	cqrs.Command[SignedIn]
+
 	Code  string
 	State string
 	Token string
 }
-
-// CommandName -.
-func (FinishOIDCLogin) CommandName() string { return "FinishOIDCLogin" }
 
 // SignedIn is a sign-in's result: the user, the position of their creation when this sign-in created
 // them, and the auth token.

@@ -7,14 +7,14 @@ import (
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // BeginOIDCLogin returns the provider URL to send the browser to and the token FinishOIDCLogin
 // needs. With no provider configured it is entity.ErrOIDCDisabled.
-type BeginOIDCLogin struct{}
-
-// QueryName -.
-func (BeginOIDCLogin) QueryName() string { return "BeginOIDCLogin" }
+type BeginOIDCLogin struct {
+	cqrs.Query[Started]
+}
 
 // Started is a sign-in begun.
 type Started struct {

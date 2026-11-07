@@ -8,6 +8,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,12 +17,11 @@ import (
 // is entity.ErrInvalidCredentials alike, so a caller cannot tell which emails exist. It changes
 // nothing, so it is a query; the token is its only result.
 type LogIn struct {
+	cqrs.Query[string]
+
 	Email    string
 	Password string
 }
-
-// QueryName -.
-func (LogIn) QueryName() string { return "LogIn" }
 
 // LogInHandler handles LogIn.
 type LogInHandler struct {

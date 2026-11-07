@@ -100,6 +100,6 @@ func TestListAllTasksIsForAdmins(t *testing.T) {
 
 	user := entity.Principal{UserID: "u1", Roles: []entity.Role{entity.RoleUser}}
 
-	_, err := cqrs.SendQuery[query.TaskPage](context.Background(), qs, query.ListAllTasks{Principal: user})
+	_, err := cqrs.SendQuery(context.Background(), qs, query.ListAllTasks{Principal: user})
 	require.ErrorIs(t, err, entity.ErrAdminRequired)
 }

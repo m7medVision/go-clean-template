@@ -6,6 +6,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // _defaultLimit is the page size ListTasks and ListAllTasks use when the caller asks for none.
@@ -20,14 +21,13 @@ type TaskPage struct {
 // ListTasks lists UserID's tasks, of Status when it is set. A Limit of 0 or less is the default
 // page; a negative Offset is 0.
 type ListTasks struct {
+	cqrs.Query[TaskPage]
+
 	UserID string
 	Status *entity.TaskStatus
 	Limit  int
 	Offset int
 }
-
-// QueryName -.
-func (ListTasks) QueryName() string { return "ListTasks" }
 
 // ListTasksHandler handles ListTasks.
 type ListTasksHandler struct {

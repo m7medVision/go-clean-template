@@ -13,12 +13,11 @@ import (
 
 // DeleteTask deletes UserID's task. Another user's task is entity.ErrTaskNotFound.
 type DeleteTask struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID string
 	TaskID string
 }
-
-// CommandName -.
-func (DeleteTask) CommandName() string { return "DeleteTask" }
 
 // ActorID -.
 func (c DeleteTask) ActorID() string { return c.UserID }

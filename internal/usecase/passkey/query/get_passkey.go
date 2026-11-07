@@ -6,17 +6,17 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // GetPasskey reads UserID's passkey ID (base64url): what a transport answers a passkey command with.
 // Any other ID, including another user's passkey, is entity.ErrPasskeyNotFound.
 type GetPasskey struct {
+	cqrs.Query[entity.Passkey]
+
 	UserID string
 	ID     string
 }
-
-// QueryName -.
-func (GetPasskey) QueryName() string { return "GetPasskey" }
 
 // GetPasskeyHandler handles GetPasskey.
 type GetPasskeyHandler struct {

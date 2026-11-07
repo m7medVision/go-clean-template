@@ -35,12 +35,12 @@ func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 
 // readBack reads the task a command just wrote, for the response body.
 func (r *controller) readBack(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	return cqrs.SendQuery[entity.Task](ctx, r.qs, query.GetTask{UserID: userID, TaskID: taskID})
+	return cqrs.SendQuery(ctx, r.qs, query.GetTask{UserID: userID, TaskID: taskID})
 }
 
 // listPage sends a list query and answers with its page.
-func listPage[Q cqrs.Query](ctx context.Context, r *controller, q Q, op string) (*listTasksOutput, error) {
-	page, err := cqrs.SendQuery[query.TaskPage](ctx, r.qs, q)
+func listPage[Q cqrs.QueryOf[query.TaskPage]](ctx context.Context, r *controller, q Q, op string) (*listTasksOutput, error) {
+	page, err := cqrs.SendQuery(ctx, r.qs, q)
 	if err != nil {
 		return nil, apierr.Problem(ctx, r.l, err, op)
 	}

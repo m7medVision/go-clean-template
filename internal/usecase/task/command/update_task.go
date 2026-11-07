@@ -14,14 +14,13 @@ import (
 // UpdateTask replaces the title and description of UserID's task. Another user's task is
 // entity.ErrTaskForbidden.
 type UpdateTask struct {
+	cqrs.Command[cqrs.Written]
+
 	UserID      string
 	TaskID      string
 	Title       string
 	Description string
 }
-
-// CommandName -.
-func (UpdateTask) CommandName() string { return "UpdateTask" }
 
 // ActorID -.
 func (c UpdateTask) ActorID() string { return c.UserID }

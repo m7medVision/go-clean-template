@@ -14,18 +14,35 @@ import (
 var (
 	// ErrNoHandler is returned for a message type nothing has registered a handler for.
 	ErrNoHandler = errors.New("cqrs: no handler")
-	// ErrResultType is returned when a handler's result is not the type the sender asked for.
+	// ErrResultType is returned when a step answers with another type than the message's result.
 	ErrResultType = errors.New("cqrs: result type")
 )
 
-// Command is a request to change state. CommandName labels its traces, logs and metrics.
-type Command interface {
-	CommandName() string
+// Command marks a request to change state that answers R. A command type embeds it, and the bus
+// names the message after the type:
+//
+//	type CreateTask struct {
+//		cqrs.Command[cqrs.Written]
+//
+//		Title string
+//	}
+type Command[R any] struct{}
+
+func (Command[R]) command(R) {}
+
+// Query marks a request to read state that answers R, as Command does for a command.
+type Query[R any] struct{}
+
+func (Query[R]) query(R) {}
+
+// CommandOf is a message that embeds Command[R]: a command that answers R.
+type CommandOf[R any] interface {
+	command(R)
 }
 
-// Query is a request to read state. QueryName labels its traces, logs and metrics.
-type Query interface {
-	QueryName() string
+// QueryOf is a message that embeds Query[R]: a query that answers R.
+type QueryOf[R any] interface {
+	query(R)
 }
 
 // Handler handles one message type.
