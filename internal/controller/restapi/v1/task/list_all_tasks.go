@@ -18,7 +18,7 @@ func (r *controller) listAllTasks(api huma.API) {
 		Description: "List tasks across all users with optional filtering. Requires the admin role.",
 		Method:      http.MethodGet,
 		Path:        "/v1/admin/tasks",
-		Tags:        []string{_tasksTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusForbidden),
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {

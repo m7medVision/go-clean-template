@@ -27,7 +27,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 			"\": sign in again and retry.",
 		Method:   http.MethodPost,
 		Path:     "/v1/passkeys/register/begin",
-		Tags:     []string{_passkeysTag},
+		Tags:     []string{_tag},
 		Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:   apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*ceremonyOutput, error) {

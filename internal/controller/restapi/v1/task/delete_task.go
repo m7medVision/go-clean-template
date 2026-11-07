@@ -23,7 +23,7 @@ func (r *controller) deleteTask(api huma.API) {
 		Description:   "Delete a task by ID",
 		Method:        http.MethodDelete,
 		Path:          "/v1/tasks/{id}",
-		Tags:          []string{_tasksTag},
+		Tags:          []string{_tag},
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),

@@ -26,7 +26,7 @@ func (r *controller) renamePasskey(api huma.API) {
 		Description: "Rename one of the current user's passkeys. Another user's passkey is not found.",
 		Method:      http.MethodPatch,
 		Path:        "/v1/passkeys/{id}",
-		Tags:        []string{_passkeysTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, input *renamePasskeyInput) (*passkeyOutput, error) {

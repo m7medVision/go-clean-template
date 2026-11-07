@@ -24,7 +24,7 @@ func (r *controller) transitionTask(api huma.API) {
 		Description: "Change task status (todo -> in_progress -> done, or in_progress -> todo)",
 		Method:      http.MethodPatch,
 		Path:        "/v1/tasks/{id}/status",
-		Tags:        []string{_tasksTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound),
 	}, func(ctx context.Context, input *transitionTaskInput) (*taskOutput, error) {

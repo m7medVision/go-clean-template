@@ -28,7 +28,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 		Description:   "Verify the browser's new credential against the ceremony and store it as a passkey.",
 		Method:        http.MethodPost,
 		Path:          "/v1/passkeys/register/finish",
-		Tags:          []string{_passkeysTag},
+		Tags:          []string{_tag},
 		DefaultStatus: http.StatusCreated,
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:        apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict),

@@ -21,7 +21,7 @@ func (r *controller) profile(api huma.API) {
 		Description: "Get current user profile",
 		Method:      http.MethodGet,
 		Path:        "/v1/user/profile",
-		Tags:        []string{_usersTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, _ *profileInput) (*userOutput, error) {

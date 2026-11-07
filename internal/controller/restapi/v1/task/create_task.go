@@ -23,7 +23,7 @@ func (r *controller) createTask(api huma.API) {
 		Description:   "Create a new task for the current user",
 		Method:        http.MethodPost,
 		Path:          "/v1/tasks",
-		Tags:          []string{_tasksTag},
+		Tags:          []string{_tag},
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusCreated,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized),

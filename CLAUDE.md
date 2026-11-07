@@ -182,10 +182,11 @@ line at most. The version comes first, so a v2 is one sibling folder (`restapi/v
 domain folders inside.
 
 ```
-restapi/v1/<domain>/   controller.go (struct, NewRoutes, helpers several ops share), one file per
-                       Huma op named after its operation ID (create_task.go: the op, its own
-                       input/output structs), request.go and response.go (DTOs, and the input/
-                       output structs several ops share), <domain>_test.go, fake_test.go
+restapi/v1/<domain>/   controller.go (struct, NewRoutes, the _tag its ops carry, helpers several ops
+                       share), one file per Huma op named after its operation ID (create_task.go:
+                       the op, its own input/output structs), request.go and response.go (DTOs,
+                       and the input/output structs several ops share), <domain>_test.go,
+                       fake_test.go
 grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface, shared
                        helpers), one file per RPC (create_task.go), request.go, response.go, tests
 graphql/<domain>/      resolver.go (Query/Mutation, New, shared helpers), one file per field

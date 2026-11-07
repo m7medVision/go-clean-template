@@ -29,7 +29,7 @@ func (r *controller) convert(api huma.API) {
 		Description: "Convert an amount at the latest daily rate and save it to the history",
 		Method:      http.MethodPost,
 		Path:        "/v1/exchange/convert",
-		Tags:        []string{_exchangeTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized),
 	}, func(ctx context.Context, input *convertInput) (*convertOutput, error) {

@@ -28,7 +28,7 @@ func (r *controller) exchangeHistory(api huma.API) {
 		Description: "Show one page of the current user's currency conversions, newest first",
 		Method:      http.MethodGet,
 		Path:        "/v1/exchange/history",
-		Tags:        []string{_exchangeTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *exchangeHistoryInput) (*exchangeHistoryOutput, error) {

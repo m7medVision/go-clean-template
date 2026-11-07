@@ -17,7 +17,7 @@ func (r *controller) getTask(api huma.API) {
 		Description: "Get a task by ID",
 		Method:      http.MethodGet,
 		Path:        "/v1/tasks/{id}",
-		Tags:        []string{_tasksTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound),
 	}, func(ctx context.Context, input *taskPathInput) (*taskOutput, error) {

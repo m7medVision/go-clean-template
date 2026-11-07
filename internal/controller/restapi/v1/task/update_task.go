@@ -24,7 +24,7 @@ func (r *controller) updateTask(api huma.API) {
 		Description: "Update task title and description",
 		Method:      http.MethodPut,
 		Path:        "/v1/tasks/{id}",
-		Tags:        []string{_tasksTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound),
 	}, func(ctx context.Context, input *updateTaskInput) (*taskOutput, error) {

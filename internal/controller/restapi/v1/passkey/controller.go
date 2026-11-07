@@ -8,7 +8,7 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-const _passkeysTag = "passkeys"
+const _tag = "passkeys"
 
 type controller struct {
 	cmds *cqrs.Commands

@@ -28,7 +28,7 @@ func (r *controller) deletePasskey(api huma.API) {
 			"Another user's passkey is not found.",
 		Method:        http.MethodDelete,
 		Path:          "/v1/passkeys/{id}",
-		Tags:          []string{_passkeysTag},
+		Tags:          []string{_tag},
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),

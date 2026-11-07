@@ -26,7 +26,7 @@ func (r *controller) listPasskeys(api huma.API) {
 		Description: "List the current user's passkeys, oldest first",
 		Method:      http.MethodGet,
 		Path:        "/v1/passkeys",
-		Tags:        []string{_passkeysTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, _ *listPasskeysInput) (*listPasskeysOutput, error) {

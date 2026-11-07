@@ -18,7 +18,7 @@ func (r *controller) listTasks(api huma.API) {
 		Description: "List tasks for the current user with optional filtering",
 		Method:      http.MethodGet,
 		Path:        "/v1/tasks",
-		Tags:        []string{_tasksTag},
+		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
