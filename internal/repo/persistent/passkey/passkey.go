@@ -22,14 +22,14 @@ type Repo struct {
 	pg *postgres.Postgres
 }
 
-// NewReadModel returns the passkey read model, instrumented with OpenTelemetry tracing spans.
+// NewReadModel returns the passkey read model.
 func NewReadModel(pg *postgres.Postgres) repo.PasskeyReadModel {
-	return newTraced(&Repo{pg: pg})
+	return &Repo{pg: pg}
 }
 
-// NewGuard returns the used-challenge guard, instrumented with OpenTelemetry tracing spans.
+// NewGuard returns the used-challenge guard.
 func NewGuard(pg *postgres.Postgres) repo.ChallengeGuard {
-	return newTraced(&Repo{pg: pg})
+	return &Repo{pg: pg}
 }
 
 func (r *Repo) q(ctx context.Context) *queries.Queries {

@@ -146,13 +146,12 @@ Layout rules:
 
 - In `usecase/<domain>/`, one file per message in `command/`, `query/` or `event/`, named after it
   in snake case (`create_task.go`), with its test beside it. Elsewhere, one file per domain per
-  layer, named after the domain (`task.go`, `user.go`, `exchange.go`), plus a `tracing.go` in every
-  `repo/persistent/<domain>/` package.
+  layer, named after the domain (`task.go`, `user.go`, `exchange.go`).
 - Package name matches the directory name. A repository package shares its name with the use-case
   package of the same domain, so `internal/app` imports the repositories under aliases
   (`persistTaskRepo`, …).
 - Repository constructors take their dependencies as arguments. `New` and `NewReadModel` return the
-  *interface* from `contracts.go`, wrapped in its traced decorator; `NewProjector` and `NewImporter`
+  *interface* from `contracts.go`; `NewProjector` and `NewImporter`
   return their struct, which `internal/app` lists as a `repo.Subscriber` or `repo.Importer`. A handler is a struct
   whose exported fields are its dependencies, filled in by `register.go`. No package-level state —
   `gochecknoglobals` and `gochecknoinits` are on.
@@ -245,11 +244,8 @@ shape from a neighbouring handler in the same transport.
 and retry (on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`AdminOnly()`)
 and validate (`Validate()`). A handler carries none of these. A message type with no registered
 handler is `cqrs.ErrNoHandler` at the first send, so a new message needs its line in `register.go`.
-Repositories still return their interface wrapped in a traced decorator: `func New(...)
-repo.EventStore { return newTraced(&Store{...}) }`, the wrapper in `tracing.go` beside it. Adding a
-method to a repository contract means implementing it in three places: the interface, the struct,
-and the `traced*` decorator. Skipping the decorator is a compile error that reads as an unrelated
-interface mismatch.
+Below the buses, otelpgx traces every SQL statement and otelhttp every outbound call, so
+repositories carry no tracing code: a span per message, then one per statement or request.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
 its `SchemaVersion()` and adding an `eventstore.Upcast` from the previous version to
@@ -497,8 +493,8 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
 2. **A query:** add `internal/usecase/<domain>/query/<name>.go`: the query type (embedding
    `cqrs.Query[R]`, R being what it answers) and
    its handler, which reads only the domain's read model. A new read-model method goes in
-   `internal/repo/contracts.go`, `internal/repo/persistent/<domain>/<domain>.go` and that package's
-   `tracing.go`, with its SQL in `queries/<domain>.sql` and `make sqlc`; then `make mock`. Test the
+   `internal/repo/contracts.go` and `internal/repo/persistent/<domain>/<domain>.go`, with its SQL in
+   `queries/<domain>.sql` and `make sqlc`; then `make mock`. Test the
    handler against `internal/repo/repomock`.
 3. **Register it**: one line in `internal/usecase/<domain>/register.go`. A message with no handler is
    `cqrs.ErrNoHandler` at the first send.
@@ -558,8 +554,8 @@ generated files copy — read it before writing. The steps are what the generate
    `make mock`.
 4. **Read model and projector** — in `internal/repo/persistent/<domain>/`: `<domain>.go` (`package
    <domain>`, the read-model methods calling the sqlc queries from `queries/<domain>.sql`, driver
-   errors mapped to sentinels, `NewReadModel` returning the interface wrapped in `newTraced`) with
-   `tracing.go` next to it, and `projector.go` (`NewProjector`, `Name`, `Tables`, one case per event
+   errors mapped to sentinels, `NewReadModel` returning the interface), and `projector.go`
+   (`NewProjector`, `Name`, `Tables`, one case per event
    in `Handle`, writing through `pg.Executor(ctx)`), each with its test.
 5. **Commands, queries and event handlers** — `internal/usecase/<domain>/command/`, `query/` and,
    for side effects, `event/`, one file per message with its test (see the recipe above), and

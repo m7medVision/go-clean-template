@@ -20,9 +20,9 @@ type Repo struct {
 	q *queries.Queries
 }
 
-// NewReadModel returns the exchange read model, instrumented with OpenTelemetry tracing spans.
+// NewReadModel returns the exchange read model.
 func NewReadModel(pg *postgres.Postgres) repo.ExchangeReadModel {
-	return newTraced(&Repo{queries.New(pg.Pool)})
+	return &Repo{queries.New(pg.Pool)}
 }
 
 // Conversion -.

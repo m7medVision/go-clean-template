@@ -124,4 +124,4 @@ interface.
    then `queue.Send(ctx, entity.EmailQueue, body)` on a `repo.QueueRepo`.
    To keep the handler unaware of the queue, put this behind a port, as the welcome email does: a
    method on `repo.UserNotifier` in `internal/repo/contracts.go`, implemented in
-   `internal/repo/notify` and mirrored in `notify/tracing.go`.
+   `internal/repo/notify`.

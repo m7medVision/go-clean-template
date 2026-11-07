@@ -34,7 +34,7 @@ type Store struct {
 // their old versions with upcasts. It snapshots a stream each time it crosses a multiple of
 // snapshotEvery events; below 1, never.
 func New(pg *postgres.Postgres, snapshotEvery int, events []entity.Event, upcasts ...Upcast) repo.EventStore {
-	return newTraced(&Store{pg: pg, codec: NewCodec(events, upcasts...), snapshotEvery: snapshotEvery})
+	return &Store{pg: pg, codec: NewCodec(events, upcasts...), snapshotEvery: snapshotEvery}
 }
 
 // Save appends a's pending events and applies claims in one transaction, joining the context's.

@@ -46,13 +46,13 @@ type latestResponse struct {
 	Rates      map[string]decimal.Decimal `json:"rates"`
 }
 
-// New returns an ExchangeRate-API client for baseURL (e.g. https://open.er-api.com),
-// instrumented with OpenTelemetry tracing spans.
+// New returns an ExchangeRate-API client for baseURL (e.g. https://open.er-api.com). Its transport
+// opens an OpenTelemetry client span per request.
 func New(baseURL string) repo.ExchangeWebAPI {
-	return newTraced(&ExchangeWebAPI{
+	return &ExchangeWebAPI{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		client:  &http.Client{Timeout: _timeout, Transport: otelhttp.NewTransport(http.DefaultTransport)},
-	})
+	}
 }
 
 // Rate -.

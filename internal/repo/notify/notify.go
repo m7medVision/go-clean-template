@@ -17,10 +17,9 @@ type Notifier struct {
 
 var _ repo.UserNotifier = (*Notifier)(nil)
 
-// New returns a UserNotifier instrumented with OpenTelemetry tracing spans. loginURL is the sign-in
-// page the welcome email links to.
+// New returns a UserNotifier. loginURL is the sign-in page the welcome email links to.
 func New(q repo.QueueRepo, loginURL string) repo.UserNotifier {
-	return newTraced(&Notifier{queue: q, loginURL: loginURL})
+	return &Notifier{queue: q, loginURL: loginURL}
 }
 
 // Welcome enqueues the welcome email; the worker sends it.

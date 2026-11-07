@@ -82,8 +82,9 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
     (`fmt.Errorf("CreateTask - aggregate.Create: %w", err)`).
 12. **Cross-cutting concerns are steps, not decorators.** Tracing, logging, metrics, retries,
     authorization and validation wrap every message on the buses (`pkg/cqrs`,
-    `internal/usecase/behavior`), so no handler carries them. Repositories still return their
-    interface wrapped in a tracing decorator (`tracing.go`).
+    `internal/usecase/behavior`), so no handler carries them. Below the buses, every SQL statement
+    (otelpgx) and outbound HTTP call (otelhttp) gets its own span, so repositories carry no tracing
+    code either.
 
 ### Where code goes
 
@@ -115,8 +116,7 @@ A reviewer checks the imports first:
 - Does a query load an aggregate, or a command return resource data?
 - Does anything but a projector write a read-model table?
 - Is a new message missing from its domain's `register.go`, or a new event from `EventTypes()`?
-- Is a new repository contract method missing from its `tracing.go` decorator or from the mocks
-  (`make mock`)?
+- Is a new repository contract method missing from the mocks (`make mock`)?
 
 Any "yes" is a rule broken, and the change goes back.
 

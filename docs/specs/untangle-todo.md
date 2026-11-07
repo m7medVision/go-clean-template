@@ -145,7 +145,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 17. **Size:** M
 
 ### 19. No hand-written tracing decorators  (I)
-- [ ] The 9 `tracing.go` files are gone; constructors return their type; no PII in spans; CLAUDE.md's
+- [x] The 9 `tracing.go` files are gone; constructors return their type; no PII in spans; CLAUDE.md's
       "three places per method" rule removed.
 
 **Verify:** G1. **Depends on:** none. **Size:** L (deletions)

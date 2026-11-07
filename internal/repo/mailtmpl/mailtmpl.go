@@ -69,7 +69,7 @@ func New() (repo.MailRenderer, error) {
 		return nil, err
 	}
 
-	return newTraced(r), nil
+	return r, nil
 }
 
 func load(fsys fs.FS) (*Renderer, error) {

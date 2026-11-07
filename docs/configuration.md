@@ -122,8 +122,8 @@ http://127.0.0.1:16686.
   middleware.
   gRPC uses the [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler.
   The outbound exchange-rate call uses an `otelhttp` transport, so it joins the same trace.
-- **Every layer has spans.** Use cases and repositories are wrapped in tracing decorators
-  (`*/tracing.go`), so a trace shows controller → use case → repo or webapi.
+- **Every layer has spans.** A trace shows the request, then a span per command or query (the
+  buses' trace step), then one per SQL statement (otelpgx) and per outbound HTTP call (otelhttp).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the
   instrumentation runs unconditionally with no overhead.
 - **Only the API is traced.** `/healthz`, `/metrics` and `/docs` are excluded; only the versioned

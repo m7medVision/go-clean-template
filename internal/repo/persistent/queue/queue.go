@@ -24,9 +24,9 @@ type Repo struct {
 	q  *queries.Queries
 }
 
-// New returns a Queue repository instrumented with OpenTelemetry tracing spans.
+// New returns a Queue repository.
 func New(pg *postgres.Postgres) repo.QueueRepo {
-	return newTraced(&Repo{pg: pg, q: queries.New(pg.Pool)})
+	return &Repo{pg: pg, q: queries.New(pg.Pool)}
 }
 
 // Send enqueues body on queue and returns the message id. It joins the transaction the context

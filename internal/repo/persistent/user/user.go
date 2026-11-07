@@ -20,9 +20,9 @@ type Repo struct {
 	q *queries.Queries
 }
 
-// NewReadModel returns the user read model, instrumented with OpenTelemetry tracing spans.
+// NewReadModel returns the user read model.
 func NewReadModel(pg *postgres.Postgres) repo.UserReadModel {
-	return newTraced(&Repo{queries.New(pg.Pool)})
+	return &Repo{queries.New(pg.Pool)}
 }
 
 // ByID -.
