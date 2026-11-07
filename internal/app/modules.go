@@ -54,7 +54,14 @@ type deps struct {
 // modules lists every domain. GraphQL is the one transport not registered here: gqlgen needs one
 // root resolver, so internal/controller/graphql/resolver.go lists the domains it serves.
 func modules() []module {
-	return []module{taskModule(), userModule(), exchangeModule(), passkeyModule(), oidcModule(), mailModule()}
+	return []module{
+		taskModule(),
+		userModule(),
+		exchangeModule(),
+		passkeyModule(),
+		oidcModule(),
+		mailModule(),
+	}
 }
 
 // projectors lists every read model's projector: a write waits for them, and each can be rebuilt.

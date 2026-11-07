@@ -34,13 +34,13 @@ type resolver struct {
 	mutation mutation
 }
 
+// newResolver fills in each domain's resolvers, one statement per domain.
 func newResolver(b cqrs.Buses, l *slog.Logger) *resolver {
-	taskQ, taskM := task.New(b, l)
+	r := &resolver{}
+	r.query.taskQuery, r.mutation.taskMutation = task.New(b, l)
+	r.query.exchangeQuery = exchange.New(b, l)
 
-	return &resolver{
-		query:    query{taskQuery: taskQ, exchangeQuery: exchange.New(b, l)},
-		mutation: mutation{taskMutation: taskM},
-	}
+	return r
 }
 
 func (r *resolver) Query() generated.QueryResolver { return r.query }

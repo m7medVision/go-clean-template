@@ -224,8 +224,11 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
   folder (`task.TaskList`) carries a `//nolint:revive` saying so.
 - GraphQL: `resolver.go` at the root embeds each domain's `Query` and `Mutation` through a type
   alias (`taskQuery = task.Query`): Go names an embedded field after its type, so two domains'
-  `Query` types would clash without one. gqlgen writes no resolver code (`gqlgen.yml` has no
-  `resolver:` section), so it never rewrites a hand-written file; `generated/` has one file per
+  `Query` types would clash without one; `newResolver` fills them in, one statement per domain.
+  A schema type binds to the `entity` type of the same name (`autobind` in `gqlgen.yml`), so a
+  domain's read shape needs no entry there; `models:` lists only what autobind would get wrong. gqlgen
+  writes no resolver code (`gqlgen.yml` has no `resolver:` section), so it never rewrites a
+  hand-written file; `generated/` has one file per
   schema file that declares a type (a field-only file generates none), and gqlgen does not delete
   the file of a schema file you remove or rename: delete it by hand. GraphQL has no `v1/`: a schema
   evolves by adding fields and marking old ones `@deprecated`.

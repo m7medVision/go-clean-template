@@ -92,7 +92,7 @@ func TestABadMailSenderStopsTheWorker(t *testing.T) {
 // A subscriber's name keys its checkpoint row, and an importer's domain its backfill marker. Renaming
 // one orphans the stored row: the subscriber starts again from the first event (an event handler
 // repeats its side effects), and the importer runs again. Change this list only with a migration of
-// those rows.
+// those rows. A new domain adds names, which orphans nothing.
 func TestTheStoredNamesStayTheSame(t *testing.T) {
 	t.Parallel()
 
@@ -112,8 +112,8 @@ func TestTheStoredNamesStayTheSame(t *testing.T) {
 		domains = append(domains, imp.Domain())
 	}
 
-	assert.ElementsMatch(t, []string{"task", "user", "exchange", "passkey", "send-welcome-email"}, subscribers)
-	assert.ElementsMatch(t, []string{"task", "user", "exchange", "passkey"}, domains)
+	assert.Subset(t, subscribers, []string{"task", "user", "exchange", "passkey", "send-welcome-email"})
+	assert.Subset(t, domains, []string{"task", "user", "exchange", "passkey"})
 }
 
 // Every event type reaches a read model, and no two subscribers share a checkpoint.
