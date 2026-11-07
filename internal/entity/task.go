@@ -68,6 +68,16 @@ func (s TaskStatus) Valid() bool {
 	return slices.Contains(TaskStatuses(), s)
 }
 
+// TaskStatusFilter is the status a list of tasks asks for, from a transport's optional field: nil,
+// meaning any status, when s is empty.
+func TaskStatusFilter(s TaskStatus) *TaskStatus {
+	if s == "" {
+		return nil
+	}
+
+	return &s
+}
+
 // ValidateTaskText refuses a title of no characters or more than MaxTaskTitleLen, and a description
 // longer than MaxTaskDescriptionLen.
 func ValidateTaskText(title, description string) error {

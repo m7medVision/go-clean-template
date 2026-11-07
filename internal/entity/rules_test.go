@@ -49,6 +49,22 @@ func TestTaskStatusMustBeKnown(t *testing.T) {
 	require.ErrorIs(t, entity.ValidateTaskStatus("archived"), entity.ErrInvalidTaskStatus)
 }
 
+// A list's status filter is optional on every transport: an empty one means any status, and any
+// other is passed on for the query to validate.
+func TestAnEmptyStatusFilterMeansAny(t *testing.T) {
+	t.Parallel()
+
+	require.Nil(t, entity.TaskStatusFilter(""))
+
+	filter := entity.TaskStatusFilter(entity.TaskStatusDone)
+	require.NotNil(t, filter)
+	require.Equal(t, entity.TaskStatusDone, *filter)
+
+	filter = entity.TaskStatusFilter("archived")
+	require.NotNil(t, filter)
+	require.Equal(t, entity.TaskStatus("archived"), *filter)
+}
+
 func TestSignUpRules(t *testing.T) {
 	t.Parallel()
 

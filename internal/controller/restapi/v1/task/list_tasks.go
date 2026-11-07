@@ -8,6 +8,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 )
 
@@ -25,7 +26,7 @@ func (r *controller) listTasks(api huma.API) {
 		userID := authn.MustCaller(ctx).UserID
 
 		return listPage(ctx, r, query.ListTasks{
-			UserID: userID, Status: input.status(), Limit: input.Limit, Offset: input.Offset,
+			UserID: userID, Status: entity.TaskStatusFilter(input.Status), Limit: input.Limit, Offset: input.Offset,
 		}, "listTasks")
 	})
 }

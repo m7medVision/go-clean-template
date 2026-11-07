@@ -28,17 +28,6 @@ type listTasksInput struct {
 	Offset int               `query:"offset" default:"0" minimum:"0"`
 }
 
-// status is the filter the query asks for, or nil for every status.
-func (in *listTasksInput) status() *entity.TaskStatus {
-	if in.Status == "" {
-		return nil
-	}
-
-	status := in.Status
-
-	return &status
-}
-
 type taskPathInput struct {
 	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
