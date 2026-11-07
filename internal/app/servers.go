@@ -78,7 +78,8 @@ func listenAndServe(
 		return fmt.Errorf("%s server - stop: %w", name, err)
 	}
 
-	if err = <-served; err != nil && !errors.Is(err, http.ErrServerClosed) {
+	// A gRPC server stopped before its Serve began answers ErrServerStopped, an HTTP one ErrServerClosed.
+	if err = <-served; err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, grpc.ErrServerStopped) {
 		return fmt.Errorf("%s server - serve: %w", name, err)
 	}
 
