@@ -254,12 +254,12 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 9: Comments, tests, sweep
 
 ### 33. Comments  (P)
-- [ ] No `// X -.` placeholders; no comment that restates the code; external facts kept.
+- [x] No `// X -.` placeholders; no comment that restates the code; external facts kept.
 
 **Verify:** G1. **Depends on:** 32. **Size:** mechanical.
 
 ### 34. Tests  (Q)
-- [ ] The decision log's remove/rewrite/consolidate/fix lists done; every remaining test fails on a
+- [x] The decision log's remove/rewrite/consolidate/fix lists done; every remaining test fails on a
       real regression.
 
 **Verify:** G1. **Depends on:** 33. **Size:** mechanical.
