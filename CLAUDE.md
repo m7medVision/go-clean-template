@@ -102,7 +102,8 @@ internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → intern
   worker runs), `persistent/<domain>/` (each domain's read model, projector and importer), and
   `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
   unit-tested against the recorded response in `testdata/` that the integration stub also serves).
-  `internal/repo/memstore` is the in-memory event store command-handler tests use.
+  `internal/repo/memstore` is the in-memory event store command-handler tests use; it and the
+  Postgres store share `internal/repo/eventcodec` (codec, snapshot rule, claims, metadata).
 - `internal/controller/<transport>/v1/<domain>/` — one folder per domain in each transport, holding
   that domain's handlers, DTOs and tests (GraphQL has no `v1/`). A controller takes `cqrs.Buses` and
   imports its domain's `command`/`query` packages only for the message types. Controllers never
@@ -249,8 +250,8 @@ Below the buses, otelpgx traces every SQL statement and otelhttp every outbound 
 repositories carry no tracing code: a span per message, then one per statement or request.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
-its `SchemaVersion()` and adding an `eventstore.Upcast` from the previous version to
-`eventstore.Upcasts()`. A new event type needs an entry in `entity.EventTypes()`, a case in the
+its `SchemaVersion()` and adding an `entity.Upcast` from the previous version to
+`entity.Upcasts()`. A new event type needs an entry in `entity.EventTypes()`, a case in the
 aggregate's `Apply`, and a case in the projector; an event the codec does not know fails to load.
 
 **Writes go through aggregates; read-model tables belong to their projector.** A command handler

@@ -10,7 +10,6 @@ import (
 
 	"github.com/m7medvision/go-clean-template/config"
 	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
@@ -99,7 +98,7 @@ func newRunner(cfg *config.Config, pg *postgres.Postgres, l *slog.Logger) (
 		return nil, nil, err
 	}
 
-	store := projection.NewStore(pg, eventstore.NewReader(pg, entity.EventTypes(), eventstore.Upcasts()...), l)
+	store := projection.NewStore(pg, eventstore.NewReader(pg, newCodec()), l)
 	runner := projection.New(l, store,
 		projection.PollInterval(cfg.CQRS.ProjectionPollInterval),
 		projection.BatchSize(cfg.CQRS.ProjectionBatchSize),

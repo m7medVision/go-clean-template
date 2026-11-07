@@ -1,11 +1,11 @@
-package eventstore_test
+package eventcodec_test
 
 import (
 	"encoding/json"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,8 +23,8 @@ func (unlisted) EventType() string  { return "Unlisted" }
 func (unlisted) SchemaVersion() int { return 1 }
 
 // The stored shapes Renamed had: version 1 called the field name, version 2 headline.
-func renamedUpcasts() []eventstore.Upcast {
-	return []eventstore.Upcast{
+func renamedUpcasts() []entity.Upcast {
+	return []entity.Upcast{
 		{Type: "Renamed", From: 1, Up: func(payload json.RawMessage) (json.RawMessage, error) {
 			var v1 struct {
 				Name string `json:"name"`
@@ -51,7 +51,7 @@ func renamedUpcasts() []eventstore.Upcast {
 func TestCodecRoundTripsAnEvent(t *testing.T) {
 	t.Parallel()
 
-	codec := eventstore.NewCodec([]entity.Event{renamed{}})
+	codec := eventcodec.New([]entity.Event{renamed{}})
 
 	stored, err := codec.Encode(renamed{Title: "a"})
 	require.NoError(t, err)
@@ -66,9 +66,9 @@ func TestCodecRoundTripsAnEvent(t *testing.T) {
 func TestCodecUpcastsAnOlderVersionStepByStep(t *testing.T) {
 	t.Parallel()
 
-	codec := eventstore.NewCodec([]entity.Event{renamed{}}, renamedUpcasts()...)
+	codec := eventcodec.New([]entity.Event{renamed{}}, renamedUpcasts()...)
 
-	e, err := codec.Decode(eventstore.Stored{
+	e, err := codec.Decode(eventcodec.Stored{
 		Type: "Renamed", SchemaVersion: 1, Payload: json.RawMessage(`{"name":"old"}`),
 	})
 
@@ -79,39 +79,39 @@ func TestCodecUpcastsAnOlderVersionStepByStep(t *testing.T) {
 func TestCodecRejectsAVersionWithNoUpcaster(t *testing.T) {
 	t.Parallel()
 
-	codec := eventstore.NewCodec([]entity.Event{renamed{}})
+	codec := eventcodec.New([]entity.Event{renamed{}})
 
-	_, err := codec.Decode(eventstore.Stored{Type: "Renamed", SchemaVersion: 2, Payload: json.RawMessage(`{}`)})
+	_, err := codec.Decode(eventcodec.Stored{Type: "Renamed", SchemaVersion: 2, Payload: json.RawMessage(`{}`)})
 
-	require.ErrorIs(t, err, eventstore.ErrNoUpcaster)
+	require.ErrorIs(t, err, eventcodec.ErrNoUpcaster)
 }
 
 func TestCodecRejectsAVersionNewerThanTheCode(t *testing.T) {
 	t.Parallel()
 
-	codec := eventstore.NewCodec([]entity.Event{renamed{}})
+	codec := eventcodec.New([]entity.Event{renamed{}})
 
-	_, err := codec.Decode(eventstore.Stored{Type: "Renamed", SchemaVersion: 4, Payload: json.RawMessage(`{}`)})
+	_, err := codec.Decode(eventcodec.Stored{Type: "Renamed", SchemaVersion: 4, Payload: json.RawMessage(`{}`)})
 
-	require.ErrorIs(t, err, eventstore.ErrNewerVersion)
+	require.ErrorIs(t, err, eventcodec.ErrNewerVersion)
 }
 
 func TestCodecRejectsAnUnknownType(t *testing.T) {
 	t.Parallel()
 
-	codec := eventstore.NewCodec([]entity.Event{renamed{}})
+	codec := eventcodec.New([]entity.Event{renamed{}})
 
-	_, err := codec.Decode(eventstore.Stored{Type: "Unlisted", SchemaVersion: 1, Payload: json.RawMessage(`{}`)})
-	require.ErrorIs(t, err, eventstore.ErrUnknownEvent)
+	_, err := codec.Decode(eventcodec.Stored{Type: "Unlisted", SchemaVersion: 1, Payload: json.RawMessage(`{}`)})
+	require.ErrorIs(t, err, eventcodec.ErrUnknownEvent)
 
 	_, err = codec.Encode(unlisted{})
-	require.ErrorIs(t, err, eventstore.ErrUnknownEvent)
+	require.ErrorIs(t, err, eventcodec.ErrUnknownEvent)
 }
 
 func TestCodecKnowsEveryDomainEvent(t *testing.T) {
 	t.Parallel()
 
-	codec := eventstore.NewCodec(entity.EventTypes())
+	codec := eventcodec.New(entity.EventTypes())
 
 	for _, e := range entity.EventTypes() {
 		stored, err := codec.Encode(e)
@@ -130,9 +130,9 @@ func TestCodecKnowsEveryDomainEvent(t *testing.T) {
 func TestASnapshotIsDueWhenTheStreamCrossesTheInterval(t *testing.T) {
 	t.Parallel()
 
-	assert.False(t, eventstore.SnapshotDue(0, 2, 3))
-	assert.True(t, eventstore.SnapshotDue(2, 3, 3))
-	assert.True(t, eventstore.SnapshotDue(2, 7, 3))
-	assert.False(t, eventstore.SnapshotDue(3, 5, 3))
-	assert.False(t, eventstore.SnapshotDue(0, 100, 0))
+	assert.False(t, eventcodec.SnapshotDue(0, 2, 3))
+	assert.True(t, eventcodec.SnapshotDue(2, 3, 3))
+	assert.True(t, eventcodec.SnapshotDue(2, 7, 3))
+	assert.False(t, eventcodec.SnapshotDue(3, 5, 3))
+	assert.False(t, eventcodec.SnapshotDue(0, 100, 0))
 }

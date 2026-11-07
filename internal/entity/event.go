@@ -2,6 +2,7 @@ package entity
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"time"
 )
@@ -15,6 +16,20 @@ import (
 type Event interface {
 	EventType() string
 	SchemaVersion() int
+}
+
+// Upcast rewrites one event type's stored payload from version From to From+1.
+type Upcast struct {
+	Type string
+	From int
+	Up   func(payload json.RawMessage) (json.RawMessage, error)
+}
+
+// Upcasts lists how each event type's older stored versions become its current one. An event whose
+// shape changes gets a new SchemaVersion and an Upcast here from the version before; the stored
+// events stay as they were written. Every event is at its first version, so there are none yet.
+func Upcasts() []Upcast {
+	return nil
 }
 
 // EventTypes lists one zero value of every Event type. The store decodes only these, so a new

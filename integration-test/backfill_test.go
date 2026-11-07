@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
 	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
@@ -78,7 +79,7 @@ func importAll(t *testing.T, pg *postgres.Postgres) {
 	t.Helper()
 
 	ctx := context.Background()
-	store := eventstore.New(pg, 0, entity.EventTypes())
+	store := eventstore.New(pg, eventcodec.New(entity.EventTypes()), 0)
 
 	for _, imp := range []repo.Importer{
 		persistTaskRepo.NewImporter(pg, store),

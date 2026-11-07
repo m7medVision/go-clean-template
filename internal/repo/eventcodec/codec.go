@@ -1,26 +1,27 @@
-// Package eventstore stores aggregates as streams of events in Postgres: it appends a command's
-// events with their claims in one transaction, loads an aggregate from its latest snapshot and the
-// events after it, and turns stored events into the current version of their type.
-package eventstore
+// Package eventcodec holds what every event store shares, whatever it stores in: the codec that turns
+// events into stored rows and back (upcasting old versions), when a stream is due a snapshot, what a
+// taken claim answers, and the metadata an event is stored with. It imports no driver, so the
+// Postgres store and the in-memory one both use it.
+package eventcodec
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
 	// ErrUnknownEvent is an event type the codec was not given.
-	ErrUnknownEvent = errors.New("eventstore: unknown event type")
+	ErrUnknownEvent = errors.New("eventcodec: unknown event type")
 	// ErrNoUpcaster is a stored version with no upcaster to the next one.
-	ErrNoUpcaster = errors.New("eventstore: no upcaster")
+	ErrNoUpcaster = errors.New("eventcodec: no upcaster")
 	// ErrNewerVersion is a stored version newer than the code: a binary older than the data.
-	ErrNewerVersion = errors.New("eventstore: event version newer than the code")
-	// ErrClaimTaken is a claim another owner holds, when the claim names no Taken error of its own.
-	ErrClaimTaken = errors.New("eventstore: claim taken")
+	ErrNewerVersion = errors.New("eventcodec: event version newer than the code")
 )
 
 // Stored is an event as a row holds it.
@@ -28,13 +29,6 @@ type Stored struct {
 	Type          string
 	SchemaVersion int
 	Payload       json.RawMessage
-}
-
-// Upcast rewrites one event type's payload from version From to From+1.
-type Upcast struct {
-	Type string
-	From int
-	Up   func(payload json.RawMessage) (json.RawMessage, error)
 }
 
 type upcastKey struct {
@@ -46,16 +40,16 @@ type upcastKey struct {
 type Codec struct {
 	types     map[string]reflect.Type
 	versions  map[string]int
-	upcasters map[upcastKey]Upcast
+	upcasters map[upcastKey]entity.Upcast
 }
 
-// NewCodec returns a codec for events (one zero value per type, as entity.EventTypes lists them)
-// and the upcasts between their stored versions.
-func NewCodec(events []entity.Event, upcasts ...Upcast) *Codec {
+// New returns a codec for events (one zero value per type, as entity.EventTypes lists them) and the
+// upcasts between their stored versions.
+func New(events []entity.Event, upcasts ...entity.Upcast) *Codec {
 	c := &Codec{
 		types:     make(map[string]reflect.Type, len(events)),
 		versions:  make(map[string]int, len(events)),
-		upcasters: make(map[upcastKey]Upcast, len(upcasts)),
+		upcasters: make(map[upcastKey]entity.Upcast, len(upcasts)),
 	}
 
 	for _, e := range events {
@@ -78,7 +72,7 @@ func (c *Codec) Encode(e entity.Event) (Stored, error) {
 
 	payload, err := json.Marshal(e)
 	if err != nil {
-		return Stored{}, fmt.Errorf("eventstore - Encode - json.Marshal %s: %w", e.EventType(), err)
+		return Stored{}, fmt.Errorf("eventcodec - Encode - json.Marshal %s: %w", e.EventType(), err)
 	}
 
 	return Stored{Type: e.EventType(), SchemaVersion: e.SchemaVersion(), Payload: payload}, nil
@@ -106,14 +100,14 @@ func (c *Codec) Decode(s Stored) (entity.Event, error) {
 
 		var err error
 		if payload, err = u.Up(payload); err != nil {
-			return nil, fmt.Errorf("eventstore - Decode - upcast %s v%d: %w", s.Type, version, err)
+			return nil, fmt.Errorf("eventcodec - Decode - upcast %s v%d: %w", s.Type, version, err)
 		}
 	}
 
 	// A new value of the event's concrete type, filled from the payload.
 	v := reflect.New(t)
 	if err := json.Unmarshal(payload, v.Interface()); err != nil {
-		return nil, fmt.Errorf("eventstore - Decode - json.Unmarshal %s: %w", s.Type, err)
+		return nil, fmt.Errorf("eventcodec - Decode - json.Unmarshal %s: %w", s.Type, err)
 	}
 
 	e, ok := v.Elem().Interface().(entity.Event)
@@ -122,4 +116,25 @@ func (c *Codec) Decode(s Stored) (entity.Event, error) {
 	}
 
 	return e, nil
+}
+
+// ClaimTaken is the error for claim c, held by another owner: its own Taken error, or ErrClaimTaken.
+func ClaimTaken(c *entity.Claim) error {
+	if c.Taken != nil {
+		return c.Taken
+	}
+
+	return fmt.Errorf("%w: %s %q", entity.ErrClaimTaken, c.Scope, c.Value)
+}
+
+// Metadata is the metadata an event is stored with: the context's, with the trace it runs in as
+// the correlation when it has none.
+func Metadata(ctx context.Context) entity.Metadata {
+	md := entity.MetadataFromContext(ctx)
+
+	if sc := trace.SpanContextFromContext(ctx); md.CorrelationID == "" && sc.HasTraceID() {
+		md.CorrelationID = sc.TraceID().String()
+	}
+
+	return md
 }

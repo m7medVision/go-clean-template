@@ -133,7 +133,7 @@ after it.
 Two more features of the store:
 - **Versioning.** Every event has its own `SchemaVersion`. When a shape changes, raise that event's
   version and add
-  an `eventstore.Upcast` from the version before to `eventstore.Upcasts()`. Stored events are never
+  an `entity.Upcast` from the version before to `entity.Upcasts()`, beside the events. Stored events are never
   rewritten; old ones are upcast one version at a time as they load.
 - **Write-side guards.** Claims (`claims` table) keep emails, usernames and SSO identities unique.
   `webauthn_used_challenges` keeps a passkey login from completing twice. A command writes both in

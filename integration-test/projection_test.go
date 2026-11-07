@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventstoretest"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
@@ -94,7 +95,7 @@ func startRunner(t *testing.T, pg *postgres.Postgres, c *runCounter) func() {
 
 	events := append(entity.EventTypes(), eventstoretest.Events()...)
 	l := slog.New(slog.DiscardHandler)
-	store := projection.NewStore(pg, eventstore.NewReader(pg, events).IncludingScratch(), l)
+	store := projection.NewStore(pg, eventstore.NewReader(pg, eventcodec.New(events)).IncludingScratch(), l)
 
 	// An hour between polls: only the LISTEN notification can wake the runner in time.
 	runner := projection.New(l, store, projection.PollInterval(time.Hour))

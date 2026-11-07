@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
@@ -13,14 +14,14 @@ import (
 // Reader reads the whole store in position order, for the projection runner.
 type Reader struct {
 	pg             *postgres.Postgres
-	codec          *Codec
+	codec          *eventcodec.Codec
 	includeScratch bool
 }
 
-// NewReader returns a reader for events (entity.EventTypes() for the domain's own), upcasting
-// their old versions with upcasts. It skips scratch streams, whose IDs start with an underscore.
-func NewReader(pg *postgres.Postgres, events []entity.Event, upcasts ...Upcast) *Reader {
-	return &Reader{pg: pg, codec: NewCodec(events, upcasts...)}
+// NewReader returns a reader decoding events with codec. It skips scratch streams, whose IDs start
+// with an underscore.
+func NewReader(pg *postgres.Postgres, codec *eventcodec.Codec) *Reader {
+	return &Reader{pg: pg, codec: codec}
 }
 
 // IncludingScratch returns a reader that also reads scratch streams: the store's own tests use it,
@@ -46,7 +47,7 @@ func (r *Reader) ReadAll(ctx context.Context, after int64, limit int) ([]entity.
 	events := make([]entity.RecordedEvent, 0, len(rows))
 
 	for i := range rows {
-		e, err := r.codec.Decode(Stored{Type: rows[i].Type, SchemaVersion: int(rows[i].SchemaVersion), Payload: rows[i].Payload})
+		e, err := r.codec.Decode(eventcodec.Stored{Type: rows[i].Type, SchemaVersion: int(rows[i].SchemaVersion), Payload: rows[i].Payload})
 		if err != nil {
 			return nil, fmt.Errorf("Reader - ReadAll at %d: %w", rows[i].Position, err)
 		}

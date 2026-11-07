@@ -120,12 +120,12 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 13. **Size:** L
 
 ### Checkpoint 3
-- [ ] G3 green.
+- [x] G3 green.
 
 ## Phase 5: Event store, projections, contracts
 
 ### 16. One pgx-free codec for both stores  (E)
-- [ ] Codec, upcast registry (next to the events), claim rules and `SnapshotDue` in one package used
+- [x] Codec, upcast registry (next to the events), claim rules and `SnapshotDue` in one package used
       by the Postgres store and `memstore`; `ErrClaimTaken` in `entity`; one codec built once;
       `memstore` matches Postgres (empty-save early return, decode errors returned, upcasts).
 

@@ -11,6 +11,7 @@ import (
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
@@ -71,9 +72,14 @@ func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l 
 	return cmds, qs
 }
 
+// newCodec returns the codec of the domain's events, as entity lists them and their upcasts.
+func newCodec() *eventcodec.Codec {
+	return eventcodec.New(entity.EventTypes(), entity.Upcasts()...)
+}
+
 // newEventStore returns the event store every command handler appends through.
 func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
-	return eventstore.New(pg, cfg.CQRS.SnapshotEvery, entity.EventTypes(), eventstore.Upcasts()...)
+	return eventstore.New(pg, newCodec(), cfg.CQRS.SnapshotEvery)
 }
 
 // registerHandlers registers every domain's command and query handlers on the buses.

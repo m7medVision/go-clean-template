@@ -1,4 +1,4 @@
-package eventstore
+package eventcodec
 
 // SnapshotDue reports whether a stream that grew from version before to version after crossed a
 // multiple of every, and so is due a snapshot. An every below 1 never snapshots.

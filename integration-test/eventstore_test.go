@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventstoretest"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
@@ -41,7 +42,7 @@ func newPostgres(t *testing.T) *postgres.Postgres {
 }
 
 func newSuiteStore(pg *postgres.Postgres) repo.EventStore {
-	return eventstore.New(pg, eventstoretest.SnapshotEvery, eventstoretest.Events())
+	return eventstore.New(pg, eventcodec.New(eventstoretest.Events()), eventstoretest.SnapshotEvery)
 }
 
 func TestPostgresEventStorePassesTheEventStoreSuite(t *testing.T) {

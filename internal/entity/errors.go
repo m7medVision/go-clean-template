@@ -136,6 +136,8 @@ var (
 	// ErrStreamNotFound is a load of a stream that has no events. Command handlers turn it into
 	// their domain's not-found error.
 	ErrStreamNotFound = errors.New("stream not found")
+	// ErrClaimTaken is a claim another owner holds, when the claim names no Taken error of its own.
+	ErrClaimTaken = errors.New("claim taken")
 	// ErrClaimNotFound is a lookup of a claim nobody holds.
 	ErrClaimNotFound = errors.New("claim not found")
 )
