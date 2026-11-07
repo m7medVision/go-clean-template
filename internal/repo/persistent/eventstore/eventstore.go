@@ -23,7 +23,6 @@ const (
 	_uniqueViolation = "23505"
 )
 
-// Store is the Postgres event store.
 type Store struct {
 	pg            *postgres.Postgres
 	codec         *eventcodec.Codec
@@ -112,7 +111,6 @@ func applyClaims(ctx context.Context, q *queries.Queries, claims []entity.Claim)
 	return nil
 }
 
-// append inserts the pending events after the loaded version and returns the last position.
 func (s *Store) append(ctx context.Context, q *queries.Queries, a entity.Aggregate) (int64, error) {
 	if len(a.Pending()) == 0 {
 		return 0, nil
@@ -217,8 +215,6 @@ func (s *Store) Load(ctx context.Context, streamID string, a entity.Aggregate) e
 	return nil
 }
 
-// restoreSnapshot restores a from streamID's snapshot when a is a Snapshotter of the snapshot's
-// version, and returns the stream version it restored to (0 for none).
 func restoreSnapshot(ctx context.Context, q *queries.Queries, streamID string, a entity.Aggregate) (int, error) {
 	sn, ok := a.(entity.Snapshotter)
 	if !ok {
@@ -245,7 +241,6 @@ func restoreSnapshot(ctx context.Context, q *queries.Queries, streamID string, a
 	return int(snap.StreamVersion), nil
 }
 
-// ClaimOwner returns who holds the claim.
 func (s *Store) ClaimOwner(ctx context.Context, scope, value string) (string, error) {
 	owner, err := queries.New(s.pg.Executor(ctx)).ClaimOwner(ctx, queries.ClaimOwnerParams{Scope: scope, Value: value})
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -42,22 +42,17 @@ type UserImported struct {
 	Identities   []UserIdentity `json:"identities"`
 }
 
-// EventType -.
 func (UserRegistered) EventType() string { return "UserRegistered" }
 
 // SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
 func (UserRegistered) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (UserRegisteredViaOIDC) EventType() string { return "UserRegisteredViaOIDC" }
 
-// SchemaVersion -.
 func (UserRegisteredViaOIDC) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (UserImported) EventType() string { return "UserImported" }
 
-// SchemaVersion -.
 func (UserImported) SchemaVersion() int { return 1 }
 
 // UserEvents lists the user events, one zero value each.

@@ -7,12 +7,10 @@ import (
 	"slices"
 )
 
-// Commands is the command bus.
 type Commands struct {
 	bus bus
 }
 
-// Queries is the query bus.
 type Queries struct {
 	bus bus
 }
@@ -50,7 +48,6 @@ func SendQuery[Q QueryOf[R], R any](ctx context.Context, b *Queries, q Q) (R, er
 	return send[R](ctx, &b.bus, q)
 }
 
-// handle is a registered handler with its message type erased.
 type handle func(ctx context.Context, msg any) (any, error)
 
 type bus struct {

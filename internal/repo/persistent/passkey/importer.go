@@ -18,17 +18,14 @@ type Importer struct {
 
 var _ eventstore.Importer = (*Importer)(nil)
 
-// NewImporter returns the passkey importer, reading pg.
 func NewImporter(pg *postgres.Postgres) *Importer {
 	return &Importer{pg: pg}
 }
 
-// Domain -.
 func (*Importer) Domain() string {
 	return "passkey"
 }
 
-// Import -.
 func (i *Importer) Import(ctx context.Context) ([]eventstore.Import, error) {
 	return imports(ctx, queries.New(i.pg.Executor(ctx)))
 }

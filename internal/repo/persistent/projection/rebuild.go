@@ -68,7 +68,6 @@ func rebuild(ctx context.Context, pg *postgres.Postgres, p Projector) error {
 			return fmt.Errorf("projection - Rebuild %s - ResetCheckpoint: %w", p.Name(), err)
 		}
 
-		// Wakes the worker running the projector, so it starts replaying at once.
 		if err := q.NotifyEvents(ctx); err != nil {
 			return fmt.Errorf("projection - Rebuild %s - NotifyEvents: %w", p.Name(), err)
 		}

@@ -33,16 +33,13 @@ type ConversionImported struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
-// EventType -.
 func (CurrencyConverted) EventType() string { return "CurrencyConverted" }
 
 // SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
 func (CurrencyConverted) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (ConversionImported) EventType() string { return "ConversionImported" }
 
-// SchemaVersion -.
 func (ConversionImported) SchemaVersion() int { return 1 }
 
 // ConversionEvents lists the conversion events, one zero value each.

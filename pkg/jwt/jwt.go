@@ -8,16 +8,13 @@ import (
 	jwtlib "github.com/golang-jwt/jwt/v5"
 )
 
-// ErrUnexpectedSigningMethod is returned when the JWT signing method is not expected.
 var ErrUnexpectedSigningMethod = errors.New("unexpected signing method")
 
-// Manager handles JWT token generation and parsing.
 type Manager struct {
 	secret   string
 	duration time.Duration
 }
 
-// New -.
 func New(secret string, duration time.Duration) *Manager {
 	return &Manager{
 		secret:   secret,
@@ -25,7 +22,6 @@ func New(secret string, duration time.Duration) *Manager {
 	}
 }
 
-// tokenClaims is the payload of an auth token.
 type tokenClaims struct {
 	jwtlib.RegisteredClaims
 

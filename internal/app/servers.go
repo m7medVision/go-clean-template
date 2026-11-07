@@ -33,8 +33,6 @@ func newHTTPServer(port string, h http.Handler, consistencyTimeout time.Duration
 	}
 }
 
-// serveHTTP serves srv until ctx ends, then shuts it down, letting the requests in flight finish
-// for _shutdownTimeout. It fails when srv cannot listen or stops serving on its own.
 func serveHTTP(ctx context.Context, srv *http.Server, l *slog.Logger) error {
 	return listenAndServe(ctx, "http", srv.Addr, l, srv.Serve, func(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, _shutdownTimeout)
@@ -44,7 +42,6 @@ func serveHTTP(ctx context.Context, srv *http.Server, l *slog.Logger) error {
 	})
 }
 
-// serveGRPC serves srv on port until ctx ends, then stops it once the calls in flight finish.
 func serveGRPC(ctx context.Context, srv *grpc.Server, port string, l *slog.Logger) error {
 	return listenAndServe(ctx, "grpc", net.JoinHostPort("", port), l, srv.Serve, func(context.Context) error {
 		srv.GracefulStop()
@@ -53,8 +50,6 @@ func serveGRPC(ctx context.Context, srv *grpc.Server, port string, l *slog.Logge
 	})
 }
 
-// listenAndServe listens on addr and runs serve on the listener until ctx ends; then it runs stop
-// and waits for serve to return.
 func listenAndServe(
 	ctx context.Context, name, addr string, l *slog.Logger,
 	serve func(net.Listener) error, stop func(context.Context) error,

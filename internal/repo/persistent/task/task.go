@@ -20,7 +20,6 @@ type Repo struct {
 	pg *postgres.Postgres
 }
 
-// NewReadModel returns the task read model.
 func NewReadModel(pg *postgres.Postgres) repo.TaskReadModel {
 	return &Repo{pg: pg}
 }
@@ -29,7 +28,6 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// Get -.
 func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
 	task, err := r.q(ctx).GetTask(ctx, taskID)
 	if err != nil {
@@ -47,7 +45,6 @@ func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, err
 	return entity.Task(task), nil
 }
 
-// List -.
 func (r *Repo) List(
 	ctx context.Context, userID string, status *entity.TaskStatus, page entity.Page,
 ) (entity.List[entity.Task], error) {
@@ -69,7 +66,6 @@ func (r *Repo) List(
 	return entity.List[entity.Task]{Items: tasks(rows), Total: int(total)}, nil
 }
 
-// ListAll -.
 func (r *Repo) ListAll(ctx context.Context, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error) {
 	total, err := r.q(ctx).CountAllTasks(ctx, (*string)(status))
 	if err != nil {

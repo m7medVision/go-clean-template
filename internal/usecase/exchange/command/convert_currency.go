@@ -26,17 +26,15 @@ type ConvertCurrency struct {
 	Amount decimal.Decimal
 }
 
-// ActorID -.
 func (c ConvertCurrency) ActorID() string { return c.UserID }
 
-// ConvertCurrencyHandler handles ConvertCurrency. Now is the clock (time.Now when nil).
+// ConvertCurrencyHandler's Now is the clock (time.Now when nil).
 type ConvertCurrencyHandler struct {
 	Store repo.EventStore
 	Rates repo.ExchangeWebAPI
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (entity.Written, error) {
 	conversion, err := entity.NewConversion(cmd.From, cmd.To, cmd.Amount)
 	if err != nil {

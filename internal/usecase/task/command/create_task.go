@@ -22,19 +22,16 @@ type CreateTask struct {
 	Description string
 }
 
-// ActorID -.
 func (c CreateTask) ActorID() string { return c.UserID }
 
-// Validate -.
 func (c CreateTask) Validate() error { return entity.ValidateTaskText(c.Title, c.Description) }
 
-// CreateTaskHandler handles CreateTask. Now is the clock (time.Now when nil).
+// CreateTaskHandler's Now is the clock (time.Now when nil).
 type CreateTaskHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h CreateTaskHandler) Handle(ctx context.Context, cmd CreateTask) (entity.Written, error) {
 	id := uuid.NewString()
 

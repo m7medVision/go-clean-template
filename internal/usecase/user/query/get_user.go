@@ -16,12 +16,10 @@ type GetUser struct {
 	UserID string
 }
 
-// GetUserHandler handles GetUser.
 type GetUserHandler struct {
 	Users repo.UserReadModel
 }
 
-// Handle -.
 func (h GetUserHandler) Handle(ctx context.Context, q GetUser) (entity.User, error) {
 	user, err := h.Users.ByID(ctx, q.UserID)
 	if err != nil {

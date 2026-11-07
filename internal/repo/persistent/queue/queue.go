@@ -22,7 +22,6 @@ type Repo struct {
 	pg *postgres.Postgres
 }
 
-// New returns the queue on pg.
 func New(pg *postgres.Postgres) *Repo {
 	return &Repo{pg: pg}
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Deps is what the mail handler is built from.
 type Deps struct {
 	Renderer repo.MailRenderer
 	Mailer   repo.Mailer

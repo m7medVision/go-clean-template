@@ -20,17 +20,14 @@ type SendWelcomeEmail struct {
 
 var _ repo.Subscriber = SendWelcomeEmail{}
 
-// Name -.
 func (SendWelcomeEmail) Name() string {
 	return "send-welcome-email"
 }
 
-// Handles is the registration with a password.
 func (SendWelcomeEmail) Handles() []entity.Event {
 	return []entity.Event{entity.UserRegistered{}}
 }
 
-// Handle -.
 func (h SendWelcomeEmail) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	registered, ok := e.Event.(entity.UserRegistered)
 	if !ok {

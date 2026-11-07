@@ -24,7 +24,6 @@ func main() {
 	}
 }
 
-// run serves the app until SIGINT or SIGTERM.
 func run(ctx context.Context) error {
 	cfg, err := config.NewConfig()
 	if err != nil {

@@ -9,14 +9,12 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Deps is what the OIDC handlers are built from.
 type Deps struct {
 	SSO      repo.SSOProvider
 	Store    repo.EventStore
 	Sessions repo.SessionIssuer
 }
 
-// Register registers the OIDC command and query handlers, one line each.
 func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d Deps) {
 	cqrs.HandleCommand(cmds, command.FinishOIDCLoginHandler{SSO: d.SSO, Store: d.Store, Sessions: d.Sessions})
 

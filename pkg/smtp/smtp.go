@@ -152,7 +152,6 @@ func (c *Client) converse(client *smtp.Client, from, to string, data []byte) err
 	return nil
 }
 
-// handshake upgrades to TLS when the server offers it, then authenticates when credentials are set.
 func (c *Client) handshake(client *smtp.Client) error {
 	if ok, _ := client.Extension("STARTTLS"); ok {
 		if err := client.StartTLS(&tls.Config{ServerName: c.host, MinVersion: tls.VersionTLS12}); err != nil {
@@ -254,7 +253,6 @@ func writePart(parts *multipart.Writer, mediaType, content string) error {
 	return nil
 }
 
-// messageID returns a random Message-ID under the sender's domain.
 func messageID(from string) (string, error) {
 	b := make([]byte, _messageIDBytes)
 	if _, err := rand.Read(b); err != nil {

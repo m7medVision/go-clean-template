@@ -27,7 +27,7 @@ type FinishPasskeyLogin struct {
 	Body  []byte
 }
 
-// FinishPasskeyLoginHandler handles FinishPasskeyLogin. Now is the clock (time.Now when nil).
+// FinishPasskeyLoginHandler's Now is the clock (time.Now when nil).
 type FinishPasskeyLoginHandler struct {
 	Ceremony repo.PasskeyCeremony
 	Store    repo.EventStore
@@ -37,7 +37,6 @@ type FinishPasskeyLoginHandler struct {
 	Now      func() time.Time
 }
 
-// Handle -.
 func (h *FinishPasskeyLoginHandler) Handle(ctx context.Context, cmd FinishPasskeyLogin) (entity.SignedIn, error) {
 	userID, id, err := h.Ceremony.LoginFor(cmd.Body)
 	if err != nil {

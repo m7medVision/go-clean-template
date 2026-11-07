@@ -7,8 +7,6 @@ type WelcomeEmail struct {
 	LoginURL string `json:"login_url"`
 }
 
-// Template -.
 func (WelcomeEmail) Template() string { return "welcome" }
 
-// Recipient -.
 func (e WelcomeEmail) Recipient() string { return e.To }

@@ -12,8 +12,7 @@ const (
 	// _defaultPasskeyName names a passkey registered or renamed without one.
 	_defaultPasskeyName = "Passkey"
 	// MaxPasskeyNameLen is the longest name a passkey may have, in characters.
-	MaxPasskeyNameLen = 64
-	// _passkeySnapshotVersion is the version of passkeySnapshot's shape.
+	MaxPasskeyNameLen       = 64
 	_passkeySnapshotVersion = 1
 )
 
@@ -23,8 +22,6 @@ func PasskeyStreamID(id PasskeyID) string {
 	return "passkey-" + id.String()
 }
 
-// passkeyName is a passkey's name trimmed, a blank one the default, and one longer than
-// MaxPasskeyNameLen ErrInvalidPasskeyName.
 func passkeyName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 
@@ -69,7 +66,6 @@ func ImportPasskeyAggregate(row *Passkey) *PasskeyAggregate {
 	return a
 }
 
-// StreamID -.
 func (a *PasskeyAggregate) StreamID() string {
 	return PasskeyStreamID(a.passkey.ID)
 }
@@ -166,7 +162,6 @@ func (a *PasskeyAggregate) Delete(userID string, at time.Time) error {
 	return nil
 }
 
-// Apply -.
 func (a *PasskeyAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case PasskeyRegistered:
@@ -195,12 +190,10 @@ type passkeySnapshot struct {
 	Deleted    bool            `json:"deleted"`
 }
 
-// SnapshotVersion -.
 func (*PasskeyAggregate) SnapshotVersion() int {
 	return _passkeySnapshotVersion
 }
 
-// Snapshot -.
 func (a *PasskeyAggregate) Snapshot() any {
 	s := passkeySnapshot{
 		UserID: a.passkey.UserID, Credential: a.passkey.Credential, Registered: a.registered, Deleted: a.deleted,
@@ -210,7 +203,6 @@ func (a *PasskeyAggregate) Snapshot() any {
 	return s
 }
 
-// RestoreSnapshot -.
 func (a *PasskeyAggregate) RestoreSnapshot(data json.RawMessage) error {
 	var s passkeySnapshot
 	if err := json.Unmarshal(data, &s); err != nil {

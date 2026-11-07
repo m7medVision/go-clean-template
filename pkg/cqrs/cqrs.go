@@ -45,7 +45,6 @@ type QueryOf[R any] interface {
 	query(R)
 }
 
-// Handler handles one message type.
 type Handler[M, R any] interface {
 	Handle(ctx context.Context, msg M) (R, error)
 }
@@ -53,7 +52,6 @@ type Handler[M, R any] interface {
 // HandlerFunc adapts a function to a Handler.
 type HandlerFunc[M, R any] func(ctx context.Context, msg M) (R, error)
 
-// Handle calls f.
 func (f HandlerFunc[M, R]) Handle(ctx context.Context, msg M) (R, error) {
 	return f(ctx, msg)
 }
@@ -62,10 +60,8 @@ func (f HandlerFunc[M, R]) Handle(ctx context.Context, msg M) (R, error) {
 type Kind string
 
 const (
-	// KindCommand is the command bus.
 	KindCommand Kind = "command"
-	// KindQuery is the query bus.
-	KindQuery Kind = "query"
+	KindQuery   Kind = "query"
 )
 
 // Message is what a step sees of the message it wraps. Body is the command or query itself, so a

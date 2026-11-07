@@ -22,19 +22,16 @@ type UpdateTask struct {
 	Description string
 }
 
-// ActorID -.
 func (c UpdateTask) ActorID() string { return c.UserID }
 
-// Validate -.
 func (c UpdateTask) Validate() error { return entity.ValidateTaskText(c.Title, c.Description) }
 
-// UpdateTaskHandler handles UpdateTask. Now is the clock (time.Now when nil).
+// UpdateTaskHandler's Now is the clock (time.Now when nil).
 type UpdateTaskHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h UpdateTaskHandler) Handle(ctx context.Context, cmd UpdateTask) (entity.Written, error) {
 	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
 		return t.Update(cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now))

@@ -104,7 +104,6 @@ func (c *Codec) Decode(s Stored) (entity.Event, error) {
 		}
 	}
 
-	// A new value of the event's concrete type, filled from the payload.
 	v := reflect.New(t)
 	if err := json.Unmarshal(payload, v.Interface()); err != nil {
 		return nil, fmt.Errorf("eventcodec - Decode - json.Unmarshal %s: %w", s.Type, err)

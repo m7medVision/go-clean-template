@@ -18,7 +18,6 @@ import (
 
 var _ repo.EventStore = (*Store)(nil)
 
-// Option configures a Store.
 type Option func(*Store)
 
 // SnapshotEvery makes the store snapshot a stream each time it crosses a multiple of n events.
@@ -45,7 +44,6 @@ type claimKey struct {
 	value string
 }
 
-// Store keeps every stream in memory.
 type Store struct {
 	mu            sync.Mutex
 	codec         *eventcodec.Codec
@@ -209,7 +207,6 @@ func (s *Store) Load(_ context.Context, streamID string, a entity.Aggregate) err
 	return nil
 }
 
-// ClaimOwner returns who holds the claim.
 func (s *Store) ClaimOwner(_ context.Context, scope, value string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

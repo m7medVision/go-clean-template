@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Option -.
 type Option func(*Client)
 
 // Auth makes the client authenticate with PLAIN. An empty username leaves auth off, which is what a

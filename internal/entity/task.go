@@ -21,7 +21,6 @@ const (
 	MaxTaskDescriptionLen = 1000
 )
 
-// TaskStatus -.
 type TaskStatus string
 
 const (
@@ -42,7 +41,6 @@ type Task struct {
 	UpdatedAt   time.Time  `json:"updated_at"  example:"2026-01-01T00:00:00Z"`
 }
 
-// Valid reports whether s is a known task status.
 func (s TaskStatus) Valid() bool {
 	switch s {
 	case TaskStatusTodo, TaskStatusInProgress, TaskStatusDone:
@@ -75,7 +73,6 @@ func ValidateTaskStatus(s TaskStatus) error {
 	return nil
 }
 
-// CanMoveTo reports whether a task in status s may move to status to.
 func (s TaskStatus) CanMoveTo(to TaskStatus) bool {
 	switch s {
 	case TaskStatusTodo:

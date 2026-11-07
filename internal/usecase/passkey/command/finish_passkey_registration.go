@@ -26,18 +26,15 @@ type FinishPasskeyRegistration struct {
 	Body   []byte
 }
 
-// ActorID -.
 func (c FinishPasskeyRegistration) ActorID() string { return c.UserID }
 
-// FinishPasskeyRegistrationHandler handles FinishPasskeyRegistration. Now is the clock (time.Now when
-// nil).
+// FinishPasskeyRegistrationHandler's Now is the clock (time.Now when nil).
 type FinishPasskeyRegistrationHandler struct {
 	Ceremony repo.PasskeyCeremony
 	Store    repo.EventStore
 	Now      func() time.Time
 }
 
-// Handle -.
 func (h FinishPasskeyRegistrationHandler) Handle(ctx context.Context, cmd FinishPasskeyRegistration) (entity.Written, error) {
 	id, record, err := h.Ceremony.FinishRegistration(cmd.UserID, cmd.Token, cmd.Body)
 	if err != nil {

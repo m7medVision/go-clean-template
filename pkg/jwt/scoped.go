@@ -26,7 +26,6 @@ type scopedClaims struct {
 	jwtlib.RegisteredClaims
 }
 
-// NewScoped -.
 func NewScoped(secret, purpose string, duration time.Duration) (*Scoped, error) {
 	key, err := hkdf.Key(sha256.New, []byte(secret), nil, purpose, _scopedKeyLen)
 	if err != nil {

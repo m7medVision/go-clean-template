@@ -21,19 +21,16 @@ type TransitionTask struct {
 	Status entity.TaskStatus
 }
 
-// ActorID -.
 func (c TransitionTask) ActorID() string { return c.UserID }
 
-// Validate -.
 func (c TransitionTask) Validate() error { return entity.ValidateTaskStatus(c.Status) }
 
-// TransitionTaskHandler handles TransitionTask. Now is the clock (time.Now when nil).
+// TransitionTaskHandler's Now is the clock (time.Now when nil).
 type TransitionTaskHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h TransitionTaskHandler) Handle(ctx context.Context, cmd TransitionTask) (entity.Written, error) {
 	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
 		return t.Transition(cmd.UserID, cmd.Status, aggregate.Now(h.Now))

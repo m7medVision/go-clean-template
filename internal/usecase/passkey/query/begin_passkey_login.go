@@ -15,12 +15,10 @@ type BeginPasskeyLogin struct {
 	cqrs.Query[entity.CeremonyStarted]
 }
 
-// BeginPasskeyLoginHandler handles BeginPasskeyLogin.
 type BeginPasskeyLoginHandler struct {
 	Ceremony repo.PasskeyCeremony
 }
 
-// Handle -.
 func (h BeginPasskeyLoginHandler) Handle(context.Context, BeginPasskeyLogin) (entity.CeremonyStarted, error) {
 	started, err := h.Ceremony.BeginLogin()
 	if err != nil {

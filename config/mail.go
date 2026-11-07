@@ -1,6 +1,6 @@
 package config
 
-// Mail -. Only the worker sends, so none of it is required.
+// Mail has no required field: only the worker sends.
 type Mail struct {
 	SMTPHost     string `env:"SMTP_HOST" envDefault:"localhost"`
 	SMTPPort     int    `env:"SMTP_PORT" envDefault:"1025"`

@@ -23,7 +23,6 @@ import (
 // _scope scopes the ceremony token's key and audience, so no other token passes for it.
 const _scope = "webauthn-ceremony"
 
-// Ceremony begins and finishes the WebAuthn ceremonies.
 type Ceremony struct {
 	webauthn *webauthn.WebAuthn
 	signer   *jwt.Scoped

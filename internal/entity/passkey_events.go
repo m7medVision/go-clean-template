@@ -46,34 +46,25 @@ type PasskeyImported struct {
 	LastUsedAt *time.Time      `json:"last_used_at"`
 }
 
-// EventType -.
 func (PasskeyRegistered) EventType() string { return "PasskeyRegistered" }
 
 // SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
 func (PasskeyRegistered) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (PasskeyRenamed) EventType() string { return "PasskeyRenamed" }
 
-// SchemaVersion -.
 func (PasskeyRenamed) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (PasskeyUsed) EventType() string { return "PasskeyUsed" }
 
-// SchemaVersion -.
 func (PasskeyUsed) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (PasskeyDeleted) EventType() string { return "PasskeyDeleted" }
 
-// SchemaVersion -.
 func (PasskeyDeleted) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (PasskeyImported) EventType() string { return "PasskeyImported" }
 
-// SchemaVersion -.
 func (PasskeyImported) SchemaVersion() int { return 1 }
 
 // PasskeyEvents lists the passkey events, one zero value each.

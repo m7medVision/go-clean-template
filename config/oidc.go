@@ -1,6 +1,6 @@
 package config
 
-// OIDC -. SSO sign-in through an OpenID Connect provider, on when Issuer is set. The provider
+// OIDC is SSO sign-in through an OpenID Connect provider, on when Issuer is set. The provider
 // redirects back to APP_BASE_URL/sso/callback, which must be a redirect URI of the client.
 type OIDC struct {
 	Issuer       string `env:"OIDC_ISSUER"`

@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// WebAuthn -. Passkeys only work on an origin listed in RPOrigins whose host is RPID or a
-// subdomain of it. The defaults cover Caddy, a dev server and the app's own port.
+// WebAuthn is passkey sign-in. Passkeys only work on an origin listed in RPOrigins whose host is
+// RPID or a subdomain of it. The defaults cover Caddy, a dev server and the app's own port.
 type WebAuthn struct {
 	RPID      string   `env:"WEBAUTHN_RP_ID" envDefault:"localhost"`
 	RPName    string   `env:"WEBAUTHN_RP_NAME" envDefault:"Go Clean Template"`

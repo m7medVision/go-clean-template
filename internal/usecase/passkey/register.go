@@ -7,7 +7,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Deps is what the passkey handlers are built from.
 type Deps struct {
 	Ceremony repo.PasskeyCeremony
 	Store    repo.EventStore
@@ -17,8 +16,8 @@ type Deps struct {
 	Sessions repo.SessionIssuer
 }
 
-// Register registers every passkey command and query handler, one line each. Deps and the sign-in
-// handler are passed by pointer: gocritic's hugeParam refuses structs this size by value.
+// Register takes Deps, and registers the sign-in handler, by pointer: gocritic's hugeParam refuses
+// structs this size by value.
 func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d *Deps) {
 	cqrs.HandleCommand(cmds, command.FinishPasskeyRegistrationHandler{Ceremony: d.Ceremony, Store: d.Store})
 	cqrs.HandleCommand(cmds, command.RenamePasskeyHandler{Store: d.Store})

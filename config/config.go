@@ -29,7 +29,6 @@ type (
 		OIDC     OIDC
 	}
 
-	// App -.
 	App struct {
 		Name    string `env:"APP_NAME,required"`
 		Version string `env:"APP_VERSION,required"`
@@ -38,34 +37,28 @@ type (
 		BaseURL string `env:"APP_BASE_URL" envDefault:"http://localhost"`
 	}
 
-	// HTTP -.
 	HTTP struct {
 		Port string `env:"HTTP_PORT,required"`
 	}
 
-	// Log -.
 	Log struct {
 		Level string `env:"LOG_LEVEL,required"`
 	}
 
-	// PG -.
 	PG struct {
 		PoolMax int    `env:"PG_POOL_MAX,required"`
 		URL     string `env:"PG_URL,required"`
 	}
 
-	// JWT -.
 	JWT struct {
 		Secret      string        `env:"JWT_SECRET,required"`
 		TokenExpiry time.Duration `env:"JWT_TOKEN_EXPIRY" envDefault:"15m"`
 	}
 
-	// Metrics -.
 	Metrics struct {
 		Enabled bool `env:"METRICS_ENABLED" envDefault:"true"`
 	}
 
-	// Docs -.
 	Docs struct {
 		Enabled bool `env:"DOCS_ENABLED" envDefault:"false"`
 	}
@@ -78,7 +71,6 @@ type (
 		SampleRate float64 `env:"TRACING_SAMPLE_RATE" envDefault:"0.1"`
 	}
 
-	// Exchange -.
 	Exchange struct {
 		// ServiceURL is the base URL of the ExchangeRate-API open access endpoint that supplies
 		// exchange rates. The integration tests point it at a local stub.
@@ -86,7 +78,6 @@ type (
 	}
 )
 
-// NewConfig returns app config.
 func NewConfig() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {

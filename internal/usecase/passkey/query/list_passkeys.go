@@ -16,12 +16,10 @@ type ListPasskeys struct {
 	UserID string
 }
 
-// ListPasskeysHandler handles ListPasskeys.
 type ListPasskeysHandler struct {
 	Passkeys repo.PasskeyReadModel
 }
 
-// Handle -.
 func (h ListPasskeysHandler) Handle(ctx context.Context, q ListPasskeys) ([]entity.Passkey, error) {
 	passkeys, err := h.Passkeys.ListByUser(ctx, q.UserID)
 	if err != nil {

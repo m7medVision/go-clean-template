@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// _taskSnapshotVersion is the version of taskSnapshot's shape.
 const _taskSnapshotVersion = 1
 
-// TaskStreamID is the stream of the task with id.
 func TaskStreamID(id string) string {
 	return "task-" + id
 }
@@ -52,17 +50,14 @@ func ImportTaskAggregate(row *Task) *TaskAggregate {
 	return t
 }
 
-// StreamID -.
 func (t *TaskAggregate) StreamID() string {
 	return TaskStreamID(t.task.ID)
 }
 
-// ID is the task's ID.
 func (t *TaskAggregate) ID() string {
 	return t.task.ID
 }
 
-// StreamOf names the stream of the task with id.
 func (*TaskAggregate) StreamOf(id string) string {
 	return TaskStreamID(id)
 }
@@ -72,8 +67,6 @@ func (*TaskAggregate) NotFound() error {
 	return ErrTaskNotFound
 }
 
-// ownedBy is nil when userID owns the live task: a deleted task is ErrTaskNotFound and another
-// user's is ErrTaskForbidden.
 func (t *TaskAggregate) ownedBy(userID string) error {
 	switch {
 	case t.deleted:
@@ -124,7 +117,6 @@ func (t *TaskAggregate) Delete(userID string, at time.Time) error {
 	return nil
 }
 
-// Apply -.
 func (t *TaskAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case TaskCreated:
@@ -144,17 +136,14 @@ type taskSnapshot struct {
 	Deleted bool      `json:"deleted"`
 }
 
-// SnapshotVersion -.
 func (*TaskAggregate) SnapshotVersion() int {
 	return _taskSnapshotVersion
 }
 
-// Snapshot -.
 func (t *TaskAggregate) Snapshot() any {
 	return taskSnapshot{Task: t.task, Deleted: t.deleted}
 }
 
-// RestoreSnapshot -.
 func (t *TaskAggregate) RestoreSnapshot(data json.RawMessage) error {
 	var s taskSnapshot
 	if err := json.Unmarshal(data, &s); err != nil {

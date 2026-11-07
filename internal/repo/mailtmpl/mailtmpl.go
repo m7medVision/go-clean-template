@@ -55,7 +55,6 @@ type compiled struct {
 	text *texttemplate.Template
 }
 
-// Renderer -.
 type Renderer struct {
 	templates map[string]compiled
 }
@@ -91,7 +90,6 @@ func load(fsys fs.FS) (*Renderer, error) {
 	return r, nil
 }
 
-// emailNames lists the emails in fsys: one per <name>.html.tmpl directly under templates/.
 func emailNames(fsys fs.FS) ([]string, error) {
 	paths, err := fs.Glob(fsys, path.Join(_dir, "*"+_htmlSuffix))
 	if err != nil {

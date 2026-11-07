@@ -20,7 +20,6 @@ type Repo struct {
 	pg *postgres.Postgres
 }
 
-// NewReadModel returns the user read model.
 func NewReadModel(pg *postgres.Postgres) repo.UserReadModel {
 	return &Repo{pg: pg}
 }
@@ -29,7 +28,6 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// ByID -.
 func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
 	user, err := r.q(ctx).GetUserByID(ctx, id)
 	if err != nil {
@@ -39,7 +37,6 @@ func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
 	return entity.User(user), nil
 }
 
-// ByEmail -.
 func (r *Repo) ByEmail(ctx context.Context, email string) (entity.User, error) {
 	user, err := r.q(ctx).GetUserByEmail(ctx, email)
 	if err != nil {

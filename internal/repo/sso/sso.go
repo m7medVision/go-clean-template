@@ -40,7 +40,6 @@ type ceremony struct {
 	Verifier string `json:"v"`
 }
 
-// SSO signs users in at the provider.
 type SSO struct {
 	state *jwt.Scoped
 	cfg   config.OIDC

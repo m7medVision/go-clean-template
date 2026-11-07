@@ -29,7 +29,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	d := &deps{cfg: cfg, pg: b.pg, store: b.store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)}
 
-	// Rows written before a domain stored events become its first events, once.
 	if err = eventstore.Backfill(ctx, b.pg, b.store, importers(d)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
 	}

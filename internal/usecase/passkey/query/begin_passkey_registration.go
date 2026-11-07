@@ -24,16 +24,13 @@ type BeginPasskeyRegistration struct {
 	AuthTime time.Time
 }
 
-// BeginPasskeyRegistrationHandler handles BeginPasskeyRegistration.
 type BeginPasskeyRegistrationHandler struct {
 	Ceremony repo.PasskeyCeremony
 	Users    repo.UserReadModel
 	Passkeys repo.PasskeyReadModel
 }
 
-// Handle -.
 func (h BeginPasskeyRegistrationHandler) Handle(ctx context.Context, q BeginPasskeyRegistration) (entity.CeremonyStarted, error) {
-	// A stale sign-in is refused before anything is read.
 	if err := h.Ceremony.CheckReauth(q.AuthTime); err != nil {
 		return entity.CeremonyStarted{}, fmt.Errorf("BeginPasskeyRegistration: %w", err)
 	}

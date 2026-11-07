@@ -20,17 +20,14 @@ type Importer struct {
 
 var _ eventstore.Importer = (*Importer)(nil)
 
-// NewImporter returns the exchange importer, reading pg.
 func NewImporter(pg *postgres.Postgres) *Importer {
 	return &Importer{pg: pg}
 }
 
-// Domain -.
 func (*Importer) Domain() string {
 	return "exchange"
 }
 
-// Import -.
 func (i *Importer) Import(ctx context.Context) ([]eventstore.Import, error) {
 	return imports(ctx, queries.New(i.pg.Executor(ctx)))
 }

@@ -48,7 +48,6 @@ func RunWorker(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-// newRunner returns the runner of every module's projectors and event handlers.
 func newRunner(d *deps) (*projection.Runner, error) {
 	ps, handlers := projectors(d.pg), eventHandlers(d)
 	if err := projection.Check(ps, handlers, entity.EventTypes()); err != nil {

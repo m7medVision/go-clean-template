@@ -19,16 +19,14 @@ type DeleteTask struct {
 	TaskID string
 }
 
-// ActorID -.
 func (c DeleteTask) ActorID() string { return c.UserID }
 
-// DeleteTaskHandler handles DeleteTask. Now is the clock (time.Now when nil).
+// DeleteTaskHandler's Now is the clock (time.Now when nil).
 type DeleteTaskHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h DeleteTaskHandler) Handle(ctx context.Context, cmd DeleteTask) (entity.Written, error) {
 	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
 		return t.Delete(cmd.UserID, aggregate.Now(h.Now))

@@ -29,8 +29,6 @@ func main() {
 	}
 }
 
-// run runs the worker until SIGINT or SIGTERM, or, given a projection to rebuild, resets it and
-// returns.
 func run(ctx context.Context, rebuild string) error {
 	cfg, err := config.NewConfig()
 	if err != nil {

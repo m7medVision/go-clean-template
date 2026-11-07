@@ -21,16 +21,14 @@ type RenamePasskey struct {
 	Name   string
 }
 
-// ActorID -.
 func (c RenamePasskey) ActorID() string { return c.UserID }
 
-// RenamePasskeyHandler handles RenamePasskey. Now is the clock (time.Now when nil).
+// RenamePasskeyHandler's Now is the clock (time.Now when nil).
 type RenamePasskeyHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h RenamePasskeyHandler) Handle(ctx context.Context, cmd RenamePasskey) (entity.Written, error) {
 	written, err := aggregate.Change(ctx, h.Store, cmd.ID, func(p *entity.PasskeyAggregate) error {
 		return p.Rename(cmd.UserID, cmd.Name, aggregate.Now(h.Now))

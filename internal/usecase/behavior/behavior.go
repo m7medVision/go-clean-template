@@ -79,7 +79,6 @@ func Wait(checkpoints repo.ProjectionCheckpoints, projectors []repo.Subscriber, 
 	}
 }
 
-// projecting names the projectors that handle any of the event types.
 func projecting(projectors []repo.Subscriber, types []string) []string {
 	var names []string
 
@@ -92,7 +91,6 @@ func projecting(projectors []repo.Subscriber, types []string) []string {
 	return names
 }
 
-// waitFor polls the projectors' checkpoints every tick until all reach position, or timeout.
 func waitFor(
 	ctx context.Context, checkpoints repo.ProjectionCheckpoints, projectors []string, position int64,
 	timeout, tick time.Duration,

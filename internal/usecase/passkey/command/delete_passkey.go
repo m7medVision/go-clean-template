@@ -21,16 +21,14 @@ type DeletePasskey struct {
 	ID     string
 }
 
-// ActorID -.
 func (c DeletePasskey) ActorID() string { return c.UserID }
 
-// DeletePasskeyHandler handles DeletePasskey. Now is the clock (time.Now when nil).
+// DeletePasskeyHandler's Now is the clock (time.Now when nil).
 type DeletePasskeyHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h DeletePasskeyHandler) Handle(ctx context.Context, cmd DeletePasskey) (entity.Written, error) {
 	written, err := aggregate.Change(ctx, h.Store, cmd.ID, func(p *entity.PasskeyAggregate) error {
 		return p.Delete(cmd.UserID, aggregate.Now(h.Now))

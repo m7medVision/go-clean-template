@@ -10,7 +10,6 @@ const (
 	RoleUser  Role = "user"
 )
 
-// Valid reports whether r is a known role.
 func (r Role) Valid() bool {
 	switch r {
 	case RoleAdmin, RoleUser:
@@ -47,7 +46,6 @@ type Principal struct {
 	Roles  []Role
 }
 
-// Has reports whether the caller holds role r.
 func (p Principal) Has(r Role) bool {
 	return slices.Contains(p.Roles, r)
 }

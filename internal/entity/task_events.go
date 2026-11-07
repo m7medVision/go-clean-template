@@ -45,34 +45,25 @@ type TaskImported struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
-// EventType -.
 func (TaskCreated) EventType() string { return "TaskCreated" }
 
 // SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
 func (TaskCreated) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (TaskUpdated) EventType() string { return "TaskUpdated" }
 
-// SchemaVersion -.
 func (TaskUpdated) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (TaskTransitioned) EventType() string { return "TaskTransitioned" }
 
-// SchemaVersion -.
 func (TaskTransitioned) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (TaskDeleted) EventType() string { return "TaskDeleted" }
 
-// SchemaVersion -.
 func (TaskDeleted) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (TaskImported) EventType() string { return "TaskImported" }
 
-// SchemaVersion -.
 func (TaskImported) SchemaVersion() int { return 1 }
 
 // TaskEvents lists the task events, one zero value each.

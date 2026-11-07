@@ -75,7 +75,6 @@ func New(t *testing.T) *IDP {
 	return idp
 }
 
-// Issuer is the provider's issuer URL.
 func (p *IDP) Issuer() string { return p.srv.URL }
 
 // Authorize plays the user signing in at the provider: it reads the nonce and PKCE challenge from

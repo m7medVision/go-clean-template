@@ -18,12 +18,10 @@ type GetPasskey struct {
 	ID     string
 }
 
-// GetPasskeyHandler handles GetPasskey.
 type GetPasskeyHandler struct {
 	Passkeys repo.PasskeyReadModel
 }
 
-// Handle -.
 func (h GetPasskeyHandler) Handle(ctx context.Context, q GetPasskey) (entity.Passkey, error) {
 	var id entity.PasskeyID
 	if err := id.UnmarshalText([]byte(q.ID)); err != nil {

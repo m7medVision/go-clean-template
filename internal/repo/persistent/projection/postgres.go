@@ -28,17 +28,14 @@ type PostgresStore struct {
 
 var _ Store = (*PostgresStore)(nil)
 
-// NewStore returns the runner's store on pg, reading events through reader.
 func NewStore(pg *postgres.Postgres, reader Reader, l *slog.Logger) *PostgresStore {
 	return &PostgresStore{pg: pg, reader: reader, logger: l}
 }
 
-// ReadAll reads the store after a position.
 func (s *PostgresStore) ReadAll(ctx context.Context, after int64, limit int) ([]entity.RecordedEvent, error) {
 	return s.reader.ReadAll(ctx, after, limit)
 }
 
-// InTx runs fn in one transaction.
 func (s *PostgresStore) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return s.pg.InTx(ctx, fn)
 }
@@ -48,7 +45,6 @@ func (s *PostgresStore) EnsureCheckpoint(ctx context.Context, name string) error
 	return queries.New(s.pg.Executor(ctx)).EnsureCheckpoint(ctx, name)
 }
 
-// Checkpoint returns name's checkpoint.
 func (s *PostgresStore) Checkpoint(ctx context.Context, name string) (int64, error) {
 	return queries.New(s.pg.Executor(ctx)).GetCheckpoint(ctx, name)
 }
@@ -92,7 +88,6 @@ func (s *PostgresStore) listen(ctx context.Context, notify chan<- struct{}) {
 	}
 }
 
-// listenOnce holds one LISTEN connection until it fails or ctx ends.
 func (s *PostgresStore) listenOnce(ctx context.Context, notify chan<- struct{}) error {
 	conn, err := s.pg.Connect(ctx)
 	if err != nil {

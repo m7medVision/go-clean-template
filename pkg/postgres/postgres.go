@@ -18,7 +18,6 @@ const (
 	_defaultConnTimeout  = time.Second
 )
 
-// Postgres -.
 type Postgres struct {
 	maxPoolSize  int
 	connAttempts int
@@ -27,7 +26,6 @@ type Postgres struct {
 	pool *pgxpool.Pool
 }
 
-// New -.
 func New(url string, opts ...Option) (*Postgres, error) {
 	pg := &Postgres{
 		maxPoolSize:  _defaultMaxPoolSize,
@@ -35,7 +33,6 @@ func New(url string, opts ...Option) (*Postgres, error) {
 		connTimeout:  _defaultConnTimeout,
 	}
 
-	// Custom options
 	for _, opt := range opts {
 		opt(pg)
 	}
@@ -86,7 +83,6 @@ func connect(cfg *pgxpool.Config, timeout time.Duration) (*pgxpool.Pool, error) 
 	return pool, nil
 }
 
-// Close -.
 func (p *Postgres) Close() {
 	if p.pool != nil {
 		p.pool.Close()

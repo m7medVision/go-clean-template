@@ -20,7 +20,6 @@ type Repo struct {
 	pg *postgres.Postgres
 }
 
-// NewReadModel returns the exchange read model.
 func NewReadModel(pg *postgres.Postgres) repo.ExchangeReadModel {
 	return &Repo{pg: pg}
 }
@@ -29,7 +28,6 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// Conversion -.
 func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error) {
 	row, err := r.q(ctx).GetConversion(ctx, queries.GetConversionParams{ConversionID: &conversionID, UserID: userID})
 	if err != nil {

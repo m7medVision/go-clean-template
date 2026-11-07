@@ -20,12 +20,10 @@ type GetTask struct {
 	TaskID string
 }
 
-// GetTaskHandler handles GetTask.
 type GetTaskHandler struct {
 	Tasks repo.TaskReadModel
 }
 
-// Handle -.
 func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (entity.Task, error) {
 	task, err := h.Tasks.Get(ctx, q.UserID, q.TaskID)
 	if err != nil {

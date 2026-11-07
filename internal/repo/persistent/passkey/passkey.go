@@ -21,7 +21,6 @@ type Repo struct {
 	pg *postgres.Postgres
 }
 
-// NewReadModel returns the passkey read model.
 func NewReadModel(pg *postgres.Postgres) repo.PasskeyReadModel {
 	return &Repo{pg: pg}
 }
@@ -65,7 +64,6 @@ type Guard struct {
 	pg *postgres.Postgres
 }
 
-// NewGuard returns the used-challenge guard.
 func NewGuard(pg *postgres.Postgres) repo.ChallengeGuard {
 	return &Guard{pg: pg}
 }

@@ -20,13 +20,11 @@ type DeliverEmail struct {
 	Email entity.Email
 }
 
-// DeliverEmailHandler handles DeliverEmail.
 type DeliverEmailHandler struct {
 	Renderer repo.MailRenderer
 	Mailer   repo.Mailer
 }
 
-// Handle -.
 func (h DeliverEmailHandler) Handle(ctx context.Context, cmd DeliverEmail) (struct{}, error) {
 	msg, err := h.Renderer.Render(ctx, cmd.Email)
 	if err != nil {

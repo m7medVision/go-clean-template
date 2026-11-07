@@ -18,12 +18,10 @@ type GetConversion struct {
 	ConversionID string
 }
 
-// GetConversionHandler handles GetConversion.
 type GetConversionHandler struct {
 	History repo.ExchangeReadModel
 }
 
-// Handle -.
 func (h GetConversionHandler) Handle(ctx context.Context, q GetConversion) (entity.Conversion, error) {
 	conversion, err := h.History.Conversion(ctx, q.UserID, q.ConversionID)
 	if err != nil {

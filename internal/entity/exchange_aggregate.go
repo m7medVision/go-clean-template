@@ -2,7 +2,6 @@ package entity
 
 import "time"
 
-// ConversionStreamID is the stream of the conversion with id.
 func ConversionStreamID(id string) string {
 	return "conversion-" + id
 }
@@ -37,17 +36,14 @@ func ImportConversionAggregate(id, userID string, c *Conversion, createdAt time.
 	return a
 }
 
-// StreamID -.
 func (a *ConversionAggregate) StreamID() string {
 	return ConversionStreamID(a.id)
 }
 
-// ID is the conversion's ID.
 func (a *ConversionAggregate) ID() string {
 	return a.id
 }
 
-// Apply -.
 func (a *ConversionAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case CurrencyConverted:

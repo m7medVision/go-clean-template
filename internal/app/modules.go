@@ -39,7 +39,6 @@ type module struct {
 	queues func(d *deps, b cqrs.Buses, w *worker.Worker) error
 }
 
-// deps are what the modules build their parts from.
 type deps struct {
 	cfg   *config.Config
 	pg    *postgres.Postgres
@@ -98,7 +97,6 @@ func registerHandlers(d *deps, b cqrs.Buses) error {
 	return nil
 }
 
-// registerREST registers every domain's REST operations on api, over b.
 func registerREST(b cqrs.Buses, l *slog.Logger) func(api huma.API) {
 	return func(api huma.API) {
 		for _, m := range modules() {
@@ -109,7 +107,6 @@ func registerREST(b cqrs.Buses, l *slog.Logger) func(api huma.API) {
 	}
 }
 
-// registerGRPC registers every domain's gRPC services on s, over b.
 func registerGRPC(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 	for _, m := range modules() {
 		if m.grpc != nil {

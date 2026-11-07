@@ -18,12 +18,10 @@ type Projector struct {
 
 var _ repo.Subscriber = (*Projector)(nil)
 
-// NewProjector returns the exchange projector writing to pg.
 func NewProjector(pg *postgres.Postgres) *Projector {
 	return &Projector{pg: pg}
 }
 
-// Name -.
 func (*Projector) Name() string {
 	return "exchange"
 }
@@ -33,12 +31,10 @@ func (*Projector) Tables() []string {
 	return []string{"exchange_history"}
 }
 
-// Handles is every exchange event.
 func (*Projector) Handles() []entity.Event {
 	return entity.ConversionEvents()
 }
 
-// Handle -.
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }

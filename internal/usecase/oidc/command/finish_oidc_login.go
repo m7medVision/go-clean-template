@@ -29,7 +29,7 @@ type FinishOIDCLogin struct {
 	Token string
 }
 
-// FinishOIDCLoginHandler handles FinishOIDCLogin. Now is the clock (time.Now when nil).
+// FinishOIDCLoginHandler's Now is the clock (time.Now when nil).
 type FinishOIDCLoginHandler struct {
 	SSO      repo.SSOProvider
 	Store    repo.EventStore
@@ -37,7 +37,6 @@ type FinishOIDCLoginHandler struct {
 	Now      func() time.Time
 }
 
-// Handle -.
 func (h FinishOIDCLoginHandler) Handle(ctx context.Context, cmd FinishOIDCLogin) (entity.SignedIn, error) {
 	identity, err := h.SSO.Verify(ctx, cmd.Code, cmd.State, cmd.Token)
 	if err != nil {
@@ -57,7 +56,6 @@ func (h FinishOIDCLoginHandler) Handle(ctx context.Context, cmd FinishOIDCLogin)
 	return entity.SignedIn{Written: written, Token: token}, nil
 }
 
-// user returns the user the identity's claim names, or creates one.
 func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *entity.SSOIdentity) (entity.Written, error) {
 	claim := entity.OIDCIdentity(identity.Issuer, identity.Subject)
 

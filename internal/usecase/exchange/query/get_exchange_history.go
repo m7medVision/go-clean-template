@@ -19,12 +19,10 @@ type GetExchangeHistory struct {
 	UserID string
 }
 
-// GetExchangeHistoryHandler handles GetExchangeHistory.
 type GetExchangeHistoryHandler struct {
 	History repo.ExchangeReadModel
 }
 
-// Handle -.
 func (h GetExchangeHistoryHandler) Handle(ctx context.Context, q GetExchangeHistory) (entity.List[entity.Conversion], error) {
 	history, err := h.History.History(ctx, q.UserID, q.Page)
 	if err != nil {

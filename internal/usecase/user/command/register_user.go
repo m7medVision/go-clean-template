@@ -23,16 +23,14 @@ type RegisterUser struct {
 	Password string
 }
 
-// Validate -.
 func (c RegisterUser) Validate() error { return entity.ValidateSignUp(c.Username, c.Email, c.Password) }
 
-// RegisterUserHandler handles RegisterUser. Now is the clock (time.Now when nil).
+// RegisterUserHandler's Now is the clock (time.Now when nil).
 type RegisterUserHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
 func (h RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUser) (entity.Written, error) {
 	hash, err := entity.HashPassword(cmd.Password)
 	if err != nil {

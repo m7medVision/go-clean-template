@@ -105,12 +105,10 @@ type SignedIn struct {
 	Token string
 }
 
-// WrittenAt is the position of the write.
 func (w Written) WrittenAt() int64 {
 	return w.Position
 }
 
-// WrittenEvents are the types of the events the write appended.
 func (w Written) WrittenEvents() []string {
 	return w.Events
 }

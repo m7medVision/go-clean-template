@@ -48,18 +48,14 @@ func newBuses(pg *postgres.Postgres, projectors []repo.Subscriber, consistencyTi
 	return cmds, qs
 }
 
-// newCodec returns the codec of the domain's events, as entity lists them and their upcasts.
 func newCodec() *eventcodec.Codec {
 	return eventcodec.New(entity.EventTypes(), entity.Upcasts()...)
 }
 
-// newEventStore returns the event store every command handler appends through. It snapshots a
-// stream every snapshotEvery events.
 func newEventStore(pg *postgres.Postgres, snapshotEvery int) repo.EventStore {
 	return eventstore.New(pg, newCodec(), snapshotEvery)
 }
 
-// subscribersOf is the projectors as the subscribers the wait step waits on.
 func subscribersOf(projectors []projection.Projector) []repo.Subscriber {
 	subs := make([]repo.Subscriber, len(projectors))
 	for i, p := range projectors {

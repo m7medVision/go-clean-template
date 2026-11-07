@@ -20,21 +20,16 @@ type ListAllTasks struct {
 	Status    *entity.TaskStatus
 }
 
-// AdminOnly -.
 func (ListAllTasks) AdminOnly() {}
 
-// Caller -.
 func (q ListAllTasks) Caller() entity.Principal { return q.Principal }
 
-// Validate -.
 func (q ListAllTasks) Validate() error { return validateList(q.Status, q.Page) }
 
-// ListAllTasksHandler handles ListAllTasks.
 type ListAllTasksHandler struct {
 	Tasks repo.TaskReadModel
 }
 
-// Handle -.
 func (h ListAllTasksHandler) Handle(ctx context.Context, q ListAllTasks) (entity.List[entity.Task], error) {
 	tasks, err := h.Tasks.ListAll(ctx, q.Status, q.Page)
 	if err != nil {

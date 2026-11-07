@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-// Message is a message read from a queue.
 type Message struct {
 	ID         int64
 	Queue      string
@@ -30,7 +29,6 @@ type Queue interface {
 	Delete(ctx context.Context, queue string, id int64) error
 }
 
-// Settings say how the worker reads its queues.
 type Settings struct {
 	// PollInterval is how long a queue loop sleeps after a read returns no messages.
 	PollInterval time.Duration
@@ -57,7 +55,6 @@ type Worker struct {
 	logger   *slog.Logger
 }
 
-// New returns a worker reading q with s.
 func New(l *slog.Logger, q Queue, s Settings) *Worker {
 	return &Worker{queue: q, handlers: make(map[string]HandlerFunc), settings: s, logger: l}
 }
@@ -105,7 +102,6 @@ func (w *Worker) Run(ctx context.Context) error {
 	return nil
 }
 
-// poll reads queue until ctx ends, and hands each message to h under handlerCtx.
 func (w *Worker) poll(ctx, handlerCtx context.Context, queue string, h HandlerFunc) {
 	for ctx.Err() == nil {
 		if w.readBatch(ctx, handlerCtx, queue, h) > 0 {
@@ -119,7 +115,6 @@ func (w *Worker) poll(ctx, handlerCtx context.Context, queue string, h HandlerFu
 	}
 }
 
-// readBatch handles one batch and returns how many messages it read.
 func (w *Worker) readBatch(ctx, handlerCtx context.Context, queue string, h HandlerFunc) int {
 	// The batch reappears to other readers once its visibility timeout passes, counted from the
 	// read; taking the time before the read keeps this deadline on the early side.

@@ -55,7 +55,6 @@ func New(baseURL string) repo.ExchangeWebAPI {
 	}
 }
 
-// Rate -.
 func (w *ExchangeWebAPI) Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error) {
 	body, err := w.latest(ctx, from)
 	if err != nil {

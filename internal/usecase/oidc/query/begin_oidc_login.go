@@ -16,18 +16,15 @@ type BeginOIDCLogin struct {
 	cqrs.Query[Started]
 }
 
-// Started is a sign-in begun.
 type Started struct {
 	AuthURL string
 	Token   string
 }
 
-// BeginOIDCLoginHandler handles BeginOIDCLogin.
 type BeginOIDCLoginHandler struct {
 	SSO repo.SSOProvider
 }
 
-// Handle -.
 func (h BeginOIDCLoginHandler) Handle(ctx context.Context, _ BeginOIDCLogin) (Started, error) {
 	authURL, token, err := h.SSO.Begin(ctx)
 	if err != nil {

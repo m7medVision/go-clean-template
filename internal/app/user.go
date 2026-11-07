@@ -38,7 +38,6 @@ func userModule() module {
 		},
 		projector: func(pg *postgres.Postgres) projection.Projector { return persistUserRepo.NewProjector(pg) },
 		eventHandlers: func(d *deps) []repo.Subscriber {
-			// The welcome email links to the sign-in page.
 			loginURL := d.cfg.App.BaseURL + "/login"
 
 			return []repo.Subscriber{userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(d.pg), loginURL)}}

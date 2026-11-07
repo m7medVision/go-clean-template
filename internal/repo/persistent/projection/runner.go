@@ -25,7 +25,6 @@ var (
 	errBusy = errors.New("projection: subscriber busy")
 )
 
-// Store is what the runner reads and writes through.
 type Store interface {
 	ReadAll(ctx context.Context, after int64, limit int) ([]entity.RecordedEvent, error)
 	InTx(ctx context.Context, fn func(ctx context.Context) error) error
@@ -42,7 +41,6 @@ type Store interface {
 	Notifications(ctx context.Context) <-chan struct{}
 }
 
-// Runner runs subscribers.
 type Runner struct {
 	store        Store
 	subscribers  []repo.Subscriber
@@ -90,7 +88,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
-// fanOut wakes every subscriber on each notification, until n closes.
 func fanOut(n <-chan struct{}, wakes []chan struct{}) {
 	for range n {
 		for _, w := range wakes {
@@ -117,7 +114,6 @@ func (r *Runner) run(ctx context.Context, s repo.Subscriber, wake <-chan struct{
 
 		switch {
 		case full, errors.Is(err, errMoved):
-			// More to read, or a reset to reload: go again at once.
 			continue
 		case err != nil && !errors.Is(err, errBusy):
 			r.logError(ctx, s, err)
@@ -201,8 +197,6 @@ func (r *Runner) batch(ctx context.Context, s repo.Subscriber, handles map[strin
 	return len(events) == r.batchSize, nil
 }
 
-// move runs handle, when there is one, and moves s's checkpoint from `from` to `to`, in one
-// transaction.
 func (r *Runner) move(ctx context.Context, s repo.Subscriber, from, to int64, handle func(ctx context.Context) error) error {
 	return r.store.InTx(ctx, func(ctx context.Context) error {
 		locked, err := r.store.TryLock(ctx, s.Name())

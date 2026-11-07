@@ -21,13 +21,11 @@ type LogIn struct {
 	Password string
 }
 
-// LogInHandler handles LogIn.
 type LogInHandler struct {
 	Users    repo.UserReadModel
 	Sessions repo.SessionIssuer
 }
 
-// Handle -.
 func (h LogInHandler) Handle(ctx context.Context, q LogIn) (entity.SignedIn, error) {
 	user, err := h.Users.ByEmail(ctx, q.Email)
 	if err != nil || !user.PasswordMatches(q.Password) {

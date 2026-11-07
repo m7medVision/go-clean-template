@@ -21,12 +21,10 @@ type Mailer struct {
 
 var _ repo.Mailer = (*Mailer)(nil)
 
-// New returns the mailer sending through client.
 func New(client Sender) *Mailer {
 	return &Mailer{client: client}
 }
 
-// Send delivers e.
 func (m *Mailer) Send(ctx context.Context, e repo.RenderedEmail) error {
 	err := m.client.Send(ctx, smtp.Message{To: e.To, Subject: e.Subject, HTML: e.HTML, Text: e.Text})
 	if err != nil {

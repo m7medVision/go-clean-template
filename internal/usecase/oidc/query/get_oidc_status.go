@@ -12,12 +12,10 @@ type GetOIDCStatus struct {
 	cqrs.Query[bool]
 }
 
-// GetOIDCStatusHandler handles GetOIDCStatus.
 type GetOIDCStatusHandler struct {
 	SSO repo.SSOProvider
 }
 
-// Handle -.
 func (h GetOIDCStatusHandler) Handle(context.Context, GetOIDCStatus) (bool, error) {
 	return h.SSO.Enabled(), nil
 }

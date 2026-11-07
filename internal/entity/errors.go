@@ -35,7 +35,6 @@ func newError(kind Kind, msg string) *Error {
 
 func (e *Error) Error() string { return e.msg }
 
-// Kind is what the failure means to the caller.
 func (e *Error) Kind() Kind { return e.kind }
 
 // KindOf is the kind of the first *Error in err's chain, or KindInternal.

@@ -18,12 +18,10 @@ type Projector struct {
 
 var _ repo.Subscriber = (*Projector)(nil)
 
-// NewProjector returns the task projector writing to pg.
 func NewProjector(pg *postgres.Postgres) *Projector {
 	return &Projector{pg: pg}
 }
 
-// Name -.
 func (*Projector) Name() string {
 	return "task"
 }
@@ -33,12 +31,10 @@ func (*Projector) Tables() []string {
 	return []string{"tasks"}
 }
 
-// Handles is every task event.
 func (*Projector) Handles() []entity.Event {
 	return entity.TaskEvents()
 }
 
-// Handle -.
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }

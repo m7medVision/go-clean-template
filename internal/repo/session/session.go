@@ -16,12 +16,10 @@ type Issuer struct {
 
 var _ repo.SessionIssuer = Issuer{}
 
-// New returns the issuer of tokens signed by tokens.
 func New(tokens *jwt.Manager) Issuer {
 	return Issuer{tokens: tokens}
 }
 
-// Issue -.
 func (i Issuer) Issue(userID string, roles []entity.Role) (string, error) {
 	token, err := i.tokens.GenerateToken(userID, entity.RoleNames(roles))
 	if err != nil {

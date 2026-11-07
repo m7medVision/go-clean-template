@@ -9,7 +9,6 @@ const (
 	ClaimOIDCIdentity = "oidc.identity"
 )
 
-// UserStreamID is the stream of the user with id.
 func UserStreamID(id string) string {
 	return "user-" + id
 }
@@ -78,17 +77,14 @@ func (u *UserAggregate) identityClaim(issuer, subject string) Claim {
 	return Claim{Scope: ClaimOIDCIdentity, Value: OIDCIdentity(issuer, subject), Owner: u.id, Taken: ErrOIDCIdentityTaken}
 }
 
-// StreamID -.
 func (u *UserAggregate) StreamID() string {
 	return UserStreamID(u.id)
 }
 
-// ID is the user's ID.
 func (u *UserAggregate) ID() string {
 	return u.id
 }
 
-// Apply -.
 func (u *UserAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case UserRegistered:
