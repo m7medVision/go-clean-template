@@ -59,7 +59,6 @@ func TestLogInRefusesEveryWrongCredentialAlike(t *testing.T) {
 		err  error
 	}{
 		"unknown email":   {err: entity.ErrUserNotFound},
-		"read failure":    {err: io.ErrUnexpectedEOF},
 		"wrong password":  {user: entity.User{ID: "u1", PasswordHash: hashed(t, "other")}},
 		"no password set": {user: entity.User{ID: "u1"}},
 	} {
@@ -71,4 +70,18 @@ func TestLogInRefusesEveryWrongCredentialAlike(t *testing.T) {
 
 		require.ErrorIs(t, err, entity.ErrInvalidCredentials, name)
 	}
+}
+
+// A read that fails, a database outage, is the app's failure, logged as one: not a wrong credential.
+func TestLogInReturnsAReadFailure(t *testing.T) {
+	t.Parallel()
+
+	read := users(t)
+	read.EXPECT().ByEmail(gomock.Any(), "jo@example.com").Return(entity.User{}, io.ErrUnexpectedEOF)
+
+	_, err := query.LogInHandler{Users: read, Sessions: session.New(jwt.New("key", time.Hour))}.Handle(context.Background(),
+		query.LogIn{Email: "jo@example.com", Password: "secret"})
+
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	assert.NotErrorIs(t, err, entity.ErrInvalidCredentials)
 }

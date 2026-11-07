@@ -4,6 +4,7 @@ package query
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -12,8 +13,8 @@ import (
 )
 
 // LogIn checks a password and returns an auth token with the local roles. Every wrong credential
-// is entity.ErrInvalidCredentials alike, so a caller cannot tell which emails exist. It changes
-// nothing, so it is a query.
+// is entity.ErrInvalidCredentials alike, so a caller cannot tell which emails exist; a read that
+// fails is not a wrong credential, and is returned wrapped. It changes nothing, so it is a query.
 type LogIn struct {
 	cqrs.Query[entity.SignedIn]
 
@@ -28,7 +29,15 @@ type LogInHandler struct {
 
 func (h LogInHandler) Handle(ctx context.Context, q LogIn) (entity.SignedIn, error) {
 	user, err := h.Users.ByEmail(ctx, q.Email)
-	if err != nil || !user.PasswordMatches(q.Password) {
+	if errors.Is(err, entity.ErrUserNotFound) {
+		return entity.SignedIn{}, entity.ErrInvalidCredentials
+	}
+
+	if err != nil {
+		return entity.SignedIn{}, fmt.Errorf("LogIn - h.Users.ByEmail: %w", err)
+	}
+
+	if !user.PasswordMatches(q.Password) {
 		return entity.SignedIn{}, entity.ErrInvalidCredentials
 	}
 
