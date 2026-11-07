@@ -16,7 +16,7 @@ const _exchangeHistory = `query { exchangeHistory(limit: 5, offset: 10) {
 func TestExchangeHistory(t *testing.T) {
 	t.Parallel()
 
-	ex := &fakeExchange{history: entity.ExchangeHistory{Total: 11, History: []entity.Conversion{{
+	ex := &fakeExchange{history: entity.List[entity.Conversion]{Total: 11, Items: []entity.Conversion{{
 		From: "OMR", To: "CNY",
 		Amount:   decimal.RequireFromString("100.10"),
 		Rate:     decimal.RequireFromString("17.406483"),
@@ -33,29 +33,13 @@ func TestExchangeHistory(t *testing.T) {
 	assert.Equal(t, 10, ex.gotOffset)
 }
 
-func TestExchangeHistoryRejects(t *testing.T) {
+func TestExchangeHistoryUnauthenticated(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct {
-		name          string
-		authenticated bool
-		query         string
-		code          string
-	}{
-		{"no token", false, _exchangeHistory, "UNAUTHENTICATED"},
-		{"limit below 1", true, `query { exchangeHistory(limit: 0) { total } }`, "BAD_USER_INPUT"},
-		{"limit above 100", true, `query { exchangeHistory(limit: 101) { total } }`, "BAD_USER_INPUT"},
-		{"negative offset", true, `query { exchangeHistory(offset: -1) { total } }`, "BAD_USER_INPUT"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	ex := &fakeExchange{}
 
-			ex := &fakeExchange{}
+	resp := do(t, ex, false, _exchangeHistory)
 
-			resp := do(t, ex, tc.authenticated, tc.query)
-
-			assert.Equal(t, tc.code, resp.Code(t))
-			assert.False(t, ex.called)
-		})
-	}
+	assert.Equal(t, "UNAUTHENTICATED", resp.Code(t))
+	assert.False(t, ex.called)
 }

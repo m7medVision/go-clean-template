@@ -3,24 +3,31 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 )
 
+// Queue enqueues a message body on a named queue. The Postgres queue (internal/repo/persistent/queue)
+// implements it, joining the transaction the context carries: an event handler's email commits with
+// its checkpoint.
+type Queue interface {
+	Send(ctx context.Context, queue string, body json.RawMessage) (int64, error)
+}
+
 // Notifier enqueues account emails on the mail queue.
 type Notifier struct {
-	queue    repo.QueueRepo
+	queue    Queue
 	loginURL string
 }
 
 var _ repo.UserNotifier = (*Notifier)(nil)
 
-// New returns a UserNotifier instrumented with OpenTelemetry tracing spans. loginURL is the sign-in
-// page the welcome email links to.
-func New(q repo.QueueRepo, loginURL string) repo.UserNotifier {
-	return newTraced(&Notifier{queue: q, loginURL: loginURL})
+// New returns a UserNotifier. loginURL is the sign-in page the welcome email links to.
+func New(q Queue, loginURL string) repo.UserNotifier {
+	return &Notifier{queue: q, loginURL: loginURL}
 }
 
 // Welcome enqueues the welcome email; the worker sends it.

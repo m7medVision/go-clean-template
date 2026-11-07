@@ -1,0 +1,35 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (r *controller) list{{.Name.Plural.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-{{.Name.Plural.Kebab}}",
+		Summary:     "List {{.Name.Plural.Words}}",
+		Description: "List the current user's {{.Name.Plural.Words}}, newest first",
+		Method:      http.MethodGet,
+		Path:        "/v1/{{.Name.Plural.Kebab}}",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotImplemented),
+	}, func(ctx context.Context, input *list{{.Name.Plural.Go}}Input) (*list{{.Name.Plural.Go}}Output, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		page, err := cqrs.SendQuery(ctx, r.qs, query.List{{.Name.Plural.Go}}{UserID: userID, Limit: input.Limit, Offset: input.Offset})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "list{{.Name.Plural.Go}}")
+		}
+
+		return &list{{.Name.Plural.Go}}Output{Body: {{.Name.Go}}List{ {{- .Name.Plural.Go}}: page.Items, Total: page.Total}}, nil
+	})
+}

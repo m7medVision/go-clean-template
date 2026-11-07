@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -15,83 +16,83 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo reads the tasks table.
+// Repo reads the tasks table. Its queries join the transaction the context carries.
 type Repo struct {
-	q *queries.Queries
+	pg *postgres.Postgres
 }
 
-// NewReadModel returns the task read model, instrumented with OpenTelemetry tracing spans.
 func NewReadModel(pg *postgres.Postgres) repo.TaskReadModel {
-	return newTraced(&Repo{queries.New(pg.Pool)})
+	return &Repo{pg: pg}
 }
 
-// Get -.
-func (r *Repo) Get(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	task, err := r.q.GetTask(ctx, taskID)
+func (r *Repo) q(ctx context.Context) *queries.Queries {
+	return queries.New(r.pg.Executor(ctx))
+}
+
+// Get reads the task with taskID. An ID other than a UUID as the app writes them, in lower case,
+// names no task, so it is entity.ErrTaskNotFound, as it is on the write side, not the error
+// tasks.id would raise.
+func (r *Repo) Get(ctx context.Context, taskID string) (entity.Task, error) {
+	if id, err := uuid.Parse(taskID); err != nil || id.String() != taskID {
+		return entity.Task{}, entity.ErrTaskNotFound
+	}
+
+	task, err := r.q(ctx).GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Task{}, entity.ErrTaskNotFound
 		}
 
-		return entity.Task{}, fmt.Errorf("TaskReadModel - Get - r.q.GetTask: %w", err)
-	}
-
-	if task.UserID != userID {
-		return entity.Task{}, entity.ErrTaskForbidden
+		return entity.Task{}, fmt.Errorf("TaskReadModel - Get - r.q(ctx).GetTask: %w", err)
 	}
 
 	return entity.Task(task), nil
 }
 
-// List -.
-func (r *Repo) List(ctx context.Context, userID string, filter repo.TaskFilter) ([]entity.Task, int, error) {
-	status := (*string)(filter.Status)
-
-	total, err := r.q.CountTasks(ctx, queries.CountTasksParams{UserID: userID, Status: status})
+func (r *Repo) List(
+	ctx context.Context, userID string, status *entity.TaskStatus, page entity.Page,
+) (entity.List[entity.Task], error) {
+	total, err := r.q(ctx).CountTasks(ctx, queries.CountTasksParams{UserID: userID, Status: (*string)(status)})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskReadModel - List - r.q.CountTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - List - r.q(ctx).CountTasks: %w", err)
 	}
 
-	rows, err := r.q.ListTasks(ctx, queries.ListTasksParams{
+	rows, err := r.q(ctx).ListTasks(ctx, queries.ListTasksParams{
 		UserID: userID,
-		Status: status,
-		Limit:  filter.Limit,
-		Offset: filter.Offset,
+		Status: (*string)(status),
+		Limit:  int64(page.Size()),
+		Offset: int64(page.Offset),
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskReadModel - List - r.q.ListTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - List - r.q(ctx).ListTasks: %w", err)
 	}
 
-	tasks := make([]entity.Task, len(rows))
-	for i := range rows {
-		tasks[i] = entity.Task(rows[i])
-	}
-
-	return tasks, int(total), nil
+	return entity.List[entity.Task]{Items: tasks(rows), Total: int(total)}, nil
 }
 
-// ListAll -.
-func (r *Repo) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Task, int, error) {
-	status := (*string)(filter.Status)
-
-	total, err := r.q.CountAllTasks(ctx, status)
+func (r *Repo) ListAll(ctx context.Context, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error) {
+	total, err := r.q(ctx).CountAllTasks(ctx, (*string)(status))
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskReadModel - ListAll - r.q.CountAllTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - ListAll - r.q(ctx).CountAllTasks: %w", err)
 	}
 
-	rows, err := r.q.ListAllTasks(ctx, queries.ListAllTasksParams{
-		Status: status,
-		Limit:  filter.Limit,
-		Offset: filter.Offset,
+	rows, err := r.q(ctx).ListAllTasks(ctx, queries.ListAllTasksParams{
+		Status: (*string)(status),
+		Limit:  int64(page.Size()),
+		Offset: int64(page.Offset),
 	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("TaskReadModel - ListAll - r.q.ListAllTasks: %w", err)
+		return entity.List[entity.Task]{}, fmt.Errorf("TaskReadModel - ListAll - r.q(ctx).ListAllTasks: %w", err)
 	}
 
+	return entity.List[entity.Task]{Items: tasks(rows), Total: int(total)}, nil
+}
+
+func tasks(rows []queries.Task) []entity.Task {
 	tasks := make([]entity.Task, len(rows))
 	for i := range rows {
 		tasks[i] = entity.Task(rows[i])
 	}
 
-	return tasks, int(total), nil
+	return tasks
 }

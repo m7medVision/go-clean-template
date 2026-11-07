@@ -2,12 +2,7 @@ package entity
 
 import "time"
 
-// The widget events, all at schema version 1. Each carries the widget's ID, so a projector needs no
-// other context. A stored event is never rewritten: changing one's shape means raising its version
-// and adding an upcast (docs/cqrs.md).
-const _widgetEventsVersion = 1
-
-// WidgetCreated is the first event of every widget.
+// WidgetCreated is one widget's first event.
 type WidgetCreated struct {
 	WidgetID string    `json:"widget_id"`
 	UserID   string    `json:"user_id"`
@@ -26,24 +21,20 @@ type WidgetDeleted struct {
 	At       time.Time `json:"at"`
 }
 
-// EventType -.
 func (WidgetCreated) EventType() string { return "WidgetCreated" }
 
-// SchemaVersion -.
-func (WidgetCreated) SchemaVersion() int { return _widgetEventsVersion }
+// SchemaVersion is the version of the event's shape, raised with an upcast when it changes.
+func (WidgetCreated) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (WidgetUpdated) EventType() string { return "WidgetUpdated" }
 
-// SchemaVersion -.
-func (WidgetUpdated) SchemaVersion() int { return _widgetEventsVersion }
+func (WidgetUpdated) SchemaVersion() int { return 1 }
 
-// EventType -.
 func (WidgetDeleted) EventType() string { return "WidgetDeleted" }
 
-// SchemaVersion -.
-func (WidgetDeleted) SchemaVersion() int { return _widgetEventsVersion }
+func (WidgetDeleted) SchemaVersion() int { return 1 }
 
-func widgetEvents() []Event {
+// WidgetEvents lists the widget events, one zero value each.
+func WidgetEvents() []Event {
 	return []Event{WidgetCreated{}, WidgetUpdated{}, WidgetDeleted{}}
 }

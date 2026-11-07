@@ -1,0 +1,35 @@
+package widget
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+func (r *controller) listWidgets(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-widgets",
+		Summary:     "List widgets",
+		Description: "List the current user's widgets, newest first",
+		Method:      http.MethodGet,
+		Path:        "/v1/widgets",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotImplemented),
+	}, func(ctx context.Context, input *listWidgetsInput) (*listWidgetsOutput, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		page, err := cqrs.SendQuery(ctx, r.qs, query.ListWidgets{UserID: userID, Limit: input.Limit, Offset: input.Offset})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "listWidgets")
+		}
+
+		return &listWidgetsOutput{Body: WidgetList{Widgets: page.Items, Total: page.Total}}, nil
+	})
+}

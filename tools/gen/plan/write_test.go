@@ -89,8 +89,7 @@ func TestWriteWritesEveryChange(t *testing.T) {
 
 	dir, root := tree(t)
 
-	written, err := plan.Write(root, changes())
-	require.NoError(t, err)
+	require.NoError(t, plan.Write(root, changes()))
 
 	got, err := os.ReadFile(filepath.Join(dir, "internal", "usecase", "widget", "command", "create_widget.go"))
 	require.NoError(t, err)
@@ -103,9 +102,6 @@ func TestWriteWritesEveryChange(t *testing.T) {
 	info, err := os.Stat(filepath.Join(dir, "internal", "app", "buses.go"))
 	require.NoError(t, err)
 	assert.Equal(t, fs.FileMode(0o600), info.Mode().Perm(), "an edited file keeps its mode, not the 0644 of a new one")
-
-	assert.Equal(t, []string{"internal/entity/widget.go", "internal/usecase/widget"}, written.Removable)
-	assert.Equal(t, []string{"internal/app/buses.go", "README.md"}, written.Edited)
 
 	entries, err := os.ReadDir(filepath.Join(dir, "internal", "app"))
 	require.NoError(t, err)
@@ -124,8 +120,8 @@ func TestWriteUndoesEverythingWhenAStepFails(t *testing.T) {
 			dir, root := tree(t)
 			before := fingerprint(t, dir)
 
-			_, err := plan.Write(&failing{FS: root, failAt: failAt}, changes())
-			require.ErrorIs(t, err, plan.ErrWrite)
+			err := plan.Write(&failing{FS: root, failAt: failAt}, changes())
+			require.ErrorContains(t, err, "R6 all or nothing: ")
 			require.ErrorIs(t, err, errInjected)
 
 			assert.Equal(t, before, fingerprint(t, dir))

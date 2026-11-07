@@ -2,37 +2,29 @@ package app
 
 import (
 	"fmt"
-	"strings"
-	"time"
 
-	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	restoidc "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/oidc"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
+	"github.com/m7medvision/go-clean-template/internal/repo/sso"
+	"github.com/m7medvision/go-clean-template/internal/usecase/oidc"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-const (
-	// _oidcStateScope scopes the SSO sign-in state token's key and audience.
-	_oidcStateScope = "oidc-state"
-	// _oidcStateTimeout is how long a user has to sign in at the provider.
-	_oidcStateTimeout = 10 * time.Minute
-	// _oidcCallbackPath is the web client's route the provider redirects back to.
-	_oidcCallbackPath = "/sso/callback"
-)
+// oidcModule is SSO sign-in through an OpenID Connect provider, and its REST operations. It has no
+// read model: a sign-in finds its user through the identity's claim.
+func oidcModule() module {
+	return module{
+		handlers: func(d *deps, b cqrs.Buses) error {
+			// The provider is discovered on the first sign-in, so the app starts while it is down.
+			s, err := sso.New(d.cfg.JWT.Secret, d.cfg.OIDC, d.cfg.App.SSOCallbackURL())
+			if err != nil {
+				return fmt.Errorf("oidc - sso.New: %w", err)
+			}
 
-// newSSO builds the SSO sign-in the OIDC handlers share. It never fails on the provider: that is
-// discovered on the first sign-in, so the app starts while it is down. With no OIDC_ISSUER it is off.
-func newSSO(cfg *config.Config) (*sso.SSO, error) {
-	state, err := jwt.NewScoped(cfg.JWT.Secret, _oidcStateScope, _oidcStateTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
+			oidc.Register(b.Commands, b.Queries, oidc.Deps{SSO: s, Store: d.store, Sessions: session.New(d.tokens)})
+
+			return nil
+		},
+		rest: restoidc.NewRoutes,
 	}
-
-	return sso.New(state, &sso.Config{
-		Issuer:       cfg.OIDC.Issuer,
-		ClientID:     cfg.OIDC.ClientID,
-		ClientSecret: cfg.OIDC.ClientSecret,
-		RedirectURL:  strings.TrimSuffix(cfg.App.BaseURL, "/") + _oidcCallbackPath,
-		RolesClaim:   cfg.OIDC.RolesClaim,
-		RoleMap:      cfg.OIDC.RoleMap,
-	}), nil
 }

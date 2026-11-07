@@ -2,16 +2,16 @@ package command_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,11 +33,11 @@ func (f *fixture) login(t *testing.T) login {
 	users.EXPECT().ByID(gomock.Any(), f.user.ID).Return(f.user, nil).AnyTimes()
 
 	guard := newBurnStore()
-	tokens := jwt.New(passkeytest.SigningKey, time.Hour)
+	tokens := jwt.New(ceremonytest.SigningKey, time.Hour)
 
 	return login{
 		handler: &command.FinishPasskeyLoginHandler{
-			Ceremony: f.ceremony, Store: f.store, Users: users, Guard: guard, Tx: inline{}, Tokens: tokens, Now: now,
+			Ceremony: f.ceremony, Store: f.store, Users: users, Guard: guard, Sessions: session.New(tokens), Now: now,
 		},
 		guard:  guard,
 		tokens: tokens,
@@ -45,19 +45,13 @@ func (f *fixture) login(t *testing.T) login {
 }
 
 // assertion begins a login and answers it with the fixture's credential.
-func (f *fixture) assertion(t *testing.T) (token string, body []byte, challenge string) {
+func (f *fixture) assertion(t *testing.T) (token string, body []byte) {
 	t.Helper()
 
 	started, err := f.ceremony.BeginLogin()
 	require.NoError(t, err)
 
-	var raw struct {
-		Challenge string `json:"challenge"`
-	}
-
-	require.NoError(t, json.Unmarshal(started.Options, &raw))
-
-	return started.Token, passkeytest.Assert(t, started.Options, f.cred, &f.auth), raw.Challenge
+	return started.Token, ceremonytest.Assert(t, started.Options, f.cred, &f.auth)
 }
 
 func TestFinishPasskeyLoginSignsInAndRecordsTheUse(t *testing.T) {
@@ -68,7 +62,7 @@ func TestFinishPasskeyLoginSignsInAndRecordsTheUse(t *testing.T) {
 	f.cred.Counter = 1
 	l := f.login(t)
 
-	token, body, challenge := f.assertion(t)
+	token, body := f.assertion(t)
 
 	signedIn, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 	require.NoError(t, err)
@@ -80,12 +74,9 @@ func TestFinishPasskeyLoginSignsInAndRecordsTheUse(t *testing.T) {
 	assert.Equal(t, id.String(), signedIn.ID)
 	assert.Positive(t, signedIn.Position)
 
-	hash := sha256.Sum256([]byte(challenge))
-	assert.Contains(t, l.guard.used, string(hash[:]))
-
 	used, ok := f.events(id)[1].(entity.PasskeyUsed)
 	require.True(t, ok)
-	assert.Equal(t, nowStored(), used.At)
+	assert.Equal(t, now(), used.At)
 
 	var record webauthn.Credential
 
@@ -99,7 +90,7 @@ func TestFinishingTheSameLoginAgainIsAReplay(t *testing.T) {
 	f := newFixture(t)
 	id := f.register(t)
 	l := f.login(t)
-	token, body, _ := f.assertion(t)
+	token, body := f.assertion(t)
 
 	_, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 	require.NoError(t, err)
@@ -109,6 +100,11 @@ func TestFinishingTheSameLoginAgainIsAReplay(t *testing.T) {
 	require.ErrorIs(t, err, entity.ErrPasskeyChallengeUsed)
 	assert.Empty(t, replayed.Token)
 	assert.Len(t, f.events(id), 2, "a replay records no second use")
+
+	token, body = f.assertion(t)
+
+	_, err = l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
+	require.NoError(t, err, "only that ceremony's challenge is burned")
 }
 
 func TestADeletedPasskeyCannotSignIn(t *testing.T) {
@@ -121,42 +117,37 @@ func TestADeletedPasskeyCannotSignIn(t *testing.T) {
 		command.DeletePasskey{UserID: f.user.ID, ID: id.String()})
 	require.NoError(t, err)
 
-	token, body, _ := f.assertion(t)
+	token, body := f.assertion(t)
 
 	_, err = f.login(t).handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
-	require.ErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
+	require.ErrorIs(t, err, entity.ErrPasskeyLoginInvalid)
 }
 
 func TestAnUnregisteredCredentialCannotSignIn(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	token, body, _ := f.assertion(t)
+	token, body := f.assertion(t)
 
 	_, err := f.login(t).handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
-	require.ErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
+	require.ErrorIs(t, err, entity.ErrPasskeyLoginInvalid)
 }
 
 func TestAGuardFailureIsNotABadCeremony(t *testing.T) {
 	t.Parallel()
 
-	for name, set := range map[string]func(b *burnStore){
-		"expired challenge cleanup": func(b *burnStore) { b.expireErr = errGuard },
-		"burn":                      func(b *burnStore) { b.burnErr = errGuard },
-	} {
-		f := newFixture(t)
-		id := f.register(t)
-		l := f.login(t)
-		set(l.guard)
+	f := newFixture(t)
+	id := f.register(t)
+	l := f.login(t)
+	l.guard.burnErr = errGuard
 
-		token, body, _ := f.assertion(t)
+	token, body := f.assertion(t)
 
-		_, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
+	_, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
-		require.ErrorIs(t, err, errGuard, name)
-		require.NotErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid, name)
-		assert.Len(t, f.events(id), 1, name)
-	}
+	require.ErrorIs(t, err, errGuard)
+	require.NotErrorIs(t, err, entity.ErrPasskeyLoginInvalid)
+	assert.Len(t, f.events(id), 1, "a login whose burn failed records no use")
 }

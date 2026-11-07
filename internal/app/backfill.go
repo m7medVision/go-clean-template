@@ -1,21 +1,21 @@
 package app
 
 import (
-	"github.com/m7medvision/go-clean-template/internal/repo"
-	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
-	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
-	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
-	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// importers lists, per domain, what turns the rows it wrote before event sourcing into events. Run
-// calls them through eventstore.Backfill before it serves, and each runs once.
-func importers(pg *postgres.Postgres, store repo.EventStore) []repo.Importer {
-	return []repo.Importer{
-		persistTaskRepo.NewImporter(pg, store),
-		persistUserRepo.NewImporter(pg, store),
-		persistExchangeRepo.NewImporter(pg, store),
-		persistPasskeyRepo.NewImporter(pg, store),
+// importers lists each module's importer: what turns the rows its domain wrote before event
+// sourcing into events. Run calls them through eventstore.Backfill before it serves, and each runs
+// once; a rebuild refuses until they have.
+func importers(pg *postgres.Postgres) []eventstore.Importer {
+	var imps []eventstore.Importer
+
+	for _, m := range modules() {
+		if m.importer != nil {
+			imps = append(imps, m.importer(pg))
+		}
 	}
+
+	return imps
 }

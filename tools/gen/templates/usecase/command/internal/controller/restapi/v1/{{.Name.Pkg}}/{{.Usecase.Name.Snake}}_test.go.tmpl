@@ -1,0 +1,61 @@
+{{- $id := print .Name.Kebab "-1" -}}
+package {{.Name.Pkg}}_test
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"{{.Module}}/internal/controller/restapi/resttest"
+	"{{.Module}}/internal/controller/restapi/v1/{{.Name.Pkg}}"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// Test{{.Usecase.Name.Go}}Operation sends {{.Usecase.Name.Kebab}} through real buses whose one handler is a
+// fake {{.Usecase.Name.Go}} handler, so it holds once the handler is written: it checks what the operation
+// sends and answers, and that the stub's entity.ErrNotImplemented answers 501.
+func Test{{.Usecase.Name.Go}}Operation(t *testing.T) {
+	t.Parallel()
+
+	token := resttest.Token(t)
+	sent := []command.{{.Usecase.Name.Go}}{{"{{"}}UserID: "user-1"{{if .Usecase.ByID}}, {{.Name.Go}}ID: "{{$id}}"{{end}}}}
+
+	for name, tc := range map[string]struct {
+		token  string
+		err    error
+		status int
+		want   string
+		sent   []command.{{.Usecase.Name.Go}}
+	}{
+		"answers the ID it wrote":    {token: token, status: http.StatusOK, want: `{"id":"{{$id}}"}`, sent: sent},
+		"a stub handler answers 501": {token: token, err: entity.ErrNotImplemented, status: http.StatusNotImplemented, sent: sent},
+		"needs the caller":           {status: http.StatusUnauthorized},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []command.{{.Usecase.Name.Go}}
+
+			b := resttest.NewBuses()
+			cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.{{.Usecase.Name.Go}}, entity.Written](
+				func(_ context.Context, cmd command.{{.Usecase.Name.Go}}) (entity.Written, error) {
+					got = append(got, cmd)
+
+					return entity.Written{ID: "{{$id}}"}, tc.err
+				}))
+
+			resp := resttest.Do(t.Context(), resttest.NewRouter(b, {{.Name.Pkg}}.NewRoutes), {{.Usecase.HTTPMethod}}, "{{.Usecase.Target $id}}", tc.token, "")
+
+			require.Equal(t, tc.status, resp.Code, resp.Body.String())
+			assert.Equal(t, tc.sent, got)
+
+			if tc.want != "" {
+				assert.JSONEq(t, tc.want, resp.Body.String())
+			}
+		})
+	}
+}

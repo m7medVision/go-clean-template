@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -20,9 +21,10 @@ type Actor interface {
 	ActorID() string
 }
 
-// Restricted is a message only a caller holding a role may send.
-type Restricted interface {
-	RequiredRole() entity.Role
+// AdminOnly is a message only a caller holding entity.RoleAdmin may send. Every caller holds
+// entity.RoleUser, so admin is the only role a message can require.
+type AdminOnly interface {
+	AdminOnly()
 	Caller() entity.Principal
 }
 
@@ -47,23 +49,30 @@ func Stamp() cqrs.Step {
 	}
 }
 
-// Wait holds a command's result until every projector in projectors has handled the event at its
-// position (cqrs.Written, alone or embedded), checking every tick, so a read sent straight after the
-// command sees the write.
+// Wait holds a command's result until the projectors of the events it wrote (an entity.Write, alone
+// or embedded) have handled the event at its position, checking every tick, so a read sent straight
+// after the command sees the write. projectors names, for each event type, the projectors that
+// handle it. A projector that handles none of the events written is not waited for, so one that is
+// stuck holds up only the writes it projects; a command that wrote no events waits for nothing.
 // Past timeout it returns entity.ErrReadModelBehind: the write itself is committed.
-func Wait(checkpoints repo.ProjectionCheckpoints, projectors []string, timeout, tick time.Duration) cqrs.Step {
+func Wait(checkpoints repo.ProjectionCheckpoints, projectors map[string][]string, timeout, tick time.Duration) cqrs.Step {
 	return func(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
 		out, err := next(ctx)
-		if err != nil || len(projectors) == 0 {
+		if err != nil {
 			return out, err
 		}
 
-		written, ok := out.(interface{ WrittenAt() int64 })
-		if !ok || written.WrittenAt() == 0 {
+		written, ok := out.(entity.Write)
+		if !ok {
 			return out, nil
 		}
 
-		if err = waitFor(ctx, checkpoints, projectors, written.WrittenAt(), timeout, tick); err != nil {
+		names := projecting(projectors, written.WrittenEvents())
+		if len(names) == 0 {
+			return out, nil
+		}
+
+		if err = waitFor(ctx, checkpoints, names, written.WrittenAt(), timeout, tick); err != nil {
 			return out, fmt.Errorf("behavior - Wait %s: %w", msg.Name, err)
 		}
 
@@ -71,7 +80,21 @@ func Wait(checkpoints repo.ProjectionCheckpoints, projectors []string, timeout, 
 	}
 }
 
-// waitFor polls the projectors' checkpoints every tick until all reach position, or timeout.
+// projecting lists, once each, the projectors of the event types written.
+func projecting(projectors map[string][]string, written []string) []string {
+	var names []string
+
+	for _, eventType := range written {
+		for _, name := range projectors[eventType] {
+			if !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+
+	return names
+}
+
 func waitFor(
 	ctx context.Context, checkpoints repo.ProjectionCheckpoints, projectors []string, position int64,
 	timeout, tick time.Duration,
@@ -116,20 +139,14 @@ func Retry(attempts int) cqrs.Step {
 	}
 }
 
-// Authorize stops a Restricted message whose caller lacks its role: entity.ErrAdminRequired for
-// the admin role, entity.ErrRoleRequired for any other.
+// Authorize stops an AdminOnly message whose caller is not an admin with entity.ErrAdminRequired.
 func Authorize() cqrs.Step {
 	return func(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
-		r, ok := msg.Body.(Restricted)
-		if !ok || r.Caller().Has(r.RequiredRole()) {
-			return next(ctx)
-		}
-
-		if r.RequiredRole() == entity.RoleAdmin {
+		if a, ok := msg.Body.(AdminOnly); ok && !a.Caller().Has(entity.RoleAdmin) {
 			return nil, entity.ErrAdminRequired
 		}
 
-		return nil, fmt.Errorf("%w: %s", entity.ErrRoleRequired, r.RequiredRole())
+		return next(ctx)
 	}
 }
 

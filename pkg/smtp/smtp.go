@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	_defaultTimeout = 30 * time.Second
+	// _timeout bounds one whole send: dial, conversation and data.
+	_timeout        = 30 * time.Second
 	_messageIDBytes = 16
 )
 
@@ -31,48 +32,47 @@ var ErrInvalidAddress = errors.New("invalid email address")
 // Client sends each message on its own connection: STARTTLS when the server offers it, then AUTH
 // when credentials are set.
 type Client struct {
-	host    string
-	addr    string
-	from    string
-	auth    smtp.Auth
-	timeout time.Duration
+	host string
+	addr string
+	from *mail.Address
+	auth smtp.Auth
 }
 
 // New returns a client for the relay at host:port that sends from from, an RFC 5322 address such as
-// "App <noreply@example.com>".
-func New(host string, port int, from string, opts ...Option) *Client {
+// "App <noreply@example.com>". A from that is not exactly one address is ErrInvalidAddress, so a
+// bad sender stops the binary at startup instead of failing every send.
+func New(host string, port int, from string, opts ...Option) (*Client, error) {
+	sender, err := parseAddress(from)
+	if err != nil {
+		return nil, fmt.Errorf("smtp - New - from: %w", err)
+	}
+
 	c := &Client{
-		host:    host,
-		addr:    net.JoinHostPort(host, strconv.Itoa(port)),
-		from:    from,
-		timeout: _defaultTimeout,
+		host: host,
+		addr: net.JoinHostPort(host, strconv.Itoa(port)),
+		from: sender,
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	return c
+	return c, nil
 }
 
 // Send delivers m as a multipart/alternative message: the text part, then the HTML part.
 func (c *Client) Send(ctx context.Context, m Message) error {
-	from, err := parseAddress(c.from)
-	if err != nil {
-		return fmt.Errorf("smtp - Send - from: %w", err)
-	}
-
 	to, err := parseAddress(m.To)
 	if err != nil {
 		return fmt.Errorf("smtp - Send - to: %w", err)
 	}
 
-	data, err := build(from, to, m)
+	data, err := build(c.from, to, m)
 	if err != nil {
 		return fmt.Errorf("smtp - Send - build: %w", err)
 	}
 
-	if err := c.deliver(ctx, from.Address, to.Address, data); err != nil {
+	if err := c.deliver(ctx, c.from.Address, to.Address, data); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("smtp - Send: %w", ctxErr)
 		}
@@ -99,7 +99,7 @@ func (c *Client) deliver(ctx context.Context, from, to string, data []byte) erro
 		return err
 	}
 
-	dialer := net.Dialer{Timeout: c.timeout}
+	dialer := net.Dialer{Timeout: _timeout}
 
 	conn, err := dialer.DialContext(ctx, "tcp", c.addr)
 	if err != nil {
@@ -110,7 +110,7 @@ func (c *Client) deliver(ctx context.Context, from, to string, data []byte) erro
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 
-	if err = conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+	if err = conn.SetDeadline(time.Now().Add(_timeout)); err != nil {
 		_ = conn.Close()
 
 		return fmt.Errorf("set deadline: %w", err)
@@ -151,7 +151,6 @@ func (c *Client) converse(client *smtp.Client, from, to string, data []byte) err
 	return nil
 }
 
-// handshake upgrades to TLS when the server offers it, then authenticates when credentials are set.
 func (c *Client) handshake(client *smtp.Client) error {
 	if ok, _ := client.Extension("STARTTLS"); ok {
 		if err := client.StartTLS(&tls.Config{ServerName: c.host, MinVersion: tls.VersionTLS12}); err != nil {
@@ -253,7 +252,6 @@ func writePart(parts *multipart.Writer, mediaType, content string) error {
 	return nil
 }
 
-// messageID returns a random Message-ID under the sender's domain.
 func messageID(from string) (string, error) {
 	b := make([]byte, _messageIDBytes)
 	if _, err := rand.Read(b); err != nil {

@@ -1,0 +1,60 @@
+package widget_test
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/widget"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestCountWidgetsOperation sends count-widgets through real buses whose one handler is a
+// fake CountWidgets handler, so it holds once the handler is written: it checks what the operation
+// sends and answers, and that the stub's entity.ErrNotImplemented answers 501.
+func TestCountWidgetsOperation(t *testing.T) {
+	t.Parallel()
+
+	token := resttest.Token(t)
+	sent := []query.CountWidgets{{UserID: "user-1"}}
+
+	for name, tc := range map[string]struct {
+		token  string
+		err    error
+		status int
+		want   string
+		sent   []query.CountWidgets
+	}{
+		"answers the result":         {token: token, status: http.StatusOK, want: `{}`, sent: sent},
+		"a stub handler answers 501": {token: token, err: entity.ErrNotImplemented, status: http.StatusNotImplemented, sent: sent},
+		"needs the caller":           {status: http.StatusUnauthorized},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []query.CountWidgets
+
+			b := resttest.NewBuses()
+			cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.CountWidgets, query.CountWidgetsResult](
+				func(_ context.Context, q query.CountWidgets) (query.CountWidgetsResult, error) {
+					got = append(got, q)
+
+					return query.CountWidgetsResult{}, tc.err
+				}))
+
+			resp := resttest.Do(t.Context(), resttest.NewRouter(b, widget.NewRoutes), http.MethodGet, "/v1/widgets/count", tc.token, "")
+
+			require.Equal(t, tc.status, resp.Code, resp.Body.String())
+			assert.Equal(t, tc.sent, got)
+
+			if tc.want != "" {
+				assert.JSONEq(t, tc.want, resp.Body.String())
+			}
+		})
+	}
+}

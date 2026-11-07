@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventstoretest"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
@@ -20,8 +21,11 @@ import (
 
 const (
 	storePoolSize = 10
-	// lateWriteWait is how long the ordering test lets a second writer run before it reads.
-	lateWriteWait = 300 * time.Millisecond
+	// connectWait bounds how long a test waits for the stack's database, which is up by then.
+	connectWait = 30 * time.Second
+
+	lockWait = 10 * time.Second
+	lockPoll = 10 * time.Millisecond
 )
 
 var errRollBack = errors.New("roll back")
@@ -33,7 +37,10 @@ func newPostgres(t *testing.T) *postgres.Postgres {
 	pgURL := os.Getenv("PG_URL")
 	require.NotEmpty(t, pgURL, "PG_URL is not set")
 
-	pg, err := postgres.New(pgURL, postgres.MaxPoolSize(storePoolSize))
+	ctx, cancel := context.WithTimeout(t.Context(), connectWait)
+	defer cancel()
+
+	pg, err := postgres.New(ctx, pgURL, storePoolSize)
 	require.NoError(t, err)
 	t.Cleanup(pg.Close)
 
@@ -41,7 +48,7 @@ func newPostgres(t *testing.T) *postgres.Postgres {
 }
 
 func newSuiteStore(pg *postgres.Postgres) repo.EventStore {
-	return eventstore.New(pg, eventstoretest.SnapshotEvery, eventstoretest.Events())
+	return eventstore.New(pg, eventcodec.New(eventstoretest.Events()), eventstoretest.SnapshotEvery)
 }
 
 func TestPostgresEventStorePassesTheEventStoreSuite(t *testing.T) {
@@ -77,7 +84,7 @@ func TestSaveStampsTheContextsMetadata(t *testing.T) {
 
 	var raw json.RawMessage
 
-	err = pg.Pool.QueryRow(ctx, "SELECT metadata FROM events WHERE stream_id = $1", n.StreamID()).Scan(&raw)
+	err = pg.Executor(ctx).QueryRow(ctx, "SELECT metadata FROM events WHERE stream_id = $1", n.StreamID()).Scan(&raw)
 	require.NoError(t, err)
 
 	var md entity.Metadata
@@ -98,7 +105,7 @@ type tailer struct {
 func (tl *tailer) read(ctx context.Context, t *testing.T) {
 	t.Helper()
 
-	rows, err := tl.pg.Pool.Query(ctx,
+	rows, err := tl.pg.Executor(ctx).Query(ctx,
 		"SELECT position FROM events WHERE stream_id LIKE $1 AND position > $2 ORDER BY position", tl.pattern, tl.cursor)
 	require.NoError(t, err)
 
@@ -113,6 +120,17 @@ func (tl *tailer) read(ctx context.Context, t *testing.T) {
 	}
 
 	require.NoError(t, rows.Err())
+}
+
+// waitingForAnAdvisoryLock reports whether a session waits for an advisory lock: during the ordering
+// test, only its second writer can, behind the first one's hold on the store's append lock.
+func waitingForAnAdvisoryLock(ctx context.Context, pg *postgres.Postgres) bool {
+	var waiting bool
+
+	err := pg.Executor(ctx).QueryRow(ctx,
+		"SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted)").Scan(&waiting)
+
+	return err == nil && waiting
 }
 
 // A reader that tails the store by position must never pass a position that commits later. A
@@ -154,11 +172,18 @@ func TestAWriteCommittedLateIsStillReadInOrder(t *testing.T) {
 		fastDone <- err
 	}()
 
-	select {
-	case err := <-fastDone:
-		fastDone <- err
-	case <-time.After(lateWriteWait):
-	}
+	// Read only once the fast writer has either committed (which the append lock forbids) or is
+	// waiting for the lock, so the read cannot come before it and pass by chance.
+	require.Eventually(t, func() bool {
+		select {
+		case err := <-fastDone:
+			fastDone <- err
+
+			return true
+		default:
+			return waitingForAnAdvisoryLock(ctx, pg)
+		}
+	}, lockWait, lockPoll, "the second writer neither committed nor waited for the append lock")
 
 	tl.read(ctx, t)
 	close(release)

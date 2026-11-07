@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -10,25 +11,24 @@ import (
 )
 
 // ArchiveWidget is the command archive-widget, sent by UserID for the widget WidgetID.
-// Add the fields it needs.
+// Add the fields it needs, and the rules they follow in Validate.
 type ArchiveWidget struct {
+	cqrs.Command[entity.Written]
+
 	UserID   string
 	WidgetID string
 }
 
-// CommandName -.
-func (ArchiveWidget) CommandName() string { return "ArchiveWidget" }
-
-// ActorID -.
 func (c ArchiveWidget) ActorID() string { return c.UserID }
 
-// ArchiveWidgetHandler handles ArchiveWidget.
+// ArchiveWidgetHandler's Now is the clock (time.Now when nil).
 type ArchiveWidgetHandler struct {
 	Store repo.EventStore
+	Now   func() time.Time
 }
 
 // Handle is a stub: write it to change the widget through aggregate.Change, calling the
 // behavior method you add to its aggregate, which records the event you add for it.
-func (ArchiveWidgetHandler) Handle(_ context.Context, _ ArchiveWidget) (cqrs.Written, error) {
-	return cqrs.Written{}, fmt.Errorf("ArchiveWidget: %w", entity.ErrNotImplemented)
+func (ArchiveWidgetHandler) Handle(_ context.Context, _ ArchiveWidget) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("ArchiveWidget: %w", entity.ErrNotImplemented)
 }

@@ -2,10 +2,10 @@
 package gqlerr
 
 import (
-	"errors"
+	"context"
+	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
@@ -20,20 +20,9 @@ const (
 	_codeInternal        = "INTERNAL"
 )
 
-type mapping struct {
-	sentinel error
-	code     string
-	message  string
-}
-
 // Unauthenticated is the error for a request without a valid bearer token.
 func Unauthenticated() error {
 	return newError(_codeUnauthenticated, "unauthorized")
-}
-
-// InvalidInput is the error for arguments that fail a resolver's checks.
-func InvalidInput() error {
-	return newError(_codeBadUserInput, "invalid input")
 }
 
 // Internal is the error for a failure whose details the caller must not see.
@@ -41,27 +30,39 @@ func Internal() error {
 	return newError(_codeInternal, "internal server error")
 }
 
-// Map turns a use-case error into the GraphQL error for its entity.Err* sentinel. Any other error
-// is logged under op and reported as Internal.
-func Map(l logger.Interface, err error, op string) error {
-	for _, m := range []mapping{
-		{entity.ErrTaskNotFound, _codeNotFound, "task not found"},
-		{entity.ErrTaskForbidden, _codeForbidden, "forbidden"},
-		{entity.ErrAdminRequired, _codeForbidden, "admin role required"},
-		{entity.ErrInvalidTransition, _codeBadUserInput, "invalid status transition"},
-		// Any message can produce these three, whatever its domain.
-		{entity.ErrReadModelBehind, _codeUnavailable, "saved, but not yet readable: read it again shortly"},
-		{entity.ErrConcurrencyConflict, _codeConflict, "the record changed while this request ran: try again"},
-		{entity.ErrNotImplemented, _codeNotImplemented, "not implemented"},
-	} {
-		if errors.Is(err, m.sentinel) {
-			return newError(m.code, m.message)
-		}
+// Map turns a failed command or query into the GraphQL error for the kind of its entity.Error,
+// logged under op as its kind says.
+func Map(ctx context.Context, l *slog.Logger, err error, op string) error {
+	kind := entity.KindOf(err)
+	if level, ok := kind.LogLevel(); ok {
+		l.Log(ctx, level, "graphql - "+op, "error", err)
 	}
 
-	l.Error(err, "graphql - "+op)
+	return newError(code(kind), entity.Message(err))
+}
 
-	return Internal()
+// code is the extensions.code of a kind. A switch, so that exhaustive fails the lint on a kind it
+// does not name.
+func code(k entity.Kind) string {
+	switch k {
+	case entity.KindInvalid:
+		return _codeBadUserInput
+	case entity.KindUnauthenticated:
+		return _codeUnauthenticated
+	case entity.KindForbidden:
+		return _codeForbidden
+	case entity.KindNotFound:
+		return _codeNotFound
+	case entity.KindExists, entity.KindConflict:
+		return _codeConflict
+	case entity.KindUnavailable, entity.KindUpstream:
+		return _codeUnavailable
+	case entity.KindNotImplemented:
+		return _codeNotImplemented
+	case entity.KindInternal:
+	}
+
+	return _codeInternal
 }
 
 func newError(code, message string) error {

@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo"
@@ -11,22 +12,21 @@ import (
 
 // Delete{{.Name.Go}} deletes UserID's {{.Name.Words}}. Another user's {{.Name.Words}} is entity.Err{{.Name.Go}}NotFound.
 type Delete{{.Name.Go}} struct {
+	cqrs.Command[entity.Written]
+
 	UserID   string
 	{{.Name.Go}}ID string
 }
 
-// CommandName -.
-func (Delete{{.Name.Go}}) CommandName() string { return "Delete{{.Name.Go}}" }
-
-// ActorID -.
 func (c Delete{{.Name.Go}}) ActorID() string { return c.UserID }
 
-// Delete{{.Name.Go}}Handler handles Delete{{.Name.Go}}.
+// Delete{{.Name.Go}}Handler's Now is the clock (time.Now when nil).
 type Delete{{.Name.Go}}Handler struct {
 	Store repo.EventStore
+	Now   func() time.Time
 }
 
-// Handle is a stub: write it to load the {{.Name.Words}} through aggregate.Change and call its Delete.
-func (Delete{{.Name.Go}}Handler) Handle(_ context.Context, _ Delete{{.Name.Go}}) (cqrs.Written, error) {
-	return cqrs.Written{}, fmt.Errorf("Delete{{.Name.Go}}: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to call the {{.Name.Words}}'s Delete through aggregate.Change.
+func (Delete{{.Name.Go}}Handler) Handle(_ context.Context, _ Delete{{.Name.Go}}) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("Delete{{.Name.Go}}: %w", entity.ErrNotImplemented)
 }

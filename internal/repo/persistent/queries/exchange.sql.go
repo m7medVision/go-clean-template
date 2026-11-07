@@ -25,16 +25,12 @@ func (q *Queries) CountExchanges(ctx context.Context, userID string) (int64, err
 }
 
 const getConversion = `-- name: GetConversion :one
-SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
-WHERE conversion_id = $1 AND user_id = $2
+SELECT user_id, from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
+WHERE conversion_id = $1
 `
 
-type GetConversionParams struct {
-	ConversionID *string
-	UserID       string
-}
-
 type GetConversionRow struct {
+	UserID       string
 	FromCurrency string
 	ToCurrency   string
 	Amount       decimal.Decimal
@@ -43,10 +39,11 @@ type GetConversionRow struct {
 	RateDate     time.Time
 }
 
-func (q *Queries) GetConversion(ctx context.Context, arg GetConversionParams) (GetConversionRow, error) {
-	row := q.db.QueryRow(ctx, getConversion, arg.ConversionID, arg.UserID)
+func (q *Queries) GetConversion(ctx context.Context, conversionID *string) (GetConversionRow, error) {
+	row := q.db.QueryRow(ctx, getConversion, conversionID)
 	var i GetConversionRow
 	err := row.Scan(
+		&i.UserID,
 		&i.FromCurrency,
 		&i.ToCurrency,
 		&i.Amount,
@@ -133,7 +130,7 @@ func (q *Queries) ListEveryExchange(ctx context.Context) ([]ExchangeHistory, err
 const listExchanges = `-- name: ListExchanges :many
 SELECT from_currency, to_currency, amount, rate, result, rate_date FROM exchange_history
 WHERE user_id = $1
-ORDER BY id DESC
+ORDER BY created_at DESC, id DESC
 LIMIT $3::bigint OFFSET $2::bigint
 `
 
@@ -152,6 +149,7 @@ type ListExchangesRow struct {
 	RateDate     time.Time
 }
 
+// ListExchanges pages by when each conversion happened, newest first.
 func (q *Queries) ListExchanges(ctx context.Context, arg ListExchangesParams) ([]ListExchangesRow, error) {
 	rows, err := q.db.Query(ctx, listExchanges, arg.UserID, arg.Offset, arg.Limit)
 	if err != nil {

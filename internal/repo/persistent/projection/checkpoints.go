@@ -16,7 +16,6 @@ type Checkpoints struct {
 
 var _ repo.ProjectionCheckpoints = (*Checkpoints)(nil)
 
-// NewCheckpoints returns the checkpoints on pg.
 func NewCheckpoints(pg *postgres.Postgres) *Checkpoints {
 	return &Checkpoints{pg: pg}
 }

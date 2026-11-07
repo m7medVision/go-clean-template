@@ -33,13 +33,16 @@ controller ─SendQuery──▶ query bus ─▶ steps ─▶ query handler ─
 
 ### Buses and steps (`pkg/cqrs`, `internal/usecase/behavior`)
 
-- `cqrs.SendCommand[R](ctx, cmds, cmd)` and `cqrs.SendQuery[R](ctx, qs, q)` find the one handler
-  registered for the message's type and run it through the bus's steps.
+- A message type embeds `cqrs.Command[R]` or `cqrs.Query[R]`, naming what it answers. `cqrs.SendCommand(ctx,
+  cmds, cmd)` and `cqrs.SendQuery(ctx, qs, q)` find the one handler registered for the message's type,
+  run it through the bus's steps and return an `R`: a sender never restates the result type, and a
+  handler that answers another type does not compile. The type's Go name labels the message in
+  traces, logs, metrics and the events' causation metadata.
 - A message type with no handler is `cqrs.ErrNoHandler`.
 - A second handler for one type panics at startup.
 - The two buses are separate types, so a query can never be sent where a command belongs.
 - There is no reflection-based discovery. Each domain registers its handlers in
-  `internal/usecase/<domain>/register.go`, and `internal/app/buses.go` calls every domain's
+  `internal/usecase/<domain>/register.go`, and each domain's module in `internal/app/<domain>.go` calls its
   `Register` once.
 
 The steps, outermost first:
@@ -50,9 +53,9 @@ The steps, outermost first:
 | log | ✓ | ✓ | outcome and duration at debug |
 | metrics | ✓ | ✓ | `cqrs_messages_total{kind,name,outcome}`, `cqrs_message_duration_seconds` |
 | stamp | ✓ | ✓ | the actor (`ActorID()`) and the message name into the event metadata |
-| wait | ✓ | | after the handler: until every projector has passed the write's position, or `CQRS_CONSISTENCY_TIMEOUT` (then `entity.ErrReadModelBehind`) |
+| wait | ✓ | | after the handler: until the projectors that handle the events it wrote (`entity.Written.Events`) have passed its position, or `CQRS_CONSISTENCY_TIMEOUT` (then `entity.ErrReadModelBehind`) |
 | retry | ✓ | | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
-| authorize | ✓ | ✓ | a message with `RequiredRole()` is refused for a caller without it (`ListAllTasks` needs admin) |
+| authorize | ✓ | ✓ | an `AdminOnly()` message is refused with `entity.ErrAdminRequired` for a caller who is not an admin (`ListAllTasks`) |
 | validate | ✓ | ✓ | calls `Validate()` when the message has one |
 
 ### Commands
@@ -60,20 +63,30 @@ The steps, outermost first:
 One file per command, in `internal/usecase/<domain>/command/`. The file holds the command type and
 its handler.
 
-The handler returns `cqrs.Written`: the aggregate's ID and the position of its last event. A
-sign-in embeds it beside the auth token (`SignedIn`). A transport that answers with the resource
+The handler returns `entity.Written`: the aggregate's ID and the position of its last event (zero
+when it appended nothing). A sign-in embeds it beside the auth token (`SignedIn`); the wait step finds
+it in either through the `entity.Write` interface. A command that writes no events, such as
+`DeliverEmail`, answers `struct{}`, and nothing waits for it. A transport that answers with the resource
 sends a query after the command: REST `POST /v1/tasks` sends `CreateTask`, then `GetTask` with the
 returned ID.
 
 The shared helpers in `internal/usecase/aggregate` do the store work:
-- `aggregate.Create` saves a new aggregate;
-- `aggregate.Change` loads one, runs the change and saves it;
-- `aggregate.Now` is the time in UTC, to the microsecond the read model keeps.
+- `aggregate.Save` saves what an aggregate recorded, new or loaded, and answers `Written` with the
+  aggregate's own `ID()`;
+- `aggregate.Load[entity.PasskeyAggregate](ctx, store, id)` loads one by ID. The aggregate type says
+  the rest: `StreamOf(id)` names its stream, or answers the not-found error for an ID that names
+  none (a passkey ID that is not base64url), and `NotFound()` is its error for an ID with no stream.
+  Passkey registration takes that error to mean a new credential;
+- `aggregate.Change(ctx, store, id, func(t *entity.TaskAggregate) error {...})` loads one as `Load`
+  does, runs the change and saves it;
+- `aggregate.Now` is the time in UTC.
 
 ### Queries
 
 One file per query, in `internal/usecase/<domain>/query/`. A query reads its domain's read model
-interface (`repo.TaskReadModel`, …) and nothing else. It never loads an aggregate.
+interface (`repo.TaskReadModel`, …) and nothing else. It never loads an aggregate. A read model
+returns a record by its ID, whoever owns it, and the query decides whether the caller may read it
+with the record's `ReadableBy` (`GetTask`, `GetPasskey`, `GetConversion`).
 
 The begin steps of the passkey and SSO ceremonies are queries: they record nothing, since the token
 they return carries the ceremony's state.
@@ -91,9 +104,16 @@ they return carries the ceremony's state.
   methods check the rules and call `entity.Record`, which applies the event and queues it for the
   store. `Apply` changes the state for one event, the same way whether the event was just recorded
   or is being replayed.
-- **The read shapes are separate types.** `entity.Task`, `entity.User`, `entity.Passkey` and
-  `entity.Conversion` are what queries return and the API sends. They are named after the API
-  schema, so the aggregates carry an `Aggregate` suffix.
+- **An aggregate keeps only what its rules need, in a private state.** `TaskAggregate` keeps the
+  task's owner and status, `PasskeyAggregate` its owner and credential record, and `UserAggregate`
+  and `ConversionAggregate`, which are never loaded, keep what their claims and stream need. The
+  read shapes, `entity.Task`, `entity.User`, `entity.Passkey` and `entity.Conversion`, are what
+  queries return and the API sends; renaming one of their fields changes no stored event or
+  snapshot. They are named after the API schema, so the aggregates carry an `Aggregate` suffix.
+- **A snapshot is the private state's JSON.** Only an aggregate that is loaded (task, passkey)
+  snapshots. A field added to the state is missing from older snapshots and reads as its zero
+  value; a change that cannot read the old shape raises `SnapshotVersion`, and older snapshots are
+  then ignored and the stream replayed.
 - **Every event type is registered.** Each one is listed in `entity.EventTypes()`, which the
   store's codec reads.
 
@@ -116,8 +136,9 @@ context carries:
 after it.
 
 Two more features of the store:
-- **Versioning.** Every event has a `SchemaVersion`. When a shape changes, raise the version and add
-  an `eventstore.Upcast` from the version before to `eventstore.Upcasts()`. Stored events are never
+- **Versioning.** Every event has its own `SchemaVersion`. When a shape changes, raise that event's
+  version and add
+  an `entity.Upcast` from the version before to `entity.Upcasts()`, beside the events. Stored events are never
   rewritten; old ones are upcast one version at a time as they load.
 - **Write-side guards.** Claims (`claims` table) keep emails, usernames and SSO identities unique.
   `webauthn_used_challenges` keeps a passkey login from completing twice. A command writes both in
@@ -135,7 +156,11 @@ The worker runs one loop per subscriber:
 | `passkey` | projector | `webauthn_credentials` |
 | `send-welcome-email` | event handler | the `mail` queue |
 
-- **Each loop reads in order.** It reads the events after its checkpoint, in position order.
+- **Each loop reads in order.** It reads the events after its checkpoint, in position order, and
+  hands the subscriber those of the types it `Handles`. The others move its checkpoint without
+  reaching it, a batch of them in one transaction.
+- **Every event reaches a read model.** The worker refuses to start when an event type in
+  `entity.EventTypes()` has no projector, or when two subscribers share a name (`projection.Check`).
 - **An event and its checkpoint commit together.** Each event is handled in one transaction with the
   checkpoint's move: a subscriber writes through `Executor(ctx)`, so its rows, or its queue message,
   commit with the checkpoint exactly once. A failure rolls both back, and the event is retried.
@@ -159,13 +184,15 @@ make projection-rebuild name=task
 
 This empties the projector's tables and resets its checkpoint to 0, in one transaction, then
 notifies the running worker, which replays every event into them. Until it catches up, reads from
-those tables are incomplete. Only projectors can be rebuilt: replaying an event handler would
+those tables are incomplete. It refuses while the backfill has not imported every domain: the
+importers read those tables, so emptying one would lose the rows they have still to import. Only projectors can be rebuilt: replaying an event handler would
 repeat its side effects, such as sending every welcome email again.
 
 ### Reads after writes
 
-A command's response waits until every projector has passed its position, so a read sent right
-after a write sees it. The web client relies on this: it reloads its lists after every mutation.
+A command's response waits until the projectors that handle the events it wrote have passed its
+position, so a read sent right after a write sees it. A projector that handles none of them is not
+waited for, so one that is stuck holds up only the writes it projects. The web client relies on this: it reloads its lists after every mutation.
 
 If the projectors are still behind after `CQRS_CONSISTENCY_TIMEOUT`, the write is saved, but the
 answer is a 503 (gRPC `Unavailable`, GraphQL `UNAVAILABLE`): read again shortly, don't write again.
@@ -175,11 +202,16 @@ worker running.
 ### The backfill
 
 At start, the app runs each domain's importer once, under the store's lock, in one transaction with
-its marker (`_backfill/<domain>` in `projection_checkpoints`). An importer turns the rows the domain
-wrote before it stored events into `*Imported` events, one per row, and claims what they hold.
+its marker (the domain's row in `backfill_markers`). An importer reads the rows the domain wrote
+before it stored events and returns one new aggregate per row, holding its `*Imported` event, with
+the claims the row holds. `eventstore.Backfill` saves them in one loop for every domain, and skips a
+stream that exists already: its row came from its events. It checks before it saves, so a stream
+that exists never fails a statement inside the import's transaction. A database upgraded from
+v0.3, which kept its markers in `projection_checkpoints` as `_backfill/<domain>`, has them moved to
+`backfill_markers` at the next start instead of importing again.
 
-Projectors apply `*Imported` events as upserts, so the rows stay as they were and no checkpoint is
-ever moved by hand.
+Projectors insert the rows of `*Imported` events with `ON CONFLICT DO NOTHING`, so a row that is
+there already stays as it was and no checkpoint is ever moved by hand.
 
 ### Scratch streams
 
@@ -189,8 +221,9 @@ database with a running worker.
 
 ## Adding to it
 
-- **A command.** Add `internal/usecase/<domain>/command/<name>.go`, holding the type with
-  `CommandName()` (and `ActorID()` when it acts for a user) and a handler returning `cqrs.Written`.
+- **A command.** Add `internal/usecase/<domain>/command/<name>.go`, holding the type, which embeds
+  `cqrs.Command[entity.Written]` (and has `ActorID()` when it acts for a user), and a handler returning
+  `entity.Written`.
   Put its test beside it, against `internal/repo/memstore`. Add one line to the domain's
   `register.go`. Then send it from each transport.
 - **A query.** Add `internal/usecase/<domain>/query/<name>.go` and a test against
@@ -199,12 +232,16 @@ database with a running worker.
   `SchemaVersion()`, add it to the domain's list in `EventTypes()`, and handle it in the aggregate's
   `Apply` and in the projector.
 - **A changed event.** Raise its `SchemaVersion` and add the upcast from the previous version.
-- **A projector.** Add `internal/repo/persistent/<domain>/projector.go`. It needs `Name`, `Tables`,
-  and a `Project` function tested against a fake of sqlc's `Querier`. Add it to `subscribers` in
-  `internal/app/buses.go`.
-- **An event handler.** Add `internal/usecase/<domain>/event/<name>.go`, with a `Name` and a
-  `Handle` that does its work through repositories that join the context's transaction. Add it to
-  `subscribers`.
+- **A projector.** Add `internal/repo/persistent/<domain>/projector.go`: a `NewProjector(pg)` that
+  returns `projection.NewProjector(name, tables, handles, pg, project)`, with its name, the tables a
+  rebuild empties, the events it `Handles` (its domain's event list, such as `entity.TaskEvents()`)
+  and an unexported `project` function: one case per event, writing through the `queries.Querier` it
+  is handed, and a `default` case answering `entity.ErrUnhandledEvent`. Test `project` against a fake
+  of sqlc's `Querier`, through the package's `export_test.go`. Return the projector from the
+  `projector` of the domain's module (`internal/app/<domain>.go`).
+- **An event handler.** Add `internal/usecase/<domain>/event/<name>.go`, with a `Name`, the events it
+  `Handles` and a `Handle` that does its work through repositories that join the context's
+  transaction. Add it to `eventHandlers`.
 
 ## Configuration
 

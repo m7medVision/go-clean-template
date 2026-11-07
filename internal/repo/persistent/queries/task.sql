@@ -11,7 +11,7 @@ WHERE user_id = sqlc.arg('user_id')
 SELECT * FROM tasks
 WHERE user_id = sqlc.arg('user_id')
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
 
 -- name: CountAllTasks :one
@@ -21,7 +21,7 @@ WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text);
 -- name: ListAllTasks :many
 SELECT * FROM tasks
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg('limit')::bigint OFFSET sqlc.arg('offset')::bigint;
 
 -- The task projector's writes. InsertTaskRow leaves an existing row alone, so replaying a task's

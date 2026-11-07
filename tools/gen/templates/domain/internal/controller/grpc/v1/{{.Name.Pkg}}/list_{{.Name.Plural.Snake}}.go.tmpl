@@ -1,0 +1,24 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/grpc/v1/rpcerr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (c *Controller) List{{.Name.Plural.Go}}(ctx context.Context, req *v1.List{{.Name.Plural.Go}}Request) (*v1.List{{.Name.Plural.Go}}Response, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	page, err := cqrs.SendQuery(ctx, c.qs, query.List{{.Name.Plural.Go}}{
+		UserID: userID, Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
+	})
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "List{{.Name.Plural.Go}}")
+	}
+
+	return NewList{{.Name.Plural.Go}}Response(page.Items, page.Total), nil
+}

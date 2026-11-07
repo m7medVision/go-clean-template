@@ -11,8 +11,8 @@ import (
 const _tracerName = "github.com/m7medvision/go-clean-template/pkg/cqrs"
 
 // Trace opens one span per message, named after its bus and message ("command CreateTask"), and
-// marks it failed when the message fails. It sits between the transport's span and the
-// repositories' spans.
+// marks it failed when the message fails. It sits between the transport's span and the spans of
+// the SQL statements and outbound HTTP calls the handler makes.
 func Trace(tp trace.TracerProvider) Step {
 	tracer := tp.Tracer(_tracerName)
 

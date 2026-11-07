@@ -1,0 +1,13 @@
+enum TaskStatus { TODO IN_PROGRESS DONE }
+
+type Task {
+  id: ID!
+  userId: ID!
+  title: String!
+  description: String!
+  status: TaskStatus!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type TaskList { tasks: [Task!]!  total: Int! }

@@ -1,0 +1,25 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/controller/graphql/gqlerr"
+	"{{.Module}}/internal/controller/graphql/middleware"
+	"{{.Module}}/internal/controller/graphql/model"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (q Query) {{.Name.Plural.Go}}(ctx context.Context, limit, offset int) (*model.{{.Name.Go}}List, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	page, err := cqrs.SendQuery(ctx, q.qs, query.List{{.Name.Plural.Go}}{UserID: caller.UserID, Limit: limit, Offset: offset})
+	if err != nil {
+		return nil, gqlerr.Map(ctx, q.l, err, "{{.Name.Plural.Lower}}")
+	}
+
+	return &model.{{.Name.Go}}List{ {{- .Name.Plural.Go}}: page.Items, Total: page.Total}, nil
+}

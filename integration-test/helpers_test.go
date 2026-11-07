@@ -165,18 +165,17 @@ func getHealthCheck(url string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+// healthCheck waits for the app to answer 200: a refused connection, like any other answer, means
+// it is still starting.
 func healthCheck(attempts int) error {
 	for attempts > 0 {
 		statusCode, err := getHealthCheck(healthPath)
-		if err != nil {
-			return err
-		}
-
-		if statusCode == http.StatusOK {
+		if err == nil && statusCode == http.StatusOK {
 			return nil
 		}
 
-		log.Printf("Integration tests: url %s is not available, attempts left: %d", healthPath, attempts)
+		log.Printf("Integration tests: url %s is not available (%d, %v), attempts left: %d",
+			healthPath, statusCode, err, attempts)
 
 		time.Sleep(time.Second)
 

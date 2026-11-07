@@ -10,7 +10,9 @@ The three domains and how each transport exposes them. Every transport sends the
 | gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) |
 
 Every operation except register and the sign-ins needs `Authorization: Bearer <token>`, with the
-token from a sign-in.
+token from a sign-in. On REST that is what an operation's `security` in the OpenAPI document says,
+and the server enforces exactly that: one declaration, the operation's Huma `Security`, does both.
+A path no operation serves is a `404`, token or not.
 
 ## User authentication
 
@@ -34,8 +36,8 @@ setup are in [sso.md](sso.md).
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/v1/auth/oidc` | none | `{enabled}`: whether `OIDC_ISSUER` is set |
-| `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down |
-| `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in, `409` when the email or username belongs to another account |
+| `POST` | `/v1/auth/oidc/begin` | none | `{url, ceremony_token}`: send the browser to `url`; `404` when SSO is off, `502` when the provider is down or does not answer within 5 s |
+| `POST` | `/v1/auth/oidc/finish` | none | Body `{code, state}` from the callback, header `X-Ceremony-Token`; returns `{token}`. `401` for a bad or replayed sign-in (the provider refuses the code, or the ID token does not verify), `409` when the email or username belongs to another account, `502` when the provider is down or does not answer within 5 s at any step: discovery, the code exchange or fetching its keys |
 
 ## Passkeys
 
@@ -79,7 +81,8 @@ CRUD with a status state machine. Tasks are scoped to the authenticated user.
 | Delete | `DELETE /v1/tasks/{id}` |
 
 - Status transitions: `todo` → `in_progress` → `done`, and `in_progress` → `todo`.
-- Lists page with `limit`/`offset` and take an optional `status` filter.
+- Lists page with `limit`/`offset` (10 by default, at most 100; `entity.Page` holds the rule for
+  every transport, and on gRPC an unset `limit` is the default) and take an optional `status` filter.
 - The admin list needs the `admin` role in the caller's token, or it answers `403`. A password
   sign-in grants only `user`; see [architecture.md](architecture.md#roles).
 
@@ -100,8 +103,12 @@ example of an outbound HTTP API behind a repository interface.
   rounded half-even to 2 places.
 - Rates update once a day and are not live market rates; the response carries the rate's `rate_date`.
   The provider's terms require a link back to it wherever the rates are shown (the web page has one).
-- An unknown currency, or `from` equal to `to`, answers 400. History pages
-  with `limit`/`offset` and returns a `total`.
+- An unknown currency, or `from` equal to `to`, answers 400. The amount is a decimal string, positive,
+  with at most 15 digits before the point and 8 after: `entity.NewConversion` parses and checks it for
+  every transport (400), and REST's pattern says the same (422). A rate provider that cannot be
+  reached, times out, or answers with an error or a body that does not decode is `502` (gRPC
+  `Unavailable`). History pages with `limit`/`offset` and
+  returns a `total`.
 
 ## REST
 
@@ -124,18 +131,21 @@ changes show up in review and clients can generate types without a running serve
 - **Any operation** whose handler is still the stub the generator wrote answers `501`
   (`entity.ErrNotImplemented`) until the handler is written ([generator.md](generator.md)).
 - **Validation** failures answer `422`. That includes query parameters: on `GET /v1/tasks`, `limit`
-  must be at least 1, `offset` at least 0, and `status` one of `todo`, `in_progress`, `done`.
+  must be 1–100, `offset` at least 0, and `status` one of `todo`, `in_progress`, `done`.
   Unknown fields in a request body are ignored.
 - **Metrics** at `/metrics` (`METRICS_ENABLED`): `http_requests_total` and
   `http_request_duration_seconds`, labeled by `method`, `route` (the chi pattern, or `unmatched`) and
-  `code`.
+  `code`; for gRPC, `grpc_requests_total` and `grpc_request_duration_seconds`, labeled by `method`
+  (the full method name) and `code`.
 - `/healthz` answers when the app is up.
 
 ## GraphQL
 
 [gqlgen](https://github.com/99designs/gqlgen) on the REST port, covering tasks and the exchange
-history. The schemas are [task.graphqls](../internal/controller/graphql/schema/task.graphqls) and
-[exchange.graphqls](../internal/controller/graphql/schema/exchange.graphqls).
+history. The schema is in [schema/](../internal/controller/graphql/schema/): each domain's types
+in `<domain>_types.graphqls`, and each field in its own file, named after it
+([create_task.graphqls](../internal/controller/graphql/schema/create_task.graphqls) declares
+`createTask`).
 
 | Operation | GraphQL |
 | --- | --- |
@@ -150,7 +160,9 @@ history. The schemas are [task.graphqls](../internal/controller/graphql/schema/t
 
 - With `DOCS_ENABLED=true`, a playground is at `/graphql/playground`. Put
   `{"Authorization": "Bearer <token>"}` in its headers pane.
-- Resolvers check the bearer token themselves, so introspection works without one.
+- Introspection (`__schema`, `__type`) is part of the docs: it answers only with `DOCS_ENABLED=true`,
+  and is refused (`introspection disabled`) otherwise. Resolvers check the bearer token themselves,
+  so it needs no token. The web client's types come from the schema files, not from introspection.
 - Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`
   (the admin list without the `admin` role), `UNAVAILABLE` and `CONFLICT` (a write's `503` and `409`
   on REST), `NOT_IMPLEMENTED` (a generated stub handler's `501`), `INTERNAL`. An expired token is
@@ -159,8 +171,8 @@ history. The schemas are [task.graphqls](../internal/controller/graphql/schema/t
 ## gRPC
 
 Services are defined in [auth.proto](proto/v1/auth.proto), [task.proto](proto/v1/task.proto) and
-[exchange.proto](proto/v1/exchange.proto); `make proto-v1` regenerates the Go code beside them. Server
-reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
+[exchange.proto](proto/v1/exchange.proto); `make proto-v1` regenerates the Go code beside them. With
+`DOCS_ENABLED`, server reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 
 | Operation | Method |
 | --- | --- |
@@ -178,7 +190,10 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 | Exchange history | `ExchangeService/GetHistory` |
 
 - The token goes in the `authorization` metadata as it is, with no `Bearer` prefix; without a valid
-  one a call answers `Unauthenticated`.
+  one a call answers `Unauthenticated`. `Register` and `Login` are the methods called without one: a
+  domain's module lists them by their generated `FullMethodName` constants (`grpcPublic`).
+- Every call is logged and counted like an HTTP request, and a panic answers `Internal` instead of
+  ending the process.
 - Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
   user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
   list without the `admin` role `PermissionDenied`, a write the read models have not caught up with
@@ -188,24 +203,28 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 ## Versioning
 
 Each transport keeps its handlers under `v1/`, one folder per domain. A v2 is a sibling `v2/` with the
-same domain folders, registered next to v1; v1 stays untouched.
+same domain folders, registered next to v1 in the domain's module in `internal/app` (for tasks,
+[`internal/app/task.go`](../internal/app/task.go)); v1 stays untouched.
 
-REST, in [`internal/controller/restapi/router.go`](../internal/controller/restapi/router.go). The v2
-operations go on the same Huma API under `/v2/...` paths, so they share one OpenAPI document:
-
-```go
-api := humachi.New(r, apiConfig)
-
-v1.NewRoutes(api, b, l)
-v2.NewRoutes(api, b, l)
-```
-
-gRPC, in [`internal/controller/grpc/router.go`](../internal/controller/grpc/router.go), with the new
-protos in `docs/proto/v2`:
+REST: the v2 operations go on the same Huma API under `/v2/...` paths, so they share one OpenAPI
+document, which `make openapi` exports from the same registration. A v2 operation needs a token when
+it declares `Security`, as a v1 one does: nothing depends on the path.
 
 ```go
-v1.NewRoutes(app, b, l)
-v2.NewRoutes(app, b, l)
-
-reflection.Register(app)
+rest: func(api huma.API, b cqrs.Buses, l *slog.Logger) {
+	resttask.NewRoutes(api, b, l)   // restapi/v1/task
+	resttaskv2.NewRoutes(api, b, l) // restapi/v2/task
+},
 ```
+
+gRPC, with the new protos in `docs/proto/v2`:
+
+```go
+grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
+	pb.RegisterTaskServiceServer(s, grpctask.New(b, l))
+	pbv2.RegisterTaskServiceServer(s, grpctaskv2.New(b, l))
+},
+```
+
+A v2 method needs a token unless the module lists it in `grpcPublic`, as the user module lists
+`AuthService` sign-up and sign-in.

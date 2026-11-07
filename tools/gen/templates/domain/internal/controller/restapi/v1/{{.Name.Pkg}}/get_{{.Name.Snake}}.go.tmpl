@@ -1,0 +1,35 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+)
+
+func (r *controller) get{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-{{.Name.Kebab}}",
+		Summary:     "Get {{.Name.Words}}",
+		Description: "Get one of the current user's {{.Name.Plural.Words}} by ID",
+		Method:      http.MethodGet,
+		Path:        "/v1/{{.Name.Plural.Kebab}}/{id}",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		Errors: apierr.QueryErrors(
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusNotImplemented,
+		),
+	}, func(ctx context.Context, input *{{.Name.Lower}}PathInput) (*{{.Name.Lower}}Output, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		{{.Name.Lower}}, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "get{{.Name.Go}}")
+		}
+
+		return &{{.Name.Lower}}Output{Body: {{.Name.Lower}}}, nil
+	})
+}

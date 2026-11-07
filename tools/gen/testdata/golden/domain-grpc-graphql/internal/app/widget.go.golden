@@ -1,0 +1,28 @@
+package app
+
+import (
+	"log/slog"
+
+	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	grpcwidget "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/widget"
+	persistWidgetRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/widget"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"google.golang.org/grpc"
+)
+
+// widgetModule is the widget domain: its handlers over the widget read model, its projector,
+// and its operations on each transport but GraphQL, whose root resolver lists the domains itself.
+func widgetModule() module {
+	return module{
+		handlers: func(d *deps, b cqrs.Buses) error {
+			widget.Register(b.Commands, b.Queries, widget.Deps{Store: d.store, Widgets: persistWidgetRepo.NewReadModel(d.pg)})
+
+			return nil
+		},
+		projector: persistWidgetRepo.NewProjector,
+		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
+			pb.RegisterWidgetServiceServer(s, grpcwidget.New(b, l))
+		},
+	}
+}

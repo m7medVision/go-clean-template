@@ -107,7 +107,7 @@ func (q *Queries) InsertTaskRow(ctx context.Context, arg InsertTaskRowParams) er
 const listAllTasks = `-- name: ListAllTasks :many
 SELECT id, user_id, title, description, status, created_at, updated_at FROM tasks
 WHERE ($1::text IS NULL OR status = $1::text)
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT $3::bigint OFFSET $2::bigint
 `
 
@@ -182,7 +182,7 @@ const listTasks = `-- name: ListTasks :many
 SELECT id, user_id, title, description, status, created_at, updated_at FROM tasks
 WHERE user_id = $1
   AND ($2::text IS NULL OR status = $2::text)
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT $4::bigint OFFSET $3::bigint
 `
 

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -18,203 +20,88 @@ import (
 
 const respOK = "ok"
 
-type ctxCapture struct {
-	ctx context.Context
+// callerCapture is a unary handler that keeps the caller its context carries.
+type callerCapture struct {
+	called bool
+	caller authn.Caller
+	ok     bool
 }
 
-func (c *ctxCapture) handler(_ context.Context, _ any) (any, error) {
+func (c *callerCapture) handle(ctx context.Context, _ any) (any, error) {
+	c.called = true
+	c.caller, c.ok = authn.CallerFrom(ctx)
+
 	return respOK, nil
 }
 
-func (c *ctxCapture) capturingHandler(ctx context.Context, _ any) (any, error) {
-	c.ctx = ctx
-
-	return respOK, nil
-}
-
-func newJWTManager(t *testing.T) *jwt.Manager {
+// call runs a call of method with incoming metadata md, unless it is nil, through Auth with
+// Register public.
+func call(t *testing.T, tokens *jwt.Manager, method string, md metadata.MD) (*callerCapture, error) {
 	t.Helper()
 
-	return jwt.New("test-secret", time.Hour)
-}
-
-func runSkipAuthTest(t *testing.T, method string) {
-	t.Helper()
-
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: method}
-
-	called := false
-	handler := func(_ context.Context, _ any) (any, error) {
-		called = true
-
-		return respOK, nil
+	ctx := t.Context()
+	if md != nil {
+		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 
-	resp, err := interceptor(t.Context(), nil, info, handler)
+	capture := &callerCapture{}
+	auth := grpcmw.Auth(tokens, pb.AuthService_Register_FullMethodName)
+
+	resp, err := auth(ctx, nil, &grpc.UnaryServerInfo{FullMethod: method}, capture.handle)
+	if err == nil {
+		assert.Equal(t, respOK, resp)
+	}
+
+	return capture, err
+}
+
+func TestAuthLetsAPublicMethodThrough(t *testing.T) {
+	t.Parallel()
+
+	capture, err := call(t, jwt.New("test-secret", time.Hour), pb.AuthService_Register_FullMethodName, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, respOK, resp)
-	assert.True(t, called)
+	assert.True(t, capture.called)
+	assert.False(t, capture.ok, "a public method gets no caller")
 }
 
-func TestAuthInterceptor_SkipRegister(t *testing.T) {
+func TestAuthRejects(t *testing.T) {
 	t.Parallel()
-	runSkipAuthTest(t, "/grpc.v1.AuthService/Register")
+
+	tokens := jwt.New("test-secret", time.Hour)
+
+	tests := []struct {
+		name string
+		md   metadata.MD
+	}{
+		{"no metadata", nil},
+		{"no authorization", metadata.Pairs("other-key", "value")},
+		{"invalid token", metadata.Pairs("authorization", "invalid-token")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			capture, err := call(t, tokens, pb.TaskService_GetTask_FullMethodName, tc.md)
+
+			assert.False(t, capture.called)
+			assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		})
+	}
 }
 
-func TestAuthInterceptor_SkipLogin(t *testing.T) {
-	t.Parallel()
-	runSkipAuthTest(t, "/grpc.v1.AuthService/Login")
-}
-
-func TestAuthInterceptor_MissingMetadata(t *testing.T) {
+func TestAuthRunsTheMethodWithTheTokensCaller(t *testing.T) {
 	t.Parallel()
 
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
+	tokens := jwt.New("test-secret", time.Hour)
 
-	capture := &ctxCapture{}
-
-	resp, err := interceptor(t.Context(), nil, info, capture.handler)
-
-	assert.Nil(t, resp)
-	require.Error(t, err)
-
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.Unauthenticated, st.Code())
-	assert.Contains(t, st.Message(), "missing metadata")
-}
-
-func TestAuthInterceptor_MissingAuthorizationToken(t *testing.T) {
-	t.Parallel()
-
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
-
-	md := metadata.New(map[string]string{"other-key": "value"})
-	ctx := metadata.NewIncomingContext(t.Context(), md)
-
-	capture := &ctxCapture{}
-
-	resp, err := interceptor(ctx, nil, info, capture.handler)
-
-	assert.Nil(t, resp)
-	require.Error(t, err)
-
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.Unauthenticated, st.Code())
-	assert.Contains(t, st.Message(), "missing authorization token")
-}
-
-func TestAuthInterceptor_InvalidToken(t *testing.T) {
-	t.Parallel()
-
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
-
-	md := metadata.Pairs("authorization", "invalid-token")
-	ctx := metadata.NewIncomingContext(t.Context(), md)
-
-	capture := &ctxCapture{}
-
-	resp, err := interceptor(ctx, nil, info, capture.handler)
-
-	assert.Nil(t, resp)
-	require.Error(t, err)
-
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.Unauthenticated, st.Code())
-	assert.Contains(t, st.Message(), "invalid or expired token")
-}
-
-func TestAuthInterceptor_ValidToken(t *testing.T) {
-	t.Parallel()
-
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
-
-	token, err := jwtMgr.GenerateToken("user-id-123", nil)
+	token, err := tokens.GenerateToken("user-42", []string{"admin"})
 	require.NoError(t, err)
 
-	md := metadata.Pairs("authorization", token)
-	ctx := metadata.NewIncomingContext(t.Context(), md)
-
-	capture := &ctxCapture{}
-
-	resp, err := interceptor(ctx, nil, info, capture.capturingHandler)
-
-	require.NoError(t, err)
-	assert.Equal(t, respOK, resp)
-
-	userID, ok := grpcmw.UserIDFromContext(capture.ctx)
-	assert.True(t, ok)
-	assert.Equal(t, "user-id-123", userID)
-}
-
-func TestUserIDFromContext_WithValue(t *testing.T) {
-	t.Parallel()
-
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/GetTask"}
-
-	token, err := jwtMgr.GenerateToken("user-42", nil)
+	capture, err := call(t, tokens, pb.TaskService_ListAllTasks_FullMethodName, metadata.Pairs("authorization", token))
 	require.NoError(t, err)
 
-	md := metadata.Pairs("authorization", token)
-	ctx := metadata.NewIncomingContext(t.Context(), md)
-
-	capture := &ctxCapture{}
-
-	_, err = interceptor(ctx, nil, info, capture.capturingHandler)
-	require.NoError(t, err)
-
-	userID, ok := grpcmw.UserIDFromContext(capture.ctx)
-	assert.True(t, ok)
-	assert.Equal(t, "user-42", userID)
-}
-
-func TestUserIDFromContext_WithoutValue(t *testing.T) {
-	t.Parallel()
-
-	userID, ok := grpcmw.UserIDFromContext(t.Context())
-	assert.False(t, ok)
-	assert.Empty(t, userID)
-}
-
-func TestPrincipalFromContext(t *testing.T) {
-	t.Parallel()
-
-	jwtMgr := newJWTManager(t)
-	interceptor := grpcmw.AuthInterceptor(jwtMgr)
-	info := &grpc.UnaryServerInfo{FullMethod: "/grpc.v1.TaskService/ListAllTasks"}
-
-	token, err := jwtMgr.GenerateToken("user-42", []string{"admin", "superuser"})
-	require.NoError(t, err)
-
-	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", token))
-	capture := &ctxCapture{}
-
-	_, err = interceptor(ctx, nil, info, capture.capturingHandler)
-	require.NoError(t, err)
-
-	principal, ok := grpcmw.PrincipalFromContext(capture.ctx)
-	require.True(t, ok)
-	assert.Equal(t, entity.Principal{UserID: "user-42", Roles: []entity.Role{entity.RoleAdmin}}, principal)
-}
-
-func TestPrincipalFromContext_WithoutValue(t *testing.T) {
-	t.Parallel()
-
-	_, ok := grpcmw.PrincipalFromContext(t.Context())
-	assert.False(t, ok)
+	require.True(t, capture.ok)
+	assert.Equal(t, entity.Principal{UserID: "user-42", Roles: []entity.Role{entity.RoleAdmin}}, capture.caller.Principal)
 }

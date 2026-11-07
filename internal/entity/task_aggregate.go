@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// _taskSnapshotVersion is the version of taskSnapshot's shape.
 const _taskSnapshotVersion = 1
 
-// TaskStreamID is the stream of the task with id.
 func TaskStreamID(id string) string {
 	return "task-" + id
 }
@@ -19,8 +17,16 @@ func TaskStreamID(id string) string {
 type TaskAggregate struct {
 	AggregateBase
 
-	task    Task
+	task    taskState
 	deleted bool
+}
+
+// taskState is what the task's rules need. Its JSON is the snapshot's: a field added here is a
+// field old snapshots lack, read as its zero value.
+type taskState struct {
+	ID     string     `json:"id"`
+	UserID string     `json:"user_id"`
+	Status TaskStatus `json:"status"`
 }
 
 var _ Snapshotter = (*TaskAggregate)(nil)
@@ -44,27 +50,32 @@ func ImportTaskAggregate(row *Task) *TaskAggregate {
 	return t
 }
 
-// StreamID -.
 func (t *TaskAggregate) StreamID() string {
 	return TaskStreamID(t.task.ID)
 }
 
-// State is the task as its events add up.
-func (t *TaskAggregate) State() Task {
-	return t.task
+func (t *TaskAggregate) ID() string {
+	return t.task.ID
 }
 
-// ownedBy is nil when userID owns the live task: a deleted task is ErrTaskNotFound and another
-// user's is ErrTaskForbidden.
+// StreamOf names the stream of the task with id. Every ID names one.
+func (*TaskAggregate) StreamOf(id string) (string, error) {
+	return TaskStreamID(id), nil
+}
+
+// NotFound is the error for a task ID with no stream.
+func (*TaskAggregate) NotFound() error {
+	return ErrTaskNotFound
+}
+
+// ownedBy is nil when userID may change the task: when it is live and theirs. A deleted task is
+// ErrTaskNotFound, and another user's ErrTaskForbidden, as a read of it is.
 func (t *TaskAggregate) ownedBy(userID string) error {
-	switch {
-	case t.deleted:
+	if t.deleted {
 		return ErrTaskNotFound
-	case t.task.UserID != userID:
-		return ErrTaskForbidden
-	default:
-		return nil
 	}
+
+	return taskOwnedBy(t.task.UserID, userID)
 }
 
 // Update replaces the title and description of userID's task.
@@ -97,7 +108,7 @@ func (t *TaskAggregate) Transition(userID string, to TaskStatus, at time.Time) e
 // Delete deletes userID's task. Another user's task is ErrTaskNotFound, not ErrTaskForbidden, so a
 // delete never tells a stranger the task exists.
 func (t *TaskAggregate) Delete(userID string, at time.Time) error {
-	if t.deleted || t.task.UserID != userID {
+	if t.ownedBy(userID) != nil {
 		return ErrTaskNotFound
 	}
 
@@ -106,44 +117,33 @@ func (t *TaskAggregate) Delete(userID string, at time.Time) error {
 	return nil
 }
 
-// Apply -.
 func (t *TaskAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case TaskCreated:
-		t.task = Task{
-			ID: ev.TaskID, UserID: ev.UserID, Title: ev.Title, Description: ev.Description,
-			Status: TaskStatusTodo, CreatedAt: ev.At, UpdatedAt: ev.At,
-		}
+		t.task = taskState{ID: ev.TaskID, UserID: ev.UserID, Status: TaskStatusTodo}
 	case TaskImported:
-		t.task = Task{
-			ID: ev.TaskID, UserID: ev.UserID, Title: ev.Title, Description: ev.Description,
-			Status: ev.Status, CreatedAt: ev.CreatedAt, UpdatedAt: ev.UpdatedAt,
-		}
-	case TaskUpdated:
-		t.task.Title, t.task.Description, t.task.UpdatedAt = ev.Title, ev.Description, ev.At
+		t.task = taskState{ID: ev.TaskID, UserID: ev.UserID, Status: ev.Status}
+	case TaskUpdated: // the title and description are the read model's; no rule reads them
 	case TaskTransitioned:
-		t.task.Status, t.task.UpdatedAt = ev.To, ev.At
+		t.task.Status = ev.To
 	case TaskDeleted:
 		t.deleted = true
 	}
 }
 
 type taskSnapshot struct {
-	Task    Task `json:"task"`
-	Deleted bool `json:"deleted"`
+	Task    taskState `json:"task"`
+	Deleted bool      `json:"deleted"`
 }
 
-// SnapshotVersion -.
 func (*TaskAggregate) SnapshotVersion() int {
 	return _taskSnapshotVersion
 }
 
-// Snapshot -.
 func (t *TaskAggregate) Snapshot() any {
 	return taskSnapshot{Task: t.task, Deleted: t.deleted}
 }
 
-// RestoreSnapshot -.
 func (t *TaskAggregate) RestoreSnapshot(data json.RawMessage) error {
 	var s taskSnapshot
 	if err := json.Unmarshal(data, &s); err != nil {

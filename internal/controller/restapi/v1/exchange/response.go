@@ -6,9 +6,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// _resultPlaces matches the scale entity.Conversion rounds Result to.
-const _resultPlaces = 2
-
 // Conversion is entity.Conversion with its decimals as strings: decimal.Decimal has no schema of
 // its own, and a JSON number would lose precision in most clients.
 type Conversion struct {
@@ -20,29 +17,26 @@ type Conversion struct {
 	RateDate string `json:"rate_date" example:"2026-10-19" format:"date"`
 }
 
-// ExchangeHistory -.
 type ExchangeHistory struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	History []Conversion `json:"history"`
 	Total   int          `json:"total" example:"42"`
 }
 
-// NewConversion -.
 func NewConversion(c *entity.Conversion) Conversion {
 	return Conversion{
 		From:     c.From,
 		To:       c.To,
 		Amount:   c.Amount.String(),
 		Rate:     c.Rate.String(),
-		Result:   c.Result.StringFixed(_resultPlaces),
+		Result:   c.ResultString(),
 		RateDate: c.RateDate.Format(time.DateOnly),
 	}
 }
 
-// NewExchangeHistory -.
-func NewExchangeHistory(h entity.ExchangeHistory) ExchangeHistory {
-	history := make([]Conversion, 0, len(h.History))
-	for i := range h.History {
-		history = append(history, NewConversion(&h.History[i]))
+func NewExchangeHistory(h entity.List[entity.Conversion]) ExchangeHistory {
+	history := make([]Conversion, 0, len(h.Items))
+	for i := range h.Items {
+		history = append(history, NewConversion(&h.Items[i]))
 	}
 
 	return ExchangeHistory{History: history, Total: h.Total}

@@ -1,0 +1,25 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/controller/graphql/gqlerr"
+	"{{.Module}}/internal/controller/graphql/middleware"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (q Query) {{.Name.Go}}(ctx context.Context, id string) (*entity.{{.Name.Go}}, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	{{.Name.Lower}}, err := cqrs.SendQuery(ctx, q.qs, query.Get{{.Name.Go}}{UserID: caller.UserID, {{.Name.Go}}ID: id})
+	if err != nil {
+		return nil, gqlerr.Map(ctx, q.l, err, "{{.Name.Lower}}")
+	}
+
+	return &{{.Name.Lower}}, nil
+}

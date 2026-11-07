@@ -14,21 +14,37 @@ import (
 var (
 	// ErrNoHandler is returned for a message type nothing has registered a handler for.
 	ErrNoHandler = errors.New("cqrs: no handler")
-	// ErrResultType is returned when a handler's result is not the type the sender asked for.
+	// ErrResultType is returned when a step answers with another type than the message's result.
 	ErrResultType = errors.New("cqrs: result type")
 )
 
-// Command is a request to change state. CommandName labels its traces, logs and metrics.
-type Command interface {
-	CommandName() string
+// Command marks a request to change state that answers R. A command type embeds it, and the bus
+// names the message after the type:
+//
+//	type CreateTask struct {
+//		cqrs.Command[entity.Written]
+//
+//		Title string
+//	}
+type Command[R any] struct{}
+
+func (Command[R]) command(R) {}
+
+// Query marks a request to read state that answers R, as Command does for a command.
+type Query[R any] struct{}
+
+func (Query[R]) query(R) {}
+
+// CommandOf is a message that embeds Command[R]: a command that answers R.
+type CommandOf[R any] interface {
+	command(R)
 }
 
-// Query is a request to read state. QueryName labels its traces, logs and metrics.
-type Query interface {
-	QueryName() string
+// QueryOf is a message that embeds Query[R]: a query that answers R.
+type QueryOf[R any] interface {
+	query(R)
 }
 
-// Handler handles one message type.
 type Handler[M, R any] interface {
 	Handle(ctx context.Context, msg M) (R, error)
 }
@@ -36,32 +52,16 @@ type Handler[M, R any] interface {
 // HandlerFunc adapts a function to a Handler.
 type HandlerFunc[M, R any] func(ctx context.Context, msg M) (R, error)
 
-// Handle calls f.
 func (f HandlerFunc[M, R]) Handle(ctx context.Context, msg M) (R, error) {
 	return f(ctx, msg)
-}
-
-// Written is what a command handler returns: the aggregate it wrote and the store position of the
-// last event it appended. A command never returns resource data; read that with a query.
-type Written struct {
-	ID       string
-	Position int64
-}
-
-// WrittenAt is the position of the write. A result that embeds Written, such as a sign-in that also
-// carries a token, has it too, so the pipeline can tell what it wrote.
-func (w Written) WrittenAt() int64 {
-	return w.Position
 }
 
 // Kind names the bus a message travels on.
 type Kind string
 
 const (
-	// KindCommand is the command bus.
 	KindCommand Kind = "command"
-	// KindQuery is the query bus.
-	KindQuery Kind = "query"
+	KindQuery   Kind = "query"
 )
 
 // Message is what a step sees of the message it wraps. Body is the command or query itself, so a

@@ -1,0 +1,24 @@
+package widget
+
+import (
+	"context"
+
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+func (c *Controller) ListWidgets(ctx context.Context, req *v1.ListWidgetsRequest) (*v1.ListWidgetsResponse, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	page, err := cqrs.SendQuery(ctx, c.qs, query.ListWidgets{
+		UserID: userID, Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
+	})
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "ListWidgets")
+	}
+
+	return NewListWidgetsResponse(page.Items, page.Total), nil
+}

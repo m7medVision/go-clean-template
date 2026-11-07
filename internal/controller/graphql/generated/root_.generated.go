@@ -373,7 +373,27 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
-	{Name: "../schema/exchange.graphqls", Input: `"""
+	{Name: "../schema/all_tasks.graphqls", Input: `extend type Query {
+  "Every user's tasks. Requires the admin role; anyone else gets FORBIDDEN."
+  allTasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
+}
+`, BuiltIn: false},
+	{Name: "../schema/create_task.graphqls", Input: `input CreateTaskInput { title: String!  description: String }
+
+extend type Mutation {
+  createTask(input: CreateTaskInput!): Task!
+}
+`, BuiltIn: false},
+	{Name: "../schema/delete_task.graphqls", Input: `extend type Mutation {
+  deleteTask(id: ID!): Boolean!
+}
+`, BuiltIn: false},
+	{Name: "../schema/exchange_history.graphqls", Input: `extend type Query {
+  "One page of the caller's conversions, newest first. limit is 1–100."
+  exchangeHistory(limit: Int! = 10, offset: Int! = 0): ConversionList!
+}
+`, BuiltIn: false},
+	{Name: "../schema/exchange_types.graphqls", Input: `"""
 A currency conversion. Amounts and rates are decimal strings, so no precision is lost to
 floating point. rateDate is the day the rate was published (YYYY-MM-DD).
 """
@@ -387,15 +407,22 @@ type Conversion {
 }
 
 type ConversionList { conversions: [Conversion!]!  total: Int! }
-
-extend type Query {
-  "One page of the caller's conversions, newest first. limit is 1–100."
-  exchangeHistory(limit: Int! = 10, offset: Int! = 0): ConversionList!
-}
 `, BuiltIn: false},
 	{Name: "../schema/scalars.graphqls", Input: `scalar Time
 `, BuiltIn: false},
-	{Name: "../schema/task.graphqls", Input: `enum TaskStatus { TODO IN_PROGRESS DONE }
+	{Name: "../schema/schema.graphqls", Input: `# The root types. Each field is declared in its own file, named after it (createTask in
+# create_task.graphqls), with extend type Query or extend type Mutation, together with any input
+# type only it takes. A domain's shared types are in <domain>_types.graphqls.
+
+type Query
+
+type Mutation
+`, BuiltIn: false},
+	{Name: "../schema/task.graphqls", Input: `extend type Query {
+  task(id: ID!): Task!
+}
+`, BuiltIn: false},
+	{Name: "../schema/task_types.graphqls", Input: `enum TaskStatus { TODO IN_PROGRESS DONE }
 
 type Task {
   id: ID!
@@ -408,22 +435,19 @@ type Task {
 }
 
 type TaskList { tasks: [Task!]!  total: Int! }
-
-input CreateTaskInput { title: String!  description: String }
-input UpdateTaskInput { title: String!  description: String }
-
-type Query {
-  task(id: ID!): Task!
+`, BuiltIn: false},
+	{Name: "../schema/tasks.graphqls", Input: `extend type Query {
   tasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
-  "Every user's tasks. Requires the admin role; anyone else gets FORBIDDEN."
-  allTasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
 }
-
-type Mutation {
-  createTask(input: CreateTaskInput!): Task!
-  updateTask(id: ID!, input: UpdateTaskInput!): Task!
+`, BuiltIn: false},
+	{Name: "../schema/transition_task.graphqls", Input: `extend type Mutation {
   transitionTask(id: ID!, status: TaskStatus!): Task!
-  deleteTask(id: ID!): Boolean!
+}
+`, BuiltIn: false},
+	{Name: "../schema/update_task.graphqls", Input: `input UpdateTaskInput { title: String!  description: String }
+
+extend type Mutation {
+  updateTask(id: ID!, input: UpdateTaskInput!): Task!
 }
 `, BuiltIn: false},
 }

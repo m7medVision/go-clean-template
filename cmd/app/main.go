@@ -1,19 +1,35 @@
 package main
 
 import (
-	"log"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/app"
 )
 
 func main() {
-	// Configuration
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := run(ctx)
+
+	stop()
+
+	if err != nil {
+		// JSON on stdout, as every other line is; config may not have loaded, so at info.
+		slog.New(slog.NewJSONHandler(os.Stdout, nil)).Error("app stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("Config error: %s", err)
+		return fmt.Errorf("config: %w", err)
 	}
 
-	// Run
-	app.Run(cfg)
+	return app.Run(ctx, cfg)
 }

@@ -11,52 +11,50 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/shopspring/decimal"
 )
 
-// ConvertCurrency converts Amount from one currency to another at today's reference rate and
-// records it in UserID's history. An invalid request is entity.ErrInvalidConversion, and a currency
-// the rate provider does not know entity.ErrUnsupportedCurrency.
+// ConvertCurrency converts Amount, a decimal string, from one currency to another at today's
+// reference rate and records it in UserID's history. An invalid pair of codes is
+// entity.ErrInvalidConversion, an amount that does not parse or fit entity.ErrInvalidAmount, a
+// currency the rate provider does not know entity.ErrUnsupportedCurrency, and a provider that cannot
+// be reached entity.ErrRatesUnavailable.
 type ConvertCurrency struct {
+	cqrs.Command[entity.Written]
+
 	UserID string
 	From   string
 	To     string
-	Amount decimal.Decimal
+	Amount string
 }
 
-// CommandName -.
-func (ConvertCurrency) CommandName() string { return "ConvertCurrency" }
-
-// ActorID -.
 func (c ConvertCurrency) ActorID() string { return c.UserID }
 
-// ConvertCurrencyHandler handles ConvertCurrency. Now is the clock (time.Now when nil).
+// ConvertCurrencyHandler's Now is the clock (time.Now when nil).
 type ConvertCurrencyHandler struct {
 	Store repo.EventStore
 	Rates repo.ExchangeWebAPI
 	Now   func() time.Time
 }
 
-// Handle -.
-func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (cqrs.Written, error) {
+func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (entity.Written, error) {
 	conversion, err := entity.NewConversion(cmd.From, cmd.To, cmd.Amount)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
 	}
 
 	rate, date, err := h.Rates.Rate(ctx, conversion.From, conversion.To)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
 	}
 
 	conversion.ApplyRate(rate, date)
 
 	id := uuid.NewString()
 
-	written, err := aggregate.Create(ctx, h.Store, id,
+	written, err := aggregate.Save(ctx, h.Store,
 		entity.NewConversionAggregate(id, cmd.UserID, &conversion, aggregate.Now(h.Now)))
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Save: %w", err)
 	}
 
 	return written, nil

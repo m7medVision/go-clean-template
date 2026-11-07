@@ -42,12 +42,12 @@ func (p *Proto) InService(name, text string) (Insertion, error) {
 
 	closing := p.file.NodeInfo(found[0].CloseBrace).Start().Offset
 
-	return Insertion{Path: p.path, Offset: lineStart(p.src, closing), Text: indent(text, "  ")}, nil
+	return Insertion{Offset: lineStart(p.src, closing), Text: indent(text, "  ")}, nil
 }
 
 // AtEnd appends text to the file, after a blank line.
 func (p *Proto) AtEnd(text string) Insertion {
-	return Insertion{Path: p.path, Offset: len(p.src), Text: "\n" + indent(text, "")}
+	return Insertion{Offset: len(p.src), Text: "\n" + indent(text, "")}
 }
 
 // Services returns the names of the file's services, in order.

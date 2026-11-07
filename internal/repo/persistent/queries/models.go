@@ -12,6 +12,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type BackfillMarker struct {
+	Domain     string
+	ImportedAt time.Time
+}
+
 type Claim struct {
 	Scope   string
 	Value   string

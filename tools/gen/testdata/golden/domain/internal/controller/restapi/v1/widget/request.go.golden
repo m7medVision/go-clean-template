@@ -1,7 +1,8 @@
 package widget
 
-// CreateWidget is the body of a create, empty until the widget has fields. Add each one here,
-// with the Huma tags that validate it, and pass it to command.CreateWidget in createWidget.
+// CreateWidget is the body of a create, empty until the widget has fields. Add each one here, with
+// the Huma tags that document its rules, which the command's Validate enforces, and pass it to
+// command.CreateWidget in createWidget.
 type CreateWidget struct {
 	_ struct{} `additionalProperties:"true"`
 }
@@ -9,4 +10,13 @@ type CreateWidget struct {
 // UpdateWidget is the body of an update, empty until the widget has fields, as CreateWidget is.
 type UpdateWidget struct {
 	_ struct{} `additionalProperties:"true"`
+}
+
+type listWidgetsInput struct {
+	Limit  int `query:"limit" default:"10" minimum:"1" maximum:"100"`
+	Offset int `query:"offset" default:"0" minimum:"0"`
+}
+
+type widgetPathInput struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 }

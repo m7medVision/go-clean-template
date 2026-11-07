@@ -65,9 +65,9 @@ graphql: ### generate GraphQL server code from schema (gqlgen)
 	cd internal/controller/graphql && go tool gqlgen generate
 .PHONY: graphql
 
-openapi: ### export the REST OpenAPI document (Huma) to docs/openapi/v1.json
+openapi: ### export the REST OpenAPI document (Huma) to docs/openapi/v1.json, stating APP_VERSION
 	mkdir -p docs/openapi
-	go run ./cmd/openapi > docs/openapi/v1.json.tmp
+	go run ./cmd/openapi -version '$(APP_VERSION)' > docs/openapi/v1.json.tmp
 	mv docs/openapi/v1.json.tmp docs/openapi/v1.json
 .PHONY: openapi
 
@@ -141,9 +141,11 @@ projection-rebuild: ### rebuild one projection's read model from the event store
 GEN = go -C tools/gen run .
 GEN_OPTS = $(if $(transports),--transports '$(transports)') $(if $(dry-run),--dry-run)
 # After the generator writes, the regenerators its output needs, then a build; a dry run runs none.
-# The first failure stops them. The undo the generator printed restores the tree, regenerated
-# paths included: rule R3 had them clean before the write. Their output scrolls the generator's
-# checklist and undo out of view, so the last line points back to them.
+# This is the one list of them: the generator names none. The first failure stops them. The undo
+# the generator printed restores the tree, whatever they changed included: rule R3 had no tracked
+# file changed before the write, and the undo leaves the untracked files that were there alone.
+# Their output scrolls the generator's checklist and undo out of view, so the last line points back
+# to them.
 GEN_REGENERATE = $(if $(dry-run),,$(MAKE) proto-v1 graphql sqlc mock openapi web-api web-graphql format && go build ./... \
 	|| { echo 'gen: a regenerator or the build failed: run the undo printed above to restore the tree' >&2; exit 1; }; \
 	echo 'gen: done. The next steps and the undo are printed above the output of the regenerators.')
@@ -206,14 +208,21 @@ integration-test: ### run integration-test
 	go clean -testcache && go test -v ./integration-test/...
 .PHONY: integration-test
 
-mock: ### run mockgen
-	mkdir -p ./internal/repo/repomock
-	mockgen -source ./internal/repo/contracts.go -package repomock > ./internal/repo/repomock/repomock.go
+mock: ### run mockgen: one mock file per contract file, from its go:generate directive
+	rm -rf ./internal/repo/repomock
+	go generate ./internal/repo
 .PHONY: mock
 
+# Atlas asks for TLS unless the URL says otherwise, so a URL without sslmode gets sslmode=disable, as
+# the app's startup apply does (internal/app/migrate.go).
 schema-apply: ### apply desired schema to the database (Atlas)
-	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
-		--to file://internal/app/schema
+	url='$(PG_URL)'; \
+	case "$$url" in \
+		*sslmode=*) ;; \
+		*\?*) url="$$url&sslmode=disable" ;; \
+		*) url="$$url?sslmode=disable" ;; \
+	esac; \
+	atlas schema apply -u "$$url" --to file://internal/app/schema
 .PHONY: schema-apply
 
 schema-roundtrip: ### apply the schema up from master, down to it and up again, in a throwaway Postgres container

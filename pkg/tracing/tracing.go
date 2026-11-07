@@ -19,20 +19,19 @@ const _defaultShutdownTimeout = 5 * time.Second
 // ShutdownFunc flushes and stops the tracer provider.
 type ShutdownFunc func(context.Context) error
 
-// Config holds tracing configuration.
+// Config is where spans go, and how many: Endpoint is the OTLP/gRPC collector, SampleRate the
+// share of new traces kept.
 type Config struct {
-	Enabled     bool
-	ServiceName string
-	Version     string
-	Endpoint    string
-	Insecure    bool
-	SampleRate  float64
+	Enabled    bool
+	Endpoint   string
+	Insecure   bool
+	SampleRate float64
 }
 
 // New configures a global TracerProvider with an OTLP/gRPC exporter and
-// W3C trace-context + baggage propagators. If tracing is disabled, it installs
-// a no-op provider so instrumentation code can run unconditionally.
-func New(ctx context.Context, cfg Config) (ShutdownFunc, error) {
+// W3C trace-context + baggage propagators, for the service named service at version. If tracing is
+// disabled, it installs a no-op provider so instrumentation code can run unconditionally.
+func New(ctx context.Context, service, version string, cfg Config) (ShutdownFunc, error) {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
@@ -58,8 +57,8 @@ func New(ctx context.Context, cfg Config) (ShutdownFunc, error) {
 		resource.WithTelemetrySDK(),
 		resource.WithHost(),
 		resource.WithAttributes(
-			semconv.ServiceName(cfg.ServiceName),
-			semconv.ServiceVersion(cfg.Version),
+			semconv.ServiceName(service),
+			semconv.ServiceVersion(version),
 		),
 	)
 	if err != nil {

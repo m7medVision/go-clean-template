@@ -1,0 +1,62 @@
+package widget_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestArchiveWidgetMutation asks for Mutation.archiveWidget through real buses whose one handler is a
+// fake ArchiveWidget handler, so it holds once the handler is written: it checks what the field sends
+// and answers, and that the stub's entity.ErrNotImplemented answers NOT_IMPLEMENTED.
+func TestArchiveWidgetMutation(t *testing.T) {
+	t.Parallel()
+
+	token := graphqltest.Token(t)
+	sent := []command.ArchiveWidget{{UserID: graphqltest.UserID, WidgetID: "widget-1"}}
+
+	for name, tc := range map[string]struct {
+		token string
+		err   error
+		code  string
+		want  string
+		sent  []command.ArchiveWidget
+	}{
+		"answers the ID it wrote":                {token: token, want: `"widget-1"`, sent: sent},
+		"a stub handler answers NOT_IMPLEMENTED": {token: token, err: entity.ErrNotImplemented, code: "NOT_IMPLEMENTED", sent: sent},
+		"needs the caller":                       {code: "UNAUTHENTICATED"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []command.ArchiveWidget
+
+			cmds := cqrs.NewCommands()
+			cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.ArchiveWidget, entity.Written](
+				func(_ context.Context, cmd command.ArchiveWidget) (entity.Written, error) {
+					got = append(got, cmd)
+
+					return entity.Written{ID: "widget-1"}, tc.err
+				}))
+
+			resp := graphqltest.Post(t, cqrs.Buses{Commands: cmds}, tc.token, `mutation { archiveWidget(id: "widget-1") }`, nil)
+
+			assert.Equal(t, tc.sent, got)
+
+			if tc.code != "" {
+				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
+
+				return
+			}
+
+			require.Empty(t, resp.Errors, resp.Body)
+			assert.JSONEq(t, tc.want, string(resp.Data["archiveWidget"]))
+		})
+	}
+}

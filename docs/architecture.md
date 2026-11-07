@@ -9,8 +9,8 @@ change follows the [rules](#rules) below; a change that breaks one is not merged
 Dependencies point inward. Controllers send commands and queries through the buses in
 [`pkg/cqrs`](../pkg/cqrs) to their handlers in `internal/usecase/<domain>/command/` and `query/`.
 Handlers reach storage and outbound APIs through the interfaces in
-[`internal/repo/contracts.go`](../internal/repo/contracts.go): the event store for writes, a read
-model for reads. Every layer passes [`internal/entity`](../internal/entity) types, and `entity` imports
+[`internal/repo`](../internal/repo): the event store for writes (`contracts.go`, with the other
+ports every domain shares), a read model for reads (in the file named after its domain). Every layer passes [`internal/entity`](../internal/entity) types, and `entity` imports
 nothing from this module. [cqrs.md](cqrs.md) explains the command and query split and the event store.
 
 ```mermaid
@@ -32,7 +32,7 @@ its handlers in `internal/controller/worker` send commands on the same command b
 Each transport is a controller package: [the packages table](#packages) lists them.
 Controllers never import each other, and none of them knows about Postgres. A REST handler that needs
 data sends a query, whose handler goes through a read-model interface. `pkg/` holds infrastructure
-with no domain knowledge (buses, servers, logger, JWT, Postgres pool, tracing and the like) and must
+with no domain knowledge (buses, servers, JWT, Postgres pool, tracing and the like) and must
 not import `internal/`.
 
 ## Rules
@@ -47,43 +47,48 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
    interfaces → entity. An inner layer never imports an outer one.
 2. **`internal/entity` imports nothing from this module.** Domain types, aggregates, events and
    their rules are plain Go.
-3. **Handlers know only interfaces.** They depend on `internal/repo/contracts.go`, never on a
+3. **Handlers know only interfaces.** They depend on the contracts in `internal/repo`, never on a
    repository implementation, and import no HTTP client, SQL driver or transport framework.
 4. **Controllers send messages, never call repositories.** No SQL, no `pkg/postgres`, no outbound
    HTTP in a controller: it sends a command or a query on the buses.
-5. **Transports are independent.** The packages under `internal/controller/` never import each other.
-   Logic two transports share belongs in a handler. Inside a transport, the domain folders
+5. **Transports are independent.** The packages under `internal/controller/` never import each other,
+   with two exceptions that import none of them: `authn`, which turns a token into the caller for
+   all three, and `httpmw`, the middleware around every HTTP request, whose problem writer REST's
+   `Auth` middleware borrows. Logic two transports share belongs in a handler. Inside a transport, the domain folders
    (`restapi/v1/task`, `grpc/v1/task`, `graphql/task`, …) never import each other either; what
    several domains share has its own package in that transport (`restapi/v1/response`,
-   `restapi/v1/apidoc`, `restapi/v1/apierr`, `grpc/v1/rpcerr`, `graphql/middleware`, `graphql/gqlerr`,
-   `graphql/paging`).
+   `restapi/v1/apidoc`, `restapi/v1/apierr`, `grpc/v1/rpcerr`, `graphql/middleware`, `graphql/gqlerr`).
 6. **`pkg/` never imports `internal/` or `config/`.** It takes its settings as arguments.
-7. **Wiring happens once,** in `internal/app`: `buses.go` builds the buses, registers every domain's
-   handlers (`registerHandlers`) and lists the worker's subscribers. Nothing else constructs its own
-   dependencies.
+7. **Wiring happens once,** in `internal/app`: one file per domain returns its `module`, everything
+   either binary builds for that domain, and `modules.go` is the one list of them (GraphQL's root
+   resolver aside). Nothing else constructs its own dependencies.
 
 ### Each layer's job
 
 8. **A controller handler does six things, in order:** get the caller, decode into a transport-local
-   DTO, validate structure, send the command or query with the request's `ctx`, map `entity.Err*`
-   sentinels to a transport status, and encode a response DTO. Nothing else. It never passes a request
+   DTO, validate structure, send the command or query with the request's `ctx`, map the error's
+   kind to a transport status (one function per transport), and encode a response DTO. Nothing else. It never passes a request
    DTO into a message, and returns an entity directly only when its JSON shape already is the API shape.
 9. **A domain rule is written once, on the aggregate or in the handler.** Never in a controller, and
    never duplicated per transport. A rule about one record goes on its aggregate
    (`TaskAggregate.Transition`, `entity.NewConversion`); a rule across records uses a claim
    (unique emails). Authorization is a domain rule too: "only an admin lists every user's tasks" is
-   `ListAllTasks.RequiredRole`, enforced by the buses' authorize step for every transport.
+   `ListAllTasks.AdminOnly`, enforced by the buses' authorize step for every transport, and who may
+   read a record is the record's `ReadableBy` (`entity.Task.ReadableBy`), which the query handler
+   checks on what the read model returns by ID. The task aggregate changes a task by the same rule.
 10. **State changes only through aggregates recording events.** A command handler loads an
     aggregate, calls its behavior method and saves what it recorded. A command returns what
-    identifies the write (`cqrs.Written`), never resource data; a query reads only read models; and
+    identifies the write (`entity.Written`), never resource data; a query reads only read models; and
     only a read model's projector writes its tables.
 11. **Only controllers know transport errors.** Lower layers return sentinels from
-    `internal/entity/errors.go` or errors wrapped with their layer path
-    (`fmt.Errorf("CreateTask - aggregate.Create: %w", err)`).
+    `internal/entity` (each domain's in its own file, the shared ones in `errors.go`) or errors
+    wrapped with their layer path
+    (`fmt.Errorf("CreateTask - aggregate.Save: %w", err)`).
 12. **Cross-cutting concerns are steps, not decorators.** Tracing, logging, metrics, retries,
     authorization and validation wrap every message on the buses (`pkg/cqrs`,
-    `internal/usecase/behavior`), so no handler carries them. Repositories still return their
-    interface wrapped in a tracing decorator (`tracing.go`).
+    `internal/usecase/behavior`), so no handler carries them. Below the buses, every SQL statement
+    (otelpgx) and outbound HTTP call (otelhttp) gets its own span, so repositories carry no tracing
+    code either.
 
 ### Where code goes
 
@@ -115,8 +120,7 @@ A reviewer checks the imports first:
 - Does a query load an aggregate, or a command return resource data?
 - Does anything but a projector write a read-model table?
 - Is a new message missing from its domain's `register.go`, or a new event from `EventTypes()`?
-- Is a new repository contract method missing from its `tracing.go` decorator or from the mocks
-  (`make mock`)?
+- Is a new repository contract method missing from the mocks (`make mock`)?
 
 Any "yes" is a rule broken, and the change goes back.
 
@@ -126,12 +130,17 @@ The app knows two roles, `entity.RoleAdmin` and `entity.RoleUser`. A sign-in wri
 roles into the app JWT (`roles` claim). A password sign-in always grants `user` (`entity.LocalRoles`).
 A passkey sign-in does too.
 An SSO sign-in grants the roles the provider's claims map to ([sso.md](sso.md#roles)).
-Each transport's auth turns the token into an `entity.Principal`, dropping role names it does not
-know:
+One function, `authn.ReadToken` (`internal/controller/authn`), turns the token into the caller for
+every transport: an `authn.Caller`, the `entity.Principal` (role names it does not know dropped) and
+when the token was issued. Each transport reads only its own header and stores the caller under the
+one context key:
 
-- REST: `middleware.Principal`
-- gRPC: `grpcmw.PrincipalFromContext`
-- GraphQL: `middleware.Principal` (in `graphql/middleware`)
+- REST: the `Auth` Huma middleware, for every operation that declares `Security`; handlers read the
+  caller with `authn.MustCaller`. An operation that declares none is public.
+- gRPC: the `Auth` interceptor, for every method no module lists in `grpcPublic`; methods read the
+  caller with `authn.MustCaller`.
+- GraphQL: `middleware.WithOptionalCaller` lets every request through, so resolvers ask
+  `middleware.Caller`, which answers `UNAUTHENTICATED` when there is none.
 
 A handler puts the
 principal in the messages that need a role, such as `ListAllTasks`: the buses' authorize step
@@ -142,30 +151,39 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 
 | Package | What it holds |
 | --- | --- |
-| [`cmd/app`](../cmd/app/main.go) | Reads config, builds the logger, then hands over to `internal/app.Run`. |
+| [`cmd/app`](../cmd/app/main.go) | Reads config, then hands over to `internal/app.Run`, which builds the `log/slog` logger (JSON lines at `LOG_LEVEL`) and passes it to everything that logs. |
 | [`cmd/worker`](../cmd/worker/main.go) | Reads config, then `RunWorker` in `internal/app/worker.go`. Same Docker image as the app (`/worker` instead of `/app`); it never applies the schema. |
-| [`cmd/openapi`](../cmd/openapi/main.go) | Prints the REST OpenAPI document without a server or database. `make openapi` writes it to `docs/openapi/v1.json`. |
-| [`internal/app`](../internal/app) | Wiring. `buses.go` builds the command and query buses with their steps, registers every domain's handlers (`registerHandlers`) and lists the worker's projectors and event handlers (`subscribers`); `backfill.go` lists each domain's importer. `app.go` runs the backfill, starts the servers (`initServers`) and waits for a signal to shut down; `worker.go` runs the queue worker and the projection runner. See [Schema](#schema) for `migrate.go`. |
-| [`internal/controller`](../internal/controller) | One package per transport. Inside each, one folder per domain (`restapi/v1/task/`, `grpc/v1/task/`, `graphql/task/`) holds that domain's handlers, request and response DTOs, and tests; the version's `router.go` registers every domain over the buses. Handlers decode, send a command or query, map `entity.Err*` sentinels to a transport status, and encode. |
-| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `v1/response/` (`Token`), `v1/apidoc/` (the security scheme and the `auth` tag) and `v1/apierr/` (the failures any command can produce) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with, over fake handlers on real buses. |
-| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which `v1/router.go` registers; `v1/rpcerr/` maps the failures any command can produce. |
-| [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen), mounted on the REST router. One folder per domain (`task/`, `exchange/`) holds its resolvers and their tests; `resolver.go` joins them into the root `Query` and `Mutation`. `middleware/` (the caller), `gqlerr/` (error codes) and `paging/` are shared, and `graphqltest/` is the test kit. gqlgen generates only `generated/` and `model/`. |
+| [`cmd/openapi`](../cmd/openapi/main.go) | Prints the REST OpenAPI document without a server, a database or any environment: the version it states comes from `-version`. `make openapi` passes `APP_VERSION` and writes the document to `docs/openapi/v1.json`. |
+| [`config`](../config) | Every setting, parsed from the environment into one exported section per concern (`config.WebAuthn`, `config.Worker`, …). The binaries pass each part only the sections or values it reads, and no controller imports it. Defaults are written only here; a `pkg/` type with the same fields as a section converts from it (`worker.Settings(cfg.Worker)`, `tracing.Config(cfg.Tracing)`). `config.App` also builds the links to the web client's routes (`LoginURL`, `SSOCallbackURL`), the one place Go names them. |
+| [`internal/app`](../internal/app) | Wiring. One file per domain (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) returns its `module`: its command and query handlers, importer, REST operations, gRPC services, projector, event handlers and queues. `modules.go` lists them, and each binary installs only the parts it runs: the app everything but mail delivery, the worker the projectors, event handlers and the mail queue, so the worker needs no WebAuthn, SSO or JWT settings and the app no SMTP. `buses.go` builds the command and query buses with their steps; `http.go` is the app's one chi mux, which mounts REST (`restapi.NewHandler`) and GraphQL side by side, and `OpenAPI`, which `cmd/openapi` prints from the same registration. `bootstrap.go` builds what both binaries start from (logger, tracing, metrics registry, pool, buses) and closes it; `openPool` there is the one place a pool is opened, for both binaries and `make projection-rebuild`. `app.go` builds the event store, which only the app's command handlers and the backfill write through, runs the backfill, then the HTTP and gRPC servers; `worker.go` the queue worker and the projection runner. Each part is a `Run(ctx) error` under one errgroup, and stops when the context `main` takes from `signal.NotifyContext` ends; the pool closes after all of them return. `servers.go` serves a plain `http.Server` and `grpc.Server` that way: once the context ends, each gets 3 s to finish the requests and streams in flight, then drops what is left with a warning that names it (an open reflection stream, as grpcui holds, would otherwise keep gRPC up forever), and the stop is still a clean one; the HTTP write deadline is `CQRS_CONSISTENCY_TIMEOUT` plus the longer of the rate API's timeout (`webapi.Timeout`) and the SSO provider's (`sso.Timeout`, one deadline for all of a sign-in step's calls to it) plus a margin, so a conversion that waits for its rate, or a finished SSO sign-in for its provider, and then its projections can still answer. See [Schema](#schema) for `migrate.go`. |
+| [`internal/controller`](../internal/controller) | One package per transport. Inside each, one folder per domain (`restapi/v1/task/`, `grpc/v1/task/`, `graphql/task/`) holds that domain's handlers, one file per operation (`create_task.go`), its request and response DTOs, and tests; the domain's module in `internal/app` registers it over the buses. Handlers decode, send a command or query, map `entity.Err*` sentinels to a transport status, and encode. |
+| [`internal/controller/authn`](../internal/controller/authn) | The caller of a request, for every transport: `ReadToken` turns a token into an `authn.Caller` (principal and issue time), stored under one context key that handlers read with `MustCaller` (REST, gRPC) or through GraphQL's `middleware.Caller`. It imports no transport. |
+| [`internal/controller/httpmw`](../internal/controller/httpmw) | The middleware the app's HTTP mux wraps every request in, whatever serves it (REST, GraphQL, the docs, `/healthz`, `/metrics`): request log, tracing, metrics and panic recovery, and `WriteProblem`, the RFC 9457 answer a middleware gives instead of a handler. |
+| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `middleware/` holds `Auth`, the Huma middleware that enforces each operation's `Security`. `v1/response/` (`Token`), `v1/apidoc/` (the security scheme and the `auth` tag) and `v1/apierr/` (an error's kind → its problem, for every domain) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with, over fake handlers on real buses. |
+| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which the domain's module in `internal/app` registers; `v1/rpcerr/` maps an error's kind to its status, for every service. `middleware/` holds the interceptors: request log, metrics, panic recovery and the token check, which skips the methods the modules list as public. |
+| [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen), mounted beside REST on the app's mux. One folder per domain (`task/`, `exchange/`) holds its resolvers, one file per field, and their tests; `resolver.go` joins them into the root `Query` and `Mutation`. `middleware/` (the caller) and `gqlerr/` (error codes) are shared, and `graphqltest/` is the test kit. gqlgen generates only `generated/` and `model/`. |
 | [`internal/controller/worker`](../internal/controller/worker) | The queue worker's message handlers; the mail handler sends `DeliverEmail`. |
 | [`internal/entity`](../internal/entity) | Domain types (the read shapes the API returns), the aggregates and their events, the claims, and sentinel errors. `EventTypes()` lists every event the store can decode. |
 | [`internal/usecase`](../internal/usecase) | One package per domain: `command/` and `query/` hold one file per message with its handler, `event/` the event handlers, and `register.go` lists them. `aggregate/` is the load–change–save helper every command uses, and `behavior/` the app's pipeline steps (stamp, wait, retry, authorize, validate). See [cqrs.md](cqrs.md). |
-| [`internal/usecase/passkey`](../internal/usecase/passkey) | WebAuthn registration and sign-in. `ceremony/` is the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn); it stores nothing, and the commands and queries pass it the browser's JSON as bytes. Ceremony state travels in a signed token and a login challenge is burned on finish. See [passkeys.md](passkeys.md). |
-| [`internal/usecase/oidc`](../internal/usecase/oidc) | SSO sign-in through an OpenID Connect provider. `sso/` is the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `x/oauth2`; it maps the provider's role claim to app roles. `FinishOIDCLogin` finds the identity's user through its claim, or creates one. See [sso.md](sso.md). |
+| [`internal/usecase/passkey`](../internal/usecase/passkey) | WebAuthn registration and sign-in, behind `repo.PasskeyCeremony`: the commands and queries pass it the browser's JSON as bytes. Ceremony state travels in a signed token and a login challenge is burned on finish. See [passkeys.md](passkeys.md). |
+| [`internal/repo/ceremony`](../internal/repo/ceremony) | The WebAuthn adapter: the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn). It stores nothing. |
+| [`internal/usecase/oidc`](../internal/usecase/oidc) | SSO sign-in through an OpenID Connect provider, behind `repo.SSOProvider`. `FinishOIDCLogin` finds the identity's user through its claim, or creates one. See [sso.md](sso.md). |
+| [`internal/repo/sso`](../internal/repo/sso) | The OpenID Connect adapter: the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `x/oauth2`. It runs the authorization-code flow with PKCE, keeps the sign-in's state in a scoped token, and maps the provider's role claim to app roles. Every call to the provider goes through one client, and one deadline (`sso.Timeout`) bounds a step's calls together; any failure to reach the provider or get an answer from it is `ErrOIDCUnavailable`. |
 | [`internal/repo/persistent`](../internal/repo/persistent) | Postgres. Each domain's package holds its read model, its projector and its importer. SQL lives in `queries/*.sql` and [sqlc](https://sqlc.dev/) compiles it to typed Go; there is no ORM. `make sqlc` first renders the HCL schema to `queries/schema/schema.sql` with Atlas in a throwaway container, so it needs Docker. |
-| [`internal/repo/persistent/eventstore`](../internal/repo/persistent/eventstore) | The event store: append under the store's lock with an optimistic version check, claims, snapshots, the codec and its upcasters, the reader the projection runner tails, and the backfill. |
-| [`internal/repo/persistent/projection`](../internal/repo/persistent/projection) | The projection runner the worker runs (checkpoints, `LISTEN`, rebuild), the checkpoints the wait step reads, and the `projection_lag_events` collector. |
+| [`internal/repo/persistent/eventstore`](../internal/repo/persistent/eventstore) | The event store: append under the store's lock with an optimistic version check, claims, snapshots, the reader the projection runner tails, and the backfill: one import loop for every domain's importer, with its markers in `backfill_markers`. |
+| [`internal/repo/eventcodec`](../internal/repo/eventcodec) | What both event stores share, with no driver: the codec that encodes events and upcasts old versions (`entity.Upcasts()`), when a stream is due a snapshot, what a taken claim answers, and the metadata an event is stored with. |
+| [`internal/repo/persistent/projection`](../internal/repo/persistent/projection) | The projection runner the worker runs (checkpoints, `LISTEN`, rebuild), `NewProjector`, the shell every domain's projector is (its name, tables and events, and its `project` function), the checkpoints the wait step reads, and the `projection_lag_events` collector. |
 | [`internal/repo/memstore`](../internal/repo/memstore) and [`eventstoretest`](../internal/repo/eventstoretest) | An in-memory event store for command-handler tests, and the contract suite it and the Postgres store both pass. |
-| [`internal/repo/repomock`](../internal/repo/repomock) | gomock mocks of `repo/contracts.go`, generated by `make mock`. |
-| [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey) | The passkey read model (`webauthn_credentials`, the library's credential record in a `jsonb` column) and the burned login challenges (`webauthn_used_challenges`), a write-side guard: a burn that inserts no row is `entity.ErrPasskeyChallengeUsed`. |
-| [`internal/repo/webapi`](../internal/repo/webapi) | Outbound HTTP. `exchange_openerapi.go` reads daily rates from open.er-api.com with plain `net/http`, decodes them straight into `decimal.Decimal`, and maps the provider's `unsupported-code` error (sent with HTTP 200) to `entity.ErrUnsupportedCurrency`. Its unit test serves the recorded response in `testdata/`. |
-| [`internal/repo/mailtmpl`](../internal/repo/mailtmpl) | Email rendering. See [worker.md](worker.md). |
-| [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail queue, so the `SendWelcomeEmail` event handler knows nothing about queues or email encoding. |
+| [`internal/repo`](../internal/repo) | The contracts the use cases call: `contracts.go` holds the ones every domain shares (the event store, subscribers, checkpoints, sessions), and one file per domain its read model and outbound ports. They speak `entity` and `repo` types only. |
+| [`internal/repo/repomock`](../internal/repo/repomock) | gomock mocks, one file per contract file, generated by `make mock` from each file's `go:generate` directive; only the ports a test constructs have one. |
+| [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey) | The passkey read model (`webauthn_credentials`, the library's credential record in a `jsonb` column) and the burned login challenges (`webauthn_used_challenges`), a write-side guard that opens its own transaction: a burn that inserts no row is `entity.ErrPasskeyChallengeUsed`, and what the login records commits with the burn. |
+| [`internal/repo/webapi`](../internal/repo/webapi) | Outbound HTTP. `exchange_openerapi.go` reads daily rates from open.er-api.com with plain `net/http`, decodes them straight into `decimal.Decimal`, maps the provider's `unsupported-code` error (sent with HTTP 200) to `entity.ErrUnsupportedCurrency`, and any other failure of the provider to `entity.ErrRatesUnavailable`. Its unit test serves the recorded response in `testdata/`. |
+| [`internal/repo/mailtmpl`](../internal/repo/mailtmpl) | Email rendering, into a `repo.RenderedEmail`. See [worker.md](worker.md). |
+| [`internal/repo/mailer`](../internal/repo/mailer) | `repo.Mailer` on `pkg/smtp`: hands a rendered email to the SMTP client. |
+| [`internal/repo/session`](../internal/repo/session) | `repo.SessionIssuer`: the auth token every sign-in (password, passkey, SSO) answers with, as a JWT signed by `pkg/jwt`. Use cases name the port, never `*jwt.Manager`. |
+| [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail queue, so the `SendWelcomeEmail` event handler knows nothing about queues or email encoding. It enqueues through its own `notify.Queue` port. |
 | [`pkg/cqrs`](../pkg/cqrs) | The typed command and query buses, and the trace, log and metrics steps every message passes. |
-| [`pkg/postgres`](../pkg/postgres) | The pool, and `InTx` and `Executor`: a transaction carried in the context, which every repository and the event store join. |
+| [`pkg/postgres`](../pkg/postgres) | The pool (unexported): `New` waits for an unreachable database, trying again every second until its context ends, and fails at once on a login the database refuses. `InTx` and `Executor` carry a transaction in the context, which every repository and the event store join; `Connect` opens a connection outside the pool for a `LISTEN`. |
 | [`pkg/jwt`](../pkg/jwt) | `Manager` signs and parses the auth JWT. `Scoped` signs short-lived payloads for one purpose, with a key derived from the same secret by HKDF and the purpose as audience, so neither token passes for the other; a sign-in flow that spans two requests keeps its state in one. The auth JWT carries a `roles` claim ([Roles](#roles)). |
 | [`pkg/tracing`](../pkg/tracing) | OpenTelemetry setup; a no-op provider when tracing is off. See [configuration.md](configuration.md#tracing). |
 | [`pkg/worker`](../pkg/worker) | The queue consumer. See [worker.md](worker.md). |
@@ -194,6 +212,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -204,14 +223,23 @@ type GetTaskHandler struct {
 }
 
 func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (entity.Task, error) {
-	return h.Tasks.Get(ctx, q.UserID, q.TaskID)
+	task, err := h.Tasks.Get(ctx, q.TaskID)
+	if err != nil {
+		return entity.Task{}, fmt.Errorf("GetTask - h.Tasks.Get: %w", err)
+	}
+
+	if err = task.ReadableBy(q.UserID); err != nil {
+		return entity.Task{}, fmt.Errorf("GetTask: %w", err)
+	}
+
+	return task, nil
 }
 ```
 
 Each domain's `register.go` fills the fields in from the dependencies `internal/app` passes it, once.
 Any implementation of the interface can replace another without a change to the handler. It also
-makes the interfaces mockable: this repo generates gomock mocks from `internal/repo/contracts.go`
-into `internal/repo/repomock` (`make mock`), and command handlers are tested against the in-memory
+makes the interfaces mockable: this repo generates gomock mocks from the contract files in
+`internal/repo` into `internal/repo/repomock` (`make mock`), and command handlers are tested against the in-memory
 event store in `internal/repo/memstore`.
 
 For a large number of injections, [wire](https://github.com/google/wire) can generate the wiring.

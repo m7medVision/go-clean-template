@@ -7,20 +7,17 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// _resultPlaces matches the scale entity.Conversion rounds Result to.
-const _resultPlaces = 2
-
 // newConversionList carries the history's decimals as strings, so no precision is lost to a
 // floating-point JSON number.
-func newConversionList(history entity.ExchangeHistory) *model.ConversionList {
-	conversions := make([]model.Conversion, len(history.History))
-	for i, c := range history.History {
+func newConversionList(history entity.List[entity.Conversion]) *model.ConversionList {
+	conversions := make([]model.Conversion, len(history.Items))
+	for i, c := range history.Items {
 		conversions[i] = model.Conversion{
 			From:     c.From,
 			To:       c.To,
 			Amount:   c.Amount.String(),
 			Rate:     c.Rate.String(),
-			Result:   c.Result.StringFixed(_resultPlaces),
+			Result:   c.ResultString(),
 			RateDate: c.RateDate.Format(time.DateOnly),
 		}
 	}

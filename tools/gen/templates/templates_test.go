@@ -23,30 +23,29 @@ func data(t *testing.T) *templates.Data {
 
 func file(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
 
-func TestRenderRendersThePathAndTheContentWithTheSameData(t *testing.T) {
+func TestGlobRendersThePathAndTheContentWithTheSameData(t *testing.T) {
 	t.Parallel()
 
 	fsys := fstest.MapFS{
-		"domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl": file("package {{.Name.Pkg}} // {{.Module}}\n"),
+		"internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl": file("package {{.Name.Pkg}} // {{.Module}}\n"),
 	}
 
-	got, err := templates.Render(fsys, "domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl", data(t))
+	got, err := templates.Glob(fsys, "internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl", data(t))
 	require.NoError(t, err)
 
-	assert.Equal(t, templates.File{
-		Template: "domain/internal/{{.Name.Pkg}}/{{.Name.Snake}}.go.tmpl",
-		Path:     "internal/lineitem/line_item.go",
-		Content:  []byte("package lineitem // example.com/app\n"),
-	}, got)
+	assert.Equal(t, []templates.File{{
+		Path:    "internal/lineitem/line_item.go",
+		Content: []byte("package lineitem // example.com/app\n"),
+	}}, got)
 }
 
-func TestRenderFailsOnAFieldTheDataLacks(t *testing.T) {
+func TestGlobFailsOnAFieldTheDataLacks(t *testing.T) {
 	t.Parallel()
 
 	for name, fsys := range map[string]fstest.MapFS{
-		"in the content": {"domain/a.go.tmpl": file("{{.Name.Shout}}\n")},
-		"in the path":    {"domain/{{.Nope}}.go.tmpl": file("package a\n")},
-		"a bad action":   {"domain/a.go.tmpl": file("{{.Name.Go\n")},
+		"in the content": {"a.go.tmpl": file("{{.Name.Shout}}\n")},
+		"in the path":    {"{{.Nope}}.go.tmpl": file("package a\n")},
+		"a bad action":   {"a.go.tmpl": file("{{.Name.Go\n")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -57,7 +56,7 @@ func TestRenderFailsOnAFieldTheDataLacks(t *testing.T) {
 				tmpl = p
 			}
 
-			_, err := templates.Render(fsys, tmpl, data(t))
+			_, err := templates.Glob(fsys, tmpl, data(t))
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tmpl)
 		})
@@ -68,39 +67,40 @@ func TestDataHasTheChosenTransportsOnly(t *testing.T) {
 	t.Parallel()
 
 	fsys := fstest.MapFS{
-		"domain/t.txt.tmpl": file(`{{if .Has "rest"}}rest {{end}}{{if .Has "grpc"}}grpc {{end}}{{if .Has "graphql"}}graphql{{end}}`),
+		"t.txt.tmpl": file(`{{if .Has "rest"}}rest {{end}}{{if .Has "grpc"}}grpc {{end}}{{if .Has "graphql"}}graphql{{end}}`),
 	}
 
-	got, err := templates.Render(fsys, "domain/t.txt.tmpl", data(t))
+	got, err := templates.Glob(fsys, "t.txt.tmpl", data(t))
 	require.NoError(t, err)
-	assert.Equal(t, "rest graphql", string(got.Content))
+	require.Len(t, got, 1)
+	assert.Equal(t, "rest graphql", string(got[0].Content))
 }
 
 func TestGlobRendersEveryMatchSortedAndFailsOnNone(t *testing.T) {
 	t.Parallel()
 
 	fsys := fstest.MapFS{
-		"domain/x/{{.Name.Snake}}_b.go.tmpl": file("b\n"),
-		"domain/x/{{.Name.Snake}}_a.go.tmpl": file("a\n"),
-		"domain/y/{{.Name.Snake}}.go.tmpl":   file("y\n"),
+		"x/{{.Name.Snake}}_b.go.tmpl": file("b\n"),
+		"x/{{.Name.Snake}}_a.go.tmpl": file("a\n"),
+		"y/{{.Name.Snake}}.go.tmpl":   file("y\n"),
 	}
 
-	got, err := templates.Glob(fsys, "domain/x/*.tmpl", data(t))
+	got, err := templates.Glob(fsys, "x/*.tmpl", data(t))
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	assert.Equal(t, "x/line_item_a.go", got[0].Path)
 	assert.Equal(t, "x/line_item_b.go", got[1].Path)
 
-	_, err = templates.Glob(fsys, "domain/z/*.tmpl", data(t))
-	require.ErrorIs(t, err, templates.ErrNoTemplates)
+	_, err = templates.Glob(fsys, "z/*.tmpl", data(t))
+	assert.ErrorContains(t, err, "no templates match z/*.tmpl")
 }
 
 func TestTextDropsTheFinalNewline(t *testing.T) {
 	t.Parallel()
 
-	fsys := fstest.MapFS{"domain/edits/a.go.Fn.tmpl": file("{{.Name.Lower}}Events()\n")}
+	fsys := fstest.MapFS{"edits/a.go.Fn.tmpl": file("{{.Name.Lower}}Events()\n")}
 
-	got, err := templates.Text(fsys, "domain/edits/a.go.Fn.tmpl", data(t))
+	got, err := templates.Text(fsys, "edits/a.go.Fn.tmpl", data(t))
 	require.NoError(t, err)
 	assert.Equal(t, "lineItemEvents()", got)
 }
@@ -110,21 +110,39 @@ func TestEveryEmbeddedFileIsATemplateOfASet(t *testing.T) {
 
 	sets := map[string]int{}
 
-	require.NoError(t, fs.WalkDir(templates.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+	all, err := templates.Set(".")
+	require.NoError(t, err)
+
+	require.NoError(t, fs.WalkDir(all, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 
 		set, _, _ := strings.Cut(p, "/")
+		if set == "usecase" {
+			kind, _, _ := strings.Cut(strings.TrimPrefix(p, "usecase/"), "/")
+			set += "/" + kind
+		}
+
 		sets[set]++
 
 		assert.True(t, strings.HasSuffix(p, ".tmpl"), "%s does not end in .tmpl", p)
-		assert.Contains(t, []string{"domain", "usecase"}, set, "%s is in no set", p)
+		assert.Contains(t, []string{"domain", "usecase/command", "usecase/query"}, set, "%s is in no set", p)
 
 		return nil
 	}))
 
-	assert.Len(t, sets, 2, "both sets have templates")
+	assert.Len(t, sets, 3, "every set has templates")
+}
+
+func TestSetRootsTheTemplatesOfOneSet(t *testing.T) {
+	t.Parallel()
+
+	set, err := templates.Set("usecase/query")
+	require.NoError(t, err)
+
+	_, err = fs.Stat(set, "next.tmpl")
+	require.NoError(t, err)
 }
 
 func usecase(t *testing.T, kebab, path string) *templates.Usecase {
@@ -143,15 +161,16 @@ func TestAUsecaseRendersWithItsDomain(t *testing.T) {
 	d.Usecase = usecase(t, "archive-line-item", "/v1/line-items/{id}/archive")
 
 	fsys := fstest.MapFS{
-		"usecase/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl": file(
+		"{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl": file(
 			"{{.Usecase.Name.Go}} {{.Name.Go}}ID {{.Usecase.Summary}}: {{.Usecase.HTTPMethod}} {{.Usecase.Target \"line-item-1\"}}\n"),
 	}
 
-	got, err := templates.Render(fsys, "usecase/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl", d)
+	got, err := templates.Glob(fsys, "{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.tmpl", d)
 	require.NoError(t, err)
-	assert.Equal(t, "lineitem/archive_line_item.go", got.Path)
+	require.Len(t, got, 1)
+	assert.Equal(t, "lineitem/archive_line_item.go", got[0].Path)
 	assert.Equal(t, "ArchiveLineItem LineItemID Archive line item: http.MethodPost /v1/line-items/line-item-1/archive\n",
-		string(got.Content))
+		string(got[0].Content))
 }
 
 func TestAUsecaseActsOnOneRecordWhenItsPathHoldsTheID(t *testing.T) {

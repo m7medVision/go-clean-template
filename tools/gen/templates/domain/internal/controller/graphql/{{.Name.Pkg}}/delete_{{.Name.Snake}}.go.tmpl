@@ -1,0 +1,24 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/controller/graphql/gqlerr"
+	"{{.Module}}/internal/controller/graphql/middleware"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (m Mutation) Delete{{.Name.Go}}(ctx context.Context, id string) (bool, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = cqrs.SendCommand(ctx, m.cmds, command.Delete{{.Name.Go}}{UserID: caller.UserID, {{.Name.Go}}ID: id})
+	if err != nil {
+		return false, gqlerr.Map(ctx, m.l, err, "delete{{.Name.Go}}")
+	}
+
+	return true, nil
+}

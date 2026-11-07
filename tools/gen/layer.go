@@ -19,7 +19,8 @@ import (
 const (
 	// _domainSet is the set of templates new-domain renders, templates/domain.
 	_domainSet = "domain"
-	// _usecaseSet is the set of templates new-usecase renders, templates/usecase.
+	// _usecaseSet holds the sets new-usecase renders, one per kind: templates/usecase/command and
+	// templates/usecase/query.
 	_usecaseSet = "usecase"
 	// _editsDir holds, inside a set, the text of the insertions into existing files.
 	_editsDir = "edits"
@@ -28,15 +29,17 @@ const (
 	_nextTemplate = "next.tmpl"
 )
 
-// layer is one part of what a command generates, such as the entity layer of a domain. Each lives
-// in its own file as a function that adds to the planner the files it creates and the edits it
-// makes: layer_<name>.go for new-domain, usecase_<name>.go for new-usecase. A command lists its
-// layers (domainLayers, usecaseLayers) and runs them in order.
+// layer is one part of what a command generates, such as the entity layer of a domain: the files
+// its templates create, and the insertions it makes into files the repository has. A command lists
+// its layers (domainLayers, usecaseLayers) and plans them in order.
 type layer struct {
 	// transport is the transport the layer belongs to, such as rest; empty for a layer every
 	// domain gets.
 	transport string
-	plan      func(pl *planner)
+	// creates are fs.Glob patterns under the set: each template one matches creates one file.
+	creates []string
+	// edits plans the layer's insertions; nil for a layer that only creates.
+	edits func(pl *planner)
 }
 
 // selectLayers returns the layers of all that run for transports: the shared ones and those of the
@@ -57,88 +60,54 @@ func selectLayers(all []layer, transports []string) []layer {
 // data it renders them with, and the plan it adds to.
 type planner struct {
 	repo rules.Repo
-	tmpl fs.FS
-	// set is the set of templates in tmpl the command renders, _domainSet or _usecaseSet.
+	// set is the folder of the templates the command renders, as in domain or usecase/command, and
+	// tmpl is those templates, rooted there.
 	set  string
+	tmpl fs.FS
 	data *templates.Data
 	plan *plan.Plan
 	// errs are what planning ran into: a file to edit that does not exist (R2), a place not found
 	// exactly once (R4), a template that does not render. They are kept rather than returned, so
 	// the dry run still shows the plan and rules.Check reports the first rule in order.
 	errs []error
-	// used holds every template rendered, so a test can find any that no layer uses.
-	used map[string]bool
 	// next is the checklist the command prints once the plan is written, or once a dry run passes:
-	// the files you write next and the docs you update. The command renders it last, once every
-	// layer has read what it names.
+	// the files you write next and the docs you update.
 	next string
 }
 
-func newPlanner(r rules.Repo, tmpl fs.FS, set, title string, data *templates.Data) *planner {
-	return &planner{repo: r, tmpl: tmpl, set: set, data: data, plan: plan.New(title), used: map[string]bool{}}
-}
-
-func (pl *planner) fail(err error) {
-	pl.errs = append(pl.errs, err)
-}
-
-// create plans the files that the templates matching pattern, a fs.Glob pattern under the
-// planner's set such as "internal/entity/*.tmpl", render to.
-//
-// A created Go file goes through go/format: gofmt aligns columns by the longest name in them, so
-// how a file aligns depends on the domain's name. Templates are written as their files for widget,
-// which a test checks. Output that does not parse is planned as it is, for rule R5 to report.
-func (pl *planner) create(pattern string) {
-	files, err := templates.Glob(pl.tmpl, path.Join(pl.set, pattern), pl.data)
+// newPlanner returns the planner of the command whose plan is called title, on the repository r:
+// it renders the templates of set with data, which it fills in with the module r's go.mod
+// declares. Without the module no import of the app can be written, so planning stops there.
+func newPlanner(r rules.Repo, set, title string, data *templates.Data) (*planner, error) {
+	module, err := modulePath(r)
 	if err != nil {
-		pl.fail(err)
-
-		return
+		return nil, err
 	}
 
-	for _, f := range files {
-		pl.used[f.Template] = true
+	tmpl, err := templates.Set(set)
+	if err != nil {
+		return nil, err
+	}
 
-		content := f.Content
-		if path.Ext(f.Path) == ".go" {
-			if formatted, err := format.Source(content); err == nil {
-				content = formatted
-			}
+	data.Module = module
+
+	return &planner{repo: r, set: set, tmpl: tmpl, data: data, plan: plan.New(title)}, nil
+}
+
+// run plans those of layers that run for transports, in order, then renders the set's checklist,
+// <set>/next.tmpl.
+func (pl *planner) run(layers []layer, transports []string) {
+	for _, l := range selectLayers(layers, transports) {
+		for _, pattern := range l.creates {
+			pl.create(pattern)
 		}
 
-		pl.plan.Create(f.Path, content)
-	}
-}
-
-// text renders <set>/edits/<name>.tmpl, the text of one insertion. name is the edited file's
-// repository path and the place in it, as in "internal/entity/event.go.EventTypes"; in the path,
-// the name forms are written as in a created file's, as in
-// "internal/usecase/{{.Name.Pkg}}/register.go.Register.command".
-func (pl *planner) text(name string) string {
-	tmpl := path.Join(pl.set, _editsDir, name+".tmpl")
-	pl.used[tmpl] = true
-
-	text, err := templates.Text(pl.tmpl, tmpl, pl.data)
-	if err != nil {
-		pl.fail(err)
+		if l.edits != nil {
+			l.edits(pl)
+		}
 	}
 
-	return text
-}
-
-// exists reports whether the repository has a file or folder at p.
-func (pl *planner) exists(p string) bool {
-	_, err := fs.Stat(pl.repo.FS, p)
-
-	return err == nil
-}
-
-// checklist renders the set's checklist, <set>/next.tmpl, into pl.next.
-func (pl *planner) checklist() {
-	tmpl := path.Join(pl.set, _nextTemplate)
-	pl.used[tmpl] = true
-
-	text, err := templates.Text(pl.tmpl, tmpl, pl.data)
+	text, err := templates.Text(pl.tmpl, _nextTemplate, pl.data)
 	if err != nil {
 		pl.fail(err)
 	}
@@ -146,10 +115,69 @@ func (pl *planner) checklist() {
 	pl.next = text + "\n"
 }
 
+func (pl *planner) fail(err error) {
+	pl.errs = append(pl.errs, err)
+}
+
+// create plans the files that the templates matching pattern, a fs.Glob pattern under the
+// planner's set such as "internal/entity/*.tmpl", render to. A created Go file goes through
+// formatGo.
+func (pl *planner) create(pattern string) {
+	files, err := templates.Glob(pl.tmpl, pattern, pl.data)
+	if err != nil {
+		pl.fail(err)
+
+		return
+	}
+
+	for _, f := range files {
+		content := f.Content
+		if path.Ext(f.Path) == ".go" {
+			content = formatGo(content)
+		}
+
+		pl.plan.Create(f.Path, content)
+	}
+}
+
+// formatGo returns the Go source src as gofmt writes it: gofmt aligns columns by the longest name
+// in them, so how a created file aligns depends on the domain's name. Templates are written as
+// their files for widget, which a test checks.
+//
+// Source that does not parse, the only source go/format refuses, is returned as it is, on purpose:
+// it is a created file, which rule R5 parses with every file the plan leaves, and reports with the
+// rule's name and the file's path once R2 to R4 have passed, so a dry run still shows the plan.
+func formatGo(src []byte) []byte {
+	formatted, err := format.Source(src)
+	if err != nil {
+		return src
+	}
+
+	return formatted
+}
+
+// text renders <set>/edits/<name>.tmpl, the text of one insertion. name is the edited file's
+// repository path and the place in it, as in "internal/entity/event.go.EventTypes"; in the path,
+// the name forms are written as in a created file's, as in
+// "internal/usecase/{{.Name.Pkg}}/register.go.Register".
+func (pl *planner) text(name string) string {
+	text, err := templates.Text(pl.tmpl, path.Join(_editsDir, name+".tmpl"), pl.data)
+	if err != nil {
+		pl.fail(err)
+	}
+
+	return text
+}
+
+// controllerTemplates is the folder of the domain's controllers on transport t as the templates
+// name it, as in internal/controller/restapi/v1/{{.Name.Pkg}}.
+func controllerTemplates(t string) string {
+	return rules.ControllerDir(t, "{{.Name.Pkg}}")
+}
+
 // editFile plans the insertions that edits return into the existing file at p, parsed with parse
-// (edit.ParseGo, edit.ParseProto, edit.ParseGraphQL or edit.ParseYAML). A file that does not exist
-// or parse, and an edit that fails, go to pl.errs; the other edits are still planned. An edit can
-// also only read the file, returning no insertion: what it finds, later edits and templates use.
+// (edit.ParseGo or edit.ParseProto). A file that does not exist or parse, and an edit that fails,
+// go to pl.errs; the other edits are still planned.
 func editFile[F any](pl *planner, p string, parse func(string, []byte) (F, error), edits ...func(F) ([]edit.Insertion, error)) {
 	src, err := pl.repo.Read(p)
 	if err != nil {

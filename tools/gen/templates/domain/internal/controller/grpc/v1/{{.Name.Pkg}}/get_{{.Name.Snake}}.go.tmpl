@@ -1,0 +1,20 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/grpc/v1/rpcerr"
+)
+
+func (c *Controller) Get{{.Name.Go}}(ctx context.Context, req *v1.Get{{.Name.Go}}Request) (*v1.{{.Name.Go}}Response, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	resp, err := c.readBack(ctx, userID, req.GetId())
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "Get{{.Name.Go}}")
+	}
+
+	return resp, nil
+}

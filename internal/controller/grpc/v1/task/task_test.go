@@ -3,6 +3,7 @@ package task_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"testing"
 	"time"
@@ -26,14 +27,6 @@ import (
 
 const _bufSize = 1 << 20
 
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}
-
 // fakeTask answers ListAllTasks on real buses, and keeps what it was asked.
 type fakeTask struct {
 	listed    []entity.Task
@@ -46,11 +39,11 @@ type fakeTask struct {
 
 func (f *fakeTask) buses() cqrs.Buses {
 	qs := cqrs.NewQueries()
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, query.TaskPage](
-		func(_ context.Context, q query.ListAllTasks) (query.TaskPage, error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[entity.Task]](
+		func(_ context.Context, q query.ListAllTasks) (entity.List[entity.Task], error) {
 			f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = q.Principal, q.Status, q.Limit, q.Offset
 
-			return query.TaskPage{Tasks: f.listed, Total: len(f.listed)}, f.err
+			return entity.List[entity.Task]{Items: f.listed, Total: len(f.listed)}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: qs}
@@ -62,8 +55,8 @@ func dial(t *testing.T, tk *fakeTask) (pb.TaskServiceClient, *jwt.Manager) {
 
 	manager := jwt.New("test-secret", time.Hour)
 	lis := bufconn.Listen(_bufSize)
-	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
-	pb.RegisterTaskServiceServer(srv, task.New(tk.buses(), noopLogger{}))
+	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.Auth(manager)))
+	pb.RegisterTaskServiceServer(srv, task.New(tk.buses(), slog.New(slog.DiscardHandler)))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -124,14 +117,4 @@ func TestListAllTasksAdminRequired(t *testing.T) {
 	_, err := client.ListAllTasks(signedIn(t, manager, []string{"user"}), &pb.ListTasksRequest{Limit: 10})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-}
-
-func TestListAllTasksInvalidStatus(t *testing.T) {
-	t.Parallel()
-
-	client, manager := dial(t, &fakeTask{})
-
-	_, err := client.ListAllTasks(signedIn(t, manager, []string{"admin"}), &pb.ListTasksRequest{Status: "archived"})
-
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }

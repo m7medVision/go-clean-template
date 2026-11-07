@@ -4,9 +4,9 @@ import (
 	"time"
 )
 
-// cqrs configures the event store and its projections: the app waits for the projections after a
+// CQRS configures the event store and its projections: the app waits for the projections after a
 // write, and the worker runs them.
-type cqrs struct {
+type CQRS struct {
 	// ConsistencyTimeout is how long a write waits for its projections before it answers that it is
 	// saved but not yet readable.
 	ConsistencyTimeout time.Duration `env:"CQRS_CONSISTENCY_TIMEOUT" envDefault:"2s"`

@@ -2,7 +2,6 @@ package entity
 
 import "time"
 
-// ConversionStreamID is the stream of the conversion with id.
 func ConversionStreamID(id string) string {
 	return "conversion-" + id
 }
@@ -12,8 +11,7 @@ func ConversionStreamID(id string) string {
 type ConversionAggregate struct {
 	AggregateBase
 
-	id         string
-	conversion Conversion
+	id string
 }
 
 // NewConversionAggregate records userID's conversion c, validated and with its rate applied.
@@ -38,28 +36,19 @@ func ImportConversionAggregate(id, userID string, c *Conversion, createdAt time.
 	return a
 }
 
-// StreamID -.
 func (a *ConversionAggregate) StreamID() string {
 	return ConversionStreamID(a.id)
 }
 
-// State is the conversion.
-func (a *ConversionAggregate) State() Conversion {
-	return a.conversion
+func (a *ConversionAggregate) ID() string {
+	return a.id
 }
 
-// Apply -.
 func (a *ConversionAggregate) Apply(e Event) {
 	switch ev := e.(type) {
 	case CurrencyConverted:
 		a.id = ev.ConversionID
-		a.conversion = Conversion{
-			From: ev.From, To: ev.To, Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate,
-		}
 	case ConversionImported:
 		a.id = ev.ConversionID
-		a.conversion = Conversion{
-			From: ev.From, To: ev.To, Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate,
-		}
 	}
 }

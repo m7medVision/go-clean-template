@@ -5,8 +5,11 @@ package graphql
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"runtime/debug"
 
+	gqlgen "github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
@@ -16,21 +19,30 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const _playgroundTitle = "Go Clean Template GraphQL"
 
-// NewHandler builds the GraphQL endpoint.
-func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, l logger.Interface) http.Handler {
+// NewHandler serves the GraphQL API over b. Introspection, which hands a client the whole schema, is
+// part of the docs: it answers only when docs is on (DOCS_ENABLED), as the playground does.
+func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, docs bool, l *slog.Logger) http.Handler {
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
 		Resolvers: newResolver(b, l),
 	}))
 
 	srv.AddTransport(transport.POST{})
-	srv.Use(extension.Introspection{})
-	srv.SetRecoverFunc(func(_ context.Context, p any) error {
-		l.Error(fmt.Sprintf("graphql - panic: %v", p))
+
+	if docs {
+		srv.Use(extension.Introspection{})
+	}
+
+	srv.SetRecoverFunc(func(ctx context.Context, p any) error {
+		attrs := []any{"panic", fmt.Sprint(p), "stack", string(debug.Stack())}
+		if fc := gqlgen.GetFieldContext(ctx); fc != nil {
+			attrs = append(attrs, "path", fc.Path().String())
+		}
+
+		l.ErrorContext(ctx, "graphql panic", attrs...)
 
 		return gqlerr.Internal()
 	})

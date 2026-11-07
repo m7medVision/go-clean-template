@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -15,31 +16,38 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// Repo reads the users table.
+// Repo reads the users table. Its queries join the transaction the context carries.
 type Repo struct {
-	q *queries.Queries
+	pg *postgres.Postgres
 }
 
-// NewReadModel returns the user read model, instrumented with OpenTelemetry tracing spans.
 func NewReadModel(pg *postgres.Postgres) repo.UserReadModel {
-	return newTraced(&Repo{queries.New(pg.Pool)})
+	return &Repo{pg: pg}
 }
 
-// ByID -.
+func (r *Repo) q(ctx context.Context) *queries.Queries {
+	return queries.New(r.pg.Executor(ctx))
+}
+
+// ByID reads the user with id. An ID other than a UUID as the app writes them, in lower case,
+// names no user, so it is entity.ErrUserNotFound, not the error users.id would raise.
 func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
-	user, err := r.q.GetUserByID(ctx, id)
+	if parsed, err := uuid.Parse(id); err != nil || parsed.String() != id {
+		return entity.User{}, entity.ErrUserNotFound
+	}
+
+	user, err := r.q(ctx).GetUserByID(ctx, id)
 	if err != nil {
-		return entity.User{}, mapGetError(err, "ByID - r.q.GetUserByID")
+		return entity.User{}, mapGetError(err, "ByID - r.q(ctx).GetUserByID")
 	}
 
 	return entity.User(user), nil
 }
 
-// ByEmail -.
 func (r *Repo) ByEmail(ctx context.Context, email string) (entity.User, error) {
-	user, err := r.q.GetUserByEmail(ctx, email)
+	user, err := r.q(ctx).GetUserByEmail(ctx, email)
 	if err != nil {
-		return entity.User{}, mapGetError(err, "ByEmail - r.q.GetUserByEmail")
+		return entity.User{}, mapGetError(err, "ByEmail - r.q(ctx).GetUserByEmail")
 	}
 
 	return entity.User(user), nil

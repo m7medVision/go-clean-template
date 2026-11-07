@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -16,38 +17,61 @@ import (
 )
 
 // DomainFree checks the rest of R1 for a new domain: nothing in the repository uses its name yet.
-// That means no use-case or read-model folder, no entity file, no table, no controller folder on
-// any transport, no proto service and no GraphQL type. A controller folder can be a package the
-// domains share, such as the REST response package, which the domain's controllers would join.
-// The pattern and keyword checks are names.Parse's.
-func DomainFree(r Repo, n *names.Name) error {
+// That means no use-case or read-model folder, no entity, contract or module file, no table, no
+// controller folder on any transport, no proto service, no GraphQL type and no package
+// (PackageNameFree). A controller folder can be a package the domains share, such as the REST
+// response package, which the domain's controllers would join. The pattern and keyword checks are names.Parse's.
+func DomainFree(ctx context.Context, r Repo, n *names.Name) error {
 	owned := []string{
 		"internal/usecase/" + n.Pkg,
 		"internal/repo/persistent/" + n.Pkg,
 		"internal/entity/" + n.Snake + ".go",
 		"internal/entity/" + n.Snake + "_aggregate.go",
+		"internal/repo/" + n.Snake + ".go",
+		"internal/app/" + n.Snake + ".go",
 		"internal/app/schema/" + n.Plural.Snake + ".hcl",
 	}
 
 	for _, t := range Transports() {
-		owned = append(owned, transportDir(t, n.Pkg))
+		owned = append(owned, ControllerDir(t, n.Pkg))
 	}
 
 	for _, p := range owned {
-		if r.exists(p) {
+		if r.Exists(p) {
 			return taken(n, p+" exists")
 		}
 	}
 
-	for _, p := range r.glob("docs/proto/v1/*.proto") {
-		if pf, err := parsed(r, p, edit.ParseProto); err == nil && slices.Contains(pf.Services(), n.Go+"Service") {
-			return taken(n, p+" declares service "+n.Go+"Service")
-		}
+	if err := noneDeclares(r, n, ProtoDir+"/*.proto", edit.ParseProto, (*edit.Proto).Services, "service", n.Go+"Service"); err != nil {
+		return err
 	}
 
-	for _, p := range r.glob("internal/controller/graphql/schema/*.graphqls") {
-		if q, err := parsed(r, p, edit.ParseGraphQL); err == nil && slices.Contains(q.Types(), n.Go) {
-			return taken(n, p+" declares type "+n.Go)
+	if err := noneDeclares(r, n, SchemaDir()+"/*.graphqls", edit.ParseGraphQL, (*edit.GraphQL).Types, "type", n.Go); err != nil {
+		return err
+	}
+
+	return PackageNameFree(ctx, r, n)
+}
+
+// noneDeclares checks that no file matching the glob files, parsed with parse, declares the name of
+// the kind, which n would declare, among the names of that kind decls reads from it. A file that
+// does not parse cannot say, so it fails the check.
+func noneDeclares[T any](r Repo, n *names.Name, files string, parse func(string, []byte) (T, error), decls func(T) []string,
+	kind, name string,
+) error {
+	paths, err := r.glob(files)
+	if err != nil {
+		return err
+	}
+
+	for _, p := range paths {
+		f, err := parsed(r, p, parse)
+		if err != nil {
+			return err
+		}
+
+		if slices.Contains(decls(f), name) {
+			return taken(n, p+" declares "+kind+" "+name)
 		}
 	}
 
@@ -56,6 +80,26 @@ func DomainFree(r Repo, n *names.Name) error {
 
 func taken(n *names.Name, why string) error {
 	return fmt.Errorf("%w: %q is taken: %s", names.ErrInvalid, n.Kebab, why)
+}
+
+// PackageNameFree checks R1 on the name n against the app's packages, as go list names them: no
+// form of n or of its plural that Go code uses as an identifier, the package form or the lower
+// one, is the name of a package. A generated file that imports that package, as a domain's
+// controllers import command and query, would find it shadowed.
+func PackageNameFree(ctx context.Context, r Repo, n *names.Name) error {
+	pkgs, err := r.Packages(ctx)
+	if err != nil {
+		return fmt.Errorf("list the app's packages: %w", err)
+	}
+
+	for _, ident := range []string{n.Pkg, n.Lower, n.Plural.Pkg, n.Plural.Lower} {
+		if importPath, ok := pkgs[ident]; ok {
+			return fmt.Errorf("%w: %q gives %q, the name of the package %s, which generated files would shadow",
+				names.ErrInvalid, n.Kebab, ident, importPath)
+		}
+	}
+
+	return nil
 }
 
 // parsed reads the file at p and parses it with parse.
@@ -79,13 +123,14 @@ func parsed[T any](r Repo, p string, parse func(string, []byte) (T, error)) (T, 
 // LoginResponse, which auth.proto declares, and only make proto-v1 would find it, after the write.
 // In a .graphqls file they are the types it defines and the fields it gives any type, as
 // Type.field, and the schema is the folder, which gqlgen reads as one: all-task would add
-// Query.allTasks, which task.graphqls has, and only make graphql would find it. Changes that do not
-// format or parse are left to R5.
+// Query.allTasks, which task.graphqls has, and only make graphql would find it.
+//
+// The check reads every file as the plan leaves it, unformatted, since what a file declares does
+// not depend on its layout. A file the plan leaves broken declares nothing here: R5 reports it in
+// its turn, after R2 to R4, since a broken file most often follows from a place R4 did not find.
+// Any other file that does not parse fails the check, which cannot tell what it declares.
 func IdentifiersFree(r Repo, n *names.Name, p *plan.Plan) error {
-	changes, err := p.Changes()
-	if err != nil {
-		return nil // R5 reports the change that breaks
-	}
+	changes := p.Contents()
 
 	// The changes by the package they declare into, as the glob of its files: dir/*.go, dir/*.proto,
 	// dir/*.graphqls.
@@ -115,8 +160,8 @@ func IdentifiersFree(r Repo, n *names.Name, p *plan.Plan) error {
 }
 
 // declarations returns the package a file declares into and the names it declares there, in
-// source order; nothing for src that is empty or does not parse.
-type declarations func(p string, src []byte) (pkg string, idents []string)
+// source order; nothing for src that is nil, as a created file's content before the plan is.
+type declarations func(p string, src []byte) (pkg string, idents []string, err error)
 
 // declarationsOf returns how to read the names a file with the extension ext declares, or nil for
 // a kind of file that declares none a package shares.
@@ -141,26 +186,25 @@ type declared struct {
 // packageFree checks the names that planned, the changes to the files matching the glob files, add
 // against every file it matches as the plan leaves it.
 func packageFree(r Repo, n *names.Name, files string, planned map[string]plan.Change) error {
-	var err error
-
 	decls := declarationsOf(path.Ext(files))
-	all := slices.Collect(maps.Keys(planned))
-	all = append(all, r.glob(files)...)
+
+	existing, err := r.glob(files)
+	if err != nil {
+		return err
+	}
+
+	all := slices.Concat(slices.Collect(maps.Keys(planned)), existing)
 	slices.Sort(all)
 	all = slices.Compact(all)
 
 	where := map[declared][]string{}
 
 	for _, f := range all {
-		src := planned[f].New
-		if _, ok := planned[f]; !ok {
-			// A file that cannot be read declares nothing here; the build would report it anyway.
-			if src, err = fs.ReadFile(r.FS, f); err != nil {
-				continue
-			}
+		pkg, ids, err := declaredBy(r, f, planned, decls)
+		if err != nil {
+			return err
 		}
 
-		pkg, ids := decls(f, src)
 		for _, id := range ids {
 			where[declared{pkg, id}] = append(where[declared{pkg, id}], f)
 		}
@@ -179,6 +223,37 @@ func packageFree(r Repo, n *names.Name, files string, planned map[string]plan.Ch
 	return nil
 }
 
+// declaredBy returns the package the file at f declares into, as the plan leaves it, and the names
+// it declares there, read with decls. A file that cannot be read or parsed is an error, unless the
+// plan changes it (plannedDecls).
+func declaredBy(r Repo, f string, planned map[string]plan.Change, decls declarations) (pkg string, idents []string, err error) {
+	if c, ok := planned[f]; ok {
+		pkg, idents = plannedDecls(decls, f, c.New)
+
+		return pkg, idents, nil
+	}
+
+	src, err := fs.ReadFile(r.FS, f)
+	if err != nil {
+		return "", nil, fmt.Errorf("read %s: %w", f, err)
+	}
+
+	return decls(f, src)
+}
+
+// plannedDecls returns what decls reads from src, the content of the file at p before or after the
+// plan changes it. A planned file that does not parse declares nothing here, on purpose: rule R5
+// reports it in its turn, after R2 to R4, since a broken file most often follows from a place R4
+// did not find.
+func plannedDecls(decls declarations, p string, src []byte) (pkg string, idents []string) {
+	pkg, idents, err := decls(p, src)
+	if err != nil {
+		return "", nil
+	}
+
+	return pkg, idents
+}
+
 // clash says that f would declare id, which files, f among them, all declare.
 func clash(f, id string, files []string) string {
 	for _, other := range files {
@@ -191,10 +266,11 @@ func clash(f, id string, files []string) string {
 }
 
 // added returns the package of a changed file and the names the change adds to it, read with
-// decls: every one of a created file, and those an edit declares more often than the file did.
+// decls: every one of a created file, and those an edit declares more often than the file did. A
+// change that leaves the file broken adds nothing here (plannedDecls).
 func added(c plan.Change, decls declarations) (pkg string, adds []string) {
-	pkg, after := decls(c.Path, c.New)
-	_, before := decls(c.Path, c.Old)
+	pkg, after := plannedDecls(decls, c.Path, c.New)
+	_, before := plannedDecls(decls, c.Path, c.Old)
 
 	for _, id := range after {
 		if i := slices.Index(before, id); i >= 0 {
@@ -210,50 +286,48 @@ func added(c plan.Change, decls declarations) (pkg string, adds []string) {
 }
 
 // protoTopLevel returns the services and top-level messages the .proto file src declares, which
-// share one namespace, and the methods of its services, as Service.Method; nothing for src that is
-// empty or does not parse. The package is the folder, whose files are one proto package, so it is
-// left empty.
-func protoTopLevel(p string, src []byte) (pkg string, idents []string) {
+// share one namespace, and the methods of its services, as Service.Method. The package is the
+// folder, whose files are one proto package, so it is left empty.
+func protoTopLevel(p string, src []byte) (pkg string, idents []string, err error) {
 	if src == nil {
-		return "", nil
+		return "", nil, nil
 	}
 
 	f, err := edit.ParseProto(p, src)
 	if err != nil {
-		return "", nil
+		return "", nil, err
 	}
 
-	return "", slices.Concat(f.Services(), f.Messages(), f.RPCs())
+	return "", slices.Concat(f.Services(), f.Messages(), f.RPCs()), nil
 }
 
 // graphqlTopLevel returns the types the .graphqls file src defines and the fields it gives every
-// type it defines or extends, as Type.field; nothing for src that is empty or does not parse. A
-// type's fields are unique across the files of a schema, which is its folder, so the package is
-// left empty.
-func graphqlTopLevel(p string, src []byte) (pkg string, idents []string) {
+// type it defines or extends, as Type.field. A type's fields are unique across the files of a
+// schema, which is its folder, so the package is left empty.
+func graphqlTopLevel(p string, src []byte) (pkg string, idents []string, err error) {
 	if src == nil {
-		return "", nil
+		return "", nil, nil
 	}
 
 	q, err := edit.ParseGraphQL(p, src)
 	if err != nil {
-		return "", nil
+		return "", nil, err
 	}
 
-	return "", slices.Concat(q.Types(), q.Fields())
+	return "", slices.Concat(q.Types(), q.Fields()), nil
 }
 
 // topLevel returns the package src declares and its top-level identifiers, methods as
-// Type.Method, in source order; nothing for src that is empty or does not parse. The blank
-// identifier and init, which a package may declare more than once, are left out.
-func topLevel(p string, src []byte) (pkg string, idents []string) {
+// Type.Method, in source order. The blank identifier and init, which a package may declare more
+// than once, are left out.
+func topLevel(p string, src []byte) (pkg string, idents []string, err error) {
 	if src == nil {
-		return "", nil
+		return "", nil, nil
 	}
 
 	file, err := parser.ParseFile(token.NewFileSet(), p, src, parser.SkipObjectResolution)
 	if err != nil {
-		return "", nil
+		return "", nil, err
 	}
 
 	for _, d := range file.Decls {
@@ -264,10 +338,12 @@ func topLevel(p string, src []byte) (pkg string, idents []string) {
 		}
 	}
 
-	return file.Name.Name, idents
+	return file.Name.Name, idents, nil
 }
 
-// declNames are the identifiers one top-level declaration declares.
+// declNames are the identifiers one top-level declaration declares. A struct type's fields are its
+// identifiers too, as Type.Field like its methods, with which they share a namespace: a message
+// that would carry the caller's UserID and a record's ID named UserID declares one field twice.
 func declNames(d ast.Decl) []string {
 	var ids []string
 
@@ -283,6 +359,7 @@ func declNames(d ast.Decl) []string {
 			switch s := s.(type) {
 			case *ast.TypeSpec:
 				ids = append(ids, s.Name.Name)
+				ids = append(ids, fieldNames(s)...)
 			case *ast.ValueSpec:
 				for _, id := range s.Names {
 					ids = append(ids, id.Name)
@@ -294,7 +371,33 @@ func declNames(d ast.Decl) []string {
 	return ids
 }
 
-// receiverType is the name of a method's receiver type: T for T, *T, T[K] and *T[K].
+// fieldNames are the fields of the struct type s declares, each as Type.Field; an embedded field
+// is named after its type, and the blank field is left out.
+func fieldNames(s *ast.TypeSpec) []string {
+	st, ok := s.Type.(*ast.StructType)
+	if !ok {
+		return nil
+	}
+
+	var ids []string
+
+	for _, f := range st.Fields.List {
+		if len(f.Names) == 0 {
+			ids = append(ids, s.Name.Name+"."+receiverType(f.Type))
+		}
+
+		for _, id := range f.Names {
+			if id.Name != "_" {
+				ids = append(ids, s.Name.Name+"."+id.Name)
+			}
+		}
+	}
+
+	return ids
+}
+
+// receiverType is the name of a method's receiver type, or of an embedded field's: T for T, *T,
+// T[K], *T[K] and pkg.T.
 func receiverType(e ast.Expr) string {
 	switch t := e.(type) {
 	case *ast.StarExpr:
@@ -303,6 +406,8 @@ func receiverType(e ast.Expr) string {
 		return receiverType(t.X)
 	case *ast.IndexListExpr:
 		return receiverType(t.X)
+	case *ast.SelectorExpr:
+		return t.Sel.Name
 	case *ast.Ident:
 		return t.Name
 	default:

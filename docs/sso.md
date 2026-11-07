@@ -14,9 +14,10 @@ The code, layer by layer:
 
 | Layer | Where |
 | --- | --- |
-| Entity | [`internal/entity/role.go`](../internal/entity/role.go) (`Role`, `Principal`), sentinels in [`errors.go`](../internal/entity/errors.go) |
+| Entity | [`internal/entity/role.go`](../internal/entity/role.go) (`Role`, `Principal`), sentinels in [`user.go`](../internal/entity/user.go) |
 | Events | [`internal/entity/user_aggregate.go`](../internal/entity/user_aggregate.go): `NewOIDCUserAggregate` records `UserRegisteredViaOIDC` and claims the identity, the email and the username |
-| Use case | [`internal/usecase/oidc`](../internal/usecase/oidc): the queries `BeginOIDCLogin` and `GetOIDCStatus`, the command `FinishOIDCLogin`; [`sso/`](../internal/usecase/oidc/sso/sso.go) is the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2` |
+| Use case | [`internal/usecase/oidc`](../internal/usecase/oidc): the queries `BeginOIDCLogin` and `GetOIDCStatus`, the command `FinishOIDCLogin`, against the `repo.SSOProvider` port |
+| Adapter | [`internal/repo/sso`](../internal/repo/sso/sso.go), the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2`; it owns the state token's scope and lifetime, and sends the provider the redirect URI `config.App.SSOCallbackURL` builds. `ssotest/` is a provider on httptest for its tests |
 | Read model | the `user` projector in [`internal/repo/persistent/user`](../internal/repo/persistent/user/projector.go) writes `users` and [`user_identities`](../internal/app/schema/user_identities.hcl) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/oidc/`](../internal/controller/restapi/v1/oidc) |
@@ -48,6 +49,14 @@ The provider is discovered on the first sign-in, not at startup. The app starts 
 is still booting or down, and `GET /v1/auth/oidc` never calls it. A failed discovery is retried on
 the next sign-in and answers `502` until then.
 
+Begin calls the provider only to discover it. Finish calls it up to three times: discovery, if the
+app has not done it since it started; the code exchange; and fetching the provider's keys, when none
+the app holds verifies the ID token. One deadline, `sso.Timeout` (5 s), bounds each step's calls
+together, so a finished sign-in fits the HTTP write deadline. Every call follows one rule: the
+provider turning the code down (a 4xx) or an ID token that does not verify is the sign-in's fault
+(`401`); failing to reach the provider or to get an answer from it (no connection, the deadline, a
+5xx, keys that cannot be fetched) is an outage (`502`); a caller that goes away is neither.
+
 ## Users and identities
 
 An identity at the provider is `(issuer, subject)`, and `user_identities` links it to a local user.
@@ -67,8 +76,9 @@ in [architecture.md](architecture.md#roles).
 
 - Every other sign-in grants only `user`. Admin comes only from the provider.
 - An SSO sign-in reads the provider's role names from the claim at `OIDC_ROLES_CLAIM` (a dotted path),
-  maps each through `OIDC_ROLE_MAP`, and drops names that do not map to an app role. A sign-in that
-  maps to nothing gets `user`.
+  maps each through `OIDC_ROLE_MAP`, and ignores names the map does not list. A sign-in that maps to
+  nothing gets `user`. Every role the map names must be `admin` or `user`: any other value stops the
+  app at startup (`sso.ErrUnknownRole`), rather than granting nothing on every sign-in.
 - Roles are fixed when the token is issued. Removing someone from the admin group takes effect at
   their next sign-in, at most `JWT_TOKEN_EXPIRY` (15 minutes by default) later.
 
@@ -81,7 +91,7 @@ buses' authorize step): `GET /v1/admin/tasks`,
 | Case | Sentinel | REST |
 | --- | --- | --- |
 | `OIDC_ISSUER` is empty | `ErrOIDCDisabled` | `404` |
-| The provider cannot be reached | `ErrOIDCUnavailable` | `502` |
+| The provider cannot be reached, fails (5xx) or does not answer in 5 s, at discovery, the code exchange or the key fetch | `ErrOIDCUnavailable` | `502` |
 | Bad, expired or replayed state, token, code or ID token; no email | `ErrOIDCCeremonyInvalid` | `401` |
 | The email or username belongs to another account | `ErrAccountConflict` | `409` |
 | A caller without `admin` lists every user's tasks | `ErrAdminRequired` | `403` (`FORBIDDEN`, `PERMISSION_DENIED`) |
@@ -126,4 +136,4 @@ variables ([configuration.md](configuration.md#oidc)):
 | Okta | `https://<org>.okta.com/oauth2/default` | `groups` | Add a `groups` claim to the authorization server, filtered to the groups you map. The org authorization server does not add it by default. |
 
 `OIDC_ROLE_MAP` maps the provider's names to `admin` or `user`, for example
-`OIDC_ROLE_MAP=Tasks.Admin:admin` on Entra ID.
+`OIDC_ROLE_MAP=Tasks.Admin:admin` on Entra ID. The app refuses to start on any other role.

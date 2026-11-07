@@ -53,11 +53,14 @@ func TestPrincipal_Has(t *testing.T) {
 	assert.False(t, none.Has(entity.RoleUser))
 }
 
-func TestLocalRoles(t *testing.T) {
+// Sign-ins the app verifies itself never grant admin; only an identity provider can.
+func TestLocalRolesNeverGrantAdmin(t *testing.T) {
 	t.Parallel()
 
-	// Sign-ins the app verifies itself never grant admin; only an identity provider can.
-	assert.Equal(t, []entity.Role{entity.RoleUser}, entity.LocalRoles())
+	local := entity.Principal{Roles: entity.LocalRoles()}
+
+	assert.True(t, local.Has(entity.RoleUser))
+	assert.False(t, local.Has(entity.RoleAdmin))
 }
 
 func TestRoleNames(t *testing.T) {

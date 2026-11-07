@@ -1,0 +1,19 @@
+Next:
+  - Write the handler, internal/usecase/{{.Name.Pkg}}/query/{{.Usecase.Name.Snake}}.go, which returns
+    entity.ErrNotImplemented until you do: read the answer from h.{{.Name.Plural.Go}}. Its test says so,
+    and goes red once you have: replace it with tests of what the query reads.
+  - Add the read-model method it calls to {{.Name.Go}}ReadModel in internal/repo/{{.Name.Snake}}.go and to
+    internal/repo/persistent/{{.Name.Pkg}}/{{.Name.Snake}}.go, with its SQL in
+    internal/repo/persistent/queries/{{.Name.Snake}}.sql; then make sqlc and make mock.
+  - Add the fields of the answer to {{.Usecase.Name.Go}}Result in the handler's file
+{{- if or (.Has "grpc") (.Has "graphql")}}, then to{{end}}
+{{- if .Has "grpc"}}
+    {{.Usecase.Name.Go}}Response in {{.Usecase.ProtoFile}}{{if .Has "graphql"}} and to{{end}}{{end}}
+{{- if .Has "graphql"}}
+    {{.Usecase.Name.Go}}Result in internal/controller/graphql/schema/{{.Usecase.Name.Snake}}.graphqls, in place
+    of its todo field{{end}}.
+{{- if .Has "rest"}}
+  - Once the handler is written, drop http.StatusNotImplemented from the Errors of its REST
+    operation, internal/controller/restapi/v1/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.
+{{- end}}
+  - Add a row for {{.Usecase.Name.Kebab}} to the {{.Name.Words}} table in docs/api.md.

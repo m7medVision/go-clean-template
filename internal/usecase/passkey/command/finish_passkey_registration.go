@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
@@ -19,46 +18,47 @@ import (
 // that does not complete the ceremony is entity.ErrPasskeyCeremonyInvalid, and a credential that is
 // registered already entity.ErrPasskeyExists.
 type FinishPasskeyRegistration struct {
+	cqrs.Command[entity.Written]
+
 	UserID string
 	Token  string
 	Name   string
 	Body   []byte
 }
 
-// CommandName -.
-func (FinishPasskeyRegistration) CommandName() string { return "FinishPasskeyRegistration" }
-
-// ActorID -.
 func (c FinishPasskeyRegistration) ActorID() string { return c.UserID }
 
-// FinishPasskeyRegistrationHandler handles FinishPasskeyRegistration. Now is the clock (time.Now when
-// nil).
+// FinishPasskeyRegistrationHandler's Now is the clock (time.Now when nil).
 type FinishPasskeyRegistrationHandler struct {
-	Ceremony *ceremony.Ceremony
+	Ceremony repo.PasskeyCeremony
 	Store    repo.EventStore
 	Now      func() time.Time
 }
 
-// Handle -.
-func (h FinishPasskeyRegistrationHandler) Handle(ctx context.Context, cmd FinishPasskeyRegistration) (cqrs.Written, error) {
+func (h FinishPasskeyRegistrationHandler) Handle(ctx context.Context, cmd FinishPasskeyRegistration) (entity.Written, error) {
 	id, record, err := h.Ceremony.FinishRegistration(cmd.UserID, cmd.Token, cmd.Body)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
+		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
 	}
 
-	// A credential that was deleted has a stream already, and can be registered again on it.
-	passkey := &entity.PasskeyAggregate{}
-	if err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey); err != nil && !errors.Is(err, entity.ErrStreamNotFound) {
-		return cqrs.Written{}, fmt.Errorf("FinishPasskeyRegistration - h.Store.Load: %w", err)
+	// A credential never registered is new; one that was deleted has a stream already, and can be
+	// registered again on it.
+	passkey, err := aggregate.Load[entity.PasskeyAggregate](ctx, h.Store, id.String())
+
+	switch {
+	case errors.Is(err, entity.ErrPasskeyNotFound):
+		passkey = &entity.PasskeyAggregate{}
+	case err != nil:
+		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - aggregate.Load: %w", err)
 	}
 
-	if err = passkey.Register(id, cmd.UserID, entity.PasskeyName(cmd.Name), record, aggregate.Now(h.Now)); err != nil {
-		return cqrs.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
+	if err = passkey.Register(id, cmd.UserID, cmd.Name, record, aggregate.Now(h.Now)); err != nil {
+		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
 	}
 
-	written, err := aggregate.Create(ctx, h.Store, id.String(), passkey)
+	written, err := aggregate.Save(ctx, h.Store, passkey)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("FinishPasskeyRegistration - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - aggregate.Save: %w", err)
 	}
 
 	return written, nil

@@ -1,63 +1,48 @@
-// Package resttest serves the real REST router for the tests of the restapi package and of each v1
+// Package resttest serves the real REST handler for the tests of the restapi package and of each v1
 // domain folder: it is to restapi what net/http/httptest is to net/http.
 package resttest
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/m7medvision/go-clean-template/config"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/httpmw"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
 )
 
-// _signingKey is the JWT_SECRET Main sets, so the tokens Token and AdminToken sign are valid.
 const _signingKey = "test-secret"
 
-// Main sets the environment config.NewConfig reads, then runs the tests. Call it from TestMain.
-func Main(m *testing.M) {
-	for _, env := range []struct{ key, value string }{
-		{"APP_NAME", "test"},
-		{"APP_VERSION", "1.0.0"},
-		{"HTTP_PORT", "0"},
-		{"LOG_LEVEL", "info"},
-		{"PG_POOL_MAX", "1"},
-		{"PG_URL", "postgres://localhost/db"},
+// Routes registers a domain folder's operations: its NewRoutes.
+type Routes func(api huma.API, b cqrs.Buses, l *slog.Logger)
 
-		{"JWT_SECRET", _signingKey},
-		{"DOCS_ENABLED", "true"},
-	} {
-		if err := os.Setenv(env.key, env.value); err != nil {
-			panic(err)
+// NewRouter serves the REST handler with each routes' operations over the given buses, and its
+// docs, behind what the app puts in front of it: trailing slashes stripped and panics recovered. A
+// bus the test never reaches may be nil.
+func NewRouter(b cqrs.Buses, routes ...Routes) http.Handler {
+	l := slog.New(slog.DiscardHandler)
+
+	rest := restapi.NewHandler("1.0.0", true, jwt.New(_signingKey, time.Hour), l, func(api huma.API) {
+		for _, register := range routes {
+			register(api, b, l)
 		}
-	}
+	})
 
-	os.Exit(m.Run())
-}
+	r := chi.NewRouter()
+	r.Use(chimw.StripSlashes, httpmw.Recovery(l))
+	r.Mount("/", rest)
 
-// Config returns the configuration Main's environment describes.
-func Config(t *testing.T) *config.Config {
-	t.Helper()
-
-	cfg, err := config.NewConfig()
-	require.NoError(t, err)
-
-	return cfg
-}
-
-// NewRouter serves the REST router over the given buses, plus each option's operations. A bus the
-// test never reaches may be nil.
-func NewRouter(cfg *config.Config, b cqrs.Buses, opts ...restapi.Option) http.Handler {
-	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
-
-	return restapi.NewRouter(cfg, b, jwtManager, noopLogger{}, opts...)
+	return r
 }
 
 // NewBuses returns empty command and query buses with no pipeline steps, for a test to register
@@ -98,11 +83,3 @@ func Do(ctx context.Context, handler http.Handler, method, target, token, body s
 
 	return resp
 }
-
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}

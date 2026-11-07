@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -114,14 +115,11 @@ func TestANestedInTxJoinsTheOuterTransaction(t *testing.T) {
 
 	b := &beginner{tx: &fakeTx{}}
 
-	var inner pgx.Tx
+	var inner postgres.DBTX
 
 	err := postgres.InTxWith(context.Background(), b.begin, func(ctx context.Context) error {
 		return postgres.InTxWith(ctx, b.begin, func(ctx context.Context) error {
-			tx, ok := postgres.TxFrom(ctx)
-			require.True(t, ok)
-
-			inner = tx
+			inner = (&postgres.Postgres{}).Executor(ctx)
 
 			return nil
 		})
@@ -152,8 +150,5 @@ func TestExecutorIsThePoolOutsideATransaction(t *testing.T) {
 
 	pg := &postgres.Postgres{}
 
-	_, ok := postgres.TxFrom(context.Background())
-
-	assert.False(t, ok)
-	assert.Equal(t, pg.Pool, pg.Executor(context.Background()))
+	assert.IsType(t, (*pgxpool.Pool)(nil), pg.Executor(context.Background()))
 }

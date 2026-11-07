@@ -89,29 +89,18 @@ func TestTheWidgetProjectorReturnsAWriteFailure(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{err: errWrite}, entity.WidgetDeleted{WidgetID: "1"}), errWrite)
 }
 
+func TestTheWidgetProjectorHasACaseForEveryEventItHandles(t *testing.T) {
+	t.Parallel()
+
+	for _, e := range widget.NewProjector(nil).Handles() {
+		require.NotErrorIs(t, project(t, &fakeQuerier{}, e), entity.ErrUnhandledEvent, e.EventType())
+	}
+
+	require.ErrorIs(t, project(t, &fakeQuerier{}, otherEvent{}), entity.ErrUnhandledEvent)
+}
+
 // otherEvent stands for any other domain's event.
 type otherEvent struct{}
 
 func (otherEvent) EventType() string  { return "Other" }
 func (otherEvent) SchemaVersion() int { return 1 }
-
-func TestTheWidgetProjectorIgnoresOtherDomainsEvents(t *testing.T) {
-	t.Parallel()
-
-	q := &fakeQuerier{}
-
-	require.NoError(t, project(t, q, otherEvent{}))
-
-	assert.Empty(t, q.inserted)
-	assert.Empty(t, q.updated)
-	assert.Empty(t, q.deleted)
-}
-
-func TestTheWidgetProjectorIsNamedAndOwnsTheWidgetsTable(t *testing.T) {
-	t.Parallel()
-
-	p := widget.NewProjector(nil)
-
-	assert.Equal(t, "widget", p.Name())
-	assert.Equal(t, []string{"widgets"}, p.Tables())
-}

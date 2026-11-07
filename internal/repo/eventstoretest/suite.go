@@ -39,7 +39,6 @@ func Events() []entity.Event {
 // SnapshotEvery events. Tests use fresh stream IDs and claim values, so a store may be shared.
 type NewStore func(t *testing.T) repo.EventStore
 
-// Run runs the suite against the stores newStore builds.
 func Run(t *testing.T, newStore NewStore) {
 	t.Helper()
 
@@ -289,10 +288,8 @@ type NoteWritten struct {
 	Text string `json:"text"`
 }
 
-// EventType -.
 func (NoteWritten) EventType() string { return "NoteWritten" }
 
-// SchemaVersion -.
 func (NoteWritten) SchemaVersion() int { return 1 }
 
 // NoteEdited replaces a note's text.
@@ -300,10 +297,8 @@ type NoteEdited struct {
 	Text string `json:"text"`
 }
 
-// EventType -.
 func (NoteEdited) EventType() string { return "NoteEdited" }
 
-// SchemaVersion -.
 func (NoteEdited) SchemaVersion() int { return 1 }
 
 // Note is the suite's aggregate. Applied counts the events applied to this value, so a test can
@@ -321,7 +316,6 @@ type Note struct {
 // projection runner never delivers, so the suite can run against the database a worker reads.
 func NoteStreamID(id string) string { return "_note-" + id }
 
-// NewNote writes a note.
 func NewNote(id, text string) *Note {
 	n := &Note{}
 	entity.Record(n, NoteWritten{ID: id, Text: text})
@@ -329,13 +323,10 @@ func NewNote(id, text string) *Note {
 	return n
 }
 
-// Edit replaces the note's text.
 func (n *Note) Edit(text string) { entity.Record(n, NoteEdited{Text: text}) }
 
-// StreamID -.
 func (n *Note) StreamID() string { return NoteStreamID(n.ID) }
 
-// Apply -.
 func (n *Note) Apply(e entity.Event) {
 	n.Applied++
 
@@ -354,13 +345,10 @@ type noteSnapshot struct {
 	Edits int    `json:"edits"`
 }
 
-// SnapshotVersion -.
 func (*Note) SnapshotVersion() int { return 1 }
 
-// Snapshot -.
 func (n *Note) Snapshot() any { return noteSnapshot{ID: n.ID, Text: n.Text, Edits: n.Edits} }
 
-// RestoreSnapshot -.
 func (n *Note) RestoreSnapshot(data json.RawMessage) error {
 	var s noteSnapshot
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -377,5 +365,4 @@ type NoteV2 struct {
 	Note
 }
 
-// SnapshotVersion -.
 func (*NoteV2) SnapshotVersion() int { return _noteV2Shape }

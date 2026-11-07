@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -25,20 +24,20 @@ type txKey struct{}
 // rolls back when fn fails or panics. Inside a transaction already, InTx joins it instead of
 // opening a second one, and the outermost call decides the outcome.
 func (p *Postgres) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	return inTx(ctx, p.Pool.Begin, fn)
+	return inTx(ctx, p.pool.Begin, fn)
 }
 
 // Executor returns the transaction ctx carries, or the pool when it carries none.
 func (p *Postgres) Executor(ctx context.Context) DBTX {
-	if tx, ok := TxFrom(ctx); ok {
+	if tx, ok := txFrom(ctx); ok {
 		return tx
 	}
 
-	return p.Pool
+	return p.pool
 }
 
-// TxFrom returns the transaction ctx carries.
-func TxFrom(ctx context.Context) (pgx.Tx, bool) {
+// txFrom returns the transaction ctx carries.
+func txFrom(ctx context.Context) (pgx.Tx, bool) {
 	tx, ok := ctx.Value(txKey{}).(pgx.Tx)
 
 	return tx, ok
@@ -47,7 +46,7 @@ func TxFrom(ctx context.Context) (pgx.Tx, bool) {
 func inTx(
 	ctx context.Context, begin func(context.Context) (pgx.Tx, error), fn func(context.Context) error,
 ) error {
-	if _, ok := TxFrom(ctx); ok {
+	if _, ok := txFrom(ctx); ok {
 		return fn(ctx)
 	}
 
@@ -58,9 +57,7 @@ func inTx(
 
 	defer func() {
 		if p := recover(); p != nil {
-			if rbErr := tx.Rollback(context.WithoutCancel(ctx)); rbErr != nil {
-				log.Printf("postgres - InTx - rollback after panic: %v", rbErr)
-			}
+			_ = tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck // the panic goes on; a failed rollback's connection is discarded by the pool
 
 			panic(p)
 		}

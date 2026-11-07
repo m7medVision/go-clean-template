@@ -31,8 +31,7 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 - **Postgres and nothing else.** Typed queries with [sqlc](https://sqlc.dev/) and a declarative
   [Atlas](https://atlasgo.io/) schema applied at startup.
   The event store and the job queue are ordinary tables too.
-- **A worker binary.** It runs the projections, and consumes that queue, starting from an example
-  handler.
+- **A worker binary.** It runs the projections, and consumes that queue.
   It sends email from templates embedded in the binary.
 - **A React client.** TanStack Router, Query, Table and Form, typed from the OpenAPI document and the
   GraphQL schema.

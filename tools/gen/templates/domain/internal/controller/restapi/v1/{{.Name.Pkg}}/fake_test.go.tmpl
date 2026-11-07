@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"{{.Module}}/config"
 	"{{.Module}}/internal/controller/restapi/resttest"
+	"{{.Module}}/internal/controller/restapi/v1/{{.Name.Pkg}}"
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
 	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
@@ -24,20 +24,20 @@ type fake{{.Name.Go}} struct {
 // buses registers the fake's handlers on real buses whose one step is keep.
 func (f *fake{{.Name.Go}}) buses() cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
-	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+	write := func(context.Context) (entity.Written, error) { return entity.Written{ID: f.stored.ID}, f.err }
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Create{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Update{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Create{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Update{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
 
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.Get{{.Name.Go}}, entity.{{.Name.Go}}](
 		func(context.Context, query.Get{{.Name.Go}}) (entity.{{.Name.Go}}, error) { return f.stored, f.err }))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, query.{{.Name.Go}}Page](
-		func(context.Context, query.List{{.Name.Plural.Go}}) (query.{{.Name.Go}}Page, error) {
-			return query.{{.Name.Go}}Page{ {{- .Name.Plural.Go}}: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, entity.List[entity.{{.Name.Go}}]](
+		func(context.Context, query.List{{.Name.Plural.Go}}) (entity.List[entity.{{.Name.Go}}], error) {
+			return entity.List[entity.{{.Name.Go}}]{Items: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}
@@ -51,6 +51,6 @@ func (f *fake{{.Name.Go}}) keep(ctx context.Context, msg cqrs.Message, next cqrs
 }
 
 // newRouter serves the REST router over f's buses.
-func newRouter(cfg *config.Config, f *fake{{.Name.Go}}) http.Handler {
-	return resttest.NewRouter(cfg, f.buses())
+func newRouter(f *fake{{.Name.Go}}) http.Handler {
+	return resttest.NewRouter(f.buses(), {{.Name.Pkg}}.NewRoutes)
 }

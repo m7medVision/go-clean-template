@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
-	"github.com/m7medvision/go-clean-template/tools/gen/names"
 	"github.com/m7medvision/go-clean-template/tools/gen/plan"
 	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 	"github.com/stretchr/testify/assert"
@@ -142,9 +141,56 @@ func TestExecuteWritesAPlanThatPassesEveryRule(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dir, "internal", "app", "buses.go"))
 	require.NoError(t, err)
 	assert.Equal(t, "package app\n\n// widget\n", string(got))
-	assert.Contains(t, out.String(), "git checkout -- internal/app/buses.go docs/openapi/v1.json")
-	assert.Contains(t, out.String(), "git clean -fd -- internal/usecase/widget docs/openapi/v1.json")
-	assert.True(t, strings.HasSuffix(out.String(), "web/src/graphql\n\nNext:\n  - write it\n"), "the checklist, after the undo: %s", out.String())
+	assert.True(t, strings.HasSuffix(out.String(), "\n  git checkout -- . && git clean -fd -- .\n\nNext:\n  - write it\n"),
+		"the checklist, after the undo: %s", out.String())
+}
+
+// The undo takes the tree back to where it was before the write, and before whatever the
+// regenerators changed after it: R3 had no tracked file changed, and the untracked files that were
+// there, which the undo excludes by name, are there still.
+func TestTheUndoRestoresWhatTheWriteAndTheRegeneratorsChanged(t *testing.T) {
+	t.Parallel()
+
+	dir := gitRepo(t)
+
+	untracked := map[string]string{
+		filepath.Join("tasks", "todo.md"):                     "keep me\n",
+		filepath.Join("internal", "app", "notes [draft]*.md"): "and me\n",
+		"it's mine.txt": "me too\n",
+	}
+
+	for p, content := range untracked {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, p), []byte(content), 0o600))
+	}
+
+	var stdout bytes.Buffer
+	require.NoError(t, execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(), nil), false, &stdout))
+
+	// What a regenerator might do: rewrite a file the plan did not touch, and add one.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "internal", "usecase", "task", "register.go"), []byte("package task // regenerated\n"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "docs", "openapi"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "docs", "openapi", "v1.json"), []byte("{}\n"), 0o600))
+
+	_, after, ok := strings.Cut(stdout.String(), "what the regenerators do next:\n  ")
+	require.True(t, ok, stdout.String())
+
+	printed, _, _ := strings.Cut(after, "\n")
+	undo := exec.CommandContext(t.Context(), "sh", "-c", printed)
+	undo.Dir = dir
+	out, err := undo.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	// git keeps no file mode but the executable bit, so the tree is compared with what is committed.
+	require.NoError(t, rules.Check(t.Context(), rules.Open(dir), plan.New("x"), nil), "the undo left a change git reports")
+	assert.NoDirExists(t, filepath.Join(dir, "internal", "usecase", "widget"))
+	assert.NoDirExists(t, filepath.Join(dir, "docs"))
+
+	for p, content := range untracked {
+		got, err := os.ReadFile(filepath.Join(dir, p))
+		require.NoError(t, err, "%s was there before the run: the undo removed it (%s)", p, printed)
+		assert.Equal(t, content, string(got), p)
+	}
 }
 
 // planned is the planner that made p, running into errs, with a checklist of one line.
@@ -153,11 +199,12 @@ func planned(p *plan.Plan, errs []error) *planner {
 }
 
 // ruleFailure sets up one rule's failure. arrange runs before the tree is fingerprinted: it is
-// the state the user left. run is the command that must fail with want.
+// the state the user left. run is the command that must fail with want, the name the rule is
+// printed with.
 type ruleFailure struct {
 	arrange func(t *testing.T, dir string)
 	run     func(t *testing.T, dir string) error
-	want    error
+	want    string
 }
 
 func ruleFailures() map[string]ruleFailure {
@@ -166,12 +213,12 @@ func ruleFailures() map[string]ruleFailure {
 			t.Helper()
 
 			return newDomain(t.Context(), &domainRequest{root: dir, name: "type"}, &bytes.Buffer{})
-		}, names.ErrInvalid},
+		}, "R1 name: "},
 		"R1 existing domain": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			return newDomain(t.Context(), &domainRequest{root: dir, name: "task"}, &bytes.Buffer{})
-		}, names.ErrInvalid},
+		}, "R1 name: "},
 		"R2 file to create exists": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
@@ -179,7 +226,7 @@ func ruleFailures() map[string]ruleFailure {
 			p.Create("internal/usecase/task/register.go", []byte("package task\n"))
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
-		}, rules.ErrTargets},
+		}, "R2 targets: "},
 		"R3 file to edit is dirty": {func(t *testing.T, dir string) {
 			t.Helper()
 
@@ -190,13 +237,13 @@ func ruleFailures() map[string]ruleFailure {
 			p := widgetPlan()
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
-		}, rules.ErrClean},
+		}, "R3 clean: "},
 		"R4 anchor not found": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(),
 				[]error{fmt.Errorf("%w: buses.go: found func subscribers 0 times", edit.ErrAnchor)}), false, &bytes.Buffer{})
-		}, edit.ErrAnchor},
+		}, "R4 one anchor: "},
 		"R5 edit breaks a file": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
@@ -204,14 +251,14 @@ func ruleFailures() map[string]ruleFailure {
 			p.Edit("internal/app/buses.go", nil, edit.Insertion{Offset: 0, Text: "}"})
 
 			return execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(p, nil), false, &bytes.Buffer{})
-		}, plan.ErrInvalid},
+		}, "R5 still valid: "},
 		"R6 write fails part-way": {nil, func(t *testing.T, dir string) error {
 			t.Helper()
 
 			root := &failingRename{FS: openRoot(t, dir)}
 
 			return execute(t.Context(), rules.Open(dir), root, planned(widgetPlan(), nil), false, &bytes.Buffer{})
-		}, plan.ErrWrite},
+		}, "R6 all or nothing: "},
 	}
 }
 
@@ -229,7 +276,9 @@ func TestEveryRuleFailureLeavesTheTreeByteIdentical(t *testing.T) {
 
 			before := fingerprint(t, dir)
 
-			require.ErrorIs(t, tc.run(t, dir), tc.want)
+			err := tc.run(t, dir)
+			require.Error(t, err)
+			assert.True(t, strings.HasPrefix(err.Error(), tc.want), "%s is not %s", err, tc.want)
 			assert.Equal(t, before, fingerprint(t, dir))
 		})
 	}

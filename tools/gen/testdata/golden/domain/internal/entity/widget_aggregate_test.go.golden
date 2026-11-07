@@ -39,9 +39,7 @@ func TestNewWidgetAggregateRecordsWidgetCreated(t *testing.T) {
 
 	assert.Equal(t, []entity.Event{widgetCreated()}, a.Pending())
 	assert.Equal(t, "widget-"+_widgetID, a.StreamID())
-	assert.Equal(t, entity.Widget{
-		ID: _widgetID, UserID: _widgetOwner, CreatedAt: widgetCreatedAt(), UpdatedAt: widgetCreatedAt(),
-	}, a.State())
+	assert.Equal(t, _widgetID, a.ID())
 }
 
 func TestWidgetAggregateUpdateByItsOwner(t *testing.T) {
@@ -54,8 +52,6 @@ func TestWidgetAggregateUpdateByItsOwner(t *testing.T) {
 	assert.Equal(t, []entity.Event{
 		entity.WidgetUpdated{WidgetID: _widgetID, At: widgetLaterAt()},
 	}, a.Pending())
-	assert.Equal(t, widgetLaterAt(), a.State().UpdatedAt)
-	assert.Equal(t, widgetCreatedAt(), a.State().CreatedAt)
 }
 
 func TestWidgetAggregateRefusesAnotherUser(t *testing.T) {
@@ -110,16 +106,8 @@ func TestWidgetAggregateSnapshotRestoresTheSameWidget(t *testing.T) {
 
 			restored := &entity.WidgetAggregate{}
 			require.NoError(t, restored.RestoreSnapshot(data))
-			assert.Equal(t, a.State(), restored.State())
-			assert.ErrorIs(t, restored.Update(_widgetOwner, widgetLaterAt()), tc.update, "deleted or not, as snapshotted")
+			assert.Equal(t, a.StreamID(), restored.StreamID())
+			assert.ErrorIs(t, restored.Update(_widgetOwner, widgetLaterAt()), tc.update, "its owner, deleted or not, as snapshotted")
 		})
 	}
-}
-
-func TestTheWidgetEventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	assert.Subset(t, entity.EventTypes(), []entity.Event{
-		entity.WidgetCreated{}, entity.WidgetUpdated{}, entity.WidgetDeleted{},
-	})
 }

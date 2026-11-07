@@ -113,20 +113,14 @@ func TestThePasskeyProjectorReturnsAWriteFailure(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{err: errWrite}, entity.PasskeyDeleted{PasskeyID: id()}), errWrite)
 }
 
-func TestThePasskeyProjectorIgnoresOtherEvents(t *testing.T) {
+func TestThePasskeyProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	t.Parallel()
 
-	q := &fakeQuerier{}
+	for _, e := range passkey.NewProjector(nil).Handles() {
+		require.NotErrorIs(t, project(t, &fakeQuerier{}, e), entity.ErrUnhandledEvent, e.EventType())
+	}
 
-	require.NoError(t, project(t, q, entity.TaskDeleted{TaskID: "t1"}))
-	assert.Empty(t, q.inserted)
+	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestThePasskeyProjectorOwnsTheCredentialsTable(t *testing.T) {
-	t.Parallel()
-
-	p := passkey.NewProjector(nil)
-
-	assert.Equal(t, "passkey", p.Name())
-	assert.Equal(t, []string{"webauthn_credentials"}, p.Tables())
-}
+func otherDomainEvent() entity.Event { return entity.TaskDeleted{} }

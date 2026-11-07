@@ -2,33 +2,40 @@ package app
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	restpasskey "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/passkey"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
+	persistPasskeyRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
+	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
+	"github.com/m7medvision/go-clean-template/internal/usecase/passkey"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
-// _webauthnCeremonyScope scopes the WebAuthn ceremony token's key and audience.
-const _webauthnCeremonyScope = "webauthn-ceremony"
+// passkeyModule is the passkey domain: WebAuthn registration and sign-in, which reads the users'
+// read model too, its importer and projector, and its REST operations.
+func passkeyModule() module {
+	return module{
+		handlers: func(d *deps, b cqrs.Buses) error {
+			// Invalid WebAuthn settings fail here, so they stop the app at startup.
+			c, err := ceremony.New(d.cfg.JWT.Secret, d.cfg.WebAuthn, time.Now)
+			if err != nil {
+				return fmt.Errorf("passkey - ceremony.New: %w", err)
+			}
 
-// newPasskeyCeremony builds the WebAuthn ceremony the passkey handlers share. It fails when the
-// WebAuthn settings are invalid.
-func newPasskeyCeremony(cfg *config.Config) (*ceremony.Ceremony, error) {
-	signer, err := jwt.NewScoped(cfg.JWT.Secret, _webauthnCeremonyScope, cfg.WebAuthn.CeremonyTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("jwt.NewScoped: %w", err)
+			passkey.Register(b.Commands, b.Queries, &passkey.Deps{
+				Ceremony: c, Store: d.store, Users: persistUserRepo.NewReadModel(d.pg),
+				Passkeys: persistPasskeyRepo.NewReadModel(d.pg), Guard: persistPasskeyRepo.NewGuard(d.pg),
+				Sessions: session.New(d.tokens),
+			})
+
+			return nil
+		},
+		importer:  func(pg *postgres.Postgres) eventstore.Importer { return persistPasskeyRepo.NewImporter(pg) },
+		rest:      restpasskey.NewRoutes,
+		projector: persistPasskeyRepo.NewProjector,
 	}
-
-	c, err := ceremony.New(signer, &ceremony.Config{
-		RPID:         cfg.WebAuthn.RPID,
-		RPName:       cfg.WebAuthn.RPName,
-		RPOrigins:    cfg.WebAuthn.RPOrigins,
-		Timeout:      cfg.WebAuthn.CeremonyTimeout,
-		ReauthMaxAge: cfg.WebAuthn.ReauthMaxAge,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("ceremony.New: %w", err)
-	}
-
-	return c, nil
 }

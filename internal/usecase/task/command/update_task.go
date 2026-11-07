@@ -14,32 +14,30 @@ import (
 // UpdateTask replaces the title and description of UserID's task. Another user's task is
 // entity.ErrTaskForbidden.
 type UpdateTask struct {
+	cqrs.Command[entity.Written]
+
 	UserID      string
 	TaskID      string
 	Title       string
 	Description string
 }
 
-// CommandName -.
-func (UpdateTask) CommandName() string { return "UpdateTask" }
-
-// ActorID -.
 func (c UpdateTask) ActorID() string { return c.UserID }
 
-// UpdateTaskHandler handles UpdateTask. Now is the clock (time.Now when nil).
+func (c UpdateTask) Validate() error { return entity.ValidateTaskText(c.Title, c.Description) }
+
+// UpdateTaskHandler's Now is the clock (time.Now when nil).
 type UpdateTaskHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
-func (h UpdateTaskHandler) Handle(ctx context.Context, cmd UpdateTask) (cqrs.Written, error) {
-	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, entity.TaskStreamID(cmd.TaskID), &entity.TaskAggregate{},
-		entity.ErrTaskNotFound, func(t *entity.TaskAggregate) error {
-			return t.Update(cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now))
-		})
+func (h UpdateTaskHandler) Handle(ctx context.Context, cmd UpdateTask) (entity.Written, error) {
+	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
+		return t.Update(cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now))
+	})
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("UpdateTask: %w", err)
+		return entity.Written{}, fmt.Errorf("UpdateTask: %w", err)
 	}
 
 	return written, nil

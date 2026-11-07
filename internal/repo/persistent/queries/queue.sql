@@ -18,8 +18,8 @@ SET visible_at = now() + make_interval(secs => sqlc.arg('vt_seconds')::double pr
     read_count = m.read_count + 1
 FROM due
 WHERE m.id = due.id
-RETURNING m.id, m.queue, m.body, m.read_count, m.enqueued_at, m.visible_at;
+RETURNING m.id, m.body, m.read_count;
 
 -- name: DeleteQueueMessage :exec
 DELETE FROM queue_messages
-WHERE id = $1;
+WHERE id = $1 AND queue = $2;

@@ -12,11 +12,16 @@ import (
 
 const deleteQueueMessage = `-- name: DeleteQueueMessage :exec
 DELETE FROM queue_messages
-WHERE id = $1
+WHERE id = $1 AND queue = $2
 `
 
-func (q *Queries) DeleteQueueMessage(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteQueueMessage, id)
+type DeleteQueueMessageParams struct {
+	ID    int64
+	Queue string
+}
+
+func (q *Queries) DeleteQueueMessage(ctx context.Context, arg DeleteQueueMessageParams) error {
+	_, err := q.db.Exec(ctx, deleteQueueMessage, arg.ID, arg.Queue)
 	return err
 }
 
@@ -33,7 +38,7 @@ SET visible_at = now() + make_interval(secs => $1::double precision),
     read_count = m.read_count + 1
 FROM due
 WHERE m.id = due.id
-RETURNING m.id, m.queue, m.body, m.read_count, m.enqueued_at, m.visible_at
+RETURNING m.id, m.body, m.read_count
 `
 
 type ReadQueueMessagesParams struct {
@@ -42,25 +47,24 @@ type ReadQueueMessagesParams struct {
 	Qty       int32
 }
 
+type ReadQueueMessagesRow struct {
+	ID        int64
+	Body      json.RawMessage
+	ReadCount int32
+}
+
 // ReadQueueMessages claims up to qty visible messages and hides them for vt_seconds in one
 // statement. SKIP LOCKED lets concurrent workers claim disjoint batches without waiting.
-func (q *Queries) ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]QueueMessage, error) {
+func (q *Queries) ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]ReadQueueMessagesRow, error) {
 	rows, err := q.db.Query(ctx, readQueueMessages, arg.VtSeconds, arg.Queue, arg.Qty)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []QueueMessage
+	var items []ReadQueueMessagesRow
 	for rows.Next() {
-		var i QueueMessage
-		if err := rows.Scan(
-			&i.ID,
-			&i.Queue,
-			&i.Body,
-			&i.ReadCount,
-			&i.EnqueuedAt,
-			&i.VisibleAt,
-		); err != nil {
+		var i ReadQueueMessagesRow
+		if err := rows.Scan(&i.ID, &i.Body, &i.ReadCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

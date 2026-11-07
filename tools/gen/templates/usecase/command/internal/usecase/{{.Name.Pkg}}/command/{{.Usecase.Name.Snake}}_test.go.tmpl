@@ -1,0 +1,23 @@
+package command_test
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo/memstore"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"github.com/stretchr/testify/require"
+)
+
+// The handler is the stub the generator wrote, so this test fails once the handler is written: the
+// first real implementation replaces it with tests of what {{.Usecase.Name.Go}} records.
+func Test{{.Usecase.Name.Go}}IsNotImplementedYet(t *testing.T) {
+	t.Parallel()
+
+	h := command.{{.Usecase.Name.Go}}Handler{Store: memstore.New(entity.EventTypes())}
+
+	_, err := h.Handle(context.Background(), command.{{.Usecase.Name.Go}}{UserID: "user-1"{{if .Usecase.ByID}}, {{.Name.Go}}ID: "{{.Name.Kebab}}-1"{{end}}})
+
+	require.ErrorIs(t, err, entity.ErrNotImplemented)
+}

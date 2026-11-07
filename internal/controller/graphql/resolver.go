@@ -1,11 +1,12 @@
 package graphql
 
 import (
+	"log/slog"
+
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/exchange"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/task"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // The root Query and Mutation embed each domain's resolver, so the domain's methods become theirs.
@@ -33,13 +34,13 @@ type resolver struct {
 	mutation mutation
 }
 
-func newResolver(b cqrs.Buses, l logger.Interface) *resolver {
-	taskQ, taskM := task.New(b, l)
+// newResolver fills in each domain's resolvers, one statement per domain.
+func newResolver(b cqrs.Buses, l *slog.Logger) *resolver {
+	r := &resolver{}
+	r.query.taskQuery, r.mutation.taskMutation = task.New(b, l)
+	r.query.exchangeQuery = exchange.New(b, l)
 
-	return &resolver{
-		query:    query{taskQuery: taskQ, exchangeQuery: exchange.New(b, l)},
-		mutation: mutation{taskMutation: taskM},
-	}
+	return r
 }
 
 func (r *resolver) Query() generated.QueryResolver { return r.query }

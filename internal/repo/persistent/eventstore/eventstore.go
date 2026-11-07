@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -23,18 +23,16 @@ const (
 	_uniqueViolation = "23505"
 )
 
-// Store is the Postgres event store.
 type Store struct {
 	pg            *postgres.Postgres
-	codec         *Codec
+	codec         *eventcodec.Codec
 	snapshotEvery int
 }
 
-// New returns the event store for events (entity.EventTypes() for the domain's own), upcasting
-// their old versions with upcasts. It snapshots a stream each time it crosses a multiple of
-// snapshotEvery events; below 1, never.
-func New(pg *postgres.Postgres, snapshotEvery int, events []entity.Event, upcasts ...Upcast) repo.EventStore {
-	return newTraced(&Store{pg: pg, codec: NewCodec(events, upcasts...), snapshotEvery: snapshotEvery})
+// New returns the event store, encoding events with codec. It snapshots a stream each time it
+// crosses a multiple of snapshotEvery events; below 1, never.
+func New(pg *postgres.Postgres, codec *eventcodec.Codec, snapshotEvery int) repo.EventStore {
+	return &Store{pg: pg, codec: codec, snapshotEvery: snapshotEvery}
 }
 
 // Save appends a's pending events and applies claims in one transaction, joining the context's.
@@ -106,24 +104,19 @@ func applyClaims(ctx context.Context, q *queries.Queries, claims []entity.Claim)
 		}
 
 		if claimed == 0 {
-			if c.Taken != nil {
-				return c.Taken
-			}
-
-			return fmt.Errorf("%w: %s %q", ErrClaimTaken, c.Scope, c.Value)
+			return eventcodec.ClaimTaken(&c)
 		}
 	}
 
 	return nil
 }
 
-// append inserts the pending events after the loaded version and returns the last position.
 func (s *Store) append(ctx context.Context, q *queries.Queries, a entity.Aggregate) (int64, error) {
 	if len(a.Pending()) == 0 {
 		return 0, nil
 	}
 
-	metadata, err := json.Marshal(metadataFor(ctx))
+	metadata, err := json.Marshal(eventcodec.Metadata(ctx))
 	if err != nil {
 		return 0, fmt.Errorf("json.Marshal metadata: %w", err)
 	}
@@ -160,22 +153,11 @@ func (s *Store) append(ctx context.Context, q *queries.Queries, a entity.Aggrega
 	return last, nil
 }
 
-// metadataFor is the context's metadata, with the trace it runs in as the correlation.
-func metadataFor(ctx context.Context) entity.Metadata {
-	md := entity.MetadataFromContext(ctx)
-
-	if sc := trace.SpanContextFromContext(ctx); md.CorrelationID == "" && sc.HasTraceID() {
-		md.CorrelationID = sc.TraceID().String()
-	}
-
-	return md
-}
-
 func (s *Store) snapshotIfDue(ctx context.Context, q *queries.Queries, a entity.Aggregate) error {
 	sn, ok := a.(entity.Snapshotter)
 	after := a.Version() + len(a.Pending())
 
-	if !ok || !SnapshotDue(a.Version(), after, s.snapshotEvery) {
+	if !ok || !eventcodec.SnapshotDue(a.Version(), after, s.snapshotEvery) {
 		return nil
 	}
 
@@ -219,7 +201,7 @@ func (s *Store) Load(ctx context.Context, streamID string, a entity.Aggregate) e
 	version := from
 
 	for i := range rows {
-		e, err := s.codec.Decode(Stored{Type: rows[i].Type, SchemaVersion: int(rows[i].SchemaVersion), Payload: rows[i].Payload})
+		e, err := s.codec.Decode(eventcodec.Stored{Type: rows[i].Type, SchemaVersion: int(rows[i].SchemaVersion), Payload: rows[i].Payload})
 		if err != nil {
 			return fmt.Errorf("EventStore - Load %s: %w", streamID, err)
 		}
@@ -233,8 +215,6 @@ func (s *Store) Load(ctx context.Context, streamID string, a entity.Aggregate) e
 	return nil
 }
 
-// restoreSnapshot restores a from streamID's snapshot when a is a Snapshotter of the snapshot's
-// version, and returns the stream version it restored to (0 for none).
 func restoreSnapshot(ctx context.Context, q *queries.Queries, streamID string, a entity.Aggregate) (int, error) {
 	sn, ok := a.(entity.Snapshotter)
 	if !ok {
@@ -261,7 +241,6 @@ func restoreSnapshot(ctx context.Context, q *queries.Queries, streamID string, a
 	return int(snap.StreamVersion), nil
 }
 
-// ClaimOwner returns who holds the claim.
 func (s *Store) ClaimOwner(ctx context.Context, scope, value string) (string, error) {
 	owner, err := queries.New(s.pg.Executor(ctx)).ClaimOwner(ctx, queries.ClaimOwnerParams{Scope: scope, Value: value})
 	if errors.Is(err, pgx.ErrNoRows) {

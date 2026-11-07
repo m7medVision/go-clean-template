@@ -6,22 +6,21 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // CountWidgets is the query count-widgets, asked by UserID.
-// Add the fields it needs.
+// Add the fields it needs, and the rules they follow in Validate.
 type CountWidgets struct {
+	cqrs.Query[CountWidgetsResult]
+
 	UserID string
 }
-
-// QueryName -.
-func (CountWidgets) QueryName() string { return "CountWidgets" }
 
 // CountWidgetsResult is what CountWidgets answers, empty until you add its fields. The
 // REST operation answers with it as it is, so give each field its json tag.
 type CountWidgetsResult struct{}
 
-// CountWidgetsHandler handles CountWidgets.
 type CountWidgetsHandler struct {
 	Widgets repo.WidgetReadModel
 }

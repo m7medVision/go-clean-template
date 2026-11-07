@@ -54,6 +54,21 @@ func TestIdentifiersFreeRejectsADeclarationThePackageHas(t *testing.T) {
 	}
 }
 
+// A struct's fields are names of their own, as Type.Field: a message that would carry the caller's
+// UserID and a record's ID named UserID declares one field twice.
+func TestIdentifiersFreeRejectsAFieldDeclaredTwice(t *testing.T) {
+	t.Parallel()
+
+	p := plan.New("x")
+	p.Create("internal/usecase/user/command/lock_user.go",
+		[]byte("package command\n\ntype LockUser struct {\n\tcqrs.Command[entity.Written]\n\n\tUserID string\n\tUserID string\n}\n"))
+
+	err := rules.IdentifiersFree(repoOf(fstest.MapFS{}), name(t, "lock-user"), p)
+
+	require.ErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "lock_user.go would declare LockUser.UserID twice")
+}
+
 func TestIdentifiersFreeLooksAtWhatAnEditAdds(t *testing.T) {
 	t.Parallel()
 
@@ -72,6 +87,32 @@ func TestIdentifiersFreeLooksAtWhatAnEditAdds(t *testing.T) {
 	err = rules.IdentifiersFree(repoOf(fsys), name(t, "record"), p)
 	require.ErrorIs(t, err, names.ErrInvalid)
 	assert.Contains(t, err.Error(), "internal/entity/errors.go would declare ErrA twice")
+}
+
+// A file the plan leaves broken, created or edited, is R5's to report in its turn, after R2 to R4:
+// it declares nothing here. A file of the package that does not parse cannot say what it
+// declares, so it fails here.
+func TestIdentifiersFreeOnFilesThatDoNotParse(t *testing.T) {
+	t.Parallel()
+
+	created := plan.New("x")
+	created.Create("internal/entity/record.go", []byte("package entity\n\nfunc {"))
+	require.NoError(t, rules.IdentifiersFree(repoOf(entityPackage()), name(t, "record"), created))
+
+	broken := plan.New("x")
+	broken.Edit("internal/entity/errors.go", entityPackage()["internal/entity/errors.go"].Data, edit.Insertion{Offset: 0, Text: "}"})
+	require.NoError(t, rules.IdentifiersFree(repoOf(entityPackage()), name(t, "record"), broken))
+
+	fsys := entityPackage()
+	fsys["internal/entity/broken.go"] = &fstest.MapFile{Data: []byte("package entity\n\nfunc {")}
+
+	valid := plan.New("x")
+	valid.Create("internal/entity/record.go", []byte("package entity\n\ntype Rec struct{}\n"))
+
+	err := rules.IdentifiersFree(repoOf(fsys), name(t, "record"), valid)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "internal/entity/broken.go")
 }
 
 func TestIdentifiersFreeAcceptsDeclarationsThatAreNew(t *testing.T) {
@@ -146,7 +187,7 @@ func TestIdentifiersFreeLooksAtWhatAProtoEditAdds(t *testing.T) {
 		"an rpc":    {rpc, "  rpc Login (LogoutRequest) returns (LogoutResponse);\n", "AuthService.Login"},
 	} {
 		pl := plan.New("x")
-		pl.Edit(p, src, edit.Insertion{Path: p, Offset: tc.at, Text: tc.text})
+		pl.Edit(p, src, edit.Insertion{Offset: tc.at, Text: tc.text})
 
 		err := rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "login"), pl)
 
@@ -164,7 +205,7 @@ func TestIdentifiersFreeAcceptsProtoNamesThatAreNewToTheirFolder(t *testing.T) {
 	p := plan.New("x")
 	p.Create("docs/proto/v1/invoice.proto", []byte("syntax = \"proto3\";\n\npackage grpc.v1;\n\nservice InvoiceService {}\n\nmessage InvoiceResponse {}\n"))
 	p.Create("docs/proto/v2/login.proto", []byte("syntax = \"proto3\";\n\npackage grpc.v2;\n\nservice AuthService {}\n\nmessage LoginResponse {}\n"))
-	p.Edit("docs/proto/v1/auth.proto", src, edit.Insertion{Path: "docs/proto/v1/auth.proto", Offset: len(src), Text: "\nmessage LogoutRequest {}\n"})
+	p.Edit("docs/proto/v1/auth.proto", src, edit.Insertion{Offset: len(src), Text: "\nmessage LogoutRequest {}\n"})
 
 	require.NoError(t, rules.IdentifiersFree(repoOf(fsys), name(t, "invoice"), p),
 		"names new to docs/proto/v1 are free, and docs/proto/v2 is a package of its own")
@@ -204,28 +245,6 @@ func TestIdentifiersFreeRejectsAGraphQLNameAnotherFileInTheSchemaHas(t *testing.
 	}
 }
 
-func TestIdentifiersFreeLooksAtWhatAGraphQLEditAdds(t *testing.T) {
-	t.Parallel()
-
-	const p = "internal/controller/graphql/schema/task.graphqls"
-
-	src := []byte(taskSchema)
-
-	q, err := edit.ParseGraphQL(p, src)
-	require.NoError(t, err)
-
-	ins, err := q.InType("Mutation", "deleteTask(id: ID!): Boolean!")
-	require.NoError(t, err)
-
-	pl := plan.New("x")
-	pl.Edit(p, src, ins)
-
-	err = rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "task"), pl)
-
-	require.ErrorIs(t, err, names.ErrInvalid)
-	assert.Contains(t, err.Error(), p+" would declare Mutation.deleteTask twice")
-}
-
 func TestIdentifiersFreeAcceptsGraphQLNamesThatAreNewToTheirSchema(t *testing.T) {
 	t.Parallel()
 
@@ -233,14 +252,8 @@ func TestIdentifiersFreeAcceptsGraphQLNamesThatAreNewToTheirSchema(t *testing.T)
 
 	src := []byte(taskSchema)
 
-	q, err := edit.ParseGraphQL(p, src)
-	require.NoError(t, err)
-
-	ins, err := q.InType("Mutation", "archiveTask(id: ID!): Task!")
-	require.NoError(t, err)
-
 	pl := plan.New("x")
-	pl.Edit(p, src, ins)
+	pl.Create("internal/controller/graphql/schema/archive_task.graphqls", []byte("extend type Mutation {\n  archiveTask(id: ID!): Task!\n}\n"))
 	pl.Create("internal/controller/graphql/schema/invoice.graphqls", []byte("type Invoice { id: ID! }\n\n"+
 		"type InvoiceList { total: Int! }\n\nextend type Query {\n  invoice(id: ID!): Invoice!\n}\n"))
 	pl.Create("internal/controller/v2/schema/task.graphqls", []byte(taskSchema))

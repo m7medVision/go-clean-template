@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -11,11 +12,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventstoretest"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -25,10 +26,12 @@ import (
 const (
 	projectionWait = 5 * time.Second
 	projectionTick = 20 * time.Millisecond
+	// projectionBatchSize is PROJECTION_BATCH_SIZE's default.
+	projectionBatchSize = 100
 )
 
-// runCounter counts how often it was handed each position of one run's scratch notes. Its name
-// starts with an underscore, so it shows in no lag metric and no wait.
+// runCounter counts how often it was handed each position of one run's scratch notes. No write
+// waits for it, and its test deletes its checkpoint when it ends, so it leaves no lag metric behind.
 type runCounter struct {
 	name   string
 	prefix string
@@ -39,7 +42,7 @@ type runCounter struct {
 
 func newRunCounter(run string) *runCounter {
 	return &runCounter{
-		name:   "_test-" + run,
+		name:   "test-" + run,
 		prefix: eventstoretest.NoteStreamID(run),
 		counts: map[int64]int{},
 	}
@@ -48,6 +51,10 @@ func newRunCounter(run string) *runCounter {
 func (c *runCounter) Name() string { return c.name }
 
 func (*runCounter) Tables() []string { return nil }
+
+func (*runCounter) Handles() []entity.Event {
+	return append(entity.EventTypes(), eventstoretest.Events()...)
+}
 
 func (c *runCounter) Handle(_ context.Context, e *entity.RecordedEvent) error {
 	if !strings.HasPrefix(e.StreamID, c.prefix) {
@@ -93,17 +100,20 @@ func startRunner(t *testing.T, pg *postgres.Postgres, c *runCounter) func() {
 	t.Helper()
 
 	events := append(entity.EventTypes(), eventstoretest.Events()...)
-	l := logger.New("error")
-	store := projection.NewStore(pg, eventstore.NewReader(pg, events).IncludingScratch(), l)
+	l := slog.New(slog.DiscardHandler)
+	store := projection.NewStore(pg, eventstore.NewReader(pg, eventcodec.New(events)).IncludingScratch(), l)
 
 	// An hour between polls: only the LISTEN notification can wake the runner in time.
-	runner := projection.New(l, store, projection.PollInterval(time.Hour))
-	runner.Add(c)
-	runner.Start()
+	runner := projection.New(l, store, time.Hour, projectionBatchSize, c)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+
+	go func() { done <- runner.Run(ctx) }()
 
 	return func() {
-		runner.Shutdown()
-		store.Close()
+		cancel()
+		require.NoError(t, <-done)
 	}
 }
 
@@ -129,6 +139,12 @@ func TestTheRunnerDeliversEachEventOnceResumesAndRebuilds(t *testing.T) {
 	run := uuid.NewString()
 	c := newRunCounter(run)
 
+	t.Cleanup(func() {
+		_, err := pg.Executor(context.Background()).Exec(context.Background(),
+			"DELETE FROM projection_checkpoints WHERE name = $1", c.name)
+		assert.NoError(t, err)
+	})
+
 	stop := startRunner(t, pg, c)
 	want := saveNotes(ctx, t, pg, run, 0, 3)
 
@@ -149,7 +165,7 @@ func TestTheRunnerDeliversEachEventOnceResumesAndRebuilds(t *testing.T) {
 	}
 
 	// A rebuild resets the checkpoint, and the running runner replays from the first event.
-	require.NoError(t, projection.Rebuild(ctx, pg, c.name, c))
+	require.NoError(t, projection.Rebuild(ctx, pg, c.name, []projection.Projector{c}, nil))
 
 	require.Eventually(t, func() bool {
 		_, counts := c.handled()
@@ -169,11 +185,11 @@ func TestTheLagCollectorReportsEachCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	pg := newPostgres(t)
 	name := "lagtest-" + uuid.NewString()
-	q := queries.New(pg.Pool)
+	q := queries.New(pg.Executor(ctx))
 
 	require.NoError(t, q.EnsureCheckpoint(ctx, name))
 	t.Cleanup(func() {
-		_, err := pg.Pool.Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = $1", name)
+		_, err := pg.Executor(context.Background()).Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = $1", name)
 		assert.NoError(t, err)
 	})
 
@@ -200,11 +216,11 @@ func TestCheckpointsReachedNeedsEveryNamedProjector(t *testing.T) {
 	ctx := context.Background()
 	pg := newPostgres(t)
 	a, b := "_reached-"+uuid.NewString(), "_reached-"+uuid.NewString()
-	q := queries.New(pg.Pool)
+	q := queries.New(pg.Executor(ctx))
 	checkpoints := projection.NewCheckpoints(pg)
 
 	t.Cleanup(func() {
-		_, err := pg.Pool.Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = ANY($1)", []string{a, b})
+		_, err := pg.Executor(context.Background()).Exec(context.Background(), "DELETE FROM projection_checkpoints WHERE name = ANY($1)", []string{a, b})
 		assert.NoError(t, err)
 	})
 

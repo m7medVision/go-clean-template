@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"testing"
 
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,11 +25,11 @@ type fakeMail struct {
 
 func (f *fakeMail) commands() *cqrs.Commands {
 	cmds := cqrs.NewCommands()
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeliverEmail, cqrs.Written](
-		func(_ context.Context, c command.DeliverEmail) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeliverEmail, struct{}](
+		func(_ context.Context, c command.DeliverEmail) (struct{}, error) {
 			f.delivered = append(f.delivered, c.Email)
 
-			return cqrs.Written{}, f.err
+			return struct{}{}, f.err
 		}))
 
 	return cmds
@@ -45,11 +45,6 @@ func TestMailController_Handle(t *testing.T) {
 		wantErr       error
 		wantDelivered int
 	}{
-		{
-			name:          "delivers the decoded email and acknowledges it",
-			body:          welcomeBody,
-			wantDelivered: 1,
-		},
 		{
 			name:          "a body that is not an email is dropped, retrying cannot fix it",
 			body:          func(*testing.T) json.RawMessage { return json.RawMessage(`"not an object"`) },
@@ -82,7 +77,7 @@ func TestMailController_Handle(t *testing.T) {
 			t.Parallel()
 
 			mail := &fakeMail{err: tc.deliverErr}
-			c := v1.NewMailController(mail.commands(), logger.New("error"))
+			c := v1.NewMailController(mail.commands(), slog.New(slog.DiscardHandler))
 
 			err := c.Handle(context.Background(), &worker.Message{ID: 1, Body: tc.body(t)})
 

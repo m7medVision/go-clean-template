@@ -34,11 +34,8 @@ func TestSendWelcomeEmailWelcomesAUserWhoRegistered(t *testing.T) {
 func TestSendWelcomeEmailLeavesImportsAndSSOSignInsAlone(t *testing.T) {
 	t.Parallel()
 
-	notifier := repomock.NewMockUserNotifier(gomock.NewController(t))
-
-	require.NoError(t, handle(t, notifier, entity.UserImported{UserID: "u1"}))
-	require.NoError(t, handle(t, notifier, entity.UserRegisteredViaOIDC{UserID: "u1"}))
-	require.NoError(t, handle(t, notifier, entity.TaskDeleted{TaskID: "t1"}))
+	assert.Equal(t, []entity.Event{entity.UserRegistered{}}, event.SendWelcomeEmail{}.Handles(),
+		"only a registration with a password is welcomed")
 }
 
 func TestSendWelcomeEmailReturnsAFailureForTheRunnerToRetry(t *testing.T) {
@@ -48,10 +45,4 @@ func TestSendWelcomeEmailReturnsAFailureForTheRunnerToRetry(t *testing.T) {
 	notifier.EXPECT().Welcome(gomock.Any(), gomock.Any()).Return(errQueue)
 
 	require.ErrorIs(t, handle(t, notifier, entity.UserRegistered{UserID: "u1"}), errQueue)
-}
-
-func TestSendWelcomeEmailIsNamed(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "send-welcome-email", event.SendWelcomeEmail{}.Name())
 }

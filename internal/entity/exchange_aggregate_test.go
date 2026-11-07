@@ -16,7 +16,7 @@ const _conversionID = "conv-1"
 func converted(t *testing.T) entity.Conversion {
 	t.Helper()
 
-	c, err := entity.NewConversion("omr", "cny", decimal.RequireFromString("100"))
+	c, err := entity.NewConversion("omr", "cny", "100")
 	require.NoError(t, err)
 	c.ApplyRate(decimal.RequireFromString("17.406483"), time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC))
 
@@ -35,7 +35,6 @@ func TestNewConversionAggregateRecordsCurrencyConverted(t *testing.T) {
 		Amount: c.Amount, Rate: c.Rate, Result: c.Result, RateDate: c.RateDate, At: createdAt(),
 	}}, a.Pending())
 	assert.Equal(t, "conversion-"+_conversionID, a.StreamID())
-	assert.Equal(t, c, a.State())
 }
 
 func TestCurrencyConvertedKeepsAmountsExactThroughJSON(t *testing.T) {
@@ -64,17 +63,4 @@ func TestImportConversionAggregateRecordsTheRow(t *testing.T) {
 		ConversionID: _conversionID, UserID: _owner, From: "OMR", To: "CNY",
 		Amount: c.Amount, Rate: c.Rate, Result: c.Result, RateDate: c.RateDate, CreatedAt: createdAt(),
 	}}, a.Pending())
-	assert.Equal(t, c, a.State())
-}
-
-func TestTheConversionEventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	names := map[string]bool{}
-	for _, e := range entity.EventTypes() {
-		names[e.EventType()] = true
-	}
-
-	assert.True(t, names[entity.CurrencyConverted{}.EventType()])
-	assert.True(t, names[entity.ConversionImported{}.EventType()])
 }

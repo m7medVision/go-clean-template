@@ -1,0 +1,3 @@
+extend type Mutation {
+  deleteWidget(id: ID!): Boolean!
+}

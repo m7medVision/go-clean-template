@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// Worker -.
-type worker struct {
+// Worker has the fields of worker.Settings, so it converts to one.
+type Worker struct {
 	PollInterval      time.Duration `env:"WORKER_POLL_INTERVAL" envDefault:"1s"`
 	VisibilityTimeout time.Duration `env:"WORKER_VISIBILITY_TIMEOUT" envDefault:"30s"`
 	BatchSize         int           `env:"WORKER_BATCH_SIZE" envDefault:"10"`

@@ -101,20 +101,14 @@ func TestTheUserProjectorReturnsAWriteFailure(t *testing.T) {
 	require.ErrorIs(t, err, errWrite)
 }
 
-func TestTheUserProjectorIgnoresOtherEvents(t *testing.T) {
+func TestTheUserProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	t.Parallel()
 
-	q := &fakeQuerier{}
+	for _, e := range user.NewProjector(nil).Handles() {
+		require.NotErrorIs(t, project(t, &fakeQuerier{}, e), entity.ErrUnhandledEvent, e.EventType())
+	}
 
-	require.NoError(t, project(t, q, entity.TaskDeleted{TaskID: "t1"}))
-	assert.Empty(t, q.users)
+	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestTheUserProjectorOwnsTheUserTables(t *testing.T) {
-	t.Parallel()
-
-	p := user.NewProjector(nil)
-
-	assert.Equal(t, "user", p.Name())
-	assert.Equal(t, []string{"user_identities", "users"}, p.Tables())
-}
+func otherDomainEvent() entity.Event { return entity.TaskDeleted{} }

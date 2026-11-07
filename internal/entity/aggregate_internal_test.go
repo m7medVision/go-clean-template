@@ -2,11 +2,9 @@ package entity
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type counted struct{ By int }
@@ -31,25 +29,6 @@ func (c *counter) Apply(e Event) {
 }
 
 func (c *counter) count(by int) { Record(c, counted{By: by}) }
-
-type counterSnapshot struct {
-	Total int `json:"total"`
-}
-
-func (*counter) SnapshotVersion() int { return 1 }
-
-func (c *counter) Snapshot() any { return counterSnapshot{Total: c.total} }
-
-func (c *counter) RestoreSnapshot(data json.RawMessage) error {
-	var s counterSnapshot
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-
-	c.total = s.Total
-
-	return nil
-}
 
 func TestRecordAppliesTheEventAndQueuesIt(t *testing.T) {
 	t.Parallel()
@@ -88,22 +67,6 @@ func TestSavedAdvancesTheVersionAndClearsThePendingEvents(t *testing.T) {
 
 	assert.Equal(t, 5, c.Version())
 	assert.Empty(t, c.Pending())
-}
-
-func TestASnapshotterRestoresItsState(t *testing.T) {
-	t.Parallel()
-
-	c := &counter{id: "c1"}
-	c.count(7)
-
-	var s Snapshotter = c
-
-	data, err := json.Marshal(s.Snapshot())
-	require.NoError(t, err)
-
-	restored := &counter{id: "c1"}
-	require.NoError(t, restored.RestoreSnapshot(data))
-	assert.Equal(t, 7, restored.total)
 }
 
 func TestMetadataTravelsInTheContext(t *testing.T) {

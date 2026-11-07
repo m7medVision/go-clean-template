@@ -1,0 +1,22 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/grpc/v1/rpcerr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (c *Controller) Delete{{.Name.Go}}(ctx context.Context, req *v1.Delete{{.Name.Go}}Request) (*v1.Delete{{.Name.Go}}Response, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	_, err := cqrs.SendCommand(ctx, c.cmds, command.Delete{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: req.GetId()})
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "Delete{{.Name.Go}}")
+	}
+
+	return &v1.Delete{{.Name.Go}}Response{}, nil
+}

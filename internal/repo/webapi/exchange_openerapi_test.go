@@ -2,7 +2,6 @@ package webapi_test
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -60,18 +59,33 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 		assert.Equal(t, time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC), date)
 	})
 
-	t.Run("a server error is an error, not an unsupported currency", func(t *testing.T) {
+	t.Run("a status other than 200 is the provider being unavailable", func(t *testing.T) {
 		t.Parallel()
 
-		srv := newServer(t, http.StatusInternalServerError, nil)
+		for _, status := range []int{
+			http.StatusInternalServerError, http.StatusServiceUnavailable, http.StatusNotFound, http.StatusTooManyRequests,
+		} {
+			srv := newServer(t, status, nil)
+
+			_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
+
+			require.ErrorIs(t, err, entity.ErrRatesUnavailable, status)
+			assert.NotErrorIs(t, err, entity.ErrUnsupportedCurrency, status)
+		}
+	})
+
+	t.Run("an unreachable provider is unavailable", func(t *testing.T) {
+		t.Parallel()
+
+		srv := newServer(t, http.StatusOK, fixture)
+		srv.Close()
 
 		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
 
-		require.Error(t, err)
-		assert.NotErrorIs(t, err, entity.ErrUnsupportedCurrency)
+		require.ErrorIs(t, err, entity.ErrRatesUnavailable)
 	})
 
-	t.Run("a canceled context stops the call", func(t *testing.T) {
+	t.Run("a canceled context stops the call, and is not the provider's failure", func(t *testing.T) {
 		t.Parallel()
 
 		srv := newServer(t, http.StatusOK, fixture)
@@ -82,6 +96,7 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 		_, _, err := webapi.New(srv.URL).Rate(ctx, "OMR", "CNY")
 
 		require.ErrorIs(t, err, context.Canceled)
+		assert.NotErrorIs(t, err, entity.ErrRatesUnavailable)
 	})
 }
 
@@ -90,17 +105,30 @@ func TestExchangeWebAPI_RateErrorBodies(t *testing.T) {
 
 	// open.er-api.com reports errors with HTTP 200, so the client reads the body.
 	tests := []struct {
-		name            string
-		body            string
-		wantUnsupported bool
+		name string
+		body string
+		want *entity.Error
 	}{
-		{"unsupported-code means an unsupported currency", `{"result":"error","error-type":"unsupported-code"}`, true},
+		{
+			"unsupported-code means an unsupported currency",
+			`{"result":"error","error-type":"unsupported-code"}`,
+			entity.ErrUnsupportedCurrency,
+		},
 		{
 			"a missing target rate means an unsupported currency",
 			`{"result":"success","base_code":"OMR","time_last_update_unix":1792368152,"rates":{}}`,
-			true,
+			entity.ErrUnsupportedCurrency,
 		},
-		{"any other error is an error, not an unsupported currency", `{"result":"error","error-type":"rate-limited"}`, false},
+		{
+			"any other error is the provider being unavailable",
+			`{"result":"error","error-type":"rate-limited"}`,
+			entity.ErrRatesUnavailable,
+		},
+		{
+			"a body that does not decode is the provider being unavailable",
+			`{"result":"success","base_code":"OMR","rates":{"CNY":`,
+			entity.ErrRatesUnavailable,
+		},
 	}
 
 	for _, tt := range tests {
@@ -111,8 +139,8 @@ func TestExchangeWebAPI_RateErrorBodies(t *testing.T) {
 
 			_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
 
-			require.Error(t, err)
-			assert.Equal(t, tt.wantUnsupported, errors.Is(err, entity.ErrUnsupportedCurrency))
+			require.ErrorIs(t, err, tt.want)
+			assert.Equal(t, entity.KindOf(tt.want), entity.KindOf(err))
 		})
 	}
 }

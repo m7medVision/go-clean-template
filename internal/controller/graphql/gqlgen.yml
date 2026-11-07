@@ -18,9 +18,16 @@ model:
 omit_slice_element_pointers: true
 omit_getters: true
 
+# A schema type binds to the entity type of the same name, so a domain's read shape (Task) needs no
+# entry below. The entries are the types autobind would get wrong.
+autobind:
+  - github.com/m7medvision/go-clean-template/internal/entity
+
 models:
-  Task:
-    model: github.com/m7medvision/go-clean-template/internal/entity.Task
+  # entity.Conversion holds decimals, which GraphQL carries as strings: gqlgen generates
+  # model.Conversion, and the exchange resolver converts.
+  Conversion:
+    forceGenerate: true
   TaskStatus:
     model: github.com/m7medvision/go-clean-template/internal/entity.TaskStatus
     enum_values:

@@ -8,24 +8,24 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // GetWidget reads UserID's widget: entity.ErrWidgetNotFound when there is none,
 // entity.ErrWidgetForbidden when it is another user's.
 type GetWidget struct {
+	cqrs.Query[entity.Widget]
+
 	UserID   string
 	WidgetID string
 }
 
-// QueryName -.
-func (GetWidget) QueryName() string { return "GetWidget" }
-
-// GetWidgetHandler handles GetWidget.
 type GetWidgetHandler struct {
 	Widgets repo.WidgetReadModel
 }
 
-// Handle is a stub: write it to read the widget with h.Widgets.Get.
+// Handle is a stub: write it to read the widget with h.Widgets.Get, then ask its
+// ReadableBy(q.UserID).
 func (GetWidgetHandler) Handle(_ context.Context, _ GetWidget) (entity.Widget, error) {
 	return entity.Widget{}, fmt.Errorf("GetWidget: %w", entity.ErrNotImplemented)
 }

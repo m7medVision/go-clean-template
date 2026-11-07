@@ -1,23 +1,3 @@
-# The {{.Name.Words}} fields, which graphql/{{.Name.Pkg}}/ resolves. Add a field to {{.Name.Go}} for each one
-# entity.{{.Name.Go}} gets. The mutations take only the ID until then, since GraphQL has no empty input
-# type: with the first field, add Create{{.Name.Go}}Input and Update{{.Name.Go}}Input, as task.graphqls has.
-
-type {{.Name.Go}} {
-  id: ID!
-  userId: ID!
-  createdAt: Time!
-  updatedAt: Time!
-}
-
-type {{.Name.Go}}List { {{.Name.Plural.Lower}}: [{{.Name.Go}}!]!  total: Int! }
-
 extend type Query {
   {{.Name.Lower}}(id: ID!): {{.Name.Go}}!
-  {{.Name.Plural.Lower}}(limit: Int! = 10, offset: Int! = 0): {{.Name.Go}}List!
-}
-
-extend type Mutation {
-  create{{.Name.Go}}: {{.Name.Go}}!
-  update{{.Name.Go}}(id: ID!): {{.Name.Go}}!
-  delete{{.Name.Go}}(id: ID!): Boolean!
 }

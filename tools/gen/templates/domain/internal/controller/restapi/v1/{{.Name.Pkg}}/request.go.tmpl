@@ -1,7 +1,8 @@
 package {{.Name.Pkg}}
 
-// Create{{.Name.Go}} is the body of a create, empty until the {{.Name.Words}} has fields. Add each one here,
-// with the Huma tags that validate it, and pass it to command.Create{{.Name.Go}} in create{{.Name.Go}}.
+// Create{{.Name.Go}} is the body of a create, empty until the {{.Name.Words}} has fields. Add each one here, with
+// the Huma tags that document its rules, which the command's Validate enforces, and pass it to
+// command.Create{{.Name.Go}} in create{{.Name.Go}}.
 type Create{{.Name.Go}} struct {
 	_ struct{} `additionalProperties:"true"`
 }
@@ -9,4 +10,13 @@ type Create{{.Name.Go}} struct {
 // Update{{.Name.Go}} is the body of an update, empty until the {{.Name.Words}} has fields, as Create{{.Name.Go}} is.
 type Update{{.Name.Go}} struct {
 	_ struct{} `additionalProperties:"true"`
+}
+
+type list{{.Name.Plural.Go}}Input struct {
+	Limit  int `query:"limit" default:"10" minimum:"1" maximum:"100"`
+	Offset int `query:"offset" default:"0" minimum:"0"`
+}
+
+type {{.Name.Lower}}PathInput struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 }

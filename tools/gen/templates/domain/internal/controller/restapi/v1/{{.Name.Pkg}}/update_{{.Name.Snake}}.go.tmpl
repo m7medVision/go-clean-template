@@ -1,0 +1,49 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+type update{{.Name.Go}}Input struct {
+	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Body Update{{.Name.Go}}
+}
+
+// update{{.Name.Go}} sends Update{{.Name.Go}}, then reads the {{.Name.Words}} back. As in create{{.Name.Go}}, the fields
+// of the request body go into the command once they are added.
+func (r *controller) update{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-{{.Name.Kebab}}",
+		Summary:     "Update {{.Name.Words}}",
+		Description: "Update one of the current user's {{.Name.Plural.Words}} by ID",
+		Method:      http.MethodPut,
+		Path:        "/v1/{{.Name.Plural.Kebab}}/{id}",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		Errors: apierr.CommandErrors(
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusNotImplemented,
+		),
+	}, func(ctx context.Context, input *update{{.Name.Go}}Input) (*{{.Name.Lower}}Output, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.Update{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: input.ID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "update{{.Name.Go}}")
+		}
+
+		{{.Name.Lower}}, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "update{{.Name.Go}}")
+		}
+
+		return &{{.Name.Lower}}Output{Body: {{.Name.Lower}}}, nil
+	})
+}

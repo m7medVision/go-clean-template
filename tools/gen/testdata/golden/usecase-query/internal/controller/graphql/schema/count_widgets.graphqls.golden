@@ -1,0 +1,10 @@
+extend type Query {
+  "Count widgets."
+  countWidgets: CountWidgetsResult!
+}
+
+"What countWidgets answers: the fields of query.CountWidgetsResult, once it has them."
+type CountWidgetsResult {
+  "A placeholder, always null, since a GraphQL type cannot be empty: replace it with the result's first field."
+  todo: Boolean
+}

@@ -20,7 +20,6 @@ type LagCollector struct {
 	desc *prometheus.Desc
 }
 
-// NewLagCollector returns the collector for pg's checkpoints.
 func NewLagCollector(pg *postgres.Postgres) *LagCollector {
 	return &LagCollector{
 		pg: pg,
@@ -29,12 +28,10 @@ func NewLagCollector(pg *postgres.Postgres) *LagCollector {
 	}
 }
 
-// Describe -.
 func (c *LagCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
-// Collect -.
 func (c *LagCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), _lagTimeout)
 	defer cancel()

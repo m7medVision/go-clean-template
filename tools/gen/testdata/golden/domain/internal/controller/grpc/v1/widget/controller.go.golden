@@ -3,62 +3,30 @@ package widget
 
 import (
 	"context"
-	"errors"
+	"log/slog"
 
-	"github.com/go-playground/validator/v10"
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// Controller -.
 type Controller struct {
 	v1.UnimplementedWidgetServiceServer
 
 	cmds *cqrs.Commands
 	qs   *cqrs.Queries
-	l    logger.Interface
-	v    *validator.Validate
+	l    *slog.Logger
 }
 
-// New -.
-func New(b cqrs.Buses, l logger.Interface) v1.WidgetServiceServer {
-	return &Controller{cmds: b.Commands, qs: b.Queries, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
+func New(b cqrs.Buses, l *slog.Logger) v1.WidgetServiceServer {
+	return &Controller{cmds: b.Commands, qs: b.Queries, l: l}
 }
 
-// readBack reads the widget with the ID id, the one a command just wrote or the one a get asks
-// for, as the response of the RPC op, whose failure it maps with fail.
-func (c *Controller) readBack(ctx context.Context, userID, id, op string) (*v1.WidgetResponse, error) {
-	row, err := cqrs.SendQuery[entity.Widget](ctx, c.qs, query.GetWidget{UserID: userID, WidgetID: id})
+func (c *Controller) readBack(ctx context.Context, userID, widgetID string) (*v1.WidgetResponse, error) {
+	widget, err := cqrs.SendQuery(ctx, c.qs, query.GetWidget{UserID: userID, WidgetID: widgetID})
 	if err != nil {
-		return nil, c.fail(err, op)
+		return nil, err
 	}
 
-	return NewWidgetResponse(&row), nil
-}
-
-// fail maps a failed command or query to its status: first what any command can fail with, then
-// the widget errors, and anything else to a logged Internal.
-func (c *Controller) fail(err error, op string) error {
-	if shared := rpcerr.Shared(err); shared != nil {
-		c.l.Warn("grpc - v1 - %s: %v", op, err)
-
-		return shared
-	}
-
-	switch {
-	case errors.Is(err, entity.ErrWidgetNotFound):
-		return status.Error(codes.NotFound, "widget not found")
-	case errors.Is(err, entity.ErrWidgetForbidden):
-		return status.Error(codes.PermissionDenied, "forbidden")
-	default:
-		c.l.Error(err, "grpc - v1 - "+op)
-
-		return status.Error(codes.Internal, "internal server error")
-	}
+	return NewWidgetResponse(&widget), nil
 }

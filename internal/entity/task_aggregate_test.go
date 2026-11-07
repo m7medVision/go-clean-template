@@ -39,10 +39,7 @@ func TestNewTaskAggregateRecordsTaskCreated(t *testing.T) {
 
 	assert.Equal(t, []entity.Event{created()}, task.Pending())
 	assert.Equal(t, "task-"+_taskID, task.StreamID())
-	assert.Equal(t, entity.Task{
-		ID: _taskID, UserID: _owner, Title: "Write", Description: "the spec",
-		Status: entity.TaskStatusTodo, CreatedAt: createdAt(), UpdatedAt: createdAt(),
-	}, task.State())
+	assert.Equal(t, _taskID, task.ID())
 }
 
 func TestTaskAggregateUpdateByItsOwner(t *testing.T) {
@@ -55,8 +52,6 @@ func TestTaskAggregateUpdateByItsOwner(t *testing.T) {
 	assert.Equal(t, []entity.Event{
 		entity.TaskUpdated{TaskID: _taskID, Title: "Edit", Description: "the plan", At: laterAt()},
 	}, task.Pending())
-	assert.Equal(t, "Edit", task.State().Title)
-	assert.Equal(t, laterAt(), task.State().UpdatedAt)
 }
 
 func TestTaskAggregateRefusesAnotherUser(t *testing.T) {
@@ -102,7 +97,6 @@ func TestTaskAggregateTransition(t *testing.T) {
 			if !tt.allowed {
 				require.ErrorIs(t, err, entity.ErrInvalidTransition)
 				assert.Empty(t, task.Pending())
-				assert.Equal(t, tt.from, task.State().Status)
 
 				return
 			}
@@ -111,7 +105,6 @@ func TestTaskAggregateTransition(t *testing.T) {
 			assert.Equal(t, []entity.Event{
 				entity.TaskTransitioned{TaskID: _taskID, From: tt.from, To: tt.to, At: laterAt()},
 			}, task.Pending())
-			assert.Equal(t, tt.to, task.State().Status)
 		})
 	}
 }
@@ -135,7 +128,7 @@ func TestADeletedTaskIsNotFound(t *testing.T) {
 	require.ErrorIs(t, task.Delete(_owner, laterAt()), entity.ErrTaskNotFound)
 }
 
-func TestTaskImportedRestoresTheWholeTask(t *testing.T) {
+func TestAnImportedTaskKeepsItsOwnerAndStatus(t *testing.T) {
 	t.Parallel()
 
 	task := givenTask(entity.TaskImported{
@@ -143,10 +136,8 @@ func TestTaskImportedRestoresTheWholeTask(t *testing.T) {
 		Status: entity.TaskStatusDone, CreatedAt: createdAt(), UpdatedAt: laterAt(),
 	})
 
-	assert.Equal(t, entity.Task{
-		ID: _taskID, UserID: _owner, Title: "Old", Description: "row",
-		Status: entity.TaskStatusDone, CreatedAt: createdAt(), UpdatedAt: laterAt(),
-	}, task.State())
+	require.ErrorIs(t, task.Update(_other, "x", "y", laterAt()), entity.ErrTaskForbidden)
+	require.ErrorIs(t, task.Transition(_owner, entity.TaskStatusTodo, laterAt()), entity.ErrInvalidTransition)
 }
 
 func TestTaskAggregateSnapshotRestoresTheSameTask(t *testing.T) {
@@ -161,37 +152,20 @@ func TestTaskAggregateSnapshotRestoresTheSameTask(t *testing.T) {
 
 	restored := &entity.TaskAggregate{}
 	require.NoError(t, restored.RestoreSnapshot(data))
-	assert.Equal(t, task.State(), restored.State())
+	assert.Equal(t, task.StreamID(), restored.StreamID())
+	require.ErrorIs(t, restored.Update(_other, "x", "y", laterAt()), entity.ErrTaskForbidden)
+	require.NoError(t, restored.Transition(_owner, entity.TaskStatusDone, laterAt()), "in progress moves to done")
 }
 
-func TestTheTaskEventsAreRegistered(t *testing.T) {
+// A snapshot stored before the aggregate kept its own state held the whole task; it still loads.
+func TestATaskSnapshotOfTheFirstShapeStillLoads(t *testing.T) {
 	t.Parallel()
 
-	names := map[string]bool{}
-	for _, e := range entity.EventTypes() {
-		names[e.EventType()] = true
-	}
+	restored := &entity.TaskAggregate{}
+	require.NoError(t, restored.RestoreSnapshot([]byte(`{"task":{"id":"task-1","user_id":"user-1","title":"Write",
+		"description":"","status":"in_progress","created_at":"2026-01-01T09:00:00Z","updated_at":"2026-01-01T09:00:00Z"},
+		"deleted":false}`)))
 
-	for _, e := range []entity.Event{
-		entity.TaskCreated{}, entity.TaskUpdated{}, entity.TaskTransitioned{}, entity.TaskDeleted{}, entity.TaskImported{},
-	} {
-		assert.True(t, names[e.EventType()], e.EventType())
-	}
-}
-
-func TestImportTaskAggregateRecordsTheRowAsTaskImported(t *testing.T) {
-	t.Parallel()
-
-	row := entity.Task{
-		ID: _taskID, UserID: _owner, Title: "Old", Description: "row",
-		Status: entity.TaskStatusInProgress, CreatedAt: createdAt(), UpdatedAt: laterAt(),
-	}
-
-	task := entity.ImportTaskAggregate(&row)
-
-	assert.Equal(t, []entity.Event{entity.TaskImported{
-		TaskID: _taskID, UserID: _owner, Title: "Old", Description: "row",
-		Status: entity.TaskStatusInProgress, CreatedAt: createdAt(), UpdatedAt: laterAt(),
-	}}, task.Pending())
-	assert.Equal(t, row, task.State())
+	assert.Equal(t, entity.TaskStreamID(_taskID), restored.StreamID())
+	require.NoError(t, restored.Transition(_owner, entity.TaskStatusDone, laterAt()))
 }

@@ -1,9 +1,12 @@
+// Package middleware holds the gRPC server's interceptors, in the order the server chains them: the
+// request log, metrics, panic recovery and the token check.
 package middleware
 
 import (
 	"context"
+	"slices"
 
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -11,33 +14,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type contextKey string
-
-const principalKey contextKey = "principal"
-
-// UserIDFromContext extracts the user ID from the context.
-func UserIDFromContext(ctx context.Context) (string, bool) {
-	principal, ok := PrincipalFromContext(ctx)
-
-	return principal.UserID, ok
-}
-
-// PrincipalFromContext extracts the caller and the roles their token grants from the context.
-func PrincipalFromContext(ctx context.Context) (entity.Principal, bool) {
-	principal, ok := ctx.Value(principalKey).(entity.Principal)
-
-	return principal, ok
-}
-
-// AuthInterceptor returns a gRPC unary interceptor for JWT authentication.
-func AuthInterceptor(jwtManager *jwt.Manager) grpc.UnaryServerInterceptor {
-	skipAuthMethods := map[string]bool{
-		"/grpc.v1.AuthService/Register": true,
-		"/grpc.v1.AuthService/Login":    true,
-	}
-
+// Auth returns the interceptor that runs every unary call with the caller of the bare token in its
+// authorization metadata, which the method reads with authn.MustCaller, or answers Unauthenticated
+// when the token is missing or invalid. The methods in public, named by their generated
+// FullMethodName constants, are called without a token.
+func Auth(tokens *jwt.Manager, public ...string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if skipAuthMethods[info.FullMethod] {
+		if slices.Contains(public, info.FullMethod) {
 			return handler(ctx, req)
 		}
 
@@ -51,16 +34,11 @@ func AuthInterceptor(jwtManager *jwt.Manager) grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.Unauthenticated, "missing authorization token")
 		}
 
-		claims, err := jwtManager.Parse(values[0])
+		c, err := authn.ReadToken(tokens, values[0])
 		if err != nil {
 			return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
 		}
 
-		ctx = context.WithValue(ctx, principalKey, entity.Principal{
-			UserID: claims.UserID,
-			Roles:  entity.ParseRoles(claims.Roles),
-		})
-
-		return handler(ctx, req)
+		return handler(authn.WithCaller(ctx, c), req)
 	}
 }

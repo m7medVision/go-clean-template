@@ -1,0 +1,7 @@
+# The root types. Each field is declared in its own file, named after it (createTask in
+# create_task.graphqls), with extend type Query or extend type Mutation, together with any input
+# type only it takes. A domain's shared types are in <domain>_types.graphqls.
+
+type Query
+
+type Mutation

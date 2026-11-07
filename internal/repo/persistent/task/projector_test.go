@@ -126,27 +126,14 @@ func TestTheProjectorReturnsAWriteFailure(t *testing.T) {
 	require.ErrorIs(t, err, errWrite)
 }
 
-type otherEvent struct{}
-
-func (otherEvent) EventType() string  { return "Other" }
-func (otherEvent) SchemaVersion() int { return 1 }
-
-func TestTheProjectorIgnoresOtherEvents(t *testing.T) {
+func TestTheTaskProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	t.Parallel()
 
-	q := &fakeQuerier{}
+	for _, e := range task.NewProjector(nil).Handles() {
+		require.NotErrorIs(t, project(t, &fakeQuerier{}, e), entity.ErrUnhandledEvent, e.EventType())
+	}
 
-	require.NoError(t, project(t, q, otherEvent{}))
-
-	assert.Empty(t, q.inserted)
-	assert.Empty(t, q.deleted)
+	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestTheProjectorIsNamedAndOwnsTheTasksTable(t *testing.T) {
-	t.Parallel()
-
-	p := task.NewProjector(nil)
-
-	assert.Equal(t, "task", p.Name())
-	assert.Equal(t, []string{"tasks"}, p.Tables())
-}
+func otherDomainEvent() entity.Event { return entity.UserRegistered{} }

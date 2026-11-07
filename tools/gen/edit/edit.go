@@ -16,7 +16,6 @@ var ErrAnchor = errors.New("R4 one anchor")
 // Insertion is text to insert into a file at a byte offset. Every change the generator makes to
 // an existing file is one: nothing is deleted or rewritten.
 type Insertion struct {
-	Path   string
 	Offset int
 	Text   string
 }

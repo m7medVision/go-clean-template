@@ -5,52 +5,64 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func row(id, name string) entity.User {
-	return entity.User{ID: id, Username: name, Email: name + "@example.com", PasswordHash: "h", CreatedAt: at(), UpdatedAt: at()}
+// rows is a users table and its identities holding legacy rows; any other query panics on the nil
+// embedded interface.
+type rows struct {
+	queries.Querier
+
+	users      []queries.User
+	identities []queries.UserIdentity
+	err        error
 }
 
-func TestImportUsersGivesEachRowItsStreamAndClaims(t *testing.T) {
+func (r *rows) ListEveryUser(context.Context) ([]queries.User, error) { return r.users, r.err }
+
+func (r *rows) ListEveryIdentity(context.Context) ([]queries.UserIdentity, error) {
+	return r.identities, nil
+}
+
+func row(id, name string) queries.User {
+	return queries.User{ID: id, Username: name, Email: name + "@example.com", PasswordHash: "h", CreatedAt: at(), UpdatedAt: at()}
+}
+
+func TestEachUserRowBecomesAStreamHoldingUserImportedWithItsClaims(t *testing.T) {
 	t.Parallel()
 
-	store := memstore.New(entity.EventTypes())
-	identities := map[string][]entity.UserIdentity{"u2": {{Issuer: "iss", Subject: "sub", CreatedAt: at()}}}
+	imports, err := user.Imports(context.Background(), &rows{
+		users:      []queries.User{row("u1", "jo"), row("u2", "al")},
+		identities: []queries.UserIdentity{{Issuer: "iss", Subject: "sub", UserID: "u2", CreatedAt: at()}},
+	})
+	require.NoError(t, err)
+	require.Len(t, imports, 2)
 
-	require.NoError(t, user.ImportUsers(context.Background(), store, []entity.User{row("u1", "jo"), row("u2", "al")}, identities))
-
+	assert.Equal(t, entity.UserStreamID("u1"), imports[0].Aggregate.StreamID())
 	assert.Equal(t, []entity.Event{entity.UserImported{
 		UserID: "u1", Username: "jo", Email: "jo@example.com", PasswordHash: "h", CreatedAt: at(), UpdatedAt: at(),
-	}}, store.Events(entity.UserStreamID("u1")))
+	}}, imports[0].Aggregate.Pending())
 
-	owner, err := store.ClaimOwner(context.Background(), entity.ClaimUserEmail, "al@example.com")
-	require.NoError(t, err)
-	assert.Equal(t, "u2", owner)
+	claimed := map[string]string{}
+	for _, c := range imports[1].Claims {
+		claimed[c.Scope] = c.Value
+		assert.Equal(t, "u2", c.Owner)
+	}
 
-	owner, err = store.ClaimOwner(context.Background(), entity.ClaimOIDCIdentity, entity.OIDCIdentity("iss", "sub"))
-	require.NoError(t, err)
-	assert.Equal(t, "u2", owner)
+	assert.Equal(t, map[string]string{
+		entity.ClaimUserEmail:    "al@example.com",
+		entity.ClaimUserUsername: "al",
+		entity.ClaimOIDCIdentity: entity.OIDCIdentity("iss", "sub"),
+	}, claimed)
 }
 
-func TestImportUsersSkipsAUserThatHasAStreamAlready(t *testing.T) {
+func TestTheUserImporterReturnsAReadFailure(t *testing.T) {
 	t.Parallel()
 
-	store := memstore.New(entity.EventTypes())
-	existing, claims := entity.NewUserAggregate("u1", "jo", "jo@example.com", "h", at())
-	_, err := store.Save(context.Background(), existing, claims...)
-	require.NoError(t, err)
+	_, err := user.Imports(context.Background(), &rows{err: errWrite})
 
-	require.NoError(t, user.ImportUsers(context.Background(), store, []entity.User{row("u1", "jo")}, nil))
-
-	assert.Len(t, store.Events(entity.UserStreamID("u1")), 1)
-}
-
-func TestTheImporterIsTheUserDomains(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "user", user.NewImporter(nil, nil).Domain())
+	require.ErrorIs(t, err, errWrite)
 }

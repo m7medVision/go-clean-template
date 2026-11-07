@@ -1,0 +1,27 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/controller/graphql/gqlerr"
+	"{{.Module}}/internal/controller/graphql/middleware"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// Create{{.Name.Go}} takes no input until the {{.Name.Words}} has fields: with the first one, give the field the
+// argument input: Create{{.Name.Go}}Input! and pass its fields to the command, as createTask does.
+func (m Mutation) Create{{.Name.Go}}(ctx context.Context) (*entity.{{.Name.Go}}, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	written, err := cqrs.SendCommand(ctx, m.cmds, command.Create{{.Name.Go}}{UserID: caller.UserID})
+	if err != nil {
+		return nil, gqlerr.Map(ctx, m.l, err, "create{{.Name.Go}}")
+	}
+
+	return m.result(ctx, caller.UserID, written.ID, "create{{.Name.Go}}")
+}

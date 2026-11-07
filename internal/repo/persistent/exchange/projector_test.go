@@ -83,20 +83,14 @@ func TestTheExchangeProjectorReturnsAWriteFailure(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{err: errWrite}, entity.CurrencyConverted{ConversionID: "c1"}), errWrite)
 }
 
-func TestTheExchangeProjectorIgnoresOtherEvents(t *testing.T) {
+func TestTheExchangeProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	t.Parallel()
 
-	q := &fakeQuerier{}
+	for _, e := range exchange.NewProjector(nil).Handles() {
+		require.NotErrorIs(t, project(t, &fakeQuerier{}, e), entity.ErrUnhandledEvent, e.EventType())
+	}
 
-	require.NoError(t, project(t, q, entity.TaskDeleted{TaskID: "t1"}))
-	assert.Empty(t, q.inserted)
+	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestTheExchangeProjectorOwnsTheHistoryTable(t *testing.T) {
-	t.Parallel()
-
-	p := exchange.NewProjector(nil)
-
-	assert.Equal(t, "exchange", p.Name())
-	assert.Equal(t, []string{"exchange_history"}, p.Tables())
-}
+func otherDomainEvent() entity.Event { return entity.TaskDeleted{} }

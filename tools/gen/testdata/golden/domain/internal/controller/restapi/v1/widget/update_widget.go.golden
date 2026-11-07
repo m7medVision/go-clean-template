@@ -1,0 +1,49 @@
+package widget
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+type updateWidgetInput struct {
+	ID   string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Body UpdateWidget
+}
+
+// updateWidget sends UpdateWidget, then reads the widget back. As in createWidget, the fields
+// of the request body go into the command once they are added.
+func (r *controller) updateWidget(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-widget",
+		Summary:     "Update widget",
+		Description: "Update one of the current user's widgets by ID",
+		Method:      http.MethodPut,
+		Path:        "/v1/widgets/{id}",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+		Errors: apierr.CommandErrors(
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusNotImplemented,
+		),
+	}, func(ctx context.Context, input *updateWidgetInput) (*widgetOutput, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.UpdateWidget{UserID: userID, WidgetID: input.ID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "updateWidget")
+		}
+
+		widget, err := r.readBack(ctx, userID, input.ID)
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "updateWidget")
+		}
+
+		return &widgetOutput{Body: widget}, nil
+	})
+}

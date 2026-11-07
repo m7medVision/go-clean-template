@@ -8,28 +8,30 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // GetTask reads UserID's task: entity.ErrTaskNotFound when there is none, entity.ErrTaskForbidden
 // when it is another user's.
 type GetTask struct {
+	cqrs.Query[entity.Task]
+
 	UserID string
 	TaskID string
 }
 
-// QueryName -.
-func (GetTask) QueryName() string { return "GetTask" }
-
-// GetTaskHandler handles GetTask.
 type GetTaskHandler struct {
 	Tasks repo.TaskReadModel
 }
 
-// Handle -.
 func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (entity.Task, error) {
-	task, err := h.Tasks.Get(ctx, q.UserID, q.TaskID)
+	task, err := h.Tasks.Get(ctx, q.TaskID)
 	if err != nil {
 		return entity.Task{}, fmt.Errorf("GetTask - h.Tasks.Get: %w", err)
+	}
+
+	if err = task.ReadableBy(q.UserID); err != nil {
+		return entity.Task{}, fmt.Errorf("GetTask: %w", err)
 	}
 
 	return task, nil

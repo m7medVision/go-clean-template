@@ -12,7 +12,7 @@ table "tasks" {
   }
   column "title" {
     null = false
-    type = varchar(255)
+    type = text
   }
   column "description" {
     null    = true
@@ -26,12 +26,12 @@ table "tasks" {
   }
   column "created_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   column "updated_at" {
     null    = false
-    type    = timestamp
+    type    = timestamptz
     default = sql("now()")
   }
   primary_key {

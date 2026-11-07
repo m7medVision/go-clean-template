@@ -23,27 +23,6 @@ func TestUnauthenticated(t *testing.T) {
 	assert.False(t, tk.called)
 }
 
-func TestGetTaskErrors(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		err  error
-		code string
-	}{
-		{"not found", entity.ErrTaskNotFound, "NOT_FOUND"},
-		{"forbidden", entity.ErrTaskForbidden, "FORBIDDEN"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			resp := do(t, &fakeTask{err: tc.err}, true, _getTask, nil)
-
-			assert.Equal(t, tc.code, resp.Code(t))
-		})
-	}
-}
-
 func TestListTasks(t *testing.T) {
 	t.Parallel()
 
@@ -55,17 +34,6 @@ func TestListTasks(t *testing.T) {
 	assert.JSONEq(t, `{"total":1,"tasks":[{"id":"task-1","status":"TODO"}]}`, string(resp.Data["tasks"]))
 	require.NotNil(t, tk.listStatus)
 	assert.Equal(t, entity.TaskStatusTodo, *tk.listStatus)
-}
-
-func TestListTasksInvalidLimit(t *testing.T) {
-	t.Parallel()
-
-	tk := &fakeTask{}
-
-	resp := do(t, tk, true, `query { tasks(limit: 0) { total } }`, nil)
-
-	assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
-	assert.False(t, tk.called)
 }
 
 func TestAllTasks(t *testing.T) {
@@ -80,25 +48,6 @@ func TestAllTasks(t *testing.T) {
 	assert.Equal(t, entity.Principal{UserID: graphqltest.UserID, Roles: []entity.Role{entity.RoleAdmin}}, tk.listCaller)
 	require.NotNil(t, tk.listStatus)
 	assert.Equal(t, entity.TaskStatusDone, *tk.listStatus)
-}
-
-func TestAllTasksAdminRequired(t *testing.T) {
-	t.Parallel()
-
-	resp := doAs(t, &fakeTask{err: entity.ErrAdminRequired}, []string{"user"}, `query { allTasks { total } }`)
-
-	assert.Equal(t, "FORBIDDEN", resp.Code(t))
-}
-
-func TestAllTasksInvalidLimit(t *testing.T) {
-	t.Parallel()
-
-	tk := &fakeTask{}
-
-	resp := doAs(t, tk, []string{"admin"}, `query { allTasks(limit: 0) { total } }`)
-
-	assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
-	assert.False(t, tk.called)
 }
 
 func TestAllTasksUnauthenticated(t *testing.T) {

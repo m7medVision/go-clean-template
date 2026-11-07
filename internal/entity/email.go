@@ -2,9 +2,13 @@ package entity
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 )
+
+// ErrUnknownEmail is an email no template exists for.
+var ErrUnknownEmail = errors.New("unknown email template")
 
 // EmailQueue is the queue use cases send email to and the worker delivers it from.
 const EmailQueue = "mail"
@@ -59,7 +63,6 @@ func DecodeEmail(body json.RawMessage) (Email, error) {
 			continue
 		}
 
-		// A new value of kind's concrete type, filled from the data.
 		e := reflect.New(reflect.TypeOf(kind))
 		if err := json.Unmarshal(envelope.Data, e.Interface()); err != nil {
 			return nil, fmt.Errorf("DecodeEmail - json.Unmarshal %s: %w", envelope.Template, err)

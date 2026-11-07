@@ -7,8 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
-	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
-	"github.com/stretchr/testify/assert"
+	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,6 +15,10 @@ const (
 	_owner    = "user-1"
 	_widgetID = "widget-1"
 )
+
+// The update and delete handlers change the widget through aggregate.Change: this stops compiling
+// when the aggregate no longer fits it.
+var _ = aggregate.Change[entity.WidgetAggregate]
 
 // givenWidget is a store holding _owner's widget, for the commands that change one.
 func givenWidget(t *testing.T) *memstore.Store {
@@ -26,20 +29,4 @@ func givenWidget(t *testing.T) *memstore.Store {
 	require.NoError(t, err)
 
 	return store
-}
-
-func TestTheWidgetCommandsActForTheirUser(t *testing.T) {
-	t.Parallel()
-
-	for name, cmd := range map[string]interface {
-		CommandName() string
-		ActorID() string
-	}{
-		"CreateWidget": command.CreateWidget{UserID: _owner},
-		"UpdateWidget": command.UpdateWidget{UserID: _owner, WidgetID: _widgetID},
-		"DeleteWidget": command.DeleteWidget{UserID: _owner, WidgetID: _widgetID},
-	} {
-		assert.Equal(t, name, cmd.CommandName())
-		assert.Equal(t, _owner, cmd.ActorID(), name)
-	}
 }

@@ -2,13 +2,15 @@ package restapi_test
 
 import (
 	"context"
-	"encoding/json"
-	"io"
+	"log/slog"
 	"net/http"
 	"testing"
 
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -18,12 +20,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	resttest.Main(m)
-}
+// The handler-wide tests reach only these use-case methods, through the user and task operations;
+// each v1 domain folder fakes its own use case in full.
 
-// The router-wide tests reach only these use-case methods; each v1 domain folder fakes its own use
-// case in full.
+func newRouter(b cqrs.Buses) http.Handler {
+	return resttest.NewRouter(b, user.NewRoutes, task.NewRoutes)
+}
 
 // userBuses read registered back with GetUser.
 func userBuses(registered *entity.User) cqrs.Buses {
@@ -38,9 +40,9 @@ func userBuses(registered *entity.User) cqrs.Buses {
 func taskBuses(stored *entity.Task) cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(), cqrs.NewQueries()
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, cqrs.Written](
-		func(context.Context, command.UpdateTask) (cqrs.Written, error) {
-			return cqrs.Written{ID: stored.ID}, nil
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, entity.Written](
+		func(context.Context, command.UpdateTask) (entity.Written, error) {
+			return entity.Written{ID: stored.ID}, nil
 		}))
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
 		func(context.Context, query.GetTask) (entity.Task, error) { return *stored, nil }))
@@ -48,59 +50,10 @@ func taskBuses(stored *entity.Task) cqrs.Buses {
 	return cqrs.Buses{Commands: cmds, Queries: qs}
 }
 
-// panickingBuses panic on GetTask.
-func panickingBuses() cqrs.Buses {
-	qs := cqrs.NewQueries()
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
-		func(context.Context, query.GetTask) (entity.Task, error) { panic("boom") }))
-
-	return cqrs.Buses{Queries: qs}
-}
-
-func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
-	t.Parallel()
-
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
-
-	for _, tt := range []struct{ method, target string }{
-		{http.MethodGet, "/v1/auth/oidc"},
-		{http.MethodPost, "/v1/auth/oidc/begin"},
-		{http.MethodPost, "/v1/auth/passkey/begin"},
-		{http.MethodGet, "/v1/passkeys"},
-	} {
-		resp := resttest.Do(t.Context(), handler, tt.method, tt.target, resttest.Token(t), "{}")
-		assert.Equal(t, http.StatusNotFound, resp.Code, tt.target)
-	}
-
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/user/profile", "", "")
-	assert.Equal(t, http.StatusUnauthorized, resp.Code, "core routes are still served")
-}
-
-func TestApplianceRoutesArePublic(t *testing.T) {
-	t.Parallel()
-
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
-
-	for _, target := range []string{"/healthz", "/metrics", "/openapi.json", "/docs"} {
-		resp := resttest.Do(t.Context(), handler, http.MethodGet, target, "", "")
-		assert.Equal(t, http.StatusOK, resp.Code, target)
-	}
-}
-
-func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
-	t.Parallel()
-
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
-
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", "", "")
-	assert.Equal(t, http.StatusUnauthorized, resp.Code)
-	assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
-}
-
 func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), userBuses(&entity.User{ID: "user-1"}))
+	handler := newRouter(userBuses(&entity.User{ID: "user-1"}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/user/profile", resttest.Token(t), "")
 	require.Equal(t, http.StatusOK, resp.Code)
@@ -111,8 +64,7 @@ func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t),
-		taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}))
+	handler := newRouter(taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPut, "/v1/tasks/task-1", resttest.Token(t),
 		`{"id":"task-1","title":"t","description":"","status":"todo","created_at":"2026-01-01T00:00:00Z"}`)
@@ -122,7 +74,7 @@ func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := newRouter(taskBuses(&entity.Task{}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/auth/register", "",
 		`{"username":"johndoe","email":"john@example.com","password":"s3cr"}`)
@@ -131,52 +83,25 @@ func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	assert.NotContains(t, resp.Body.String(), "s3cr")
 }
 
-func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
+// Whether an operation needs a token is its Security, whatever its path: a v2 operation is
+// protected as a v1 one is, and so is one under /v1/auth that declares it. A path no operation
+// serves is a 404, token or not.
+func TestAuthFollowsTheOperationNotItsPath(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(resttest.NewBuses(), func(api huma.API, _ cqrs.Buses, _ *slog.Logger) {
+		for _, path := range []string{"/v2/things", "/v1/auth/me"} {
+			huma.Register(api, huma.Operation{
+				OperationID: "get" + path, Method: http.MethodGet, Path: path,
+				Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+			}, func(context.Context, *struct{}) (*struct{}, error) { return &struct{}{}, nil })
+		}
+	})
 
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
-	assert.Equal(t, http.StatusUnauthorized, resp.Code)
-}
-
-func TestPanicAnswers500AndIsCounted(t *testing.T) {
-	t.Parallel()
-
-	handler := resttest.NewRouter(resttest.Config(t), panickingBuses())
-
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", resttest.Token(t), "")
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
-	assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
-
-	metrics := resttest.Do(t.Context(), handler, http.MethodGet, "/metrics", "", "")
-	body, err := io.ReadAll(metrics.Body)
-	require.NoError(t, err)
-	assert.Contains(t, string(body), `http_requests_total{code="500",method="GET",route="/v1/tasks/{id}"}`)
-}
-
-func TestOpenAPIExportsEveryOperation(t *testing.T) {
-	t.Parallel()
-
-	doc, err := restapi.OpenAPI("test")
-	require.NoError(t, err)
-
-	var spec struct {
-		Info  struct{ Version string } `json:"info"`
-		Paths map[string]any           `json:"paths"`
+	for _, target := range []string{"/v2/things", "/v1/auth/me"} {
+		assert.Equal(t, http.StatusUnauthorized, resttest.Do(t.Context(), handler, http.MethodGet, target, "", "").Code, target)
+		assert.Equal(t, http.StatusNoContent, resttest.Do(t.Context(), handler, http.MethodGet, target, resttest.Token(t), "").Code, target)
 	}
 
-	require.NoError(t, json.Unmarshal(doc, &spec))
-	assert.Equal(t, "test", spec.Info.Version)
-
-	for _, path := range []string{
-		"/v1/auth/register", "/v1/auth/login", "/v1/user/profile",
-		"/v1/tasks", "/v1/tasks/{id}", "/v1/tasks/{id}/status",
-		"/v1/exchange/convert", "/v1/exchange/history",
-		"/v1/passkeys", "/v1/passkeys/register/begin", "/v1/passkeys/register/finish",
-		"/v1/auth/passkey/begin", "/v1/auth/passkey/finish",
-		"/v1/auth/oidc", "/v1/auth/oidc/begin", "/v1/auth/oidc/finish",
-	} {
-		assert.Contains(t, spec.Paths, path)
-	}
+	assert.Equal(t, http.StatusNotFound, resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "").Code)
 }

@@ -24,7 +24,6 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
-	"github.com/m7medvision/go-clean-template/pkg/smtp"
 )
 
 //go:embed templates
@@ -56,7 +55,6 @@ type compiled struct {
 	text *texttemplate.Template
 }
 
-// Renderer -.
 type Renderer struct {
 	templates map[string]compiled
 }
@@ -69,7 +67,7 @@ func New() (repo.MailRenderer, error) {
 		return nil, err
 	}
 
-	return newTraced(r), nil
+	return r, nil
 }
 
 func load(fsys fs.FS) (*Renderer, error) {
@@ -92,7 +90,6 @@ func load(fsys fs.FS) (*Renderer, error) {
 	return r, nil
 }
 
-// emailNames lists the emails in fsys: one per <name>.html.tmpl directly under templates/.
 func emailNames(fsys fs.FS) ([]string, error) {
 	paths, err := fs.Glob(fsys, path.Join(_dir, "*"+_htmlSuffix))
 	if err != nil {
@@ -142,28 +139,28 @@ func parse(fsys fs.FS, name string) (compiled, error) {
 
 // Render executes email's templates. A field the templates read but email lacks is an error here,
 // which the render test catches before a send can.
-func (r *Renderer) Render(_ context.Context, email entity.Email) (smtp.Message, error) {
+func (r *Renderer) Render(_ context.Context, email entity.Email) (repo.RenderedEmail, error) {
 	c, ok := r.templates[email.Template()]
 	if !ok {
-		return smtp.Message{}, fmt.Errorf("mailtmpl - Render: %w: %q", entity.ErrUnknownEmail, email.Template())
+		return repo.RenderedEmail{}, fmt.Errorf("mailtmpl - Render: %w: %q", entity.ErrUnknownEmail, email.Template())
 	}
 
 	subject, err := execute(c.text, _subject, email)
 	if err != nil {
-		return smtp.Message{}, fmt.Errorf("mailtmpl - Render %s subject: %w", email.Template(), err)
+		return repo.RenderedEmail{}, fmt.Errorf("mailtmpl - Render %s subject: %w", email.Template(), err)
 	}
 
 	text, err := execute(c.text, _textRoot, email)
 	if err != nil {
-		return smtp.Message{}, fmt.Errorf("mailtmpl - Render %s text: %w", email.Template(), err)
+		return repo.RenderedEmail{}, fmt.Errorf("mailtmpl - Render %s text: %w", email.Template(), err)
 	}
 
 	html, err := execute(c.html, _htmlRoot, email)
 	if err != nil {
-		return smtp.Message{}, fmt.Errorf("mailtmpl - Render %s html: %w", email.Template(), err)
+		return repo.RenderedEmail{}, fmt.Errorf("mailtmpl - Render %s html: %w", email.Template(), err)
 	}
 
-	return smtp.Message{
+	return repo.RenderedEmail{
 		To: email.Recipient(),
 		// A subject is a header: one line, whatever the template's whitespace.
 		Subject: strings.Join(strings.Fields(subject), " "),

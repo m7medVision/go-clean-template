@@ -2,93 +2,110 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 )
 
 type (
-	// Config -.
+	// Config is every setting, one section per concern. The binaries pass each part only the
+	// sections it reads.
 	Config struct {
-		App      app
-		HTTP     http
-		Log      log
-		PG       pg
-		GRPC     grpc
-		JWT      jwt
-		Metrics  metrics
-		Docs     docs
-		Tracing  tracing
-		Worker   worker
-		CQRS     cqrs
-		Mail     mail
-		Exchange exchange
-		WebAuthn webAuthn
-		OIDC     oidc
+		App      App
+		HTTP     HTTP
+		Log      Log
+		PG       PG
+		GRPC     GRPC
+		JWT      JWT
+		Metrics  Metrics
+		Docs     Docs
+		Tracing  Tracing
+		Worker   Worker
+		CQRS     CQRS
+		Mail     Mail
+		Exchange Exchange
+		WebAuthn WebAuthn
+		OIDC     OIDC
 	}
 
-	// App -.
-	app struct {
+	App struct {
 		Name    string `env:"APP_NAME,required"`
 		Version string `env:"APP_VERSION,required"`
-		// BaseURL is the public origin users reach the app at; the links the app builds point under it.
+		// BaseURL is the public origin users reach the app at, without a trailing slash; the links
+		// the app builds point under it.
 		BaseURL string `env:"APP_BASE_URL" envDefault:"http://localhost"`
 	}
 
-	// HTTP -.
-	http struct {
-		Port string `env:"HTTP_PORT,required"`
+	// HTTP is read only by the app; the worker serves no HTTP.
+	HTTP struct {
+		Port string `env:"HTTP_PORT" envDefault:"8080"`
 	}
 
-	// Log -.
-	log struct {
+	Log struct {
 		Level string `env:"LOG_LEVEL,required"`
 	}
 
-	// PG -.
-	pg struct {
+	PG struct {
 		PoolMax int    `env:"PG_POOL_MAX,required"`
 		URL     string `env:"PG_URL,required"`
 	}
 
-	// JWT -.
-	jwt struct {
-		Secret      string        `env:"JWT_SECRET,required"`
+	// JWT is read only by the app, which refuses to start without a secret; the worker issues and
+	// checks no token.
+	JWT struct {
+		Secret      string        `env:"JWT_SECRET"`
 		TokenExpiry time.Duration `env:"JWT_TOKEN_EXPIRY" envDefault:"15m"`
 	}
 
-	// Metrics -.
-	metrics struct {
+	Metrics struct {
 		Enabled bool `env:"METRICS_ENABLED" envDefault:"true"`
 	}
 
-	// Docs -.
-	docs struct {
+	Docs struct {
 		Enabled bool `env:"DOCS_ENABLED" envDefault:"false"`
 	}
 
-	// Tracing -.
-	tracing struct {
-		Enabled      bool    `env:"TRACING_ENABLED" envDefault:"false"`
-		OTLPEndpoint string  `env:"TRACING_OTLP_ENDPOINT" envDefault:"localhost:4317"`
-		OTLPInsecure bool    `env:"TRACING_OTLP_INSECURE" envDefault:"true"`
-		SampleRate   float64 `env:"TRACING_SAMPLE_RATE" envDefault:"0.1"`
+	// Tracing has the fields of tracing.Config, so it converts to one.
+	Tracing struct {
+		Enabled    bool    `env:"TRACING_ENABLED" envDefault:"false"`
+		Endpoint   string  `env:"TRACING_OTLP_ENDPOINT" envDefault:"localhost:4317"`
+		Insecure   bool    `env:"TRACING_OTLP_INSECURE" envDefault:"true"`
+		SampleRate float64 `env:"TRACING_SAMPLE_RATE" envDefault:"0.1"`
 	}
 
-	// Exchange -.
-	exchange struct {
+	Exchange struct {
 		// ServiceURL is the base URL of the ExchangeRate-API open access endpoint that supplies
 		// exchange rates. The integration tests point it at a local stub.
 		ServiceURL string `env:"EXCHANGE_SERVICE_URL" envDefault:"https://open.er-api.com"`
 	}
 )
 
-// NewConfig returns app config.
+// The web client's routes the app links to. web/src/routes/ defines them; this is the one place the
+// Go code names them.
+const (
+	_loginPath       = "/login"
+	_ssoCallbackPath = "/sso/callback"
+)
+
+// LoginURL is the web client's sign-in page, which the welcome email links to.
+func (a App) LoginURL() string {
+	return a.BaseURL + _loginPath
+}
+
+// SSOCallbackURL is the web client's route the OIDC provider sends the browser back to; it must be a
+// redirect URI of the provider's client.
+func (a App) SSOCallbackURL() string {
+	return a.BaseURL + _ssoCallbackPath
+}
+
 func NewConfig() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("config error: %w", err)
 	}
+
+	cfg.App.BaseURL = strings.TrimSuffix(cfg.App.BaseURL, "/")
 
 	return cfg, nil
 }

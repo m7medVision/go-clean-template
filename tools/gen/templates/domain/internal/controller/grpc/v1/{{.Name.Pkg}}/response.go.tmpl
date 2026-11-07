@@ -1,35 +1,28 @@
 package {{.Name.Pkg}}
 
 import (
-	"math"
-
 	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/controller/grpc/v1/response"
 	"{{.Module}}/internal/entity"
 )
 
-// New{{.Name.Go}}Response -.
-func New{{.Name.Go}}Response(row *entity.{{.Name.Go}}) *v1.{{.Name.Go}}Response {
+func New{{.Name.Go}}Response({{.Name.Lower}} *entity.{{.Name.Go}}) *v1.{{.Name.Go}}Response {
 	return &v1.{{.Name.Go}}Response{
-		Id:        row.ID,
-		UserId:    row.UserID,
-		CreatedAt: row.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: row.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		Id:        {{.Name.Lower}}.ID,
+		UserId:    {{.Name.Lower}}.UserID,
+		CreatedAt: response.Time({{.Name.Lower}}.CreatedAt),
+		UpdatedAt: response.Time({{.Name.Lower}}.UpdatedAt),
 	}
 }
 
-// NewList{{.Name.Plural.Go}}Response -.
-func NewList{{.Name.Plural.Go}}Response(rows []entity.{{.Name.Go}}, total int) *v1.List{{.Name.Plural.Go}}Response {
-	msgs := make([]*v1.{{.Name.Go}}Response, len(rows))
-	for i := range rows {
-		msgs[i] = New{{.Name.Go}}Response(&rows[i])
-	}
-
-	if total > math.MaxInt32 {
-		total = math.MaxInt32
+func NewList{{.Name.Plural.Go}}Response({{.Name.Plural.Lower}} []entity.{{.Name.Go}}, total int) *v1.List{{.Name.Plural.Go}}Response {
+	pb{{.Name.Plural.Go}} := make([]*v1.{{.Name.Go}}Response, len({{.Name.Plural.Lower}}))
+	for i := range {{.Name.Plural.Lower}} {
+		pb{{.Name.Plural.Go}}[i] = New{{.Name.Go}}Response(&{{.Name.Plural.Lower}}[i])
 	}
 
 	return &v1.List{{.Name.Plural.Go}}Response{
-		{{.Name.Plural.Go}}: msgs,
-		Total:   int32(total),
+		{{.Name.Plural.Go}}: pb{{.Name.Plural.Go}},
+		Total:   response.Count(total),
 	}
 }

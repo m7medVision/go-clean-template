@@ -7,12 +7,10 @@ import (
 	"slices"
 )
 
-// Commands is the command bus.
 type Commands struct {
 	bus bus
 }
 
-// Queries is the query bus.
 type Queries struct {
 	bus bus
 }
@@ -29,28 +27,27 @@ func NewQueries(steps ...Step) *Queries {
 
 // HandleCommand registers h as the handler of C. A second handler for C panics: wiring happens
 // once, at startup, and a duplicate is a programming error.
-func HandleCommand[C Command, R any](b *Commands, h Handler[C, R]) {
+func HandleCommand[C CommandOf[R], R any](b *Commands, h Handler[C, R]) {
 	register(&b.bus, h)
 }
 
 // HandleQuery registers h as the handler of Q. A second handler for Q panics.
-func HandleQuery[Q Query, R any](b *Queries, h Handler[Q, R]) {
+func HandleQuery[Q QueryOf[R], R any](b *Queries, h Handler[Q, R]) {
 	register(&b.bus, h)
 }
 
 // SendCommand runs cmd through the command bus's steps to its handler and returns the handler's
-// result as R. A type with no handler is ErrNoHandler.
-func SendCommand[R any, C Command](ctx context.Context, b *Commands, cmd C) (R, error) {
-	return send[R](ctx, &b.bus, cmd.CommandName(), cmd)
+// result. A type with no handler is ErrNoHandler.
+func SendCommand[C CommandOf[R], R any](ctx context.Context, b *Commands, cmd C) (R, error) {
+	return send[R](ctx, &b.bus, cmd)
 }
 
-// SendQuery runs q through the query bus's steps to its handler and returns the handler's result
-// as R. A type with no handler is ErrNoHandler.
-func SendQuery[R any, Q Query](ctx context.Context, b *Queries, q Q) (R, error) {
-	return send[R](ctx, &b.bus, q.QueryName(), q)
+// SendQuery runs q through the query bus's steps to its handler and returns the handler's result.
+// A type with no handler is ErrNoHandler.
+func SendQuery[Q QueryOf[R], R any](ctx context.Context, b *Queries, q Q) (R, error) {
+	return send[R](ctx, &b.bus, q)
 }
 
-// handle is a registered handler with its message type erased.
 type handle func(ctx context.Context, msg any) (any, error)
 
 type bus struct {
@@ -70,17 +67,14 @@ func register[M, R any](b *bus, h Handler[M, R]) {
 	}
 
 	b.handlers[t] = func(ctx context.Context, msg any) (any, error) {
-		m, ok := msg.(M)
-		if !ok {
-			return nil, fmt.Errorf("%w: %T is not %s", ErrResultType, msg, t)
-		}
-
-		return h.Handle(ctx, m)
+		return h.Handle(ctx, msg.(M)) //nolint:errcheck // send looks h up by the type of msg, so msg is an M
 	}
 }
 
-func send[R, M any](ctx context.Context, b *bus, name string, msg M) (R, error) {
+func send[R, M any](ctx context.Context, b *bus, msg M) (R, error) {
 	var zero R
+
+	name := reflect.TypeFor[M]().Name()
 
 	h, ok := b.handlers[reflect.TypeFor[M]()]
 	if !ok {

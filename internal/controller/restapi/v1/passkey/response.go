@@ -17,7 +17,6 @@ type PasskeyCeremony struct { //nolint:revive // Huma names the OpenAPI schema a
 // PasskeyOptions is the WebAuthn options JSON (the publicKey member) as the use case wrote it.
 type PasskeyOptions json.RawMessage //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 
-// MarshalJSON writes the options as they are.
 func (o PasskeyOptions) MarshalJSON() ([]byte, error) {
 	if len(o) == 0 {
 		return []byte("null"), nil
@@ -26,7 +25,6 @@ func (o PasskeyOptions) MarshalJSON() ([]byte, error) {
 	return o, nil
 }
 
-// Schema describes the options as an open object.
 func (PasskeyOptions) Schema(huma.Registry) *huma.Schema {
 	return &huma.Schema{
 		Type: huma.TypeObject,
@@ -36,7 +34,6 @@ func (PasskeyOptions) Schema(huma.Registry) *huma.Schema {
 	}
 }
 
-// PasskeyList -.
 type PasskeyList struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	Passkeys []entity.Passkey `json:"passkeys" nullable:"false"`
 }
@@ -48,4 +45,12 @@ func NewPasskeyList(passkeys []entity.Passkey) PasskeyList {
 	}
 
 	return PasskeyList{Passkeys: passkeys}
+}
+
+type ceremonyOutput struct {
+	Body PasskeyCeremony
+}
+
+type passkeyOutput struct {
+	Body entity.Passkey
 }

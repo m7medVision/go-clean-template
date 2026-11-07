@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -11,22 +12,21 @@ import (
 
 // DeleteWidget deletes UserID's widget. Another user's widget is entity.ErrWidgetNotFound.
 type DeleteWidget struct {
+	cqrs.Command[entity.Written]
+
 	UserID   string
 	WidgetID string
 }
 
-// CommandName -.
-func (DeleteWidget) CommandName() string { return "DeleteWidget" }
-
-// ActorID -.
 func (c DeleteWidget) ActorID() string { return c.UserID }
 
-// DeleteWidgetHandler handles DeleteWidget.
+// DeleteWidgetHandler's Now is the clock (time.Now when nil).
 type DeleteWidgetHandler struct {
 	Store repo.EventStore
+	Now   func() time.Time
 }
 
-// Handle is a stub: write it to load the widget through aggregate.Change and call its Delete.
-func (DeleteWidgetHandler) Handle(_ context.Context, _ DeleteWidget) (cqrs.Written, error) {
-	return cqrs.Written{}, fmt.Errorf("DeleteWidget: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to call the widget's Delete through aggregate.Change.
+func (DeleteWidgetHandler) Handle(_ context.Context, _ DeleteWidget) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("DeleteWidget: %w", entity.ErrNotImplemented)
 }

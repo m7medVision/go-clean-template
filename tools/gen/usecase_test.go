@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"os"
@@ -60,7 +61,7 @@ func planOnWidget(t *testing.T, dir string, req *usecaseRequest) *planner {
 
 	req.root = dir
 
-	pl, err := planUsecase(rules.Open(dir), templates.FS(), req)
+	pl, err := planUsecase(t.Context(), rules.Open(dir), req)
 	require.NoError(t, err)
 	require.Empty(t, pl.errs)
 
@@ -83,7 +84,8 @@ func TestEveryUsecaseFileMatchesItsGolden(t *testing.T) {
 			require.NoError(t, pl.plan.DryRun(&dryRun))
 
 			files := createdFiles(t, pl.plan)
-			require.Len(t, files, 2, "the message and its test")
+			require.Len(t, files, 9, "the message, the REST operation, the RPC and the GraphQL field, each with its test, "+
+				"and the field's schema file")
 
 			for p, content := range files {
 				golden(t, filepath.Join(goldenDir, filepath.FromSlash(p)+".golden"), content)
@@ -106,19 +108,7 @@ func TestEveryUsecaseTemplateReadsAsItsFileForWidget(t *testing.T) {
 	dir := widgetRepo(t)
 
 	for _, req := range goldenUsecases() {
-		pl := planOnWidget(t, dir, req)
-		created := createdFiles(t, pl.plan)
-
-		for tmpl := range pl.used {
-			if strings.HasPrefix(tmpl, path.Join(_usecaseSet, _editsDir)+"/") || tmpl == path.Join(_usecaseSet, _nextTemplate) {
-				continue
-			}
-
-			f, err := templates.Render(templates.FS(), tmpl, pl.data)
-			require.NoError(t, err)
-			assert.Equal(t, string(created[f.Path]), string(f.Content),
-				"%s does not render go/format-clean for %s: write it as the file gofmt would", tmpl, req.name)
-		}
+		readAsTheirFiles(t, planOnWidget(t, dir, req))
 	}
 }
 
@@ -126,25 +116,26 @@ func TestEveryUsecaseTemplateIsUsedByALayer(t *testing.T) {
 	t.Parallel()
 
 	dir := widgetRepo(t)
-	used := map[string]bool{}
+
+	var plans []*planner
 
 	for _, req := range goldenUsecases() {
-		for tmpl := range planOnWidget(t, dir, req).used {
-			used[tmpl] = true
-		}
+		plans = append(plans, planOnWidget(t, dir, req))
 	}
 
-	require.NoError(t, fs.WalkDir(templates.FS(), _usecaseSet, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			assert.True(t, used[p], "no layer of new-usecase uses %s", p)
-		}
+	used := usedTemplates(t, plans...)
 
-		return err
-	}))
+	for _, kind := range []string{_kindCommand, _kindQuery} {
+		set := path.Join(_usecaseSet, kind)
+
+		for _, tmpl := range setTemplates(t, set) {
+			assert.True(t, used[path.Join(set, tmpl)], "no layer of new-usecase uses %s in %s", tmpl, set)
+		}
+	}
 }
 
-// The hand-written domains name their read models, tags and test helpers their own way, and
-// new-usecase plans both kinds on each of them against this repository's real files.
+// The hand-written domains follow the conventions the generated code relies on, and new-usecase
+// plans both kinds on each of them against this repository's real files.
 func TestPlanningAUsecaseOnEachDomainOfThisRepositoryPassesEveryRule(t *testing.T) {
 	t.Parallel()
 
@@ -161,41 +152,46 @@ func TestPlanningAUsecaseOnEachDomainOfThisRepositoryPassesEveryRule(t *testing.
 
 			r := thisRepo()
 
-			pl, err := planUsecase(r, templates.FS(), &req)
+			pl, err := planUsecase(t.Context(), r, &req)
 			require.NoError(t, err)
 
 			require.Empty(t, pl.errs)
-			require.NoError(t, rules.Check(t.Context(), r, pl.plan, regenerated(), pl.errs))
+			require.NoError(t, rules.Check(t.Context(), r, pl.plan, pl.errs))
 		})
 	}
 }
 
-func TestPlanningAUsecaseReadsTheHandlersDependencyFromDeps(t *testing.T) {
+// The handler is built from the Deps field every domain gives the same name: Store for a command,
+// the domain's plural for a query, as exchange's Exchanges.
+func TestAUsecaseRegistersItsHandlerAfterTheLastOfItsKind(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		req           usecaseRequest
-		dep, depType  string
-		registerAfter string
+		req  usecaseRequest
+		want string
 	}{
-		{usecaseRequest{domain: "task", name: "archive-task", kind: "command"}, "Store", "EventStore", "DeleteTaskHandler"},
-		{usecaseRequest{domain: "task", name: "count-tasks", kind: "query"}, "Tasks", "TaskReadModel", "ListAllTasksHandler"},
-		{usecaseRequest{domain: "exchange", name: "count-conversions", kind: "query"}, "History", "ExchangeReadModel", "GetConversionHandler"},
+		{
+			usecaseRequest{domain: "task", name: "archive-task", kind: "command"},
+			"DeleteTaskHandler{Store: d.Store})\n\tcqrs.HandleCommand(cmds, command.ArchiveTaskHandler{Store: d.Store})\n",
+		},
+		{
+			usecaseRequest{domain: "task", name: "count-tasks", kind: "query"},
+			"ListAllTasksHandler{Tasks: d.Tasks})\n\tcqrs.HandleQuery(qs, query.CountTasksHandler{Tasks: d.Tasks})\n",
+		},
+		{
+			usecaseRequest{domain: "exchange", name: "count-conversions", kind: "query"},
+			"GetConversionHandler{Exchanges: d.Exchanges})\n\tcqrs.HandleQuery(qs, query.CountConversionsHandler{Exchanges: d.Exchanges})\n",
+		},
 	} {
-		pl, err := planUsecase(thisRepo(), templates.FS(), &tc.req)
+		pl, err := planUsecase(t.Context(), thisRepo(), &tc.req)
 		require.NoError(t, err)
-
-		u := pl.data.Usecase
-		assert.Equal(t, tc.dep, u.Dep, tc.req.name)
-		assert.Equal(t, tc.depType, u.DepType, tc.req.name)
 
 		changes, err := pl.plan.Changes()
 		require.NoError(t, err)
 
 		for _, c := range changes {
 			if strings.HasSuffix(c.Path, "/register.go") {
-				assert.Contains(t, string(c.New), tc.registerAfter+"{"+tc.dep+": d."+tc.dep+"})\n\tcqrs.Handle",
-					"%s: after the last of its kind", tc.req.name)
+				assert.Contains(t, string(c.New), tc.want, tc.req.name)
 			}
 		}
 	}
@@ -238,7 +234,7 @@ func refusals() map[string]refusal {
 		},
 		"a name whose operation the domain has": {
 			usecaseRequest{domain: "task", name: "create-task", kind: "query", transports: []string{"rest"}},
-			names.ErrInvalid, "internal/controller/restapi/v1/task/task.go would declare",
+			rules.ErrTargets, "docs/openapi/v1.json lists the operation ID create-task already",
 		},
 		"a name whose messages the proto has": {
 			usecaseRequest{domain: "task", name: "create-task", kind: "query", transports: []string{"grpc"}},
@@ -246,29 +242,34 @@ func refusals() map[string]refusal {
 		},
 		"a name whose field the schema has": {
 			usecaseRequest{domain: "task", name: "all-tasks", kind: "query"},
-			names.ErrInvalid, "internal/controller/graphql/schema/task.graphqls would declare Query.allTasks twice",
+			rules.ErrTargets, "internal/controller/graphql/schema/all_tasks.graphqls, a file to create, exists",
 		},
 		"a route the domain serves": {
 			usecaseRequest{domain: "task", name: "get-task-status", kind: "query", path: "/v1/tasks/{id}"},
 			rules.ErrTargets, "GET /v1/tasks/{id} is served already, by the operation get-task in " +
-				"internal/controller/restapi/v1/task/task.go: give the use case its own path=",
+				"docs/openapi/v1.json: give the use case its own path=",
 		},
 		"an operation ID the API has": {
 			usecaseRequest{domain: "task", name: "register", kind: "command", transports: []string{"rest"}},
-			rules.ErrTargets, "internal/controller/restapi/v1/user/user.go registers the operation ID register already",
+			rules.ErrTargets, "docs/openapi/v1.json lists the operation ID register already, for POST /v1/auth/register",
+		},
+		"a name a package of the app has": {
+			usecaseRequest{domain: "task", name: "command", kind: "command"},
+			names.ErrInvalid, `"command" gives "command", the name of the package`,
 		},
 		"a record ID named as the caller's": {
 			usecaseRequest{domain: "user", name: "lock-user", kind: "command"},
-			rules.ErrTargets, "a use case that acts on one user, as {id} in its path /v1/users/{id}/lock says, " +
-				"would carry its ID as UserID, which holds the caller's: give it a path without {id}",
+			names.ErrInvalid, "internal/usecase/user/command/lock_user.go would declare LockUser.UserID twice",
 		},
-		"a GraphQL field on a schema without Mutation": {
+		"a GraphQL field on resolvers without Mutation": {
 			usecaseRequest{domain: "exchange", name: "cancel-conversion", kind: "command", transports: []string{"graphql"}},
-			edit.ErrAnchor, "internal/controller/graphql/schema/exchange.graphqls: found type Mutation { … } 0 times",
+			rules.ErrTargets, "internal/controller/graphql/exchange declares no Mutation",
 		},
 	}
 }
 
+// Each refusal comes from planning, or from the rules the plan then meets, against this repository
+// with its working tree taken as clean: R3 reads the tree, and these tests must not depend on it.
 func TestNewUsecaseRefusesWhatARuleForbidsBeforePlanning(t *testing.T) {
 	t.Parallel()
 
@@ -276,11 +277,12 @@ func TestNewUsecaseRefusesWhatARuleForbidsBeforePlanning(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			req := tc.req
-			req.root = filepath.Join("..", "..")
-			req.dryRun = true // a test of a rule that wrongly passed must still write nothing here
+			r, req := thisRepo(), tc.req
 
-			err := newUsecase(t.Context(), &req, io.Discard)
+			pl, err := planUsecase(t.Context(), r, &req)
+			if err == nil {
+				err = rules.Check(t.Context(), r, pl.plan, pl.errs)
+			}
 
 			require.ErrorIs(t, err, tc.rule)
 			assert.Contains(t, err.Error(), tc.says)
@@ -300,52 +302,23 @@ type missingAnchor struct {
 // by what is missing.
 func missingAnchors() map[string]missingAnchor {
 	const (
-		controller     = "internal/controller/restapi/v1/widget/controller.go"
-		register       = "internal/usecase/widget/register.go"
-		grpcController = "internal/controller/grpc/v1/widget/controller.go"
-		schema         = "internal/controller/graphql/schema/widget.graphqls"
+		controller = "internal/controller/restapi/v1/widget/controller.go"
+		register   = "internal/usecase/widget/register.go"
+		proto      = "docs/proto/v1/widget.proto"
 	)
 
 	return map[string]missingAnchor{
-		"no problem method": {
-			controller, "func (r *controller) problem(", "func (r *controller) explain(", "command",
-			controller + ": found func problem 0 times",
-		},
 		"no NewRoutes": {
 			controller, "func NewRoutes(", "func Routes(", "query",
 			controller + ": found func NewRoutes 0 times",
 		},
-		"no tag constant": {
-			controller, "const _widgetsTag", "const widgetsTag", "command",
-			controller + ": found a constant _*Tag 0 times",
-		},
 		"no query handler in Register": {
 			register, "\tcqrs.HandleQuery(", "\t// cqrs.HandleQuery(", "query",
-			register + ": found a statement in Register that is a call to cqrs.HandleQuery 0 times",
+			register + ": found a run of statements in Register that are each a call to cqrs.HandleQuery 0 times",
 		},
-		"no read model in Deps": {
-			register, "repo.WidgetReadModel", "WidgetReadModel", "query",
-			register + ": found a field of Deps of type repo.*ReadModel 0 times",
-		},
-		"no fail method in the gRPC controller": {
-			grpcController, "func (c *Controller) fail(", "func (c *Controller) explain(", "command",
-			grpcController + ": found func fail 0 times",
-		},
-		"no service the gRPC controller serves": {
-			grpcController, "v1.UnimplementedWidgetServiceServer", "v1.WidgetServiceServer", "query",
-			grpcController + ": found a field of Controller of type *.Unimplemented*ServiceServer 0 times",
-		},
-		"no proto file declaring the service": {
-			"docs/proto/v1/widget.proto", "service WidgetService {", "service WidgetsService {", "command",
-			"docs/proto/v1/*.proto: found service WidgetService 0 times",
-		},
-		"no Mutation in the schema": {
-			schema, "extend type Mutation {", "extend type Subscription {", "command",
-			schema + ": found type Mutation { … } 0 times",
-		},
-		"no Query in the schema": {
-			schema, "extend type Query {", "extend type Subscription {", "query",
-			schema + ": found type Query { … } 0 times",
+		"no service in the proto file": {
+			proto, "service WidgetService {", "service WidgetsService {", "command",
+			proto + ": found service WidgetService 0 times",
 		},
 	}
 }
@@ -406,7 +379,7 @@ func TestNewUsecaseTwiceFailsR2TheSecondTimeAndWritesNothing(t *testing.T) {
 
 			var out bytes.Buffer
 			require.NoError(t, newUsecase(t.Context(), req, &out))
-			assert.Contains(t, out.String(), "created 2, edited 10")
+			assert.Contains(t, out.String(), "created 9, edited 3")
 			assert.Contains(t, out.String(), "\nNext:\n", "the checklist, after the undo")
 
 			register, err := os.ReadFile(filepath.Join(dir, "internal", "usecase", "widget", "register.go"))
@@ -448,7 +421,7 @@ func TestAUsecaseActsOnARecordWhenItsPathNamesOne(t *testing.T) {
 		},
 	} {
 		pl := planOnWidget(t, dir, &tc.req)
-		require.NoError(t, rules.Check(t.Context(), rules.Open(dir), pl.plan, regenerated(), pl.errs))
+		require.NoError(t, rules.Check(t.Context(), rules.Open(dir), pl.plan, pl.errs))
 
 		changes, err := pl.plan.Changes()
 		require.NoError(t, err)
@@ -496,71 +469,70 @@ func TestRouteDefaultsFollowTheKindTheDomainsPluralAndTheFirstWord(t *testing.T)
 	}
 }
 
-// Each transport's layer edits the domain's files on that transport. Hand-written domains name
-// some of them their own way: user's gRPC controller serves AuthService, from auth.proto, and user
-// and exchange have no gRPC test file, so they get one. Exchange's GraphQL resolves no mutations,
-// so a command on it gets no GraphQL field unless it is asked for.
-func TestAUsecaseEditsTheDomainsFilesOnEachOfItsTransports(t *testing.T) {
+// A use case creates its own file on each transport and edits only the lists that cannot be split:
+// Register, the REST NewRoutes and the service in the .proto file. User's controller serves
+// AuthService, from auth.proto. Exchange's GraphQL resolves no mutations, so a command on it gets
+// no GraphQL field unless it is asked for.
+func TestAUsecaseCreatesItsFilesAndEditsOnlyTheLists(t *testing.T) {
 	t.Parallel()
 
-	rest := func(domain string) []string {
-		dir := "internal/controller/restapi/v1/" + domain + "/"
-
-		return []string{dir + "controller.go", dir + domain + ".go", dir + domain + "_test.go", "internal/usecase/" + domain + "/register.go"}
+	edits := func(domain, proto string) []string {
+		return []string{
+			"internal/usecase/" + domain + "/register.go",
+			"internal/controller/restapi/v1/" + domain + "/controller.go",
+			"docs/proto/v1/" + proto,
+		}
 	}
 
 	for _, tc := range []struct {
-		req            usecaseRequest
-		edits, creates []string
+		req     usecaseRequest
+		edits   []string
+		creates []string
 	}{
 		{
-			req: usecaseRequest{domain: "task", name: "archive-task", kind: "command"},
-			edits: append(rest("task"), "docs/proto/v1/task.proto",
-				"internal/controller/grpc/v1/task/task.go", "internal/controller/grpc/v1/task/task_test.go",
-				"internal/controller/graphql/schema/task.graphqls",
-				"internal/controller/graphql/task/mutation.go", "internal/controller/graphql/task/mutation_test.go"),
-		},
-		{
-			req: usecaseRequest{domain: "task", name: "count-tasks", kind: "query"},
-			edits: append(rest("task"), "docs/proto/v1/task.proto",
-				"internal/controller/grpc/v1/task/task.go", "internal/controller/grpc/v1/task/task_test.go",
-				"internal/controller/graphql/schema/task.graphqls",
-				"internal/controller/graphql/task/query.go", "internal/controller/graphql/task/query_test.go"),
+			req:   usecaseRequest{domain: "task", name: "archive-task", kind: "command"},
+			edits: edits("task", "task.proto"),
+			creates: []string{
+				"internal/controller/restapi/v1/task/archive_task.go", "internal/controller/grpc/v1/task/archive_task_test.go",
+				"internal/controller/graphql/schema/archive_task.graphqls", "internal/controller/graphql/task/archive_task.go",
+			},
 		},
 		{
 			req:     usecaseRequest{domain: "user", name: "lock-user", kind: "command", path: "/v1/user/lock"},
-			edits:   append(rest("user"), "docs/proto/v1/auth.proto", "internal/controller/grpc/v1/user/user.go"),
-			creates: []string{"internal/controller/grpc/v1/user/user_test.go"},
+			edits:   edits("user", "auth.proto"),
+			creates: []string{"internal/controller/grpc/v1/user/lock_user.go", "internal/controller/grpc/v1/user/lock_user_test.go"},
 		},
 		{
 			req:     usecaseRequest{domain: "exchange", name: "cancel-conversion", kind: "command"},
-			edits:   append(rest("exchange"), "docs/proto/v1/exchange.proto", "internal/controller/grpc/v1/exchange/exchange.go"),
-			creates: []string{"internal/controller/grpc/v1/exchange/exchange_test.go"},
+			edits:   edits("exchange", "exchange.proto"),
+			creates: []string{"internal/controller/restapi/v1/exchange/cancel_conversion.go"},
 		},
 	} {
-		pl, err := planUsecase(thisRepo(), templates.FS(), &tc.req)
+		pl, err := planUsecase(t.Context(), thisRepo(), &tc.req)
 		require.NoError(t, err)
 		require.Empty(t, pl.errs, tc.req.name)
 
 		assert.ElementsMatch(t, tc.edits, pl.plan.Edited(), tc.req.name)
-
-		created := createdFiles(t, pl.plan)
-		for _, p := range tc.creates {
-			require.Contains(t, created, p, tc.req.name)
-			assert.Contains(t, string(created[p]), "package "+tc.req.domain+"_test\n", "%s: %s", tc.req.name, p)
-			assert.Contains(t, string(created[p]), "func Test"+pl.data.Usecase.Name.Go+"RPC(t *testing.T) {", "%s: %s", tc.req.name, p)
-		}
+		assert.Subset(t, pl.plan.Created(), tc.creates, tc.req.name)
+		assert.Empty(t, underDir(pl.plan.Created(), "internal/controller/graphql/exchange/"), "no mutation on exchange")
 	}
+
+	pl, err := planUsecase(t.Context(), thisRepo(), &usecaseRequest{domain: "user", name: "lock-user", kind: "command", path: "/v1/user/lock"})
+	require.NoError(t, err)
+	assert.Contains(t, string(createdFiles(t, pl.plan)["internal/controller/grpc/v1/user/lock_user_test.go"]),
+		"pb.RegisterAuthServiceServer(srv, user.New(b, slog.New(slog.DiscardHandler)))")
 }
 
 // Two use cases whose names start with one word get one default path: count-widgets and
-// count-done-widgets are both GET /v1/widgets/count. The second fails R2 before anything is
-// written, naming the operation that serves the route, and passes with a path of its own.
+// count-done-widgets are both GET /v1/widgets/count. Once make openapi has exported the first, the
+// second fails R2 before anything is written, naming the operation that serves the route, and
+// passes with a path of its own.
 func TestNewUsecaseOnARouteTheDomainServesFailsR2AndWritesNothing(t *testing.T) {
 	t.Parallel()
 
 	dir := widgetRepo(t)
 	require.NoError(t, newUsecase(t.Context(), &usecaseRequest{root: dir, domain: "widget", name: "count-widgets", kind: "query"}, io.Discard))
+	exportOperation(t, dir, "/v1/widgets/count", "get", "count-widgets")
 	commitAll(t, dir, "new-usecase count-widgets")
 
 	before := fingerprint(t, dir)
@@ -569,7 +541,7 @@ func TestNewUsecaseOnARouteTheDomainServesFailsR2AndWritesNothing(t *testing.T) 
 
 	require.ErrorIs(t, err, rules.ErrTargets)
 	assert.Contains(t, err.Error(), "GET /v1/widgets/count is served already, by the operation count-widgets in "+
-		"internal/controller/restapi/v1/widget/widget.go: give the use case its own path=")
+		"docs/openapi/v1.json: give the use case its own path=")
 	assert.Equal(t, before, fingerprint(t, dir))
 
 	require.NoError(t, newUsecase(t.Context(), &usecaseRequest{
@@ -577,11 +549,41 @@ func TestNewUsecaseOnARouteTheDomainServesFailsR2AndWritesNothing(t *testing.T) 
 	}, io.Discard))
 }
 
-// A query's GraphQL result type, <Name>Result, is a name the schema must not have yet.
+// exportOperation adds the operation id, served on method and route, to the OpenAPI document of
+// the repository dir, as make openapi does once the operation is registered.
+func exportOperation(t *testing.T, dir, route, method, id string) {
+	t.Helper()
+
+	p := filepath.Join(dir, "docs", "openapi", "v1.json")
+
+	src, err := os.ReadFile(p)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(src, &doc))
+
+	paths, ok := doc["paths"].(map[string]any)
+	require.True(t, ok, "the document has paths")
+
+	if paths[route] == nil {
+		paths[route] = map[string]any{}
+	}
+
+	item, ok := paths[route].(map[string]any)
+	require.True(t, ok, "%s is a path item", route)
+
+	item[method] = map[string]any{"operationId": id}
+
+	out, err := json.MarshalIndent(doc, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(p, out, 0o600))
+}
+
+// A query's GraphQL result type, <Name>Result, is a name the schema must not have yet, in any file.
 func TestNewUsecaseRefusesAResultTypeTheSchemaHas(t *testing.T) {
 	t.Parallel()
 
-	const schema = "internal/controller/graphql/schema/widget.graphqls"
+	const schema = "internal/controller/graphql/schema/widget_types.graphqls"
 
 	dir := widgetRepo(t)
 	replaceIn(t, dir, schema, "type WidgetList {", "type CountWidgetsResult { total: Int! }\n\ntype WidgetList {")
@@ -590,7 +592,8 @@ func TestNewUsecaseRefusesAResultTypeTheSchemaHas(t *testing.T) {
 	err := newUsecase(t.Context(), &usecaseRequest{root: dir, domain: "widget", name: "count-widgets", kind: "query", dryRun: true}, io.Discard)
 
 	require.ErrorIs(t, err, names.ErrInvalid)
-	assert.Contains(t, err.Error(), schema+" would declare CountWidgetsResult twice")
+	assert.Contains(t, err.Error(), "internal/controller/graphql/schema/count_widgets.graphqls would declare CountWidgetsResult, "+
+		"which "+schema+" declares already")
 }
 
 // The checklist printed after the write names the files to write next. Each one it names is
@@ -605,7 +608,7 @@ func TestTheChecklistNamesFilesThatExist(t *testing.T) {
 		{domain: "task", name: "count-tasks", kind: "query"},
 		{domain: "exchange", name: "count-conversions", kind: "query"},
 	} {
-		pl, err := planUsecase(r, templates.FS(), &req)
+		pl, err := planUsecase(t.Context(), r, &req)
 		require.NoError(t, err)
 
 		checkNamedFiles(t, r, pl)

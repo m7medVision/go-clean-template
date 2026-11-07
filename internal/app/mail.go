@@ -3,30 +3,38 @@ package app
 import (
 	"fmt"
 
-	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/repo"
+	workerv1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
+	"github.com/m7medvision/go-clean-template/internal/repo/mailer"
 	"github.com/m7medvision/go-clean-template/internal/repo/mailtmpl"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/smtp"
+	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
-// The SMTP client is the Mailer the app wires in.
-var _ repo.Mailer = (*smtp.Client)(nil)
+// mailModule is email delivery, which only the worker runs: the mail queue and the DeliverEmail
+// handler its messages send to, rendering with the embedded templates and sending through the relay
+// the Mail settings name.
+func mailModule() module {
+	return module{
+		queues: func(d *deps, b cqrs.Buses, w *worker.Worker) error {
+			// A broken template or a MAIL_FROM that is not one address stops the worker at startup.
+			renderer, err := mailtmpl.New()
+			if err != nil {
+				return fmt.Errorf("mail - mailtmpl.New: %w", err)
+			}
 
-// newMailDeps builds what DeliverEmail renders and sends with. It fails when an embedded template is
-// broken, so a bad template stops the binary at startup.
-func newMailDeps(cfg *config.Config) (mail.Deps, error) {
-	renderer, err := mailtmpl.New()
-	if err != nil {
-		return mail.Deps{}, fmt.Errorf("mailtmpl.New: %w", err)
+			m := d.cfg.Mail
+
+			client, err := smtp.New(m.SMTPHost, m.SMTPPort, m.From, smtp.Auth(m.SMTPUsername, m.SMTPPassword))
+			if err != nil {
+				return fmt.Errorf("mail - smtp.New: %w", err)
+			}
+
+			mail.Register(b.Commands, b.Queries, mail.Deps{Renderer: renderer, Mailer: mailer.New(client)})
+			workerv1.NewMailRoutes(w, b.Commands, d.l)
+
+			return nil
+		},
 	}
-
-	mailer := smtp.New(
-		cfg.Mail.SMTPHost,
-		cfg.Mail.SMTPPort,
-		cfg.Mail.From,
-		smtp.Auth(cfg.Mail.SMTPUsername, cfg.Mail.SMTPPassword),
-	)
-
-	return mail.Deps{Renderer: renderer, Mailer: mailer}, nil
 }

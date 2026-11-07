@@ -89,29 +89,18 @@ func TestThe{{.Name.Go}}ProjectorReturnsAWriteFailure(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{err: errWrite}, entity.{{.Name.Go}}Deleted{ {{- .Name.Go}}ID: "1"}), errWrite)
 }
 
+func TestThe{{.Name.Go}}ProjectorHasACaseForEveryEventItHandles(t *testing.T) {
+	t.Parallel()
+
+	for _, e := range {{.Name.Pkg}}.NewProjector(nil).Handles() {
+		require.NotErrorIs(t, project(t, &fakeQuerier{}, e), entity.ErrUnhandledEvent, e.EventType())
+	}
+
+	require.ErrorIs(t, project(t, &fakeQuerier{}, otherEvent{}), entity.ErrUnhandledEvent)
+}
+
 // otherEvent stands for any other domain's event.
 type otherEvent struct{}
 
 func (otherEvent) EventType() string  { return "Other" }
 func (otherEvent) SchemaVersion() int { return 1 }
-
-func TestThe{{.Name.Go}}ProjectorIgnoresOtherDomainsEvents(t *testing.T) {
-	t.Parallel()
-
-	q := &fakeQuerier{}
-
-	require.NoError(t, project(t, q, otherEvent{}))
-
-	assert.Empty(t, q.inserted)
-	assert.Empty(t, q.updated)
-	assert.Empty(t, q.deleted)
-}
-
-func TestThe{{.Name.Go}}ProjectorIsNamedAndOwnsThe{{.Name.Plural.Go}}Table(t *testing.T) {
-	t.Parallel()
-
-	p := {{.Name.Pkg}}.NewProjector(nil)
-
-	assert.Equal(t, "{{.Name.Pkg}}", p.Name())
-	assert.Equal(t, []string{"{{.Name.Plural.Snake}}"}, p.Tables())
-}

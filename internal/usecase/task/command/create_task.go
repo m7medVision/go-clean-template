@@ -15,31 +15,29 @@ import (
 
 // CreateTask creates a task owned by UserID, in status todo.
 type CreateTask struct {
+	cqrs.Command[entity.Written]
+
 	UserID      string
 	Title       string
 	Description string
 }
 
-// CommandName -.
-func (CreateTask) CommandName() string { return "CreateTask" }
-
-// ActorID -.
 func (c CreateTask) ActorID() string { return c.UserID }
 
-// CreateTaskHandler handles CreateTask. Now is the clock (time.Now when nil).
+func (c CreateTask) Validate() error { return entity.ValidateTaskText(c.Title, c.Description) }
+
+// CreateTaskHandler's Now is the clock (time.Now when nil).
 type CreateTaskHandler struct {
 	Store repo.EventStore
 	Now   func() time.Time
 }
 
-// Handle -.
-func (h CreateTaskHandler) Handle(ctx context.Context, cmd CreateTask) (cqrs.Written, error) {
+func (h CreateTaskHandler) Handle(ctx context.Context, cmd CreateTask) (entity.Written, error) {
 	id := uuid.NewString()
 
-	written, err := aggregate.Create(ctx, h.Store, id,
-		entity.NewTaskAggregate(id, cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now)))
+	written, err := aggregate.Save(ctx, h.Store, entity.NewTaskAggregate(id, cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now)))
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("CreateTask - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("CreateTask - aggregate.Save: %w", err)
 	}
 
 	return written, nil

@@ -1,0 +1,36 @@
+package query
+
+import (
+	"context"
+	"fmt"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// {{.Usecase.Name.Go}} is the query {{.Usecase.Name.Kebab}}, asked by UserID{{if .Usecase.ByID}} about the {{.Name.Words}} {{.Name.Go}}ID{{end}}.
+// Add the fields it needs, and the rules they follow in Validate.
+type {{.Usecase.Name.Go}} struct {
+	cqrs.Query[{{.Usecase.Name.Go}}Result]
+
+	UserID string
+{{- if .Usecase.ByID}}
+	{{.Name.Go}}ID string
+{{- end}}
+}
+
+// {{.Usecase.Name.Go}}Result is what {{.Usecase.Name.Go}} answers, empty until you add its fields.
+{{- if .Has "rest"}} The
+// REST operation answers with it as it is, so give each field its json tag.
+{{- end}}
+type {{.Usecase.Name.Go}}Result struct{}
+
+type {{.Usecase.Name.Go}}Handler struct {
+	{{.Name.Plural.Go}} repo.{{.Name.Go}}ReadModel
+}
+
+// Handle is a stub: write it to read the answer from h.{{.Name.Plural.Go}}.
+func ({{.Usecase.Name.Go}}Handler) Handle(_ context.Context, _ {{.Usecase.Name.Go}}) ({{.Usecase.Name.Go}}Result, error) {
+	return {{.Usecase.Name.Go}}Result{}, fmt.Errorf("{{.Usecase.Name.Go}}: %w", entity.ErrNotImplemented)
+}

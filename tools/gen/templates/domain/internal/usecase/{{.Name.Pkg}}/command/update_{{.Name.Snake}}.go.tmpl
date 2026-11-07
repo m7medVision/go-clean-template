@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo"
@@ -12,22 +13,21 @@ import (
 // Update{{.Name.Go}} changes UserID's {{.Name.Words}}. Another user's {{.Name.Words}} is entity.Err{{.Name.Go}}Forbidden.
 // The fields it changes go here.
 type Update{{.Name.Go}} struct {
+	cqrs.Command[entity.Written]
+
 	UserID   string
 	{{.Name.Go}}ID string
 }
 
-// CommandName -.
-func (Update{{.Name.Go}}) CommandName() string { return "Update{{.Name.Go}}" }
-
-// ActorID -.
 func (c Update{{.Name.Go}}) ActorID() string { return c.UserID }
 
-// Update{{.Name.Go}}Handler handles Update{{.Name.Go}}.
+// Update{{.Name.Go}}Handler's Now is the clock (time.Now when nil).
 type Update{{.Name.Go}}Handler struct {
 	Store repo.EventStore
+	Now   func() time.Time
 }
 
-// Handle is a stub: write it to load the {{.Name.Words}} through aggregate.Change and call its Update.
-func (Update{{.Name.Go}}Handler) Handle(_ context.Context, _ Update{{.Name.Go}}) (cqrs.Written, error) {
-	return cqrs.Written{}, fmt.Errorf("Update{{.Name.Go}}: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to call the {{.Name.Words}}'s Update through aggregate.Change.
+func (Update{{.Name.Go}}Handler) Handle(_ context.Context, _ Update{{.Name.Go}}) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("Update{{.Name.Go}}: %w", entity.ErrNotImplemented)
 }

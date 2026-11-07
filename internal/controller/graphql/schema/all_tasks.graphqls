@@ -1,0 +1,4 @@
+extend type Query {
+  "Every user's tasks. Requires the admin role; anyone else gets FORBIDDEN."
+  allTasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
+}

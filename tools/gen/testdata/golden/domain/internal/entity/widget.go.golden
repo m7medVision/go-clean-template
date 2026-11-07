@@ -2,6 +2,11 @@ package entity
 
 import "time"
 
+var (
+	ErrWidgetNotFound  = newError(KindNotFound, "widget not found")
+	ErrWidgetForbidden = newError(KindForbidden, "forbidden")
+)
+
 // Widget is one widget as it is read: the shape the widgets table, and the API, hold. Its rules
 // live on WidgetAggregate. Add a field here, to the events that set it, and to the table and the
 // projector that write it.
@@ -10,4 +15,19 @@ type Widget struct {
 	UserID    string    `json:"user_id"    example:"550e8400-e29b-41d4-a716-446655440000"`
 	CreatedAt time.Time `json:"created_at" example:"2026-01-01T00:00:00Z"`
 	UpdatedAt time.Time `json:"updated_at" example:"2026-01-01T00:00:00Z"`
+}
+
+// ReadableBy is nil when userID may read the widget: when it is theirs. Another user's widget is
+// ErrWidgetForbidden.
+func (a *Widget) ReadableBy(userID string) error {
+	return widgetOwnedBy(a.UserID, userID)
+}
+
+// widgetOwnedBy is who may read or change a widget: its owner. Anyone else is ErrWidgetForbidden.
+func widgetOwnedBy(owner, userID string) error {
+	if owner != userID {
+		return ErrWidgetForbidden
+	}
+
+	return nil
 }

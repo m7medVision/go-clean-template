@@ -1,10 +1,10 @@
 package cqrs_test
 
 import (
+	"bytes"
 	"context"
-	"fmt"
-	"strings"
-	"sync"
+	"encoding/json"
+	"log/slog"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -21,8 +21,8 @@ import (
 // success).
 func commandsWith(step cqrs.Step, err error) *cqrs.Commands {
 	cmds := cqrs.NewCommands(step)
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[createThing, cqrs.Written](
-		func(context.Context, createThing) (cqrs.Written, error) { return cqrs.Written{}, err },
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, written](
+		func(context.Context, CreateThing) (written, error) { return written{}, err },
 	))
 
 	return cmds
@@ -34,7 +34,7 @@ func TestTraceOpensOneSpanPerMessage(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Trace(tp), nil), createThing{})
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(cqrs.Trace(tp), nil), CreateThing{})
 	require.NoError(t, err)
 
 	spans := exporter.GetSpans()
@@ -49,7 +49,7 @@ func TestTraceMarksAFailedMessage(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Trace(tp), errHandler), createThing{})
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(cqrs.Trace(tp), errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
 	spans := exporter.GetSpans()
@@ -61,19 +61,36 @@ func TestTraceMarksAFailedMessage(t *testing.T) {
 func TestLogRecordsTheMessageAndItsOutcome(t *testing.T) {
 	t.Parallel()
 
-	l := &recordingLogger{}
+	var buf bytes.Buffer
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Log(l), nil), createThing{})
+	l := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(cqrs.Log(l), nil), CreateThing{})
 	require.NoError(t, err)
 
-	_, err = cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Log(l), errHandler), createThing{})
+	_, err = cqrs.SendCommand(context.Background(), commandsWith(cqrs.Log(l), errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
-	lines := l.lines()
-	require.Len(t, lines, 2)
-	assert.True(t, strings.HasPrefix(lines[0], "cqrs - command CreateThing - ok in "), lines[0])
-	assert.True(t, strings.HasPrefix(lines[1], "cqrs - command CreateThing - error in "), lines[1])
-	assert.True(t, strings.HasSuffix(lines[1], ": "+errHandler.Error()), lines[1])
+	var records []map[string]any
+
+	dec := json.NewDecoder(&buf)
+	for dec.More() {
+		var r map[string]any
+		require.NoError(t, dec.Decode(&r))
+
+		records = append(records, r)
+	}
+
+	require.Len(t, records, 2)
+
+	for _, r := range records {
+		assert.Equal(t, "command", r["kind"])
+		assert.Equal(t, "CreateThing", r["name"])
+		assert.Contains(t, r, "duration")
+	}
+
+	assert.NotContains(t, records[0], "error")
+	assert.Equal(t, errHandler.Error(), records[1]["error"])
 }
 
 func TestMetricsCountsMessagesByOutcome(t *testing.T) {
@@ -81,46 +98,46 @@ func TestMetricsCountsMessagesByOutcome(t *testing.T) {
 
 	reg := prometheus.NewRegistry()
 
-	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Metrics(reg), nil), createThing{})
+	metrics := cqrs.Metrics(reg)
+
+	_, err := cqrs.SendCommand(context.Background(), commandsWith(metrics, nil), CreateThing{})
 	require.NoError(t, err)
 
-	_, err = cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Metrics(reg), errHandler), createThing{})
+	_, err = cqrs.SendCommand(context.Background(), commandsWith(metrics, errHandler), CreateThing{})
 	require.ErrorIs(t, err, errHandler)
 
-	expected := `
-# HELP cqrs_messages_total Commands and queries handled, by bus, message and outcome.
-# TYPE cqrs_messages_total counter
-cqrs_messages_total{kind="command",name="CreateThing",outcome="error"} 1
-cqrs_messages_total{kind="command",name="CreateThing",outcome="ok"} 1
-`
-	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "cqrs_messages_total"))
+	assert.Equal(t, map[string]float64{"ok": 1, "error": 1}, countedCreateThings(t, reg))
 
 	series, err := testutil.GatherAndCount(reg, "cqrs_message_duration_seconds")
 	require.NoError(t, err)
 	assert.Equal(t, 2, series, "one duration series per outcome")
 }
 
-// recordingLogger keeps every Debug line.
-type recordingLogger struct {
-	mu    sync.Mutex
-	debug []string
+// countedCreateThings reads cqrs_messages_total for the command CreateThing from reg, by outcome.
+func countedCreateThings(t *testing.T, reg *prometheus.Registry) map[string]float64 {
+	t.Helper()
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	counts := map[string]float64{}
+
+	for _, f := range families {
+		if f.GetName() != "cqrs_messages_total" {
+			continue
+		}
+
+		for _, m := range f.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+
+			if labels["kind"] == "command" && labels["name"] == "CreateThing" {
+				counts[labels["outcome"]] = m.GetCounter().GetValue()
+			}
+		}
+	}
+
+	return counts
 }
-
-func (l *recordingLogger) lines() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	return append([]string(nil), l.debug...)
-}
-
-func (l *recordingLogger) Debug(message any, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.debug = append(l.debug, fmt.Sprintf(fmt.Sprint(message), args...))
-}
-
-func (*recordingLogger) Info(string, ...any) {}
-func (*recordingLogger) Warn(string, ...any) {}
-func (*recordingLogger) Error(any, ...any)   {}
-func (*recordingLogger) Fatal(any, ...any)   {}

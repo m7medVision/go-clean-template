@@ -17,7 +17,7 @@ import (
 
 func rateDate() time.Time { return time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC) }
 
-func now() time.Time { return time.Date(2026, 10, 19, 9, 0, 0, 999, time.UTC) }
+func now() time.Time { return time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC) }
 
 func TestConvertCurrencyRecordsTheConversionAtTheRate(t *testing.T) {
 	t.Parallel()
@@ -29,7 +29,7 @@ func TestConvertCurrencyRecordsTheConversionAtTheRate(t *testing.T) {
 	h := command.ConvertCurrencyHandler{Store: store, Rates: rates, Now: now}
 
 	written, err := h.Handle(context.Background(),
-		command.ConvertCurrency{UserID: "u1", From: " omr", To: "cny", Amount: decimal.RequireFromString("100")})
+		command.ConvertCurrency{UserID: "u1", From: " omr", To: "cny", Amount: "100"})
 	require.NoError(t, err)
 
 	events := store.Events(entity.ConversionStreamID(written.ID))
@@ -42,7 +42,7 @@ func TestConvertCurrencyRecordsTheConversionAtTheRate(t *testing.T) {
 	assert.Equal(t, "CNY", converted.To)
 	assert.Equal(t, "1740.65", converted.Result.String())
 	assert.Equal(t, rateDate(), converted.RateDate)
-	assert.Equal(t, now().Truncate(time.Microsecond), converted.At)
+	assert.Equal(t, now(), converted.At)
 }
 
 func TestConvertCurrencyRefusesAnInvalidRequestBeforeAskingForARate(t *testing.T) {
@@ -52,9 +52,14 @@ func TestConvertCurrencyRefusesAnInvalidRequestBeforeAskingForARate(t *testing.T
 	h := command.ConvertCurrencyHandler{Store: memstore.New(entity.EventTypes()), Rates: rates}
 
 	_, err := h.Handle(context.Background(),
-		command.ConvertCurrency{UserID: "u1", From: "OMR", To: "OMR", Amount: decimal.RequireFromString("1")})
+		command.ConvertCurrency{UserID: "u1", From: "OMR", To: "OMR", Amount: "1"})
 
 	require.ErrorIs(t, err, entity.ErrInvalidConversion)
+
+	_, err = h.Handle(context.Background(),
+		command.ConvertCurrency{UserID: "u1", From: "OMR", To: "CNY", Amount: "ten"})
+
+	require.ErrorIs(t, err, entity.ErrInvalidAmount)
 }
 
 func TestConvertCurrencyKeepsTheRateProvidersError(t *testing.T) {
@@ -66,14 +71,7 @@ func TestConvertCurrencyKeepsTheRateProvidersError(t *testing.T) {
 	h := command.ConvertCurrencyHandler{Store: memstore.New(entity.EventTypes()), Rates: rates}
 
 	_, err := h.Handle(context.Background(),
-		command.ConvertCurrency{UserID: "u1", From: "OMR", To: "XXX", Amount: decimal.RequireFromString("1")})
+		command.ConvertCurrency{UserID: "u1", From: "OMR", To: "XXX", Amount: "1"})
 
 	require.ErrorIs(t, err, entity.ErrUnsupportedCurrency)
-}
-
-func TestConvertCurrencyActsForItsUser(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "u1", command.ConvertCurrency{UserID: "u1"}.ActorID())
-	assert.Equal(t, "ConvertCurrency", command.ConvertCurrency{}.CommandName())
 }

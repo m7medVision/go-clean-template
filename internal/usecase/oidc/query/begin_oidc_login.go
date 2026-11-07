@@ -6,28 +6,25 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
+	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // BeginOIDCLogin returns the provider URL to send the browser to and the token FinishOIDCLogin
 // needs. With no provider configured it is entity.ErrOIDCDisabled.
-type BeginOIDCLogin struct{}
+type BeginOIDCLogin struct {
+	cqrs.Query[Started]
+}
 
-// QueryName -.
-func (BeginOIDCLogin) QueryName() string { return "BeginOIDCLogin" }
-
-// Started is a sign-in begun.
 type Started struct {
 	AuthURL string
 	Token   string
 }
 
-// BeginOIDCLoginHandler handles BeginOIDCLogin.
 type BeginOIDCLoginHandler struct {
-	SSO *sso.SSO
+	SSO repo.SSOProvider
 }
 
-// Handle -.
 func (h BeginOIDCLoginHandler) Handle(ctx context.Context, _ BeginOIDCLogin) (Started, error) {
 	authURL, token, err := h.SSO.Begin(ctx)
 	if err != nil {

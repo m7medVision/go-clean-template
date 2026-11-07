@@ -1,0 +1,56 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
+	"{{.Module}}/pkg/cqrs"
+)
+
+{{if .Usecase.ByID -}}
+type {{.Usecase.Name.Lower}}Input struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+{{- else -}}
+type {{.Usecase.Name.Lower}}Input struct{}
+{{- end}}
+
+type {{.Usecase.Name.Lower}}Output struct {
+	Body query.{{.Usecase.Name.Go}}Result
+}
+
+// {{.Usecase.Name.Lower}} sends {{.Usecase.Name.Go}} and answers with its result. The fields of the query come
+// from the request once they are added: put them in {{.Usecase.Name.Lower}}Input, as parameters. Its
+// handler answers 501 until it is written: then drop http.StatusNotImplemented.
+func (r *controller) {{.Usecase.Name.Lower}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "{{.Usecase.Name.Kebab}}",
+		Summary:     "{{.Usecase.Summary}}",
+		Description: "{{.Usecase.Summary}} for the current user",
+		Method:      {{.Usecase.HTTPMethod}},
+		Path:        "{{.Usecase.Path}}",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+{{- if .Usecase.ByID}}
+		Errors: apierr.QueryErrors(
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusNotImplemented,
+		),
+{{- else}}
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotImplemented),
+{{- end}}
+	}, func(ctx context.Context, {{if .Usecase.ByID}}input{{else}}_{{end}} *{{.Usecase.Name.Lower}}Input) (*{{.Usecase.Name.Lower}}Output, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		result, err := cqrs.SendQuery(ctx, r.qs, query.{{.Usecase.Name.Go}}{UserID: userID{{if .Usecase.ByID}}, {{.Name.Go}}ID: input.ID{{end}}})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "{{.Usecase.Name.Lower}}")
+		}
+
+		return &{{.Usecase.Name.Lower}}Output{Body: result}, nil
+	})
+}

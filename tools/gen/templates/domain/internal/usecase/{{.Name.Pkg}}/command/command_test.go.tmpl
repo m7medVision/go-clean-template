@@ -7,8 +7,7 @@ import (
 
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo/memstore"
-	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
-	"github.com/stretchr/testify/assert"
+	"{{.Module}}/internal/usecase/aggregate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,6 +15,10 @@ const (
 	_owner    = "user-1"
 	_{{.Name.Lower}}ID = "{{.Name.Kebab}}-1"
 )
+
+// The update and delete handlers change the {{.Name.Words}} through aggregate.Change: this stops compiling
+// when the aggregate no longer fits it.
+var _ = aggregate.Change[entity.{{.Name.Go}}Aggregate]
 
 // given{{.Name.Go}} is a store holding _owner's {{.Name.Words}}, for the commands that change one.
 func given{{.Name.Go}}(t *testing.T) *memstore.Store {
@@ -26,20 +29,4 @@ func given{{.Name.Go}}(t *testing.T) *memstore.Store {
 	require.NoError(t, err)
 
 	return store
-}
-
-func TestThe{{.Name.Go}}CommandsActForTheirUser(t *testing.T) {
-	t.Parallel()
-
-	for name, cmd := range map[string]interface {
-		CommandName() string
-		ActorID() string
-	}{
-		"Create{{.Name.Go}}": command.Create{{.Name.Go}}{UserID: _owner},
-		"Update{{.Name.Go}}": command.Update{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: _{{.Name.Lower}}ID},
-		"Delete{{.Name.Go}}": command.Delete{{.Name.Go}}{UserID: _owner, {{.Name.Go}}ID: _{{.Name.Lower}}ID},
-	} {
-		assert.Equal(t, name, cmd.CommandName())
-		assert.Equal(t, _owner, cmd.ActorID(), name)
-	}
 }

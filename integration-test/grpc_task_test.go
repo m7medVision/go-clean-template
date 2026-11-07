@@ -4,151 +4,55 @@ import (
 	"testing"
 
 	protov1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// gRPC: create and verify task.
-func TestGRPCTaskCreateV1(t *testing.T) {
+// gRPC: the task CRUD flow, every write read back at once.
+func TestGRPCTaskV1(t *testing.T) {
 	token := registerAndLoginGRPC(t)
 
-	grpcConn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient: %v", err)
+	conn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+
+	client := protov1.NewTaskServiceClient(conn)
+	ctx := grpcAuthCtx(t, token)
+
+	created, err := client.CreateTask(ctx, &protov1.CreateTaskRequest{Title: "grpc task", Description: "grpc description"})
+	require.NoError(t, err)
+	require.NotEmpty(t, created.GetId())
+	assert.Equal(t, statusTodo, created.GetStatus())
+
+	id := created.GetId()
+
+	got, err := client.GetTask(ctx, &protov1.GetTaskRequest{Id: id})
+	require.NoError(t, err)
+	assert.Equal(t, id, got.GetId())
+
+	listed, err := client.ListTasks(ctx, &protov1.ListTasksRequest{Limit: 10})
+	require.NoError(t, err)
+
+	ids := make([]string, 0, len(listed.GetTasks()))
+	for _, task := range listed.GetTasks() {
+		ids = append(ids, task.GetId())
 	}
 
-	defer func() {
-		if cerr := grpcConn.Close(); cerr != nil {
-			t.Fatalf("grpcConn.Close: %v", cerr)
-		}
-	}()
+	assert.Contains(t, ids, id)
 
-	taskClient := protov1.NewTaskServiceClient(grpcConn)
-	authCtx := grpcAuthCtx(t, token)
-
-	createResp, err := taskClient.CreateTask(authCtx, &protov1.CreateTaskRequest{
-		Title:       "grpc task",
-		Description: "grpc description",
+	updated, err := client.UpdateTask(ctx, &protov1.UpdateTaskRequest{
+		Id: id, Title: "updated grpc task", Description: "updated grpc description",
 	})
-	if err != nil {
-		t.Fatalf("CreateTask: %v", err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "updated grpc task", updated.GetTitle())
 
-	if createResp.GetId() == "" {
-		t.Fatal("expected non-empty id")
-	}
+	moved, err := client.TransitionTask(ctx, &protov1.TransitionTaskRequest{Id: id, Status: statusInProgress})
+	require.NoError(t, err)
+	assert.Equal(t, statusInProgress, moved.GetStatus())
 
-	if createResp.GetStatus() != statusTodo {
-		t.Errorf("expected status 'todo', got %q", createResp.GetStatus())
-	}
-}
-
-// gRPC: get and list tasks.
-func TestGRPCTaskGetListV1(t *testing.T) {
-	token := registerAndLoginGRPC(t)
-
-	grpcConn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient: %v", err)
-	}
-
-	defer func() {
-		if cerr := grpcConn.Close(); cerr != nil {
-			t.Fatalf("grpcConn.Close: %v", cerr)
-		}
-	}()
-
-	taskClient := protov1.NewTaskServiceClient(grpcConn)
-	authCtx := grpcAuthCtx(t, token)
-
-	createResp, err := taskClient.CreateTask(authCtx, &protov1.CreateTaskRequest{
-		Title:       "grpc get-list task",
-		Description: "grpc description",
-	})
-	if err != nil {
-		t.Fatalf("CreateTask: %v", err)
-	}
-
-	taskID := createResp.GetId()
-
-	getResp, err := taskClient.GetTask(authCtx, &protov1.GetTaskRequest{Id: taskID})
-	if err != nil {
-		t.Fatalf("GetTask: %v", err)
-	}
-
-	if getResp.GetId() != taskID {
-		t.Errorf("expected id %q, got %q", taskID, getResp.GetId())
-	}
-
-	listResp, err := taskClient.ListTasks(authCtx, &protov1.ListTasksRequest{
-		Status: "",
-		Limit:  10,
-		Offset: 0,
-	})
-	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
-	}
-
-	if listResp.GetTotal() < 1 {
-		t.Errorf("expected total >= 1, got %d", listResp.GetTotal())
-	}
-}
-
-// gRPC: update, transition, and delete task.
-func TestGRPCTaskUpdateTransitionDeleteV1(t *testing.T) {
-	token := registerAndLoginGRPC(t)
-
-	grpcConn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient: %v", err)
-	}
-
-	defer func() {
-		if cerr := grpcConn.Close(); cerr != nil {
-			t.Fatalf("grpcConn.Close: %v", cerr)
-		}
-	}()
-
-	taskClient := protov1.NewTaskServiceClient(grpcConn)
-	authCtx := grpcAuthCtx(t, token)
-
-	createResp, err := taskClient.CreateTask(authCtx, &protov1.CreateTaskRequest{
-		Title:       "grpc update task",
-		Description: "grpc description",
-	})
-	if err != nil {
-		t.Fatalf("CreateTask: %v", err)
-	}
-
-	taskID := createResp.GetId()
-
-	updateResp, err := taskClient.UpdateTask(authCtx, &protov1.UpdateTaskRequest{
-		Id:          taskID,
-		Title:       "updated grpc task",
-		Description: "updated grpc description",
-	})
-	if err != nil {
-		t.Fatalf("UpdateTask: %v", err)
-	}
-
-	if updateResp.GetTitle() != "updated grpc task" {
-		t.Errorf("expected title 'updated grpc task', got %q", updateResp.GetTitle())
-	}
-
-	transResp, err := taskClient.TransitionTask(authCtx, &protov1.TransitionTaskRequest{
-		Id:     taskID,
-		Status: statusInProgress,
-	})
-	if err != nil {
-		t.Fatalf("TransitionTask: %v", err)
-	}
-
-	if transResp.GetStatus() != statusInProgress {
-		t.Errorf("expected status 'in_progress', got %q", transResp.GetStatus())
-	}
-
-	_, err = taskClient.DeleteTask(authCtx, &protov1.DeleteTaskRequest{Id: taskID})
-	if err != nil {
-		t.Fatalf("DeleteTask: %v", err)
-	}
+	_, err = client.DeleteTask(ctx, &protov1.DeleteTaskRequest{Id: id})
+	require.NoError(t, err)
 }

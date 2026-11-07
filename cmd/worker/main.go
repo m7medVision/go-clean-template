@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"log"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/app"
@@ -13,22 +18,35 @@ func main() {
 
 	flag.Parse()
 
-	// Configuration
+	// JSON on stdout, as every other line is; config may not have loaded, so at info.
+	l := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := run(ctx, *rebuild, l)
+
+	stop()
+
+	if err != nil {
+		l.Error("worker stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, rebuild string, l *slog.Logger) error {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("Config error: %s", err)
+		return fmt.Errorf("config: %w", err)
 	}
 
-	if *rebuild != "" {
-		if err = app.RebuildProjection(cfg, *rebuild); err != nil {
-			log.Fatalf("Rebuild error: %s", err)
-		}
-
-		log.Printf("Projection %s reset: the running worker replays it from the first event", *rebuild)
-
-		return
+	if rebuild == "" {
+		return app.RunWorker(ctx, cfg)
 	}
 
-	// Run
-	app.RunWorker(cfg)
+	if err := app.RebuildProjection(ctx, cfg, rebuild); err != nil {
+		return err
+	}
+
+	l.Info("projection reset: the running worker replays it from the first event", "projection", rebuild)
+
+	return nil
 }

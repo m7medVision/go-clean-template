@@ -10,24 +10,25 @@ Keep `.env` values free of spaces and quotes: both `make` and the shell read tha
 
 ## App
 
-The Default column is the value in `config.go`; "required" means the binary refuses to start without
-it.
+The Default column is the value in `config/`, the only place a default is written: the packages the
+settings reach take them as arguments. "required" means both binaries refuse to start without it;
+"required by the app" means `cmd/app` refuses to start without it, and `cmd/worker` does not read it.
 
 | Env var | Default | |
 | --- | --- | --- |
 | `APP_NAME` | required | |
 | `APP_VERSION` | required | |
-| `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds |
-| `HTTP_PORT` | required | the HTTP API, its docs and metrics |
+| `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds; a trailing slash is dropped. The web client's routes those links name (`/login`, `/sso/callback`) are built in one place, `config.App` |
+| `HTTP_PORT` | `8080` | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `GRPC_PORT` | `8081` | the gRPC transport |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |
 | `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
 | `PG_POOL_MAX` | required | |
-| `JWT_SECRET` | required | change it outside development |
+| `JWT_SECRET` | required by the app | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
-| `METRICS_ENABLED` | `true` | Prometheus at `/metrics` |
-| `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)) |
+| `METRICS_ENABLED` | `true` | serves Prometheus at `/metrics`: HTTP and gRPC request counts and latencies, commands and queries, projection lag ([api.md](api.md)). It decides only whether `/metrics` is served: the collectors count either way |
+| `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)): REST's `/docs`, its OpenAPI document and schemas, and GraphQL's playground and introspection, and gRPC server reflection |
 
 Two variables are read by tooling, not by the app:
 
@@ -70,7 +71,7 @@ be a redirect URI of the client.
 | `OIDC_CLIENT_SECRET` | | that client's secret |
 | `OIDC_ROLES_CLAIM` | `realm_access.roles` | dotted path to the ID-token claim with the provider's role names: `roles` on Entra ID, `groups` on Okta |
 | `KEYCLOAK_PORT` | `8180` | the development Keycloak's port in compose; `.env.example` builds `OIDC_ISSUER` from it. The app does not read it |
-| `OIDC_ROLE_MAP` | empty | `provider-name:app-role` pairs, comma-separated, no spaces (`app-admin:admin,app-user:user`). Unmapped names grant nothing; a sign-in that maps to no role gets `user` |
+| `OIDC_ROLE_MAP` | empty | `provider-name:app-role` pairs, comma-separated, no spaces (`app-admin:admin,app-user:user`). Unmapped names grant nothing; a sign-in that maps to no role gets `user`. A pair naming any other app role stops the app at startup |
 
 The state token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
 
@@ -81,7 +82,7 @@ Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.m
 | Env var | Default | |
 | --- | --- | --- |
 | `WORKER_POLL_INTERVAL` | `1s` | sleep after an empty read |
-| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery |
+| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery; its handler's context ends then too |
 | `WORKER_BATCH_SIZE` | `10` | messages per read |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
@@ -92,7 +93,7 @@ required. See [cqrs.md](cqrs.md) for how they behave.
 
 | Env var | Default | |
 | --- | --- | --- |
-| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly) |
+| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly). The HTTP write deadline follows it: this, plus the 5s timeout of the rate API and of the SSO provider (a conversion or a finished sign-in waits for both), plus 3s |
 | `EVENTSTORE_SNAPSHOT_EVERY` | `100` | snapshot a stream each time it crosses a multiple of this many events; `0` never snapshots |
 | `PROJECTION_POLL_INTERVAL` | `1s` | how often an idle projection reads the store when no notification arrives |
 | `PROJECTION_BATCH_SIZE` | `100` | events a projection reads at once |
@@ -108,7 +109,7 @@ Also read only by the worker, which sends the email.
 | `MAILPIT_UI_PORT` | `8025` | the port compose publishes Mailpit's inbox UI and API on; the app does not read it |
 | `SMTP_USERNAME` | empty | empty turns auth off; when set, PLAIN auth, sent only over TLS or to localhost |
 | `SMTP_PASSWORD` | empty | |
-| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address; `.env.example` uses a bare address because of the no-spaces rule |
+| `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address, parsed at startup: anything but exactly one address stops the binary. `.env.example` uses a bare address because of the no-spaces rule |
 
 ## Tracing
 
@@ -121,13 +122,16 @@ http://127.0.0.1:16686.
   [otelhttp](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp)
   middleware.
   gRPC uses the [otelgrpc](https://github.com/open-telemetry/opentelemetry-go-contrib) stats handler.
-  The outbound exchange-rate call uses an `otelhttp` transport, so it joins the same trace.
-- **Every layer has spans.** Use cases and repositories are wrapped in tracing decorators
-  (`*/tracing.go`), so a trace shows controller → use case → repo or webapi.
+  The outbound calls, to the exchange-rate API and to the SSO provider, use an `otelhttp` transport,
+  so they join the same trace (all but the SSO key fetch, which go-oidc runs in the background).
+- **Every layer has spans.** A trace shows the request, then a span per command or query (the
+  buses' trace step), then one per SQL statement (otelpgx) and per outbound HTTP call (otelhttp).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the
-  instrumentation runs unconditionally with no overhead.
-- **Only the API is traced.** `/healthz`, `/metrics` and `/docs` are excluded; only the versioned
-  API groups are instrumented.
+  instrumentation, HTTP's included, runs unconditionally with no overhead. An incoming `traceparent`
+  still propagates, so every transport records the caller's trace ID as its events' correlation ID.
+- **The APIs are traced, whatever their version.** Every HTTP request but the health check
+  (`/healthz`) and the metrics scrape (`/metrics`) is traced: REST operations under any version,
+  GraphQL and the docs. So is every gRPC call.
 
 | Env var | Default | |
 | --- | --- | --- |

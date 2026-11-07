@@ -53,11 +53,12 @@ sequenceDiagram
 ## 0. Wiring
 
 Nothing below constructs its own dependencies. [`internal/app/buses.go`](../internal/app/buses.go)
-builds the two buses once, and each domain registers its handlers on them:
+builds the two buses once, and each domain's module registers its handlers on them; for exchange,
+[`internal/app/exchange.go`](../internal/app/exchange.go):
 
 ```go
-exchange.Register(cmds, qs, exchange.Deps{
-	Store: store, Rates: webapi.New(cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(pg),
+exchange.Register(b.Commands, b.Queries, exchange.Deps{
+	Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
 })
 ```
 
@@ -65,37 +66,43 @@ exchange.Register(cmds, qs, exchange.Deps{
 handlers, one line each. The transports get the buses and nothing else:
 
 ```go
-router := restapi.NewRouter(cfg, uc.buses, jwtManager, l) // app.go
-router.Handle("/graphql", graphql.NewHandler(uc.buses, jwtManager, l)) // graphql.go
-grpc.NewRouter(grpcServer.App, uc.buses, l) // grpc.go
+rest: restexchange.NewRoutes, // exchange.go: NewRoutes(api, b, l)
+r.Handle("/graphql", graphql.NewHandler(b, tokens, l)) // http.go
+pb.RegisterExchangeServiceServer(s, grpcexchange.New(b, l)) // exchange.go
 ```
 
 Every handler's dependency is an **interface** from
-[`internal/repo/contracts.go`](../internal/repo/contracts.go): `repo.EventStore`,
-`repo.ExchangeWebAPI` and `repo.ExchangeReadModel`. A handler never learns which implementation it
+[`internal/repo`](../internal/repo): `repo.EventStore` (in `contracts.go`), and
+`repo.ExchangeWebAPI` and `repo.ExchangeReadModel` (in `exchange.go`). A handler never learns which implementation it
 got, which is what lets the unit tests hand it the in-memory store and mocks instead.
 
 ## 1. Middleware
 
-[`internal/controller/restapi/router.go`](../internal/controller/restapi/router.go) installs chi
-middleware in this order, before any handler runs:
+The app's HTTP mux, [`internal/app/http.go`](../internal/app/http.go), installs chi middleware in
+this order (chi's `StripSlashes`, then the rest from
+[`internal/controller/httpmw`](../internal/controller/httpmw), which wraps GraphQL, the docs and
+`/healthz` as it wraps REST), and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
+whose Huma middleware `Auth` runs once the request has matched an operation, before any handler:
 
 | Middleware | What it does to this request |
 | --- | --- |
 | `StripSlashes` | `/v1/exchange/convert/` and `/v1/exchange/convert` are the same route |
 | `Logger` | logs client address, method, path, status and response size when the request ends |
-| `Tracing` (when `TRACING_ENABLED`) | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here |
-| `Metrics` (when `METRICS_ENABLED`) | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern |
+| `Tracing` | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here. Every request is traced but `/healthz` and `/metrics`; with `TRACING_ENABLED` off the span goes nowhere, but the trace ID still reaches the events' correlation ID |
+| `Metrics` | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern, on the registry `/metrics` serves when `METRICS_ENABLED` |
 | `Recovery` | turns a panic in any later layer into a 500 instead of a dropped connection |
-| `Auth` | every path under `/v1` except `/v1/auth/*` needs `Authorization: Bearer <token>`. It parses the JWT and stores the user ID in the request context, or answers 401 |
+| `Auth` | the operation declares `Security`, the same declaration the OpenAPI document shows, so it needs `Authorization: Bearer <token>`. `Auth` turns the token into the caller with `authn.ReadToken` and stores it in the request context, or answers 401. An operation that declares none is public |
 
-`Auth` is the only thing that knows about JWTs. Below this point the caller is just a `userID` string.
+`authn.ReadToken` ([`internal/controller/authn`](../internal/controller/authn/authn.go)) is the only
+thing that reads a JWT, for all three transports. Below this point the caller is an `authn.Caller`:
+a user ID, roles and when they signed in.
 
 ## 2. Decode and validate (Huma)
 
 The handler is registered with [Huma](https://github.com/danielgtaylor/huma) in
-[`internal/controller/restapi/v1/exchange/exchange.go`](../internal/controller/restapi/v1/exchange/exchange.go),
-in the exchange domain's folder. Its input type wraps a transport-local DTO from the same folder's
+[`internal/controller/restapi/v1/exchange/convert_currency.go`](../internal/controller/restapi/v1/exchange/convert_currency.go),
+in the exchange domain's folder, a file of its own as every operation has. Its input type wraps a
+transport-local DTO from the same folder's
 [`request.go`](../internal/controller/restapi/v1/exchange/request.go):
 
 ```go
@@ -117,55 +124,51 @@ failing field. The same tags also produce:
 One declaration, and nothing to keep in sync by hand.
 
 The DTO checks only **shape**: three letters, a decimal-looking string. Whether `"omr"` and `"OMR"` are
-the same currency, or whether converting OMR to OMR makes sense, is a domain rule and lives in the
-entity (step 5).
+the same currency, whether converting OMR to OMR makes sense, and what the amount is worth are domain
+rules and live in the entity (step 5).
 
 `Amount` is a string on purpose. A JSON number would be decoded into a `float64` somewhere, and money
-must never pass through a float.
+must never pass through a float. It stays a string until `entity.NewConversion` parses it into a
+`decimal.Decimal`, once, for every transport.
 
 ## 3. The handler
 
 The handler body does the same steps in the same order as every handler on every transport:
 
 ```go
-userID, ok := middleware.UserID(ctx)          // 1. who is calling
-if !ok {
-	return nil, huma.Error401Unauthorized("unauthorized")
-}
+userID := authn.MustCaller(ctx).UserID  // 1. who is calling
 
-amount, err := decimal.NewFromString(input.Body.Amount)  // 2. DTO → domain value
-if err != nil {
-	return nil, huma.Error422UnprocessableEntity("invalid amount")
-}
-
-written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.ConvertCurrency{  // 3. the write
-	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
+written, err := cqrs.SendCommand(ctx, r.cmds, command.ConvertCurrency{  // 2. the DTO's fields → the write
+	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: input.Body.Amount,
 })
 if err != nil {
-	return nil, r.problem(err, "convert")  // 4. sentinel → status
+	return nil, apierr.Problem(ctx, r.l, err, "convert")  // 3. error kind → status
 }
 
-conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,  // 5. read it back
+conversion, err := cqrs.SendQuery(ctx, r.qs,  // 4. read it back
 	query.GetConversion{UserID: userID, ConversionID: written.ID})
 if err != nil {
-	return nil, r.problem(err, "convert")
+	return nil, apierr.Problem(ctx, r.l, err, "convert")
 }
 
-return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO
+return &convertOutput{Body: NewConversion(&conversion)}, nil  // 5. entity → response DTO
 ```
 
-- **A command returns only what identifies the write.** `cqrs.Written` holds the conversion's ID and
+- **The caller is always there.** The operation declares `Security`, so `Auth` has already
+  answered 401 to a request without a valid token. `authn.MustCaller` panics only when an operation
+  reads a caller without declaring that it needs one, a programming error that `Recovery` turns
+  into a logged 500 rather than a request served as nobody.
+- **A command returns only what identifies the write.** `entity.Written` holds the conversion's ID and
   the event store position of its event, never the conversion itself. The body comes from a query,
   so every response a client sees was read from the read model, just as its next request will be.
 - **`ctx` is passed down unchanged.** It is Huma's request context: it carries the trace span, and
   it is cancelled if the client disconnects, which cancels the outbound HTTP call and the event
   store's transaction below.
-- **`problem`, in the folder's [`controller.go`](../internal/controller/restapi/v1/exchange/controller.go),
-  maps errors.** First come the failures any command can produce, from the shared
-  [`apierr`](../internal/controller/restapi/v1/apierr/apierr.go) package: 503 when the read model
-  is behind, 409 when a concurrent write won, and 501 while a handler is still a
-  [generated](generator.md) stub. Then the domain sentinels: 400 for an invalid
-  conversion or an unknown currency. Anything else is logged and becomes a 500.
+- **[`apierr.Problem`](../internal/controller/restapi/v1/apierr/apierr.go) maps errors, for every
+  domain.** Each `entity.Err*` carries its kind: `ErrInvalidConversion`, `ErrInvalidAmount` and
+  `ErrUnsupportedCurrency` are invalid (400), `ErrRatesUnavailable` is upstream (502), `ErrReadModelBehind` is unavailable (503), `ErrConcurrencyConflict` a conflict
+  (409), and a [generated](generator.md) stub's `ErrNotImplemented` 501. Anything that is not an
+  `*entity.Error` is logged and becomes a 500.
 - **The DTO and the entity never cross the boundary.** The handler never passes the `Convert` DTO to
   a command, and never returns `entity.Conversion` as the body. `NewConversion` (the folder's
   [`response.go`](../internal/controller/restapi/v1/exchange/response.go)) turns every
@@ -182,7 +185,7 @@ the pipeline from [`newBuses`](../internal/app/buses.go), outermost first:
 | log | `pkg/cqrs` | logs the outcome and duration at debug |
 | metrics | `pkg/cqrs` | counts it in `cqrs_messages_total` and times it in `cqrs_message_duration_seconds` |
 | stamp | `internal/usecase/behavior` | puts the caller's user ID and `command ConvertCurrency` in the context's event metadata |
-| wait | `internal/usecase/behavior` | after the handler: holds the result until every projector has passed `Written.Position` (step 8) |
+| wait | `internal/usecase/behavior` | after the handler: holds the result until the projectors of the events it wrote have passed `Written.Position` (step 8) |
 | retry | `internal/usecase/behavior` | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
 | authorize | `internal/usecase/behavior` | nothing here: `ConvertCurrency` needs no role |
 | validate | `internal/usecase/behavior` | nothing here: `ConvertCurrency` has no `Validate` |
@@ -195,25 +198,25 @@ Tracing, logging and metrics are steps, so no handler carries them, and none can
 holds the command and its handler, and nothing else:
 
 ```go
-func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (cqrs.Written, error) {
+func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (entity.Written, error) {
 	conversion, err := entity.NewConversion(cmd.From, cmd.To, cmd.Amount)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
 	}
 
 	rate, date, err := h.Rates.Rate(ctx, conversion.From, conversion.To)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
 	}
 
 	conversion.ApplyRate(rate, date)
 
 	id := uuid.NewString()
 
-	written, err := aggregate.Create(ctx, h.Store, id,
+	written, err := aggregate.Save(ctx, h.Store,
 		entity.NewConversionAggregate(id, cmd.UserID, &conversion, aggregate.Now(h.Now)))
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Save: %w", err)
 	}
 
 	return written, nil
@@ -222,17 +225,19 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
 
 - Validation runs first, so a bad request never costs a call to the provider.
 - The rules are the entity's ([`exchange.go`](../internal/entity/exchange.go)):
-  - `NewConversion` uppercases `"omr"` to `"OMR"`, once, for every transport. gRPC requests carry no
-    Huma tags, so this is the check that protects them. It refuses a code that isn't three letters,
-    `from` equal to `to`, and an amount that isn't positive.
+  - `NewConversion` uppercases `"omr"` to `"OMR"` and parses the amount, once, for every transport.
+    gRPC requests carry no Huma tags, so this is the check that protects them. It refuses a code
+    that isn't three letters and `from` equal to `to` (`ErrInvalidConversion`), and an amount that
+    isn't a decimal, isn't positive or has more than 15 digits before the point or 8 after it
+    (`ErrInvalidAmount`).
   - `ApplyRate` rounds half-to-even, the usual rule for money: `100 × 17.406483 = 1740.6483` →
     `1740.65`.
 - `NewConversionAggregate` ([`exchange_aggregate.go`](../internal/entity/exchange_aggregate.go))
   records the conversion as one event, `CurrencyConverted`. A conversion never changes, so its stream
   `conversion-<id>` holds that one event. Its amounts are `decimal.Decimal`, which encode to JSON as
   strings, so no amount passes through a float on its way to the store.
-- `aggregate.Create` saves the new aggregate and returns `Written`. `aggregate.Now` is the time to the
-  microsecond in UTC, the precision of the read model's timestamp columns.
+- `aggregate.Save` saves the new aggregate and returns `Written`. `aggregate.Now` is the time in UTC
+  (`h.Now` is the clock, which tests fix).
 
 ## 6. The outbound API
 
@@ -244,15 +249,19 @@ implements `repo.ExchangeWebAPI` against the
 - **Errors arrive as HTTP 200.** The provider answers `{"result": "error", "error-type":
   "unsupported-code"}` with status 200, so the client checks `result`, not only the status code.
   `unsupported-code`, or a target currency missing from `rates`, becomes
-  `entity.ErrUnsupportedCurrency`, which the handler turns into a 400. Any other failure stays a
-  wrapped error and becomes a 500.
+  `entity.ErrUnsupportedCurrency`, which the handler turns into a 400.
+- **An outage is the provider's, not the app's.** Every other failure of the provider is
+  `entity.ErrRatesUnavailable`, an upstream failure: 502, as an unreachable SSO provider is. That is
+  a provider that cannot be reached or times out, a status other than 200, an `error-type` other
+  than `unsupported-code`, and a body that does not decode. A cancelled request is not an outage:
+  `unavailable` leaves the error unmarked when the request's `ctx` has ended.
 - **Rates never touch a float.** The response struct declares `Rates map[string]decimal.Decimal`, so
   `encoding/json` hands each number's text straight to `decimal`.
 - **The date is the provider's.** `time_last_update_unix` is truncated to a UTC date and returned with
   the rate, so the response says which day's rate it used, not when the request ran.
 - **It joins the trace.** The `http.Client` uses an `otelhttp` transport, so the outbound GET is a
-  child span of the `command ConvertCurrency` span and sends `traceparent` onward. It has a 5-second timeout and
-  uses the request's `ctx`, so a client disconnect cancels it.
+  child span of the `command ConvertCurrency` span and sends `traceparent` onward. It has a 5-second timeout
+  (`webapi.Timeout`, which the app's HTTP write deadline leaves room for) and uses the request's `ctx`, so a client disconnect cancels it.
 
 This is the only file that knows the provider's URL layout or JSON shape. Switching providers means a
 new implementation of the same interface. The command handler doesn't change.
@@ -281,12 +290,13 @@ The worker runs one loop per projector
 ([`internal/repo/persistent/projection/runner.go`](../internal/repo/persistent/projection/runner.go)).
 The `NOTIFY` wakes the exchange projector's loop, which:
 1. reads the events after its checkpoint;
-2. hands `CurrencyConverted` to
-   [`persistent/exchange/projector.go`](../internal/repo/persistent/exchange/projector.go):
+2. hands `CurrencyConverted` to the projector's `project` in
+   [`persistent/exchange/projector.go`](../internal/repo/persistent/exchange/projector.go), through
+   queries that write in the loop's transaction:
 
    ```go
    case entity.CurrencyConverted:
-   	err = q.InsertConversionRow(ctx, queries.InsertConversionRowParams{
+   	return q.InsertConversionRow(ctx, queries.InsertConversionRowParams{
    		ConversionID: &ev.ConversionID, UserID: ev.UserID, FromCurrency: ev.From, ToCurrency: ev.To,
    		Amount: ev.Amount, Rate: ev.Rate, Result: ev.Result, RateDate: ev.RateDate, CreatedAt: ev.At,
    	})
@@ -296,8 +306,8 @@ The `NOTIFY` wakes the exchange projector's loop, which:
    the checkpoint commit together or not at all, so a crash between them can neither lose the row nor
    insert it twice.
 
-Meanwhile the app's wait step is polling `projection_checkpoints`. Once every projector is at or past
-the command's position, `SendCommand` returns. If they are still behind after
+Meanwhile the app's wait step is polling `projection_checkpoints`. Once the exchange projector, the
+one that handles `CurrencyConverted`, is at or past the command's position, `SendCommand` returns. If they are still behind after
 `CQRS_CONSISTENCY_TIMEOUT` (2s), it returns `entity.ErrReadModelBehind` and the client gets a 503:
 the conversion is saved, but a read could still miss it.
 
@@ -306,23 +316,28 @@ the conversion is saved, but a read could still miss it.
 `SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp,
 authorize, validate) to
 [`query/get_conversion.go`](../internal/usecase/exchange/query/get_conversion.go), which reads
-the row from `repo.ExchangeReadModel` and only from it. A query never touches the event store.
+the row by its ID from `repo.ExchangeReadModel` and only from it, then asks the conversion's
+`ReadableBy(userID)`: another user's conversion is `entity.ErrConversionNotFound`, as a missing one
+is. A query never touches the event store.
 
 ## The trace
 
 With `TRACING_ENABLED=true`, this request shows up in Jaeger as one trace:
 
 ```
-POST /v1/exchange/convert                      (otelhttp server span, REST middleware)
-├── command ConvertCurrency                    (the command bus)
-│   ├── HTTP GET                               (otelhttp client span → open.er-api.com)
-│   └── EventStore.Save                        stream.id, events.count
-└── query GetConversion                        (the query bus)
-    └── ExchangeReadModel.Conversion
+POST /v1/exchange/convert              (otelhttp server span, httpmw.Tracing)
+├── command ConvertCurrency            (the command bus's trace step)
+│   ├── HTTP GET                       (otelhttp client span → open.er-api.com)
+│   ├── BEGIN, SELECT, INSERT, COMMIT  (otelpgx, a span per statement: the event store's Save)
+│   └── SELECT                         (otelpgx: the wait step reading projection_checkpoints, once a poll)
+└── query GetConversion                (the query bus's trace step)
+    └── SELECT                         (otelpgx: the exchange_history row)
 ```
 
-The projector's insert runs in the worker, so it isn't part of this trace; the event's metadata
-carries the trace ID as its correlation ID.
+Repositories open no spans of their own: below the buses' span, otelpgx opens one per SQL
+statement, named after its operation, with the statement in `db.query.text`. The projector's insert
+runs in the worker, so it isn't part of this trace; the event's metadata carries the trace ID as its
+correlation ID.
 
 ## Where each failure ends up
 
@@ -330,37 +345,40 @@ carries the trace ID as its correlation ID.
 | --- | --- | --- |
 | No token, malformed header, expired token | `Auth` middleware | 401 |
 | `from` not three letters, amount not a decimal string | Huma tags on `request.Convert` | 422 |
-| Amount that doesn't parse as a decimal | handler | 422 |
-| `from` = `to`, amount ≤ 0, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 |
+| `from` = `to`, bad code shape | `entity.NewConversion` → `ErrInvalidConversion` | 400 |
+| Amount ≤ 0 (or, on gRPC, not a decimal or too long) | `entity.NewConversion` → `ErrInvalidAmount` | 400 |
 | Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 |
 | Saved, but the projector didn't catch up in time | wait step → `ErrReadModelBehind` | 503 |
-| Provider down, non-200, bad JSON; database error | wrapped error, logged by the handler | 500 |
+| Provider unreachable or timed out, any status but 200, another `error-type`, bad JSON | webapi → `ErrRatesUnavailable`, logged by the handler | 502 |
+| Database error | wrapped error, logged by the handler | 500 |
 
 The caller sees a fixed message (`"unsupported currency"`, `"internal server error"`). The wrapped
 error with the layer path goes only to the log.
 
 ## The same command over gRPC
 
-[`internal/controller/grpc/v1/exchange/exchange.go`](../internal/controller/grpc/v1/exchange/exchange.go) is the same
+[`internal/controller/grpc/v1/exchange/convert.go`](../internal/controller/grpc/v1/exchange/convert.go) is the same
 six steps with different types:
 
 | | REST | gRPC |
 | --- | --- | --- |
-| who is calling | the `Auth` middleware | `grpcmw.UserIDFromContext` |
+| who is calling | `authn.MustCaller`, after the `Auth` middleware | `authn.MustCaller`, after the `Auth` interceptor |
 | the request | a Huma DTO | the generated `v1.ConvertRequest` |
 | errors | 400 | `codes.InvalidArgument` |
 | the response | `NewConversion` | `NewConversionResponse` |
-| the shared failures | `apierr` | `rpcerr` |
+| error kind → status | `apierr.Problem` | `rpcerr.Status` |
 
 It sends the identical `ConvertCurrency` and `GetConversion`, so the two transports cannot disagree
 about a rule.
 
 On gRPC:
-- the gRPC interceptor rejects a missing or expired token with `Unauthenticated`;
-- there are no Huma tags, so a malformed code falls through to the entity;
+- the `Auth` interceptor rejects a missing or expired token with `Unauthenticated`, on every method
+  no module lists as public (`grpcPublic`);
+- there are no Huma tags, so a malformed code or amount falls through to the entity;
 - a bad amount, an invalid conversion and an unknown currency are all `InvalidArgument`;
-- a lagging read model is `Unavailable`;
-- the 500 cases are `Internal`.
+- a lagging read model and an unavailable rate provider are `Unavailable`;
+- the 500 cases are `Internal`, and so is a panic, which the `Recovery` interceptor logs; the
+  `Logger` and `Metrics` interceptors log and count the call as the HTTP middleware does.
 
 GraphQL exposes only the history query (`exchangeHistory`): conversion is a form, and forms use REST.
 

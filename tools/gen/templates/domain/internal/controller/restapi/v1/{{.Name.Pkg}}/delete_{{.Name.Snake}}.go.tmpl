@@ -1,0 +1,36 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+func (r *controller) delete{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-{{.Name.Kebab}}",
+		Summary:       "Delete {{.Name.Words}}",
+		Description:   "Delete one of the current user's {{.Name.Plural.Words}} by ID",
+		Method:        http.MethodDelete,
+		Path:          "/v1/{{.Name.Plural.Kebab}}/{id}",
+		Tags:          []string{_tag},
+		Security:      []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		DefaultStatus: http.StatusNoContent,
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound, http.StatusNotImplemented),
+	}, func(ctx context.Context, input *{{.Name.Lower}}PathInput) (*struct{}, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.Delete{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: input.ID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "delete{{.Name.Go}}")
+		}
+
+		return &struct{}{}, nil
+	})
+}

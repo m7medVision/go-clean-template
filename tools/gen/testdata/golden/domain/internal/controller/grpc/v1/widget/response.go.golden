@@ -1,35 +1,28 @@
 package widget
 
 import (
-	"math"
-
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// NewWidgetResponse -.
-func NewWidgetResponse(row *entity.Widget) *v1.WidgetResponse {
+func NewWidgetResponse(widget *entity.Widget) *v1.WidgetResponse {
 	return &v1.WidgetResponse{
-		Id:        row.ID,
-		UserId:    row.UserID,
-		CreatedAt: row.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: row.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		Id:        widget.ID,
+		UserId:    widget.UserID,
+		CreatedAt: response.Time(widget.CreatedAt),
+		UpdatedAt: response.Time(widget.UpdatedAt),
 	}
 }
 
-// NewListWidgetsResponse -.
-func NewListWidgetsResponse(rows []entity.Widget, total int) *v1.ListWidgetsResponse {
-	msgs := make([]*v1.WidgetResponse, len(rows))
-	for i := range rows {
-		msgs[i] = NewWidgetResponse(&rows[i])
-	}
-
-	if total > math.MaxInt32 {
-		total = math.MaxInt32
+func NewListWidgetsResponse(widgets []entity.Widget, total int) *v1.ListWidgetsResponse {
+	pbWidgets := make([]*v1.WidgetResponse, len(widgets))
+	for i := range widgets {
+		pbWidgets[i] = NewWidgetResponse(&widgets[i])
 	}
 
 	return &v1.ListWidgetsResponse{
-		Widgets: msgs,
-		Total:   int32(total),
+		Widgets: pbWidgets,
+		Total:   response.Count(total),
 	}
 }

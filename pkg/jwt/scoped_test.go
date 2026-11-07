@@ -80,7 +80,7 @@ func TestScoped_Verify_RejectsAuthToken(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestManager_ParseToken_RejectsScopedToken(t *testing.T) {
+func TestManager_Parse_RejectsScopedToken(t *testing.T) {
 	t.Parallel()
 
 	auth := jwt.New("test-secret", time.Hour)
@@ -91,6 +91,6 @@ func TestManager_ParseToken_RejectsScopedToken(t *testing.T) {
 	token, err := s.Sign([]byte("payload"))
 	require.NoError(t, err)
 
-	_, err = auth.ParseToken(token)
+	_, err = auth.Parse(token)
 	require.Error(t, err)
 }

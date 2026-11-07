@@ -10,69 +10,73 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/command"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/oidctest"
-	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const _stateTTL = 10 * time.Minute
+const (
+	_issuer   = "https://sso.example.com"
+	_subject  = "idp-subject-1"
+	_email    = "alice@example.com"
+	_username = "alice"
+)
 
 var errClaims = errors.New("claims unreadable")
 
+// fakeSSO is a provider whose sign-in always verifies as identity, or fails with err.
+type fakeSSO struct {
+	identity entity.SSOIdentity
+	err      error
+}
+
+func (*fakeSSO) Enabled() bool { return true }
+
+func (*fakeSSO) Begin(context.Context) (authURL, token string, err error) { return "", "", nil }
+
+func (f *fakeSSO) Verify(context.Context, string, string, string) (entity.SSOIdentity, error) {
+	return f.identity, f.err
+}
+
 type fixture struct {
-	idp     *oidctest.IDP
-	sso     *sso.SSO
 	store   *memstore.Store
 	tokens  *jwt.Manager
 	handler command.FinishOIDCLoginHandler
 }
 
-func newFixture(t *testing.T, store repo.EventStore) *fixture {
+func alice(roles ...entity.Role) entity.SSOIdentity {
+	return entity.SSOIdentity{Issuer: _issuer, Subject: _subject, Email: _email, Username: _username, Roles: roles}
+}
+
+func newFixture(t *testing.T, store repo.EventStore, provider repo.SSOProvider) *fixture {
 	t.Helper()
-
-	idp := oidctest.New(t)
-
-	state, err := jwt.NewScoped("test-secret", "oidc-state", _stateTTL)
-	require.NoError(t, err)
-
-	s := sso.New(state, &sso.Config{
-		Issuer: idp.Issuer(), ClientID: oidctest.ClientID, ClientSecret: oidctest.ClientSecret,
-		RedirectURL: oidctest.RedirectURL, RolesClaim: "realm_access.roles",
-		RoleMap: map[string]string{"app-admin": "admin"},
-	})
 
 	mem, _ := store.(*memstore.Store) //nolint:errcheck // nil when the test wraps the store
 	tokens := jwt.New("test-secret", time.Hour)
 
 	return &fixture{
-		idp: idp, sso: s, store: mem, tokens: tokens,
-		handler: command.FinishOIDCLoginHandler{SSO: s, Store: store, Tokens: tokens},
+		store: mem, tokens: tokens,
+		handler: command.FinishOIDCLoginHandler{SSO: provider, Store: store, Sessions: session.New(tokens)},
 	}
 }
 
-// signIn begins a sign-in, signs in at the provider with claims, and finishes it.
-func (f *fixture) signIn(t *testing.T, claims map[string]any) (command.SignedIn, error) {
+// signIn finishes a sign-in the provider verifies.
+func (f *fixture) signIn(t *testing.T) (entity.SignedIn, error) {
 	t.Helper()
 
-	authURL, token, err := f.sso.Begin(t.Context())
-	require.NoError(t, err)
-
-	code, state := f.idp.Authorize(authURL, claims)
-
-	return f.handler.Handle(t.Context(), command.FinishOIDCLogin{Code: code, State: state, Token: token})
+	return f.handler.Handle(t.Context(), command.FinishOIDCLogin{Code: "code", State: "state", Token: "token"})
 }
 
-func (f *fixture) identity() string { return entity.OIDCIdentity(f.idp.Issuer(), oidctest.Subject) }
+func identity() string { return entity.OIDCIdentity(_issuer, _subject) }
 
 func TestAFirstSignInCreatesTheUser(t *testing.T) {
 	t.Parallel()
 
-	f := newFixture(t, memstore.New(entity.EventTypes()))
+	f := newFixture(t, memstore.New(entity.EventTypes()), &fakeSSO{identity: alice(entity.RoleAdmin)})
 
-	signedIn, err := f.signIn(t, map[string]any{"realm_access": map[string]any{"roles": []string{"app-admin"}}})
+	signedIn, err := f.signIn(t)
 	require.NoError(t, err)
 	assert.Positive(t, signedIn.Position)
 
@@ -81,12 +85,12 @@ func TestAFirstSignInCreatesTheUser(t *testing.T) {
 
 	created, ok := events[0].(entity.UserRegisteredViaOIDC)
 	require.True(t, ok)
-	assert.Equal(t, oidctest.Username, created.Username)
-	assert.Equal(t, oidctest.Email, created.Email)
-	assert.Equal(t, f.idp.Issuer(), created.Issuer)
-	assert.Equal(t, oidctest.Subject, created.Subject)
+	assert.Equal(t, _username, created.Username)
+	assert.Equal(t, _email, created.Email)
+	assert.Equal(t, _issuer, created.Issuer)
+	assert.Equal(t, _subject, created.Subject)
 
-	owner, err := f.store.ClaimOwner(t.Context(), entity.ClaimOIDCIdentity, f.identity())
+	owner, err := f.store.ClaimOwner(t.Context(), entity.ClaimOIDCIdentity, identity())
 	require.NoError(t, err)
 	assert.Equal(t, signedIn.ID, owner)
 
@@ -99,12 +103,12 @@ func TestAFirstSignInCreatesTheUser(t *testing.T) {
 func TestAKnownIdentitySignsInAsItsUser(t *testing.T) {
 	t.Parallel()
 
-	f := newFixture(t, memstore.New(entity.EventTypes()))
+	f := newFixture(t, memstore.New(entity.EventTypes()), &fakeSSO{identity: alice()})
 
-	first, err := f.signIn(t, nil)
+	first, err := f.signIn(t)
 	require.NoError(t, err)
 
-	again, err := f.signIn(t, nil)
+	again, err := f.signIn(t)
 	require.NoError(t, err)
 
 	assert.Equal(t, first.ID, again.ID)
@@ -132,17 +136,11 @@ func TestARacingFirstSignInSignsInAsTheWinner(t *testing.T) {
 	t.Parallel()
 
 	mem := memstore.New(entity.EventTypes())
-	f := newFixture(t, mem)
 
-	winner, err := f.signIn(t, nil)
+	winner, err := newFixture(t, mem, &fakeSSO{identity: alice()}).signIn(t)
 	require.NoError(t, err)
 
-	racing := newFixture(t, &racingStore{Store: mem})
-	racing.idp = f.idp
-	racing.sso = f.sso
-	racing.handler.SSO = f.sso
-
-	loser, err := racing.signIn(t, nil)
+	loser, err := newFixture(t, &racingStore{Store: mem}, &fakeSSO{identity: alice()}).signIn(t)
 	require.NoError(t, err)
 	assert.Equal(t, winner.ID, loser.ID)
 }
@@ -151,11 +149,11 @@ func TestAFirstSignInWithATakenEmailIsAnAccountConflict(t *testing.T) {
 	t.Parallel()
 
 	mem := memstore.New(entity.EventTypes())
-	local, claims := entity.NewUserAggregate("local-user", "someone", oidctest.Email, "hash", time.Now())
+	local, claims := entity.NewUserAggregate("local-user", "someone", _email, "hash", time.Now())
 	_, err := mem.Save(context.Background(), local, claims...)
 	require.NoError(t, err)
 
-	_, err = newFixture(t, mem).signIn(t, nil)
+	_, err = newFixture(t, mem, &fakeSSO{identity: alice()}).signIn(t)
 
 	require.ErrorIs(t, err, entity.ErrAccountConflict)
 }
@@ -168,7 +166,7 @@ func (failingStore) ClaimOwner(context.Context, string, string) (string, error) 
 func TestAClaimReadFailureIsReturned(t *testing.T) {
 	t.Parallel()
 
-	_, err := newFixture(t, failingStore{memstore.New(entity.EventTypes())}).signIn(t, nil)
+	_, err := newFixture(t, failingStore{memstore.New(entity.EventTypes())}, &fakeSSO{identity: alice()}).signIn(t)
 
 	require.ErrorIs(t, err, errClaims)
 }
@@ -176,11 +174,11 @@ func TestAClaimReadFailureIsReturned(t *testing.T) {
 func TestAnInvalidSignInWritesNothing(t *testing.T) {
 	t.Parallel()
 
-	f := newFixture(t, memstore.New(entity.EventTypes()))
+	f := newFixture(t, memstore.New(entity.EventTypes()), &fakeSSO{err: entity.ErrOIDCCeremonyInvalid})
 
-	_, err := f.signIn(t, map[string]any{"email": nil})
+	_, err := f.signIn(t)
 	require.ErrorIs(t, err, entity.ErrOIDCCeremonyInvalid)
 
-	_, err = f.store.ClaimOwner(t.Context(), entity.ClaimOIDCIdentity, f.identity())
+	_, err = f.store.ClaimOwner(t.Context(), entity.ClaimOIDCIdentity, identity())
 	require.ErrorIs(t, err, entity.ErrClaimNotFound)
 }
