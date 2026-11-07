@@ -164,21 +164,21 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 6: Composition, auth, worker
 
 ### 21. Config by section; defaults in one place  (G)
-- [ ] Section types exported and passed by section; no mirror structs; defaults only in `config`;
+- [x] Section types exported and passed by section; no mirror structs; defaults only in `config`;
       `BaseURL` normalized once; migrate takes `cfg.PG.URL` through `pkg/postgres`; `cmd/openapi`
       needs no env; controllers don't import `config`; `resttest` sets no env.
 
 **Verify:** G2. **Depends on:** 2. **Size:** L
 
 ### 22. One lifecycle: `Run(ctx) error`  (G, M)
-- [ ] `pkg/httpserver`/`pkg/grpcserver` gone; servers, queue worker and projection runner run under
+- [x] `pkg/httpserver`/`pkg/grpcserver` gone; servers, queue worker and projection runner run under
       one errgroup with `signal.NotifyContext`; no `Fatal`; WriteTimeout derived from the consistency
       timeout; `Shutdown`/`Queues()`/`Subscribers()` dead code gone.
 
 **Verify:** G1. **Depends on:** 21. **Size:** L
 
 ### 23. One module per domain at the composition root  (G)
-- [ ] `internal/app` has one file per domain building its read model, handlers, subscribers, importer
+- [x] `internal/app` has one file per domain building its read model, handlers, subscribers, importer
       and transport registration; app and worker iterate one list; each binary installs only what it
       uses; REST options and the duplicate route lists gone; one chi mux mounts REST and GraphQL.
 
@@ -192,7 +192,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2. **Depends on:** 23. **Size:** L
 
 ### 25. Worker and queue  (M)
-- [ ] The `example` queue, `worker/v1/request` and the extra router level gone; handler context
+- [x] The `example` queue, `worker/v1/request` and the extra router level gone; handler context
       bounded by the visibility timeout; `queue.Delete` honours its queue; `MAIL_FROM` parsed at startup.
 
 **Verify:** G1. **Depends on:** 22, 23. **Size:** M
