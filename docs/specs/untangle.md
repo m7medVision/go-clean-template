@@ -422,3 +422,71 @@ From the test review: about 130 of 554 functions, plus about 110 subtests.
 
 Commits are Conventional: `refactor:` for structure, and `fix:` for the listed bugs, which means the
 merge releases a patch or minor version.
+
+---
+
+## Sweep 1 (task 35): what fresh reviewers still found, grouped by fix
+
+Three read-only reviewers (entity+usecase+pkg, repo+app+config+cmd, controllers) at c446f4d.
+
+### S1. One metrics registry and one tracing switch, read at the composition root
+`METRICS_ENABLED` is read four times and `cqrs.Metrics` registers whatever it says; `TRACING_ENABLED` gates
+HTTP tracing while gRPC, pgx and the buses trace unconditionally (so a gRPC write stores a correlation
+ID a REST write would not). Both transports copy a reuse-on-AlreadyRegistered helper only tests reach.
+Fix: bootstrap builds one `prometheus.Registerer` (a throwaway registry when metrics are off) and passes
+it to the buses, both transports' metrics and the lag collector; only `/metrics` reads the flag; HTTP
+tracing is always installed (the provider is already a no-op when off).
+
+### S2. Startup and lifecycle facts in one place
+- `pkg/postgres.New` takes no ctx (a startup wait of ~20 s ignores the shutdown signal), sleeps after its
+  last attempt, keeps test-only options and `_default*` constants: `New(ctx, url, poolSize)` retrying
+  until ctx ends.
+- The HTTP WriteTimeout margin covers the projection wait but not the rate API's 5 s client timeout.
+- `HTTP_PORT` and `JWT_SECRET` are `required` for the worker, which reads neither.
+- `importer func(*deps)` takes the whole deps though every importer uses only the pool; the pool is
+  opened in two places.
+- `pkg/worker`'s Handle-before-Run rule is a comment over an unlocked map.
+- An `OIDC_ROLE_MAP` naming no app role is dropped silently on every sign-in instead of failing startup.
+- `make schema-apply` still appends `?sslmode=disable` to a URL that may have a query.
+- `queue_messages` still uses `timestamp`/`varchar(255)`, and `EnqueuedAt`/`VisibleAt` are read by nobody.
+- The web client's `/login` and `/sso/callback` routes are hard-coded in two adapters.
+- Dead surface: `jwt.ParseToken`, `ErrUnexpectedSigningMethod` (and a hand-written HMAC check where
+  `WithValidMethods` pins HS256), `smtp.Timeout`.
+
+### S3. Read access is a domain rule, decided once
+Who may read a task, a passkey or a conversion is decided in the read models, three ways (a Go check
+answering Forbidden, a Go check answering NotFound, an SQL filter), apart from the aggregates' write-side
+rules. Fix: read models return a record by ID; an entity method (`ReadableBy`) used by the query handler
+decides, keeping today's answers.
+
+### S4. The write side's remaining loose ends
+- Both passkey handlers load by hand (stream naming, `ErrStreamNotFound`); `StreamOf` invents an empty
+  stream for an undecodable ID. Fix: `aggregate.Load`, and `StreamOf` answering the aggregate's not-found.
+- `aggregate.Now` still truncates to Postgres's precision inside the use cases; nothing compares an
+  event's time with its row's.
+- `Wait` takes `[]repo.Subscriber` (event handlers fit the type), rescans `Handles()` per command, and
+  keeps the `WrittenAt() == 0` convention: pass a map from event type to projector names built once.
+- Seven sentinel messages restate their constants by hand (and the page one is wrong: 0 is accepted).
+- The four projectors repeat a 25-line shell and export `Project` only for tests: one
+  `projection.NewProjector(name, tables, handles, pg, project)`.
+- `projection.Reader` has one implementation; `LastPosition` is production SQL only tests call;
+  memstore writes row fields nothing reads.
+
+### S5. Transports: the last per-transport copies
+- The amount is parsed in REST and gRPC, each with its own error (two messages for one rule on gRPC):
+  parse once in the domain.
+- The schema-hint pin misses the task-status enum, the passkey name query parameter and GraphQL's
+  `limit` defaults.
+- The REST passkey folder alone wraps each send in a one-caller helper.
+- GraphQL logs a panic without its stack; REST and gRPC log `panic` and `stack`.
+- The HTTP-wide middleware (log, trace, metrics, recovery) lives in `restapi/middleware` though it wraps
+  `/graphql`, `/healthz` and `/metrics`: its own package; `restapi` keeps `Auth`.
+- `oidc-status` lists no `Errors` (OpenAPI shows `default`); deletes write 204 three ways; "an empty
+  status means any" is written in REST and gRPC; a rate-API outage answers 500 where an SSO outage
+  answers 502 (`KindUpstream`).
+- Docs and comments that now contradict the code (cqrs.md's `_` subscriber rule, "upserts",
+  `projection.Names`'s doc, the codec/upcaster and trace-span comments, step 4's missing `Handles`).
+
+Kept after the sweep: `internal/repo` adapters importing `config` for their sections (config is plain
+structs; mirror structs were the problem G removed). Tests: adding handler tests for gRPC exchange/user
+is out of the user's chosen "Tests" extra (remove/fix), except where a fix above needs one.
