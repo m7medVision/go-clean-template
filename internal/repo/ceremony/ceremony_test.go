@@ -3,7 +3,6 @@ package ceremony_test
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -12,28 +11,22 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var errLookup = errors.New("lookup failed")
-
-// newCeremony returns a ceremony whose tokens live for ttl, on clock now (nil: the real one).
+// newCeremony returns a ceremony that lasts ttl, on clock now (nil: the real one).
 func newCeremony(t *testing.T, ttl time.Duration, now func() time.Time) *ceremony.Ceremony {
 	t.Helper()
 
-	signer, err := jwt.NewScoped(passkeytest.SigningKey, passkeytest.CeremonyPurpose, ttl)
-	require.NoError(t, err)
-
-	c, err := ceremony.New(signer, &ceremony.Config{
-		RPID:         passkeytest.RPID,
-		RPName:       passkeytest.RPName,
-		RPOrigins:    []string{passkeytest.RPOrigin},
-		Timeout:      passkeytest.CeremonyTimeout,
-		ReauthMaxAge: passkeytest.ReauthMaxAge,
+	c, err := ceremony.New(ceremonytest.SigningKey, &ceremony.Config{
+		RPID:         ceremonytest.RPID,
+		RPName:       ceremonytest.RPName,
+		RPOrigins:    []string{ceremonytest.RPOrigin},
+		Timeout:      ttl,
+		ReauthMaxAge: ceremonytest.ReauthMaxAge,
 		Now:          now,
 	})
 	require.NoError(t, err)
@@ -48,7 +41,7 @@ func newUser() entity.User {
 func TestRegistrationReturnsTheCredentialToStore(t *testing.T) {
 	t.Parallel()
 
-	c := newCeremony(t, passkeytest.CeremonyTimeout, nil)
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
 	user := newUser()
 
 	started, err := c.BeginRegistration(&user, nil)
@@ -57,7 +50,7 @@ func TestRegistrationReturnsTheCredentialToStore(t *testing.T) {
 
 	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
 
-	id, record, err := c.FinishRegistration(user.ID, started.Token, passkeytest.Attest(t, started.Options, cred))
+	id, record, err := c.FinishRegistration(user.ID, started.Token, ceremonytest.Attest(t, started.Options, cred))
 	require.NoError(t, err)
 	assert.Equal(t, entity.PasskeyID(cred.ID), id)
 
@@ -71,7 +64,7 @@ func TestRegistrationReturnsTheCredentialToStore(t *testing.T) {
 func TestRegistrationOptions(t *testing.T) {
 	t.Parallel()
 
-	c := newCeremony(t, passkeytest.CeremonyTimeout, nil)
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
 	user := newUser()
 	existing, err := json.Marshal(webauthn.Credential{ID: []byte{1, 2, 3, 4}})
 	require.NoError(t, err)
@@ -81,7 +74,7 @@ func TestRegistrationOptions(t *testing.T) {
 
 	parsed, err := virtualwebauthn.ParseAttestationOptions(string(started.Options))
 	require.NoError(t, err)
-	assert.Equal(t, passkeytest.RPID, parsed.RelyingPartyID)
+	assert.Equal(t, ceremonytest.RPID, parsed.RelyingPartyID)
 	assert.Equal(t, user.Email, parsed.UserName)
 	assert.Equal(t, user.Username, parsed.UserDisplayName)
 	assert.Equal(t, []string{"AQIDBA"}, parsed.ExcludeCredentials)
@@ -101,7 +94,7 @@ func TestRegistrationOptions(t *testing.T) {
 
 	require.NoError(t, json.Unmarshal(started.Options, &raw))
 	assert.Equal(t, "none", raw.Attestation)
-	assert.Equal(t, passkeytest.CeremonyTimeout.Milliseconds(), raw.Timeout)
+	assert.Equal(t, ceremonytest.CeremonyTimeout.Milliseconds(), raw.Timeout)
 	assert.Equal(t, "required", raw.AuthenticatorSelection.ResidentKey)
 	assert.True(t, raw.AuthenticatorSelection.RequireResident)
 	assert.Equal(t, "required", raw.AuthenticatorSelection.UserVerification)
@@ -110,7 +103,7 @@ func TestRegistrationOptions(t *testing.T) {
 func TestAStoredCredentialThatDoesNotDecodeFailsRegistration(t *testing.T) {
 	t.Parallel()
 
-	c := newCeremony(t, passkeytest.CeremonyTimeout, nil)
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
 	user := newUser()
 
 	_, err := c.BeginRegistration(&user, []entity.Passkey{{ID: entity.PasskeyID{1}, Credential: json.RawMessage(`"x"`)}})
@@ -122,7 +115,7 @@ func TestCheckReauth(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-	c := newCeremony(t, passkeytest.CeremonyTimeout, func() time.Time { return now })
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, func() time.Time { return now })
 
 	for _, tt := range []struct {
 		name     string
@@ -130,9 +123,9 @@ func TestCheckReauth(t *testing.T) {
 		wantErr  error
 	}{
 		{name: "signed in just now", authTime: now},
-		{name: "signed in exactly the max age ago", authTime: now.Add(-passkeytest.ReauthMaxAge)},
+		{name: "signed in exactly the max age ago", authTime: now.Add(-ceremonytest.ReauthMaxAge)},
 		{
-			name: "signed in longer ago", authTime: now.Add(-passkeytest.ReauthMaxAge - time.Second),
+			name: "signed in longer ago", authTime: now.Add(-ceremonytest.ReauthMaxAge - time.Second),
 			wantErr: entity.ErrPasskeyReauthRequired,
 		},
 		{name: "token without an issue time", authTime: time.Time{}, wantErr: entity.ErrPasskeyReauthRequired},
@@ -153,7 +146,7 @@ func TestCheckReauth(t *testing.T) {
 type registrationCase struct {
 	name   string
 	ttl    time.Duration
-	finish func(t *testing.T, c *ceremony.Ceremony, user *entity.User, started ceremony.Started) (string, string, []byte)
+	finish func(t *testing.T, c *ceremony.Ceremony, user *entity.User, started entity.CeremonyStarted) (string, string, []byte)
 }
 
 func newCred() virtualwebauthn.Credential {
@@ -163,64 +156,64 @@ func newCred() virtualwebauthn.Credential {
 func registrationInvalidCases() []registrationCase {
 	return []registrationCase{
 		{
-			name: "tampered token", ttl: passkeytest.CeremonyTimeout,
-			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s ceremony.Started) (string, string, []byte) {
+			name: "tampered token", ttl: ceremonytest.CeremonyTimeout,
+			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
-				return user.ID, passkeytest.Tamper(t, s.Token), passkeytest.Attest(t, s.Options, newCred())
+				return user.ID, ceremonytest.Tamper(t, s.Token), ceremonytest.Attest(t, s.Options, newCred())
 			},
 		},
 		{
 			name: "expired token", ttl: -time.Minute,
-			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s ceremony.Started) (string, string, []byte) {
+			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
-				return user.ID, s.Token, passkeytest.Attest(t, s.Options, newCred())
+				return user.ID, s.Token, ceremonytest.Attest(t, s.Options, newCred())
 			},
 		},
 		{
-			name: "token for another user", ttl: passkeytest.CeremonyTimeout,
-			finish: func(t *testing.T, _ *ceremony.Ceremony, _ *entity.User, s ceremony.Started) (string, string, []byte) {
+			name: "token for another user", ttl: ceremonytest.CeremonyTimeout,
+			finish: func(t *testing.T, _ *ceremony.Ceremony, _ *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
-				return uuid.NewString(), s.Token, passkeytest.Attest(t, s.Options, newCred())
+				return uuid.NewString(), s.Token, ceremonytest.Attest(t, s.Options, newCred())
 			},
 		},
 		{
-			name: "attestation for another ceremony's challenge", ttl: passkeytest.CeremonyTimeout,
-			finish: func(t *testing.T, c *ceremony.Ceremony, user *entity.User, s ceremony.Started) (string, string, []byte) {
+			name: "attestation for another ceremony's challenge", ttl: ceremonytest.CeremonyTimeout,
+			finish: func(t *testing.T, c *ceremony.Ceremony, user *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
 				other, err := c.BeginRegistration(user, nil)
 				require.NoError(t, err)
 
-				return user.ID, other.Token, passkeytest.Attest(t, s.Options, newCred())
+				return user.ID, other.Token, ceremonytest.Attest(t, s.Options, newCred())
 			},
 		},
 		{
-			name: "body that is not a credential", ttl: passkeytest.CeremonyTimeout,
-			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s ceremony.Started) (string, string, []byte) {
+			name: "body that is not a credential", ttl: ceremonytest.CeremonyTimeout,
+			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
 				return user.ID, s.Token, []byte(`{"id":"nope"}`)
 			},
 		},
 		{
-			name: "attestation without user verification", ttl: passkeytest.CeremonyTimeout,
-			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s ceremony.Started) (string, string, []byte) {
+			name: "attestation without user verification", ttl: ceremonytest.CeremonyTimeout,
+			finish: func(t *testing.T, _ *ceremony.Ceremony, user *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
 				unverified := virtualwebauthn.NewAuthenticatorWithOptions(virtualwebauthn.AuthenticatorOptions{UserNotVerified: true})
 
-				return user.ID, s.Token, passkeytest.AttestWith(t, s.Options, newCred(), &unverified)
+				return user.ID, s.Token, ceremonytest.AttestWith(t, s.Options, newCred(), &unverified)
 			},
 		},
 		{
-			name: "user ID that is not a UUID", ttl: passkeytest.CeremonyTimeout,
-			finish: func(t *testing.T, _ *ceremony.Ceremony, _ *entity.User, s ceremony.Started) (string, string, []byte) {
+			name: "user ID that is not a UUID", ttl: ceremonytest.CeremonyTimeout,
+			finish: func(t *testing.T, _ *ceremony.Ceremony, _ *entity.User, s entity.CeremonyStarted) (string, string, []byte) {
 				t.Helper()
 
-				return "not-a-uuid", s.Token, passkeytest.Attest(t, s.Options, newCred())
+				return "not-a-uuid", s.Token, ceremonytest.Attest(t, s.Options, newCred())
 			},
 		},
 	}
@@ -266,7 +259,7 @@ func register(t *testing.T, c *ceremony.Ceremony) *account {
 
 	cred := newCred()
 
-	id, record, err := c.FinishRegistration(user.ID, started.Token, passkeytest.Attest(t, started.Options, cred))
+	id, record, err := c.FinishRegistration(user.ID, started.Token, ceremonytest.Attest(t, started.Options, cred))
 	require.NoError(t, err)
 
 	handle := uuid.MustParse(user.ID)
@@ -279,23 +272,20 @@ func register(t *testing.T, c *ceremony.Ceremony) *account {
 	}
 }
 
-// lookup finds acc by its user and credential, as the login handler's would.
-func (acc *account) lookup(userID string, id entity.PasskeyID) (*entity.User, *entity.Passkey, error) {
-	if userID != acc.user.ID {
-		return nil, nil, entity.ErrUserNotFound
+// finish reads who the assertion names and verifies it against acc's user and passkey, as the
+// login handler does once it has loaded them.
+func (acc *account) finish(c *ceremony.Ceremony, token string, body []byte) (entity.PasskeyLogin, error) {
+	if _, _, err := c.LoginFor(body); err != nil {
+		return entity.PasskeyLogin{}, err
 	}
 
-	if string(id) != string(acc.passkey.ID) {
-		return &acc.user, nil, nil
-	}
-
-	return &acc.user, &acc.passkey, nil
+	return c.FinishLogin(token, body, &acc.user, &acc.passkey)
 }
 
 func (acc *account) assert(t *testing.T, options []byte) []byte {
 	t.Helper()
 
-	return passkeytest.Assert(t, options, acc.cred, &acc.auth)
+	return ceremonytest.Assert(t, options, acc.cred, &acc.auth)
 }
 
 func loginChallenge(t *testing.T, options []byte) string {
@@ -309,8 +299,8 @@ func loginChallenge(t *testing.T, options []byte) string {
 	}
 
 	require.NoError(t, json.Unmarshal(options, &raw))
-	assert.Equal(t, passkeytest.RPID, raw.RPID)
-	assert.Equal(t, passkeytest.CeremonyTimeout.Milliseconds(), raw.Timeout)
+	assert.Equal(t, ceremonytest.RPID, raw.RPID)
+	assert.Equal(t, ceremonytest.CeremonyTimeout.Milliseconds(), raw.Timeout)
 	assert.Equal(t, "required", raw.UserVerification)
 	require.NotEmpty(t, raw.Challenge)
 
@@ -320,7 +310,7 @@ func loginChallenge(t *testing.T, options []byte) string {
 func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 	t.Parallel()
 
-	c := newCeremony(t, passkeytest.CeremonyTimeout, nil)
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
 	acc := register(t, c)
 	acc.cred.Counter = 1
 
@@ -330,13 +320,13 @@ func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 	challenge := sha256.Sum256([]byte(loginChallenge(t, started.Options)))
 	before := time.Now()
 
-	login, err := c.FinishLogin(started.Token, acc.assert(t, started.Options), acc.lookup)
+	login, err := acc.finish(c, started.Token, acc.assert(t, started.Options))
 	require.NoError(t, err)
 
 	assert.Equal(t, acc.user.ID, login.UserID)
 	assert.Equal(t, acc.passkey.ID, login.PasskeyID)
 	assert.Equal(t, challenge[:], login.ChallengeHash, "the burned hash is the challenge's SHA-256")
-	assert.WithinDuration(t, before.Add(passkeytest.CeremonyTimeout), login.ExpiresAt, time.Minute)
+	assert.WithinDuration(t, before.Add(ceremonytest.CeremonyTimeout), login.ExpiresAt, time.Minute)
 
 	var record webauthn.Credential
 
@@ -348,60 +338,59 @@ func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 func TestAnAuthenticatorWithoutACounterKeepsSigningIn(t *testing.T) {
 	t.Parallel()
 
-	c := newCeremony(t, passkeytest.CeremonyTimeout, nil)
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
 	acc := register(t, c)
 
 	started, err := c.BeginLogin()
 	require.NoError(t, err)
 
-	_, err = c.FinishLogin(started.Token, acc.assert(t, started.Options), acc.lookup)
+	_, err = acc.finish(c, started.Token, acc.assert(t, started.Options))
 	require.NoError(t, err)
 }
 
-func TestALookupFailureIsNotABadCeremony(t *testing.T) {
+func TestLoginForNamesTheUserAndPasskeyOfAnAssertion(t *testing.T) {
 	t.Parallel()
 
-	c := newCeremony(t, passkeytest.CeremonyTimeout, nil)
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
 	acc := register(t, c)
 
 	started, err := c.BeginLogin()
 	require.NoError(t, err)
 
-	_, err = c.FinishLogin(started.Token, acc.assert(t, started.Options),
-		func(string, entity.PasskeyID) (*entity.User, *entity.Passkey, error) { return nil, nil, errLookup })
-
-	require.ErrorIs(t, err, errLookup)
-	require.NotErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
+	userID, id, err := c.LoginFor(acc.assert(t, started.Options))
+	require.NoError(t, err)
+	assert.Equal(t, acc.user.ID, userID)
+	assert.Equal(t, acc.passkey.ID, id)
 }
 
 // loginCase finishes a begun login with arguments that must fail as ErrPasskeyCeremonyInvalid.
 type loginCase struct {
 	name    string
 	ttl     time.Duration
-	prepare func(t *testing.T, c *ceremony.Ceremony, acc *account, started ceremony.Started) (string, []byte)
+	prepare func(t *testing.T, c *ceremony.Ceremony, acc *account, started entity.CeremonyStarted) (string, []byte)
 }
 
 func loginTokenCases() []loginCase {
 	return []loginCase{
 		{
-			name: "tampered token", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "tampered token", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
-				return passkeytest.Tamper(t, s.Token), acc.assert(t, s.Options)
+				return ceremonytest.Tamper(t, s.Token), acc.assert(t, s.Options)
 			},
 		},
 		{
 			name: "expired token", ttl: -time.Minute,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				return s.Token, acc.assert(t, s.Options)
 			},
 		},
 		{
-			name: "registration token", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, c *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "registration token", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, c *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				other, err := c.BeginRegistration(&acc.user, nil)
@@ -411,16 +400,16 @@ func loginTokenCases() []loginCase {
 			},
 		},
 		{
-			name: "body that is not an assertion", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, _ *account, s ceremony.Started) (string, []byte) {
+			name: "body that is not an assertion", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, _ *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				return s.Token, []byte(`{"id":"nope"}`)
 			},
 		},
 		{
-			name: "assertion for another ceremony's challenge", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, c *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "assertion for another ceremony's challenge", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, c *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				other, err := c.BeginLogin()
@@ -435,8 +424,8 @@ func loginTokenCases() []loginCase {
 func loginAccountCases() []loginCase {
 	return []loginCase{
 		{
-			name: "assertion without user verification", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "assertion without user verification", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				acc.auth.Options.UserNotVerified = true
@@ -445,8 +434,8 @@ func loginAccountCases() []loginCase {
 			},
 		},
 		{
-			name: "no user handle", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "no user handle", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				acc.auth.Options.UserHandle = nil
@@ -455,8 +444,8 @@ func loginAccountCases() []loginCase {
 			},
 		},
 		{
-			name: "user handle that is not a UUID", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "user handle that is not a UUID", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				acc.auth.Options.UserHandle = []byte("short")
@@ -465,8 +454,8 @@ func loginAccountCases() []loginCase {
 			},
 		},
 		{
-			name: "unknown user handle", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "unknown user handle", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				other := uuid.New()
@@ -482,8 +471,8 @@ func loginAccountCases() []loginCase {
 func loginCredentialCases() []loginCase {
 	return []loginCase{
 		{
-			name: "unknown credential", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "unknown credential", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				acc.passkey.ID = entity.PasskeyID{9, 9, 9}
@@ -492,8 +481,8 @@ func loginCredentialCases() []loginCase {
 			},
 		},
 		{
-			name: "credential signed by another key", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "credential signed by another key", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
 				forged := newCred()
@@ -504,11 +493,11 @@ func loginCredentialCases() []loginCase {
 			},
 		},
 		{
-			name: "sign count regression", ttl: passkeytest.CeremonyTimeout,
-			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s ceremony.Started) (string, []byte) {
+			name: "sign count regression", ttl: ceremonytest.CeremonyTimeout,
+			prepare: func(t *testing.T, _ *ceremony.Ceremony, acc *account, s entity.CeremonyStarted) (string, []byte) {
 				t.Helper()
 
-				acc.passkey.Credential = passkeytest.WithSignCount(t, acc.passkey.Credential, 5)
+				acc.passkey.Credential = ceremonytest.WithSignCount(t, acc.passkey.Credential, 5)
 				acc.cred.Counter = 3
 
 				return s.Token, acc.assert(t, s.Options)
@@ -525,7 +514,7 @@ func TestFinishLoginRefusesAnInvalidCeremony(t *testing.T) {
 			t.Parallel()
 
 			// Register with a working ceremony; the stored passkey is plain data any ceremony can use.
-			acc := register(t, newCeremony(t, passkeytest.CeremonyTimeout, nil))
+			acc := register(t, newCeremony(t, ceremonytest.CeremonyTimeout, nil))
 			c := newCeremony(t, tc.ttl, nil)
 
 			started, err := c.BeginLogin()
@@ -533,7 +522,7 @@ func TestFinishLoginRefusesAnInvalidCeremony(t *testing.T) {
 
 			token, body := tc.prepare(t, c, acc, started)
 
-			_, err = c.FinishLogin(token, body, acc.lookup)
+			_, err = acc.finish(c, token, body)
 			require.ErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
 		})
 	}

@@ -113,9 +113,9 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 13. **Size:** L
 
 ### 15. WebAuthn adapter behind a port  (F)
-- [ ] `usecase/passkey/ceremony` moves under `internal/repo`; `Started` no longer leaks into REST;
-      no state passed through callback side effects; `CeremonyTimeout` passed once; passkey registers
-      like the other domains.
+- [x] `usecase/passkey/ceremony` moves under `internal/repo`; `Started` no longer leaks into REST;
+      no state passed through callback side effects; `CeremonyTimeout` passed once. (Passkey's Deps
+      and sign-in handler stay pointers: gocritic's hugeParam refuses them by value.)
 
 **Verify:** G1. **Depends on:** 13. **Size:** L
 

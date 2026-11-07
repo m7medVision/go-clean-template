@@ -13,7 +13,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -40,10 +39,12 @@ type fakePasskey struct {
 
 func (f *fakePasskey) buses() cqrs.Buses {
 	b := resttest.NewBuses()
-	started := func() (ceremony.Started, error) { return ceremony.Started{Options: f.options, Token: f.token}, f.err }
+	started := func() (entity.CeremonyStarted, error) {
+		return entity.CeremonyStarted{Options: f.options, Token: f.token}, f.err
+	}
 
-	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyRegistration, ceremony.Started](
-		func(_ context.Context, q query.BeginPasskeyRegistration) (ceremony.Started, error) {
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyRegistration, entity.CeremonyStarted](
+		func(_ context.Context, q query.BeginPasskeyRegistration) (entity.CeremonyStarted, error) {
 			f.gotAuthTime = q.AuthTime
 
 			return started()
@@ -70,8 +71,8 @@ func (f *fakePasskey) buses() cqrs.Buses {
 
 			return entity.Written{ID: c.ID}, f.err
 		}))
-	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyLogin, ceremony.Started](
-		func(context.Context, query.BeginPasskeyLogin) (ceremony.Started, error) { return started() }))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyLogin, entity.CeremonyStarted](
+		func(context.Context, query.BeginPasskeyLogin) (entity.CeremonyStarted, error) { return started() }))
 	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyLogin, entity.SignedIn](
 		func(_ context.Context, c command.FinishPasskeyLogin) (entity.SignedIn, error) {
 			f.gotToken, f.gotBody = c.Token, c.Body

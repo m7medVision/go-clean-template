@@ -1,14 +1,13 @@
-// Package ceremony runs the WebAuthn ceremonies of passkey registration and login. go-webauthn
-// stays inside this package: callers pass and get the WebAuthn JSON the browser speaks, and a
-// ceremony's state travels between begin and finish in a signed token. It stores nothing: the passkey
-// commands and queries decide what to read and what to record.
+// Package ceremony runs the WebAuthn ceremonies of passkey registration and login, as
+// repo.PasskeyCeremony. go-webauthn stays inside this package: callers pass and get the WebAuthn
+// JSON the browser speaks, and a ceremony's state travels between begin and finish in a signed
+// token. It stores nothing: the passkey commands and queries decide what to read and what to record.
 package ceremony
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -16,15 +15,20 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 )
+
+// _scope scopes the ceremony token's key and audience, so no other token passes for it.
+const _scope = "webauthn-ceremony"
 
 // Config is the relying party: who passkeys are registered with, and where from.
 type Config struct {
 	RPID      string
 	RPName    string
 	RPOrigins []string
-	// Timeout is the ceremony's lifetime, sent to the browser and enforced on finish.
+	// Timeout is the ceremony's lifetime: its token's, the one sent to the browser and enforced on
+	// finish.
 	Timeout time.Duration
 	// ReauthMaxAge is how recent a sign-in must be to add a passkey.
 	ReauthMaxAge time.Duration
@@ -41,31 +45,16 @@ type Ceremony struct {
 	now      func() time.Time
 }
 
-// Started is a ceremony begun: the options for navigator.credentials, and the token its finish
-// needs.
-type Started struct {
-	Options []byte
-	Token   string
-}
+var _ repo.PasskeyCeremony = (*Ceremony)(nil)
 
-// Login is a verified passkey sign-in: whose it is, the credential record as the login left it (its
-// new sign count), and the challenge to burn so the sign-in completes once.
-type Login struct {
-	UserID        string
-	PasskeyID     entity.PasskeyID
-	Credential    json.RawMessage
-	ChallengeHash []byte
-	ExpiresAt     time.Time
-}
+// New returns the ceremony of cfg's relying party. Its tokens are signed with a key derived from
+// secret and last cfg.Timeout. Invalid WebAuthn settings fail.
+func New(secret string, cfg *Config) (*Ceremony, error) {
+	signer, err := jwt.NewScoped(secret, _scope, cfg.Timeout)
+	if err != nil {
+		return nil, fmt.Errorf("ceremony - New - jwt.NewScoped: %w", err)
+	}
 
-// Lookup finds the user a login's handle names and their passkey with the credential ID the
-// assertion carries. An unknown user is entity.ErrUserNotFound; an unknown passkey, or one that is
-// not the user's, is nil.
-type Lookup func(userID string, id entity.PasskeyID) (*entity.User, *entity.Passkey, error)
-
-// New returns the ceremony of cfg's relying party. signer seals the state a ceremony carries from
-// begin to finish; its lifetime should match cfg.Timeout.
-func New(signer *jwt.Scoped, cfg *Config) (*Ceremony, error) {
 	w, err := webauthn.New(&webauthn.Config{
 		RPID:                  cfg.RPID,
 		RPDisplayName:         cfg.RPName,
@@ -107,16 +96,16 @@ func (c *Ceremony) CheckReauth(authTime time.Time) error {
 
 // BeginRegistration returns the creation options for navigator.credentials.create, excluding the
 // user's stored passkeys, and the token FinishRegistration needs.
-func (c *Ceremony) BeginRegistration(user *entity.User, stored []entity.Passkey) (Started, error) {
+func (c *Ceremony) BeginRegistration(user *entity.User, stored []entity.Passkey) (entity.CeremonyStarted, error) {
 	acc, err := newAccount(user, stored)
 	if err != nil {
-		return Started{}, fmt.Errorf("ceremony - BeginRegistration - newAccount: %w", err)
+		return entity.CeremonyStarted{}, fmt.Errorf("ceremony - BeginRegistration - newAccount: %w", err)
 	}
 
 	creation, session, err := c.webauthn.BeginRegistration(acc,
 		webauthn.WithExclusions(webauthn.Credentials(acc.credentials).CredentialDescriptors()))
 	if err != nil {
-		return Started{}, fmt.Errorf("ceremony - BeginRegistration - c.webauthn.BeginRegistration: %w", err)
+		return entity.CeremonyStarted{}, fmt.Errorf("ceremony - BeginRegistration - c.webauthn.BeginRegistration: %w", err)
 	}
 
 	return c.started(creation.Response, session)
@@ -160,54 +149,89 @@ func (c *Ceremony) FinishRegistration(userID, token string, body []byte) (entity
 // BeginLogin returns the request options for a discoverable navigator.credentials.get (no
 // allowCredentials: the authenticator offers its passkeys for this RP) and the token FinishLogin
 // needs.
-func (c *Ceremony) BeginLogin() (Started, error) {
+func (c *Ceremony) BeginLogin() (entity.CeremonyStarted, error) {
 	assertion, session, err := c.webauthn.BeginDiscoverableLogin()
 	if err != nil {
-		return Started{}, fmt.Errorf("ceremony - BeginLogin - c.webauthn.BeginDiscoverableLogin: %w", err)
+		return entity.CeremonyStarted{}, fmt.Errorf("ceremony - BeginLogin - c.webauthn.BeginDiscoverableLogin: %w", err)
 	}
 
 	return c.started(assertion.Response, session)
 }
 
-func (c *Ceremony) started(options any, session *webauthn.SessionData) (Started, error) {
+func (c *Ceremony) started(options any, session *webauthn.SessionData) (entity.CeremonyStarted, error) {
 	encoded, err := json.Marshal(options)
 	if err != nil {
-		return Started{}, fmt.Errorf("ceremony - json.Marshal options: %w", err)
+		return entity.CeremonyStarted{}, fmt.Errorf("ceremony - json.Marshal options: %w", err)
 	}
 
 	token, err := c.signSession(session)
 	if err != nil {
-		return Started{}, err
+		return entity.CeremonyStarted{}, err
 	}
 
-	return Started{Options: encoded, Token: token}, nil
+	return entity.CeremonyStarted{Options: encoded, Token: token}, nil
+}
+
+// LoginFor reads the user and passkey an assertion (PublicKeyCredential.toJSON) names: the user
+// handle is the user's UUID bytes, the raw ID the credential's. Nothing is verified yet.
+func (c *Ceremony) LoginFor(body []byte) (userID string, id entity.PasskeyID, err error) {
+	parsed, err := protocol.ParseCredentialRequestResponseBody(bytes.NewReader(body))
+	if err != nil {
+		return "", nil, fmt.Errorf("ceremony - LoginFor - protocol.ParseCredentialRequestResponseBody: %w: %w",
+			entity.ErrPasskeyCeremonyInvalid, err)
+	}
+
+	owner, err := uuid.FromBytes(parsed.Response.UserHandle)
+	if err != nil {
+		return "", nil, fmt.Errorf("ceremony - LoginFor - uuid.FromBytes: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
+	}
+
+	return owner.String(), parsed.RawID, nil
 }
 
 // FinishLogin verifies the browser's assertion (PublicKeyCredential.toJSON) against the ceremony in
-// token, for the account lookup finds, and returns the sign-in to record. It rejects a credential
-// whose non-zero sign count did not advance (a possible clone). Anything that does not complete the
-// ceremony is entity.ErrPasskeyCeremonyInvalid; a lookup that fails for another reason is returned as
-// is.
-func (c *Ceremony) FinishLogin(token string, body []byte, lookup Lookup) (Login, error) {
+// token, for user's passkey as stored, and returns the sign-in to record. It rejects a credential
+// whose non-zero sign count did not advance (a possible clone).
+func (c *Ceremony) FinishLogin(
+	token string, body []byte, user *entity.User, passkey *entity.Passkey,
+) (entity.PasskeyLogin, error) {
 	session, err := c.verifySession(token)
 	if err != nil {
-		return Login{}, fmt.Errorf("ceremony - FinishLogin - c.verifySession: %w", err)
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - c.verifySession: %w", err)
 	}
 
 	parsed, err := protocol.ParseCredentialRequestResponseBody(bytes.NewReader(body))
 	if err != nil {
-		return Login{}, fmt.Errorf("ceremony - FinishLogin - protocol.ParseCredentialRequestResponseBody: %w: %w",
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - protocol.ParseCredentialRequestResponseBody: %w: %w",
 			entity.ErrPasskeyCeremonyInvalid, err)
 	}
 
-	owner, credential, err := c.validateLogin(&session, parsed, lookup)
+	if !bytes.Equal(parsed.RawID, passkey.ID) {
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - the assertion is another passkey's: %w",
+			entity.ErrPasskeyCeremonyInvalid)
+	}
+
+	owner, err := newAccount(user, []entity.Passkey{*passkey})
 	if err != nil {
-		return Login{}, fmt.Errorf("ceremony - FinishLogin: %w", err)
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - newAccount: %w", err)
+	}
+
+	found := func([]byte, []byte) (webauthn.User, error) { return owner, nil }
+
+	_, credential, err := c.webauthn.ValidatePasskeyLogin(found, session, parsed)
+	if err != nil {
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - c.webauthn.ValidatePasskeyLogin: %w: %w",
+			entity.ErrPasskeyCeremonyInvalid, err)
+	}
+
+	if credential.Authenticator.CloneWarning {
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - sign count did not advance: %w",
+			entity.ErrPasskeyCeremonyInvalid)
 	}
 
 	record, err := json.Marshal(credential)
 	if err != nil {
-		return Login{}, fmt.Errorf("ceremony - FinishLogin - json.Marshal credential: %w", err)
+		return entity.PasskeyLogin{}, fmt.Errorf("ceremony - FinishLogin - json.Marshal credential: %w", err)
 	}
 
 	expiresAt := session.Expires
@@ -217,72 +241,9 @@ func (c *Ceremony) FinishLogin(token string, body []byte, lookup Lookup) (Login,
 
 	hash := sha256.Sum256([]byte(session.Challenge))
 
-	return Login{
+	return entity.PasskeyLogin{
 		UserID: owner.id, PasskeyID: credential.ID, Credential: record, ChallengeHash: hash[:], ExpiresAt: expiresAt.UTC(),
 	}, nil
-}
-
-func (c *Ceremony) validateLogin(
-	session *webauthn.SessionData, parsed *protocol.ParsedCredentialAssertionData, lookup Lookup,
-) (*account, *webauthn.Credential, error) {
-	var lookupErr error
-
-	handler := func(rawID, handle []byte) (webauthn.User, error) {
-		owner, err := lookupAccount(rawID, handle, lookup)
-		if err != nil {
-			lookupErr = err
-
-			return nil, err
-		}
-
-		return owner, nil
-	}
-
-	user, credential, err := c.webauthn.ValidatePasskeyLogin(handler, *session, parsed)
-
-	if lookupErr != nil && !errors.Is(lookupErr, entity.ErrPasskeyCeremonyInvalid) {
-		return nil, nil, lookupErr
-	}
-
-	if err != nil {
-		return nil, nil, fmt.Errorf("c.webauthn.ValidatePasskeyLogin: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
-	}
-
-	if credential.Authenticator.CloneWarning {
-		return nil, nil, fmt.Errorf("sign count did not advance: %w", entity.ErrPasskeyCeremonyInvalid)
-	}
-
-	owner, ok := user.(*account)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected user %T: %w", user, entity.ErrPasskeyCeremonyInvalid)
-	}
-
-	return owner, credential, nil
-}
-
-// lookupAccount is the discoverable login handler: the user handle is the owner's UUID bytes. A
-// handle that names no user is entity.ErrPasskeyCeremonyInvalid.
-func lookupAccount(rawID, handle []byte, lookup Lookup) (*account, error) {
-	id, err := uuid.FromBytes(handle)
-	if err != nil {
-		return nil, fmt.Errorf("uuid.FromBytes: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
-	}
-
-	user, passkey, err := lookup(id.String(), rawID)
-	if err != nil {
-		if errors.Is(err, entity.ErrUserNotFound) {
-			return nil, fmt.Errorf("lookup: %w: %w", entity.ErrPasskeyCeremonyInvalid, err)
-		}
-
-		return nil, fmt.Errorf("lookup: %w", err)
-	}
-
-	var stored []entity.Passkey
-	if passkey != nil {
-		stored = []entity.Passkey{*passkey}
-	}
-
-	return newAccount(user, stored)
 }
 
 // signSession seals the ceremony state into a token the client hands back on finish.

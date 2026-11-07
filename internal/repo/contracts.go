@@ -79,6 +79,29 @@ type (
 		Verify(ctx context.Context, code, state, token string) (entity.SSOIdentity, error)
 	}
 
+	// PasskeyCeremony runs the WebAuthn ceremonies of passkey registration and sign-in. Callers pass
+	// and get the JSON the browser speaks; a ceremony's state travels from begin to finish in its
+	// token. It stores nothing. Anything that does not complete a ceremony is
+	// entity.ErrPasskeyCeremonyInvalid.
+	PasskeyCeremony interface {
+		// CheckReauth refuses a sign-in at authTime too old to add a passkey, with
+		// entity.ErrPasskeyReauthRequired.
+		CheckReauth(authTime time.Time) error
+		// BeginRegistration starts adding a passkey for user, excluding the passkeys they have.
+		BeginRegistration(user *entity.User, stored []entity.Passkey) (entity.CeremonyStarted, error)
+		// FinishRegistration verifies the browser's new credential against the ceremony in token,
+		// begun for userID, and returns its ID and the record to store.
+		FinishRegistration(userID, token string, body []byte) (entity.PasskeyID, json.RawMessage, error)
+		// BeginLogin starts a sign-in with any passkey the authenticator holds for the app.
+		BeginLogin() (entity.CeremonyStarted, error)
+		// LoginFor reads the user and passkey an assertion names, before anything is verified.
+		LoginFor(body []byte) (userID string, id entity.PasskeyID, err error)
+		// FinishLogin verifies the assertion in body against the ceremony in token, for user's
+		// passkey as stored, and returns the sign-in to record. A sign count that did not advance
+		// (a possible clone) does not complete it.
+		FinishLogin(token string, body []byte, user *entity.User, passkey *entity.Passkey) (entity.PasskeyLogin, error)
+	}
+
 	// SessionIssuer signs the auth token a sign-in answers with, carrying the user's roles.
 	SessionIssuer interface {
 		Issue(userID string, roles []entity.Role) (string, error)

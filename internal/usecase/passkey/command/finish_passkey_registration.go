@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
@@ -33,7 +32,7 @@ func (c FinishPasskeyRegistration) ActorID() string { return c.UserID }
 // FinishPasskeyRegistrationHandler handles FinishPasskeyRegistration. Now is the clock (time.Now when
 // nil).
 type FinishPasskeyRegistrationHandler struct {
-	Ceremony *ceremony.Ceremony
+	Ceremony repo.PasskeyCeremony
 	Store    repo.EventStore
 	Now      func() time.Time
 }

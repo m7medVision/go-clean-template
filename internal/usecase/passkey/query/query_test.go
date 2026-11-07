@@ -9,11 +9,10 @@ import (
 	"github.com/descope/virtualwebauthn"
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -24,12 +23,9 @@ var errRead = errors.New("read failed")
 func newCeremony(t *testing.T) *ceremony.Ceremony {
 	t.Helper()
 
-	signer, err := jwt.NewScoped(passkeytest.SigningKey, passkeytest.CeremonyPurpose, passkeytest.CeremonyTimeout)
-	require.NoError(t, err)
-
-	c, err := ceremony.New(signer, &ceremony.Config{
-		RPID: passkeytest.RPID, RPName: passkeytest.RPName, RPOrigins: []string{passkeytest.RPOrigin},
-		Timeout: passkeytest.CeremonyTimeout, ReauthMaxAge: passkeytest.ReauthMaxAge,
+	c, err := ceremony.New(ceremonytest.SigningKey, &ceremony.Config{
+		RPID: ceremonytest.RPID, RPName: ceremonytest.RPName, RPOrigins: []string{ceremonytest.RPOrigin},
+		Timeout: ceremonytest.CeremonyTimeout, ReauthMaxAge: ceremonytest.ReauthMaxAge,
 	})
 	require.NoError(t, err)
 
@@ -79,7 +75,7 @@ func TestBeginPasskeyRegistrationRefusesAStaleSignInBeforeReadingAnything(t *tes
 	h := query.BeginPasskeyRegistrationHandler{Ceremony: newCeremony(t), Users: r.users, Passkeys: r.passkeys}
 
 	_, err := h.Handle(context.Background(), query.BeginPasskeyRegistration{
-		UserID: uuid.NewString(), AuthTime: time.Now().Add(-passkeytest.ReauthMaxAge - time.Minute),
+		UserID: uuid.NewString(), AuthTime: time.Now().Add(-ceremonytest.ReauthMaxAge - time.Minute),
 	})
 
 	require.ErrorIs(t, err, entity.ErrPasskeyReauthRequired)

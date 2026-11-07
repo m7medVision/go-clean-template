@@ -1,7 +1,7 @@
-// Package passkeytest plays the browser and the authenticator for the passkey tests: it answers
+// Package ceremonytest plays the browser and the authenticator for the passkey tests: it answers
 // creation and request options with attestations and assertions from a virtual authenticator, as
 // navigator.credentials.create/get and PublicKeyCredential.toJSON would.
-package passkeytest
+package ceremonytest
 
 import (
 	"encoding/json"

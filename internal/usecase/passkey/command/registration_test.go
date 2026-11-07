@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,7 +79,7 @@ func TestAnInvalidRegistrationRecordsNothing(t *testing.T) {
 	token, body := f.attestation(t)
 
 	_, err := command.FinishPasskeyRegistrationHandler{Ceremony: f.ceremony, Store: f.store}.Handle(context.Background(),
-		command.FinishPasskeyRegistration{UserID: f.user.ID, Token: passkeytest.Tamper(t, token), Name: "x", Body: body})
+		command.FinishPasskeyRegistration{UserID: f.user.ID, Token: ceremonytest.Tamper(t, token), Name: "x", Body: body})
 
 	require.ErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
 	assert.Empty(t, f.events(entity.PasskeyID(f.cred.ID)))

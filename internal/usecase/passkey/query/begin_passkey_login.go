@@ -4,26 +4,27 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
 // BeginPasskeyLogin returns the request options for a discoverable navigator.credentials.get and the
 // token FinishPasskeyLogin needs.
 type BeginPasskeyLogin struct {
-	cqrs.Query[ceremony.Started]
+	cqrs.Query[entity.CeremonyStarted]
 }
 
 // BeginPasskeyLoginHandler handles BeginPasskeyLogin.
 type BeginPasskeyLoginHandler struct {
-	Ceremony *ceremony.Ceremony
+	Ceremony repo.PasskeyCeremony
 }
 
 // Handle -.
-func (h BeginPasskeyLoginHandler) Handle(context.Context, BeginPasskeyLogin) (ceremony.Started, error) {
+func (h BeginPasskeyLoginHandler) Handle(context.Context, BeginPasskeyLogin) (entity.CeremonyStarted, error) {
 	started, err := h.Ceremony.BeginLogin()
 	if err != nil {
-		return ceremony.Started{}, fmt.Errorf("BeginPasskeyLogin: %w", err)
+		return entity.CeremonyStarted{}, fmt.Errorf("BeginPasskeyLogin: %w", err)
 	}
 
 	return started, nil

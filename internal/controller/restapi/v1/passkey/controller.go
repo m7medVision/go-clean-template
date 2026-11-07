@@ -8,7 +8,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -36,7 +35,7 @@ func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	r.deletePasskey(api)
 }
 
-func (r *controller) beginRegistration(ctx context.Context, userID string, authTime time.Time) (ceremony.Started, error) {
+func (r *controller) beginRegistration(ctx context.Context, userID string, authTime time.Time) (entity.CeremonyStarted, error) {
 	return cqrs.SendQuery(ctx, r.qs, query.BeginPasskeyRegistration{UserID: userID, AuthTime: authTime})
 }
 
@@ -71,7 +70,7 @@ func (r *controller) delete(ctx context.Context, userID, id string) error {
 	return err
 }
 
-func (r *controller) beginLogin(ctx context.Context) (ceremony.Started, error) {
+func (r *controller) beginLogin(ctx context.Context) (entity.CeremonyStarted, error) {
 	return cqrs.SendQuery(ctx, r.qs, query.BeginPasskeyLogin{})
 }
 

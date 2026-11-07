@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
@@ -30,7 +29,7 @@ type FinishPasskeyLogin struct {
 
 // FinishPasskeyLoginHandler handles FinishPasskeyLogin. Now is the clock (time.Now when nil).
 type FinishPasskeyLoginHandler struct {
-	Ceremony *ceremony.Ceremony
+	Ceremony repo.PasskeyCeremony
 	Store    repo.EventStore
 	Users    repo.UserReadModel
 	Guard    repo.ChallengeGuard
@@ -41,20 +40,25 @@ type FinishPasskeyLoginHandler struct {
 
 // Handle -.
 func (h *FinishPasskeyLoginHandler) Handle(ctx context.Context, cmd FinishPasskeyLogin) (entity.SignedIn, error) {
-	var used *entity.PasskeyAggregate
-
-	login, err := h.Ceremony.FinishLogin(cmd.Token, cmd.Body, h.lookup(ctx, &used))
-	if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
-		return entity.SignedIn{}, fmt.Errorf("FinishPasskeyLogin: %w: %w", entity.ErrPasskeyLoginInvalid, err)
+	userID, id, err := h.Ceremony.LoginFor(cmd.Body)
+	if err != nil {
+		return entity.SignedIn{}, loginFailed(err)
 	}
 
+	user, passkey, err := h.find(ctx, userID, id)
+	if err != nil {
+		return entity.SignedIn{}, loginFailed(err)
+	}
+
+	login, err := h.Ceremony.FinishLogin(cmd.Token, cmd.Body, &user,
+		&entity.Passkey{ID: id, UserID: userID, Credential: passkey.Credential()})
+	if err != nil {
+		return entity.SignedIn{}, loginFailed(err)
+	}
+
+	written, err := h.record(ctx, &login, passkey)
 	if err != nil {
 		return entity.SignedIn{}, fmt.Errorf("FinishPasskeyLogin: %w", err)
-	}
-
-	written, err := h.record(ctx, &login, used)
-	if err != nil {
-		return entity.SignedIn{}, err
 	}
 
 	token, err := h.Sessions.Issue(login.UserID, entity.LocalRoles())
@@ -65,41 +69,49 @@ func (h *FinishPasskeyLoginHandler) Handle(ctx context.Context, cmd FinishPasske
 	return entity.SignedIn{Written: written, Token: token}, nil
 }
 
-// lookup finds the user and passkey an assertion names, and keeps the passkey's aggregate in used.
-// The credential is loaded from its stream, not the read model, so the sign count it checks is the
-// latest one even right after another login.
-func (h *FinishPasskeyLoginHandler) lookup(ctx context.Context, used **entity.PasskeyAggregate) ceremony.Lookup {
-	return func(userID string, id entity.PasskeyID) (*entity.User, *entity.Passkey, error) {
-		user, err := h.Users.ByID(ctx, userID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("h.Users.ByID: %w", err)
-		}
-
-		passkey := &entity.PasskeyAggregate{}
-
-		err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey)
-		if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && !passkey.OwnedBy(userID)) {
-			return &user, nil, nil
-		}
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("h.Store.Load: %w", err)
-		}
-
-		*used = passkey
-
-		return &user, &entity.Passkey{ID: id, UserID: userID, Credential: passkey.Credential()}, nil
+// find loads the user an assertion names and their passkey. The passkey is loaded from its stream,
+// not the read model, so the sign count it is checked against is the latest one, even right after
+// another sign-in. An unknown user, or a passkey that is unknown or not theirs, does not complete
+// the ceremony.
+func (h *FinishPasskeyLoginHandler) find(ctx context.Context, userID string, id entity.PasskeyID) (
+	entity.User, *entity.PasskeyAggregate, error,
+) {
+	user, err := h.Users.ByID(ctx, userID)
+	if errors.Is(err, entity.ErrUserNotFound) {
+		return entity.User{}, nil, fmt.Errorf("%w: %w", entity.ErrPasskeyCeremonyInvalid, err)
 	}
+
+	if err != nil {
+		return entity.User{}, nil, fmt.Errorf("h.Users.ByID: %w", err)
+	}
+
+	passkey := &entity.PasskeyAggregate{}
+
+	err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey)
+	if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && !passkey.OwnedBy(userID)) {
+		return entity.User{}, nil, fmt.Errorf("no such passkey: %w", entity.ErrPasskeyCeremonyInvalid)
+	}
+
+	if err != nil {
+		return entity.User{}, nil, fmt.Errorf("h.Store.Load: %w", err)
+	}
+
+	return user, passkey, nil
+}
+
+// loginFailed says that a ceremony that did not complete is a failed sign-in.
+func loginFailed(err error) error {
+	if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
+		return fmt.Errorf("FinishPasskeyLogin: %w: %w", entity.ErrPasskeyLoginInvalid, err)
+	}
+
+	return fmt.Errorf("FinishPasskeyLogin: %w", err)
 }
 
 // record burns the login's challenge and records the passkey's use, in one transaction.
-func (h *FinishPasskeyLoginHandler) record(ctx context.Context, login *ceremony.Login, used *entity.PasskeyAggregate) (
-	entity.Written, error,
-) {
-	if used == nil {
-		return entity.Written{}, fmt.Errorf("FinishPasskeyLogin - no passkey: %w", entity.ErrPasskeyLoginInvalid)
-	}
-
+func (h *FinishPasskeyLoginHandler) record(
+	ctx context.Context, login *entity.PasskeyLogin, passkey *entity.PasskeyAggregate,
+) (entity.Written, error) {
 	var written entity.Written
 
 	err := h.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -111,19 +123,16 @@ func (h *FinishPasskeyLoginHandler) record(ctx context.Context, login *ceremony.
 			return fmt.Errorf("h.Guard.BurnChallenge: %w", err)
 		}
 
-		if err := used.Use(login.UserID, login.Credential, aggregate.Now(h.Now)); err != nil {
+		if err := passkey.Use(login.UserID, login.Credential, aggregate.Now(h.Now)); err != nil {
 			return err
 		}
 
 		var err error
 
-		written, err = aggregate.Save(ctx, h.Store, used)
+		written, err = aggregate.Save(ctx, h.Store, passkey)
 
 		return err
 	})
-	if err != nil {
-		return entity.Written{}, fmt.Errorf("FinishPasskeyLogin: %w", err)
-	}
 
-	return written, nil
+	return written, err
 }

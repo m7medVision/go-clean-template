@@ -10,11 +10,10 @@ import (
 	"github.com/descope/virtualwebauthn"
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,12 +26,9 @@ func nowStored() time.Time { return now().Truncate(time.Microsecond) }
 func newCeremony(t *testing.T) *ceremony.Ceremony {
 	t.Helper()
 
-	signer, err := jwt.NewScoped(passkeytest.SigningKey, passkeytest.CeremonyPurpose, passkeytest.CeremonyTimeout)
-	require.NoError(t, err)
-
-	c, err := ceremony.New(signer, &ceremony.Config{
-		RPID: passkeytest.RPID, RPName: passkeytest.RPName, RPOrigins: []string{passkeytest.RPOrigin},
-		Timeout: passkeytest.CeremonyTimeout, ReauthMaxAge: passkeytest.ReauthMaxAge,
+	c, err := ceremony.New(ceremonytest.SigningKey, &ceremony.Config{
+		RPID: ceremonytest.RPID, RPName: ceremonytest.RPName, RPOrigins: []string{ceremonytest.RPOrigin},
+		Timeout: ceremonytest.CeremonyTimeout, ReauthMaxAge: ceremonytest.ReauthMaxAge,
 	})
 	require.NoError(t, err)
 
@@ -74,7 +70,7 @@ func (f *fixture) attestation(t *testing.T) (token string, body []byte) {
 	started, err := f.ceremony.BeginRegistration(&f.user, nil)
 	require.NoError(t, err)
 
-	return started.Token, passkeytest.Attest(t, started.Options, f.cred)
+	return started.Token, ceremonytest.Attest(t, started.Options, f.cred)
 }
 
 // register registers the fixture's credential through FinishPasskeyRegistration.

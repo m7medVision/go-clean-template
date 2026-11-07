@@ -13,7 +13,8 @@ The code, layer by layer:
 | Layer | Where |
 | --- | --- |
 | Entity | [`internal/entity/passkey.go`](../internal/entity/passkey.go), the aggregate and its events in [`passkey_aggregate.go`](../internal/entity/passkey_aggregate.go) and [`passkey_events.go`](../internal/entity/passkey_events.go), sentinels in [`errors.go`](../internal/entity/errors.go) |
-| Use case | [`internal/usecase/passkey`](../internal/usecase/passkey): the `begin` steps and the reads are queries, the `finish` steps, rename and delete are commands; [`ceremony/`](../internal/usecase/passkey/ceremony/ceremony.go) is the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn) |
+| Use case | [`internal/usecase/passkey`](../internal/usecase/passkey): the `begin` steps and the reads are queries, the `finish` steps, rename and delete are commands, against the `repo.PasskeyCeremony` port |
+| Adapter | [`internal/repo/ceremony`](../internal/repo/ceremony/ceremony.go), the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn); it signs the ceremony token with its own scope and `WEBAUTHN_CEREMONY_TIMEOUT` as its lifetime. `ceremonytest/` drives a software authenticator for the tests |
 | Read model | [`internal/repo/persistent/passkey`](../internal/repo/persistent/passkey/passkey.go) (with the `passkey` projector and the challenge guard), queries in [`queries/passkey.sql`](../internal/repo/persistent/queries/passkey.sql) |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/passkey/`](../internal/controller/restapi/v1/passkey) |
@@ -92,14 +93,14 @@ Public, from `/login`.
    with `mediation: "conditional"`, which puts the passkeys in the autofill of the email field
    (`autocomplete="username webauthn"`).
 3. `POST /v1/auth/passkey/finish`, with the token in `X-Ceremony-Token`, then runs, in this order:
-   1. verify the ceremony token;
-   2. parse the assertion;
-   3. look the owner up by the assertion's user handle (the user's UUID as 16 bytes), and have
-      go-webauthn check the signature against that user's stored passkeys;
-   4. reject a sign count that did not advance (see below);
-   5. **burn the challenge**;
-   6. store the credential's new state and stamp `last_used_at`;
-   7. issue the auth JWT and answer `{token}`, the same body password login returns.
+   1. read which user (the assertion's user handle, the user's UUID as 16 bytes) and which passkey
+      (its raw ID) the assertion names, and load that user and that passkey's stream; an unknown
+      user, or a passkey that is unknown or not theirs, fails the sign-in;
+   2. verify the ceremony token, and have go-webauthn check the signature against that passkey;
+   3. reject a sign count that did not advance (see below);
+   4. **burn the challenge**;
+   5. store the credential's new state and stamp `last_used_at`;
+   6. issue the auth JWT and answer `{token}`, the same body password login returns.
 
 The burn comes after the signature check and before anything is written or issued. Only a signature
 from a registered passkey can consume a challenge, so someone holding a captured token and a forged
@@ -262,9 +263,10 @@ the options JSON, makes an EC2 key, and writes the attestation and assertion JSO
 Both test suites use it with the real go-webauthn, so the ceremonies are checked end to end, not
 mocked.
 
-- **Unit**, in [`internal/usecase/passkey/`](../internal/usecase/passkey): `ceremony/` against the real
-  go-webauthn, the commands against the in-memory event store, the queries with gomock read models.
-  The helpers that drive the software authenticator are in `passkeytest/`. Together they check: registration and login succeed; `begin` refuses a sign-in older than the max age,
+- **Unit**: [`internal/repo/ceremony`](../internal/repo/ceremony) against the real go-webauthn, and in
+  [`internal/usecase/passkey/`](../internal/usecase/passkey) the commands against the in-memory event
+  store and the queries with gomock read models, both with the real ceremony. The helpers that drive
+  the software authenticator are in `internal/repo/ceremony/ceremonytest/`. Together they check: registration and login succeed; `begin` refuses a sign-in older than the max age,
   or one without an issue time, before reading anything; a tampered, expired or foreign token fails;
   so does an attestation or assertion without the user-verified flag, an assertion for another
   ceremony's challenge, an unknown credential or user handle, a credential

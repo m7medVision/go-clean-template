@@ -43,3 +43,21 @@ func (id *PasskeyID) UnmarshalText(text []byte) error {
 
 	return nil
 }
+
+// CeremonyStarted is a WebAuthn ceremony begun: the options for navigator.credentials, and the
+// token its finish needs.
+type CeremonyStarted struct {
+	Options []byte
+	Token   string
+}
+
+// PasskeyLogin is a verified passkey sign-in: whose it is, the credential record as the login left
+// it (its new sign count), and the challenge to burn, which expires with the ceremony, so the
+// sign-in completes once.
+type PasskeyLogin struct {
+	UserID        string
+	PasskeyID     PasskeyID
+	Credential    json.RawMessage
+	ChallengeHash []byte
+	ExpiresAt     time.Time
+}

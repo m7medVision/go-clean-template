@@ -9,10 +9,10 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
-	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,7 +34,7 @@ func (f *fixture) login(t *testing.T) login {
 	users.EXPECT().ByID(gomock.Any(), f.user.ID).Return(f.user, nil).AnyTimes()
 
 	guard := newBurnStore()
-	tokens := jwt.New(passkeytest.SigningKey, time.Hour)
+	tokens := jwt.New(ceremonytest.SigningKey, time.Hour)
 
 	return login{
 		handler: &command.FinishPasskeyLoginHandler{
@@ -58,7 +58,7 @@ func (f *fixture) assertion(t *testing.T) (token string, body []byte, challenge 
 
 	require.NoError(t, json.Unmarshal(started.Options, &raw))
 
-	return started.Token, passkeytest.Assert(t, started.Options, f.cred, &f.auth), raw.Challenge
+	return started.Token, ceremonytest.Assert(t, started.Options, f.cred, &f.auth), raw.Challenge
 }
 
 func TestFinishPasskeyLoginSignsInAndRecordsTheUse(t *testing.T) {
