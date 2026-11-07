@@ -555,3 +555,23 @@ Kept after sweep 2:
 - Sign-in timing: an unknown email answers before the password hash is compared, so response time
   can tell which emails exist. It predates the refactor and is a security change, not an untangling
   one: reported to the user rather than changed here.
+
+## Sweep 3 (task 35): the last pass
+
+Two read-only reviewers at 3c5899f: one over everything sweep 2 changed, one over the whole Go code
+with a high bar (bugs, special cases, hidden or needless links, real surplus only).
+
+- Sweep 2's fixes held. What it left: four comments it made stale, CLAUDE.md saying a `default`
+  satisfies `exhaustive` (this config does not let it), and the task read model's new test with no
+  generated twin. Fixed.
+- An SSO provider outage answered 502 only at the first lookup; after it, the code exchange and the
+  key fetch answered 500 or 401, and every provider call ran without a timeout. Fixed as the rate
+  provider was: every provider failure is `ErrOIDCUnavailable`, a 4xx from the token endpoint stays
+  the caller's bad ceremony, and the calls are bounded.
+
+Kept after sweep 3:
+- Releasing a claim (`entity.Claim.Release`, the stores' release path, its contract test), which no
+  domain uses yet: it is the other half of the claim contract, both stores pass it, and without it
+  the first rename or account deletion would have to change the store in three places.
+- `ConvertCurrency` checking its input in the handler (`entity.NewConversion`), not `Validate()`:
+  the amount is parsed once and every transport gets the same answer.

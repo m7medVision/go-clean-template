@@ -270,9 +270,10 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 - [x] The generator's templates and goldens re-synced to S1–S5 (the first pass missed S3/S4: the generator was written on a tree from before them; gen-check and gen-e2e green at e2cba7f).
 - [x] Sweep 2: three reviewers, findings U1–U5 recorded in the decision log, fixed and merged
       (what was kept, and why, is listed there).
-- [ ] Sweep 3 reports nothing worth fixing.
-- [ ] Fresh reviewers report no remaining special case, hidden link, needless link or surplus worth
-      fixing; whatever they found is fixed.
+- [x] Sweep 3: two reviewers; what they found is fixed or kept with its reason in the decision log.
+- [x] Fresh reviewers report no remaining special case, hidden link, needless link or surplus worth
+      fixing; whatever they found is fixed. (Sweep 3's whole-code pass still found one real bug, the
+      SSO outage mapping: fixed. No further sweep ran, so "nothing left" is that pass's judgment.)
 
 **Verify:** G4. **Depends on:** 34.
 
