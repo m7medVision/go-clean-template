@@ -48,9 +48,3 @@ func TestTheTaskImporterReturnsAReadFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, errWrite)
 }
-
-func TestTheImporterIsTheTaskDomains(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "task", task.NewImporter(nil).Domain())
-}

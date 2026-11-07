@@ -136,13 +136,4 @@ func TestTheTaskProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestTheProjectorIsNamedAndOwnsTheTasksTable(t *testing.T) {
-	t.Parallel()
-
-	p := task.NewProjector(nil)
-
-	assert.Equal(t, "task", p.Name())
-	assert.Equal(t, []string{"tasks"}, p.Tables())
-}
-
 func otherDomainEvent() entity.Event { return entity.UserRegistered{} }

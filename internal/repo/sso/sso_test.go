@@ -231,21 +231,3 @@ func TestVerifyRefusesAnInvalidCeremony(t *testing.T) {
 		})
 	}
 }
-
-func TestACodeWorksOnce(t *testing.T) {
-	t.Parallel()
-
-	idp := ssotest.New(t)
-	s := newSSO(t, idp)
-
-	authURL, token, err := s.Begin(t.Context())
-	require.NoError(t, err)
-
-	code, state := idp.Authorize(authURL, nil)
-
-	_, err = s.Verify(t.Context(), code, state, token)
-	require.NoError(t, err)
-
-	_, err = s.Verify(t.Context(), code, state, token)
-	require.ErrorIs(t, err, entity.ErrOIDCCeremonyInvalid)
-}

@@ -89,6 +89,33 @@ func TestABadMailSenderStopsTheWorker(t *testing.T) {
 	require.Error(t, registerQueues(d, newTestBuses(), w))
 }
 
+// A subscriber's name keys its checkpoint row, and an importer's domain its backfill marker. Renaming
+// one orphans the stored row: the subscriber starts again from the first event (an event handler
+// repeats its side effects), and the importer runs again. Change this list only with a migration of
+// those rows.
+func TestTheStoredNamesStayTheSame(t *testing.T) {
+	t.Parallel()
+
+	d := testDeps(nil)
+
+	var subscribers, domains []string
+
+	for _, p := range projectors(d.pg) {
+		subscribers = append(subscribers, p.Name())
+	}
+
+	for _, h := range eventHandlers(d) {
+		subscribers = append(subscribers, h.Name())
+	}
+
+	for _, imp := range importers(d) {
+		domains = append(domains, imp.Domain())
+	}
+
+	assert.ElementsMatch(t, []string{"task", "user", "exchange", "passkey", "send-welcome-email"}, subscribers)
+	assert.ElementsMatch(t, []string{"task", "user", "exchange", "passkey"}, domains)
+}
+
 // Every event type reaches a read model, and no two subscribers share a checkpoint.
 func TestTheModulesSubscribersRunTogether(t *testing.T) {
 	t.Parallel()

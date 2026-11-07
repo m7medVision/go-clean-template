@@ -91,9 +91,3 @@ func TestTheExchangeImporterReturnsAReadFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, errWrite)
 }
-
-func TestTheImporterIsTheExchangeDomains(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "exchange", exchange.NewImporter(nil).Domain())
-}

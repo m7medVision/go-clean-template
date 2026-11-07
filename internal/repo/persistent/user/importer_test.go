@@ -66,9 +66,3 @@ func TestTheUserImporterReturnsAReadFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, errWrite)
 }
-
-func TestTheImporterIsTheUserDomains(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "user", user.NewImporter(nil).Domain())
-}

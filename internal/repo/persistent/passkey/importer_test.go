@@ -51,9 +51,3 @@ func TestThePasskeyImporterReturnsAReadFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, errWrite)
 }
-
-func TestTheImporterIsThePasskeyDomains(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "passkey", passkey.NewImporter(nil).Domain())
-}

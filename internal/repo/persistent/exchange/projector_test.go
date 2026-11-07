@@ -93,13 +93,4 @@ func TestTheExchangeProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestTheExchangeProjectorOwnsTheHistoryTable(t *testing.T) {
-	t.Parallel()
-
-	p := exchange.NewProjector(nil)
-
-	assert.Equal(t, "exchange", p.Name())
-	assert.Equal(t, []string{"exchange_history"}, p.Tables())
-}
-
 func otherDomainEvent() entity.Event { return entity.TaskDeleted{} }

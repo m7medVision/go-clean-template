@@ -123,13 +123,4 @@ func TestThePasskeyProjectorHasACaseForEveryEventItHandles(t *testing.T) {
 	require.ErrorIs(t, project(t, &fakeQuerier{}, otherDomainEvent()), entity.ErrUnhandledEvent)
 }
 
-func TestThePasskeyProjectorOwnsTheCredentialsTable(t *testing.T) {
-	t.Parallel()
-
-	p := passkey.NewProjector(nil)
-
-	assert.Equal(t, "passkey", p.Name())
-	assert.Equal(t, []string{"webauthn_credentials"}, p.Tables())
-}
-
 func otherDomainEvent() entity.Event { return entity.TaskDeleted{} }

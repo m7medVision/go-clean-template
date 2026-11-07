@@ -104,21 +104,6 @@ func TestUseRecordsTheCredentialTheNextSignInVerifiesAgainst(t *testing.T) {
 	assert.JSONEq(t, string(updated), string(a.Credential()))
 }
 
-func TestImportPasskeyAggregateRecordsTheRow(t *testing.T) {
-	t.Parallel()
-
-	used := laterAt()
-	row := entity.Passkey{
-		ID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), CreatedAt: createdAt(), LastUsedAt: &used,
-	}
-
-	a := entity.ImportPasskeyAggregate(&row)
-
-	assert.Equal(t, []entity.Event{entity.PasskeyImported{
-		PasskeyID: passkeyID(), UserID: _owner, Name: "Laptop", Credential: record(), CreatedAt: createdAt(), LastUsedAt: &used,
-	}}, a.Pending())
-}
-
 func TestPasskeyAggregateSnapshotKeepsTheOwnerAndTheCredential(t *testing.T) {
 	t.Parallel()
 

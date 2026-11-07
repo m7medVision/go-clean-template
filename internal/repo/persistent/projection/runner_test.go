@@ -41,20 +41,26 @@ func (tocked) SchemaVersion() int { return 1 }
 
 // fakeStore keeps events and checkpoints in memory. A transaction's checkpoint moves apply only
 // when fn succeeds, as Postgres would commit them; a move made by another transaction meanwhile,
-// such as a rebuild's reset, stays.
+// such as a rebuild's reset, stays. It counts the reads that failed and the locks it refused, so a
+// test can wait for the runner to have tried rather than sleep.
 type fakeStore struct {
 	mu          sync.Mutex
 	events      []entity.RecordedEvent
 	checkpoints map[string]int64
 	locked      map[string]bool
+	refused     map[string]int
 	readErr     error
+	failedReads int
 	ensureFails int
 	notify      chan struct{}
 	txs         int
 }
 
 func newFakeStore(n int) *fakeStore {
-	s := &fakeStore{checkpoints: map[string]int64{}, locked: map[string]bool{}, notify: make(chan struct{}, 1)}
+	s := &fakeStore{
+		checkpoints: map[string]int64{}, locked: map[string]bool{}, refused: map[string]int{},
+		notify: make(chan struct{}, 1),
+	}
 	for range n {
 		s.append()
 	}
@@ -96,6 +102,8 @@ func (s *fakeStore) ReadAll(_ context.Context, after int64, limit int) ([]entity
 	defer s.mu.Unlock()
 
 	if s.readErr != nil {
+		s.failedReads++
+
 		return nil, s.readErr
 	}
 
@@ -169,7 +177,33 @@ func (s *fakeStore) TryLock(_ context.Context, name string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return !s.locked[name], nil
+	if s.locked[name] {
+		s.refused[name]++
+
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// refusedLock is true once the store has refused name's lock n times.
+func (s *fakeStore) refusedLock(name string, n int) func() bool {
+	return func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		return s.refused[name] >= n
+	}
+}
+
+// failedToRead is true once n reads have failed.
+func (s *fakeStore) failedToRead(n int) func() bool {
+	return func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		return s.failedReads >= n
+	}
 }
 
 func (s *fakeStore) AdvanceCheckpoint(ctx context.Context, name string, from, to int64) (bool, error) {
@@ -325,8 +359,9 @@ func TestASubscriberLockedElsewhereIsLeftAlone(t *testing.T) {
 	r := &recorder{name: "r"}
 	start(t, s, _poll, r)
 
-	time.Sleep(5 * _poll)
+	require.Eventually(t, s.refusedLock("r", 2), _eventually, _tick, "the runner tries again after a refusal")
 	assert.Empty(t, r.positions())
+	assert.Zero(t, s.checkpoint("r"))
 
 	s.lock("r", false)
 	require.Eventually(t, handledUpTo(s, r, 2), _eventually, _tick)
@@ -379,7 +414,7 @@ func TestAReadFailureIsRetried(t *testing.T) {
 	r := &recorder{name: "r"}
 	start(t, s, _poll, r)
 
-	time.Sleep(3 * _poll)
+	require.Eventually(t, s.failedToRead(2), _eventually, _tick, "the runner reads again after a failure")
 
 	s.mu.Lock()
 	s.readErr = nil
@@ -410,10 +445,10 @@ func TestEventsASubscriberDoesNotHandlePassItBy(t *testing.T) {
 func TestRebuildRefusesAnUnknownName(t *testing.T) {
 	t.Parallel()
 
-	err := projection.Rebuild(context.Background(), nil, "missing", []projection.Projector{&projector{recorder{name: "r"}}}, nil)
+	err := projection.Rebuild(context.Background(), nil, "missing", []projection.Projector{&projector{recorder{name: "tasks"}}}, nil)
 
 	require.ErrorIs(t, err, projection.ErrUnknownProjector)
-	assert.Contains(t, err.Error(), "r")
+	assert.Contains(t, err.Error(), "tasks", "the error names the projectors that can be rebuilt")
 }
 
 // The worker can start before the app has applied the schema: the runner keeps trying to create

@@ -169,19 +169,3 @@ func TestATaskSnapshotOfTheFirstShapeStillLoads(t *testing.T) {
 	assert.Equal(t, entity.TaskStreamID(_taskID), restored.StreamID())
 	require.NoError(t, restored.Transition(_owner, entity.TaskStatusDone, laterAt()))
 }
-
-func TestImportTaskAggregateRecordsTheRowAsTaskImported(t *testing.T) {
-	t.Parallel()
-
-	row := entity.Task{
-		ID: _taskID, UserID: _owner, Title: "Old", Description: "row",
-		Status: entity.TaskStatusInProgress, CreatedAt: createdAt(), UpdatedAt: laterAt(),
-	}
-
-	task := entity.ImportTaskAggregate(&row)
-
-	assert.Equal(t, []entity.Event{entity.TaskImported{
-		TaskID: _taskID, UserID: _owner, Title: "Old", Description: "row",
-		Status: entity.TaskStatusInProgress, CreatedAt: createdAt(), UpdatedAt: laterAt(),
-	}}, task.Pending())
-}

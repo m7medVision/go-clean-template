@@ -1,7 +1,6 @@
 package ceremony_test
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"slices"
 	"testing"
@@ -292,7 +291,7 @@ func (acc *account) assert(t *testing.T, options []byte) []byte {
 	return ceremonytest.Assert(t, options, acc.cred, &acc.auth)
 }
 
-func loginChallenge(t *testing.T, options []byte) string {
+func assertLoginOptions(t *testing.T, options []byte) {
 	t.Helper()
 
 	var raw struct {
@@ -306,9 +305,7 @@ func loginChallenge(t *testing.T, options []byte) string {
 	assert.Equal(t, ceremonytest.RPID, raw.RPID)
 	assert.Equal(t, ceremonytest.CeremonyTimeout.Milliseconds(), raw.Timeout)
 	assert.Equal(t, "required", raw.UserVerification)
-	require.NotEmpty(t, raw.Challenge)
-
-	return raw.Challenge
+	assert.NotEmpty(t, raw.Challenge)
 }
 
 func TestLoginReturnsTheSignInToRecord(t *testing.T) {
@@ -320,8 +317,8 @@ func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 
 	started, err := c.BeginLogin()
 	require.NoError(t, err)
+	assertLoginOptions(t, started.Options)
 
-	challenge := sha256.Sum256([]byte(loginChallenge(t, started.Options)))
 	before := time.Now()
 
 	login, err := acc.finish(c, started.Token, acc.assert(t, started.Options))
@@ -329,7 +326,6 @@ func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 
 	assert.Equal(t, acc.user.ID, login.UserID)
 	assert.Equal(t, acc.passkey.ID, login.PasskeyID)
-	assert.Equal(t, challenge[:], login.ChallengeHash, "the burned hash is the challenge's SHA-256")
 	assert.WithinDuration(t, before.Add(ceremonytest.CeremonyTimeout), login.ExpiresAt, time.Minute)
 
 	var record webauthn.Credential
@@ -337,6 +333,36 @@ func TestLoginReturnsTheSignInToRecord(t *testing.T) {
 	require.NoError(t, json.Unmarshal(login.Credential, &record))
 	assert.Equal(t, uint32(1), record.Authenticator.SignCount)
 	assert.False(t, record.Authenticator.CloneWarning)
+}
+
+// The login handler burns ChallengeHash, so it names the ceremony: a ceremony finished again gives
+// the same hash, which the replay then finds burned, and another ceremony a different one.
+func TestTheChallengeHashNamesTheCeremony(t *testing.T) {
+	t.Parallel()
+
+	c := newCeremony(t, ceremonytest.CeremonyTimeout, nil)
+	acc := register(t, c)
+
+	first, err := c.BeginLogin()
+	require.NoError(t, err)
+
+	body := acc.assert(t, first.Options)
+
+	login, err := acc.finish(c, first.Token, body)
+	require.NoError(t, err)
+
+	replay, err := acc.finish(c, first.Token, body)
+	require.NoError(t, err)
+
+	second, err := c.BeginLogin()
+	require.NoError(t, err)
+
+	other, err := acc.finish(c, second.Token, acc.assert(t, second.Options))
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, login.ChallengeHash)
+	assert.Equal(t, login.ChallengeHash, replay.ChallengeHash)
+	assert.NotEqual(t, login.ChallengeHash, other.ChallengeHash)
 }
 
 func TestAnAuthenticatorWithoutACounterKeepsSigningIn(t *testing.T) {
