@@ -13,7 +13,7 @@ import (
 func TestWithMailRegistersTheMailQueue(t *testing.T) {
 	t.Parallel()
 
-	w := worker.New(slog.New(slog.DiscardHandler), nil)
+	w := worker.New(slog.New(slog.DiscardHandler), nil, worker.Settings{})
 
 	workerctl.NewRouter(w, slog.New(slog.DiscardHandler), workerctl.WithMail(cqrs.NewCommands()))
 

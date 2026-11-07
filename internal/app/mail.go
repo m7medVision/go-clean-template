@@ -13,20 +13,15 @@ import (
 // The SMTP client is the Mailer the app wires in.
 var _ repo.Mailer = (*smtp.Client)(nil)
 
-// newMailDeps builds what DeliverEmail renders and sends with. It fails when an embedded template is
-// broken, so a bad template stops the binary at startup.
-func newMailDeps(cfg *config.Config) (mail.Deps, error) {
+// newMailDeps builds what DeliverEmail renders and sends with, through the relay m names. It fails
+// when an embedded template is broken, so a bad template stops the binary at startup.
+func newMailDeps(m *config.Mail) (mail.Deps, error) {
 	renderer, err := mailtmpl.New()
 	if err != nil {
 		return mail.Deps{}, fmt.Errorf("mailtmpl.New: %w", err)
 	}
 
-	mailer := smtp.New(
-		cfg.Mail.SMTPHost,
-		cfg.Mail.SMTPPort,
-		cfg.Mail.From,
-		smtp.Auth(cfg.Mail.SMTPUsername, cfg.Mail.SMTPPassword),
-	)
+	mailer := smtp.New(m.SMTPHost, m.SMTPPort, m.From, smtp.Auth(m.SMTPUsername, m.SMTPPassword))
 
 	return mail.Deps{Renderer: renderer, Mailer: mailer}, nil
 }

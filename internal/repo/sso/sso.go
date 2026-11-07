@@ -17,6 +17,7 @@ import (
 	"time"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -32,20 +33,6 @@ const (
 	_callbackPath = "/sso/callback"
 )
 
-// Config -.
-type Config struct {
-	// Issuer is the provider's issuer URL; empty turns SSO off.
-	Issuer       string
-	ClientID     string
-	ClientSecret string
-	// BaseURL is the app's public origin; the provider redirects back to its /sso/callback.
-	BaseURL string
-	// RolesClaim is the dotted path to the ID-token claim holding the provider's role names.
-	RolesClaim string
-	// RoleMap maps provider role names to app role names.
-	RoleMap map[string]string
-}
-
 // ceremony is the state a sign-in carries from Begin to Verify inside the signed token.
 type ceremony struct {
 	State    string `json:"s"`
@@ -56,7 +43,9 @@ type ceremony struct {
 // SSO signs users in at the provider.
 type SSO struct {
 	state *jwt.Scoped
-	cfg   Config
+	cfg   config.OIDC
+	// redirectURL is where the provider sends the browser back to.
+	redirectURL string
 
 	// mu guards provider, discovered on the first sign-in rather than at startup, so the app starts
 	// while the provider is still down. A failed discovery is retried on the next sign-in.
@@ -66,15 +55,16 @@ type SSO struct {
 
 var _ repo.SSOProvider = (*SSO)(nil)
 
-// New returns the sign-in at cfg's provider. Its state token is signed with a key derived from
-// secret. The provider is discovered on the first sign-in, so New never fails on it.
-func New(secret string, cfg *Config) (*SSO, error) {
+// New returns the sign-in at cfg's provider, which redirects back to the app at baseURL. Its
+// state token is signed with a key derived from secret. The provider is discovered on the first
+// sign-in, so New never fails on it. An empty cfg.Issuer turns SSO off.
+func New(secret string, cfg config.OIDC, baseURL string) (*SSO, error) {
 	state, err := jwt.NewScoped(secret, _stateScope, _stateTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("sso - New - jwt.NewScoped: %w", err)
 	}
 
-	return &SSO{state: state, cfg: *cfg}, nil
+	return &SSO{state: state, cfg: cfg, redirectURL: baseURL + _callbackPath}, nil
 }
 
 // Enabled reports whether a provider is configured.
@@ -178,7 +168,7 @@ func (s *SSO) oauth(provider *gooidc.Provider) *oauth2.Config {
 		ClientID:     s.cfg.ClientID,
 		ClientSecret: s.cfg.ClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  strings.TrimSuffix(s.cfg.BaseURL, "/") + _callbackPath,
+		RedirectURL:  s.redirectURL,
 		Scopes:       []string{gooidc.ScopeOpenID, "email", "profile"},
 	}
 }

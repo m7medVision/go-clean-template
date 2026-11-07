@@ -10,14 +10,14 @@ Keep `.env` values free of spaces and quotes: both `make` and the shell read tha
 
 ## App
 
-The Default column is the value in `config.go`; "required" means the binary refuses to start without
-it.
+The Default column is the value in `config/`, the only place a default is written: the packages the
+settings reach take them as arguments. "required" means the binary refuses to start without it.
 
 | Env var | Default | |
 | --- | --- | --- |
 | `APP_NAME` | required | |
 | `APP_VERSION` | required | |
-| `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds |
+| `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds; a trailing slash is dropped |
 | `HTTP_PORT` | required | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `GRPC_PORT` | `8081` | the gRPC transport |

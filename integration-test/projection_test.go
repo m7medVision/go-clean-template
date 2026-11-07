@@ -26,6 +26,8 @@ import (
 const (
 	projectionWait = 5 * time.Second
 	projectionTick = 20 * time.Millisecond
+	// projectionBatchSize is PROJECTION_BATCH_SIZE's default.
+	projectionBatchSize = 100
 )
 
 // runCounter counts how often it was handed each position of one run's scratch notes. Its name
@@ -102,7 +104,7 @@ func startRunner(t *testing.T, pg *postgres.Postgres, c *runCounter) func() {
 	store := projection.NewStore(pg, eventstore.NewReader(pg, eventcodec.New(events)).IncludingScratch(), l)
 
 	// An hour between polls: only the LISTEN notification can wake the runner in time.
-	runner := projection.New(l, store, projection.PollInterval(time.Hour))
+	runner := projection.New(l, store, time.Hour, projectionBatchSize)
 	runner.Add(c)
 	runner.Start()
 

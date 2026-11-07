@@ -14,6 +14,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
+	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -21,20 +22,6 @@ import (
 
 // _scope scopes the ceremony token's key and audience, so no other token passes for it.
 const _scope = "webauthn-ceremony"
-
-// Config is the relying party: who passkeys are registered with, and where from.
-type Config struct {
-	RPID      string
-	RPName    string
-	RPOrigins []string
-	// Timeout is the ceremony's lifetime: its token's, the one sent to the browser and enforced on
-	// finish.
-	Timeout time.Duration
-	// ReauthMaxAge is how recent a sign-in must be to add a passkey.
-	ReauthMaxAge time.Duration
-	// Now is the clock the sign-in age is measured against; nil is time.Now.
-	Now func() time.Time
-}
 
 // Ceremony begins and finishes the WebAuthn ceremonies.
 type Ceremony struct {
@@ -47,18 +34,20 @@ type Ceremony struct {
 
 var _ repo.PasskeyCeremony = (*Ceremony)(nil)
 
-// New returns the ceremony of cfg's relying party. Its tokens are signed with a key derived from
-// secret and last cfg.Timeout. Invalid WebAuthn settings fail.
-func New(secret string, cfg *Config) (*Ceremony, error) {
-	signer, err := jwt.NewScoped(secret, _scope, cfg.Timeout)
+// New returns the ceremony of rp, the relying party: who passkeys are registered with, and where
+// from. Its tokens are signed with a key derived from secret and last rp.CeremonyTimeout, which the
+// browser is sent and finish enforces. now is the clock a sign-in's age is measured against.
+// Invalid WebAuthn settings fail.
+func New(secret string, rp config.WebAuthn, now func() time.Time) (*Ceremony, error) {
+	signer, err := jwt.NewScoped(secret, _scope, rp.CeremonyTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("ceremony - New - jwt.NewScoped: %w", err)
 	}
 
 	w, err := webauthn.New(&webauthn.Config{
-		RPID:                  cfg.RPID,
-		RPDisplayName:         cfg.RPName,
-		RPOrigins:             cfg.RPOrigins,
+		RPID:                  rp.RPID,
+		RPDisplayName:         rp.RPName,
+		RPOrigins:             rp.RPOrigins,
 		AttestationPreference: protocol.PreferNoAttestation,
 		AuthenticatorSelection: protocol.AuthenticatorSelection{
 			ResidentKey:        protocol.ResidentKeyRequirementRequired,
@@ -66,20 +55,15 @@ func New(secret string, cfg *Config) (*Ceremony, error) {
 			UserVerification:   protocol.VerificationRequired,
 		},
 		Timeouts: webauthn.TimeoutsConfig{
-			Login:        webauthn.TimeoutConfig{Enforce: true, Timeout: cfg.Timeout, TimeoutUVD: cfg.Timeout},
-			Registration: webauthn.TimeoutConfig{Enforce: true, Timeout: cfg.Timeout, TimeoutUVD: cfg.Timeout},
+			Login:        webauthn.TimeoutConfig{Enforce: true, Timeout: rp.CeremonyTimeout, TimeoutUVD: rp.CeremonyTimeout},
+			Registration: webauthn.TimeoutConfig{Enforce: true, Timeout: rp.CeremonyTimeout, TimeoutUVD: rp.CeremonyTimeout},
 		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ceremony - New - webauthn.New: %w", err)
 	}
 
-	now := cfg.Now
-	if now == nil {
-		now = time.Now
-	}
-
-	return &Ceremony{webauthn: w, signer: signer, timeout: cfg.Timeout, reauth: cfg.ReauthMaxAge, now: now}, nil
+	return &Ceremony{webauthn: w, signer: signer, timeout: rp.CeremonyTimeout, reauth: rp.ReauthMaxAge, now: now}, nil
 }
 
 // CheckReauth refuses a sign-in too old to add a passkey. A passkey outlives the session that adds

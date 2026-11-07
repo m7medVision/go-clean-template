@@ -248,9 +248,7 @@ func (r *recorder) positions() []int64 {
 func start(t *testing.T, s *fakeStore, poll time.Duration, subs ...*recorder) {
 	t.Helper()
 
-	opts := []projection.Option{projection.PollInterval(poll), projection.BatchSize(2)}
-
-	runner := projection.New(slog.New(slog.DiscardHandler), s, opts...)
+	runner := projection.New(slog.New(slog.DiscardHandler), s, poll, 2)
 	for _, sub := range subs {
 		runner.Add(sub)
 	}

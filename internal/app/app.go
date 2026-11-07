@@ -33,8 +33,8 @@ type useCases struct {
 func initUseCases(
 	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l *slog.Logger,
 ) (useCases, error) {
-	cmds, qs := newBuses(cfg, pg, projection.Names(projectors(pg)), l)
-	if err := registerHandlers(cfg, cmds, qs, newEventStore(cfg, pg), pg, jwtManager); err != nil {
+	cmds, qs := newBuses(pg, projection.Names(projectors(pg)), cfg.CQRS.ConsistencyTimeout, l)
+	if err := registerHandlers(cfg, cmds, qs, newEventStore(pg, cfg.CQRS.SnapshotEvery), pg, jwtManager); err != nil {
 		return useCases{}, err
 	}
 
@@ -43,11 +43,14 @@ func initUseCases(
 
 func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l *slog.Logger) servers {
 	router := restapi.NewRouter(
-		cfg, uc.buses, jwtManager, l,
+		restapi.Settings{
+			Version: cfg.App.Version, Docs: cfg.Docs.Enabled, Tracing: cfg.Tracing.Enabled, Metrics: cfg.Metrics.Enabled,
+		},
+		uc.buses, jwtManager, l,
 		restapi.WithPasskeys(),
 		restapi.WithOIDC(),
 	)
-	mountGraphQL(router, cfg, uc, jwtManager, l)
+	mountGraphQL(router, cfg.Docs.Enabled, uc, jwtManager, l)
 
 	httpServer := httpserver.New(
 		l,
@@ -57,24 +60,8 @@ func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l *s
 
 	return servers{
 		{name: "httpServer", server: httpServer},
-		newGRPCServer(cfg, uc, jwtManager, l),
+		newGRPCServer(cfg.GRPC.Port, uc, jwtManager, l),
 	}
-}
-
-func initTracing(ctx context.Context, cfg *config.Config, serviceName string) (tracing.ShutdownFunc, error) {
-	shutdown, err := tracing.New(ctx, tracing.Config{
-		Enabled:     cfg.Tracing.Enabled,
-		ServiceName: serviceName,
-		Version:     cfg.App.Version,
-		Endpoint:    cfg.Tracing.OTLPEndpoint,
-		Insecure:    cfg.Tracing.OTLPInsecure,
-		SampleRate:  cfg.Tracing.SampleRate,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("tracing.New: %w", err)
-	}
-
-	return shutdown, nil
 }
 
 // Run serves the app until SIGINT/SIGTERM or a server fails.
@@ -84,9 +71,9 @@ func Run(cfg *config.Config) error {
 	ctx := context.Background()
 
 	// Tracing
-	shutdownTracing, err := initTracing(ctx, cfg, cfg.App.Name)
+	shutdownTracing, err := tracing.New(ctx, cfg.App.Name, cfg.App.Version, tracing.Config(cfg.Tracing))
 	if err != nil {
-		return fmt.Errorf("app - Run - initTracing: %w", err)
+		return fmt.Errorf("app - Run - tracing.New: %w", err)
 	}
 	defer func() {
 		if err := shutdownTracing(ctx); err != nil {
@@ -106,7 +93,7 @@ func Run(cfg *config.Config) error {
 	}
 
 	// Rows written before a domain stored events become its first events, once.
-	if err = eventstore.Backfill(ctx, pg, importers(pg, newEventStore(cfg, pg))...); err != nil {
+	if err = eventstore.Backfill(ctx, pg, importers(pg, newEventStore(pg, cfg.CQRS.SnapshotEvery))...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
 	}
 

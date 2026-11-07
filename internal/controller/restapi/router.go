@@ -11,7 +11,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -22,17 +21,28 @@ import (
 
 const _apiTitle = "Go Clean Template API"
 
+// Settings say what the router serves besides the operations.
+type Settings struct {
+	// Version is the API's version, as the OpenAPI document states it.
+	Version string
+	// Docs serves the docs UI, the OpenAPI document and its schemas.
+	Docs bool
+	// Tracing opens a span per API request; Metrics counts requests and serves /metrics.
+	Tracing bool
+	Metrics bool
+}
+
 // NewRouter builds the HTTP handler for every REST surface of the app.
 func NewRouter(
-	cfg *config.Config,
+	s Settings,
 	b cqrs.Buses,
 	jwtManager *jwt.Manager,
 	l *slog.Logger,
 	opts ...Option,
 ) *chi.Mux {
-	apiConfig := newAPIConfig(cfg.App.Version)
+	apiConfig := newAPIConfig(s.Version)
 
-	if !cfg.Docs.Enabled {
+	if !s.Docs {
 		apiConfig.DocsPath = ""
 		apiConfig.OpenAPIPath = ""
 		apiConfig.SchemasPath = ""
@@ -43,11 +53,11 @@ func NewRouter(
 	r.Use(chimw.StripSlashes)
 	r.Use(middleware.Logger(l))
 
-	if cfg.Tracing.Enabled {
+	if s.Tracing {
 		r.Use(middleware.Tracing())
 	}
 
-	if cfg.Metrics.Enabled {
+	if s.Metrics {
 		prometheusMiddleware := middleware.NewMetrics(prometheus.DefaultRegisterer)
 		r.Use(prometheusMiddleware.Middleware)
 	}
@@ -55,7 +65,7 @@ func NewRouter(
 	r.Use(middleware.Recovery(l))
 	r.Use(middleware.Auth(jwtManager, l))
 
-	if cfg.Metrics.Enabled {
+	if s.Metrics {
 		r.Get("/metrics", promhttp.Handler().ServeHTTP)
 	}
 

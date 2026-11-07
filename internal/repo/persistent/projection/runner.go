@@ -17,11 +17,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 )
 
-const (
-	_defaultPollInterval = time.Second
-	_defaultBatchSize    = 100
-)
-
 var (
 	// errMoved is a checkpoint that was not where the runner read it: a rebuild reset it, or
 	// another runner moved it. The event's transaction rolls back and the runner reloads.
@@ -61,24 +56,19 @@ type Runner struct {
 	wakes  []chan struct{}
 }
 
-// New returns a runner reading s.
-func New(l *slog.Logger, s Store, opts ...Option) *Runner {
+// New returns a runner reading s, at most batchSize events at once. An idle subscriber waits
+// pollInterval for a notification before it reads again.
+func New(l *slog.Logger, s Store, pollInterval time.Duration, batchSize int) *Runner {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	r := &Runner{
+	return &Runner{
 		store:        s,
-		pollInterval: _defaultPollInterval,
-		batchSize:    _defaultBatchSize,
+		pollInterval: pollInterval,
+		batchSize:    batchSize,
 		logger:       l,
 		ctx:          ctx,
 		cancel:       cancel,
 	}
-
-	for _, opt := range opts {
-		opt(r)
-	}
-
-	return r
 }
 
 // Add registers a subscriber. Call it before Start.

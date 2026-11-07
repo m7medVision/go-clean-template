@@ -15,8 +15,7 @@ func TestRegisterAndLogin(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := resttest.Config(t)
-		handler := newRouter(cfg, &fakeUser{
+		handler := newRouter(&fakeUser{
 			registered: entity.User{ID: "user-1", Username: "johndoe"},
 			token:      "token-1",
 		})
@@ -33,8 +32,7 @@ func TestRegisterAndLogin(t *testing.T) {
 	t.Run("conflict and bad credentials", func(t *testing.T) {
 		t.Parallel()
 
-		cfg := resttest.Config(t)
-		handler := newRouter(cfg, &fakeUser{
+		handler := newRouter(&fakeUser{
 			registerErr: entity.ErrUserAlreadyExists,
 			loginErr:    entity.ErrInvalidCredentials,
 		})

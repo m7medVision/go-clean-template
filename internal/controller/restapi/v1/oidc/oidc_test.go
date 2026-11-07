@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -51,8 +50,8 @@ func (f *fakeOIDC) buses() cqrs.Buses {
 	return b
 }
 
-func newRouterWithOIDC(cfg *config.Config, oc *fakeOIDC) http.Handler {
-	return resttest.NewRouter(cfg, oc.buses(), restapi.WithOIDC())
+func newRouterWithOIDC(oc *fakeOIDC) http.Handler {
+	return resttest.NewRouter(oc.buses(), restapi.WithOIDC())
 }
 
 // postFinish posts body to path with a ceremony token, as the web client posts the callback.
@@ -72,7 +71,7 @@ func TestOIDCStatus(t *testing.T) {
 	t.Parallel()
 
 	for _, enabled := range []bool{true, false} {
-		handler := newRouterWithOIDC(resttest.Config(t), &fakeOIDC{enabled: enabled})
+		handler := newRouterWithOIDC(&fakeOIDC{enabled: enabled})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/auth/oidc", "", "")
 
@@ -91,7 +90,7 @@ func TestOIDCBegin(t *testing.T) {
 	t.Parallel()
 
 	oc := &fakeOIDC{enabled: true, authURL: "http://idp/auth?state=s", token: "ceremony"}
-	handler := newRouterWithOIDC(resttest.Config(t), oc)
+	handler := newRouterWithOIDC(oc)
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/auth/oidc/begin", "", "")
 
@@ -103,7 +102,7 @@ func TestOIDCFinish(t *testing.T) {
 	t.Parallel()
 
 	oc := &fakeOIDC{enabled: true, token: "app-jwt"}
-	handler := newRouterWithOIDC(resttest.Config(t), oc)
+	handler := newRouterWithOIDC(oc)
 
 	req := `{"code":"the-code","state":"the-state"}`
 	resp := postFinish(t, handler, "/v1/auth/oidc/finish", req)
@@ -118,7 +117,7 @@ func TestOIDCFinish(t *testing.T) {
 func TestOIDCFinishRejectsEmptyFields(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouterWithOIDC(resttest.Config(t), &fakeOIDC{enabled: true})
+	handler := newRouterWithOIDC(&fakeOIDC{enabled: true})
 
 	resp := postFinish(t, handler, "/v1/auth/oidc/finish", `{"code":"","state":"s"}`)
 
@@ -148,7 +147,7 @@ func TestOIDCErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := newRouterWithOIDC(resttest.Config(t), &fakeOIDC{enabled: true, err: tt.err})
+			handler := newRouterWithOIDC(&fakeOIDC{enabled: true, err: tt.err})
 
 			resp := postFinish(t, handler, tt.path, `{"code":"c","state":"s"}`)
 

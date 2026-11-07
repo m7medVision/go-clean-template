@@ -16,6 +16,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
+	"github.com/m7medvision/go-clean-template/pkg/tracing"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
@@ -27,9 +28,9 @@ func RunWorker(cfg *config.Config) error {
 	ctx := context.Background()
 
 	// Tracing
-	shutdownTracing, err := initTracing(ctx, cfg, cfg.App.Name+"-worker")
+	shutdownTracing, err := tracing.New(ctx, cfg.App.Name+"-worker", cfg.App.Version, tracing.Config(cfg.Tracing))
 	if err != nil {
-		return fmt.Errorf("app - RunWorker - initTracing: %w", err)
+		return fmt.Errorf("app - RunWorker - tracing.New: %w", err)
 	}
 	defer func() {
 		if err := shutdownTracing(ctx); err != nil {
@@ -51,20 +52,13 @@ func RunWorker(cfg *config.Config) error {
 	}
 
 	// Projections and event handlers
-	runner, store, err := newRunner(cfg, pg, l)
+	runner, store, err := newRunner(pg, &cfg.CQRS, loginURL(cfg.App.BaseURL), l)
 	if err != nil {
 		return fmt.Errorf("app - RunWorker - newRunner: %w", err)
 	}
 
 	// Worker
-	w := worker.New(
-		l,
-		queue.New(pg),
-		worker.PollInterval(cfg.Worker.PollInterval),
-		worker.VisibilityTimeout(cfg.Worker.VisibilityTimeout),
-		worker.BatchSize(cfg.Worker.BatchSize),
-		worker.ShutdownTimeout(cfg.Worker.ShutdownTimeout),
-	)
+	w := worker.New(l, queue.New(pg), worker.Settings(cfg.Worker))
 	workerctl.NewRouter(
 		w, l,
 		workerctl.WithMail(uc.buses.Commands),
@@ -90,20 +84,17 @@ func RunWorker(cfg *config.Config) error {
 }
 
 // newRunner returns the runner of every subscriber, and the store it reads, which must be closed
-// after the runner shuts down.
-func newRunner(cfg *config.Config, pg *postgres.Postgres, l *slog.Logger) (
+// after the runner shuts down. The welcome email links to loginURL.
+func newRunner(pg *postgres.Postgres, s *config.CQRS, loginURL string, l *slog.Logger) (
 	*projection.Runner, *projection.PostgresStore, error,
 ) {
-	ps, handlers := projectors(pg), eventHandlers(cfg, pg)
+	ps, handlers := projectors(pg), eventHandlers(pg, loginURL)
 	if err := projection.Check(ps, handlers, entity.EventTypes()); err != nil {
 		return nil, nil, err
 	}
 
 	store := projection.NewStore(pg, eventstore.NewReader(pg, newCodec()), l)
-	runner := projection.New(l, store,
-		projection.PollInterval(cfg.CQRS.ProjectionPollInterval),
-		projection.BatchSize(cfg.CQRS.ProjectionBatchSize),
-	)
+	runner := projection.New(l, store, s.ProjectionPollInterval, s.ProjectionBatchSize)
 
 	for _, p := range ps {
 		runner.Add(p)

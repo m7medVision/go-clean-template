@@ -1,14 +1,15 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
@@ -19,6 +20,7 @@ import (
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/session"
+	"github.com/m7medvision/go-clean-template/internal/repo/sso"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
@@ -45,7 +47,8 @@ const (
 // newBuses builds the command and query buses with their pipelines, outermost step first:
 // trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
 // concurrent write; then authorize and validate on both, right before the handler.
-func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l *slog.Logger) (
+// A write waits consistencyTimeout at most for the projectors to pass it.
+func newBuses(pg *postgres.Postgres, projectors []string, consistencyTimeout time.Duration, l *slog.Logger) (
 	*cqrs.Commands, *cqrs.Queries,
 ) {
 	outer := []cqrs.Step{
@@ -57,7 +60,7 @@ func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l 
 	inner := []cqrs.Step{behavior.Authorize(), behavior.Validate()}
 
 	cmds := cqrs.NewCommands(slices.Concat(outer, []cqrs.Step{
-		behavior.Wait(projection.NewCheckpoints(pg), projectors, cfg.CQRS.ConsistencyTimeout, _waitTick),
+		behavior.Wait(projection.NewCheckpoints(pg), projectors, consistencyTimeout, _waitTick),
 		behavior.Retry(_commandAttempts),
 	}, inner)...)
 	qs := cqrs.NewQueries(slices.Concat(outer, inner)...)
@@ -70,9 +73,10 @@ func newCodec() *eventcodec.Codec {
 	return eventcodec.New(entity.EventTypes(), entity.Upcasts()...)
 }
 
-// newEventStore returns the event store every command handler appends through.
-func newEventStore(cfg *config.Config, pg *postgres.Postgres) repo.EventStore {
-	return eventstore.New(pg, newCodec(), cfg.CQRS.SnapshotEvery)
+// newEventStore returns the event store every command handler appends through. It snapshots a
+// stream every snapshotEvery events.
+func newEventStore(pg *postgres.Postgres, snapshotEvery int) repo.EventStore {
+	return eventstore.New(pg, newCodec(), snapshotEvery)
 }
 
 // registerHandlers registers every domain's command and query handlers on the buses.
@@ -80,17 +84,19 @@ func registerHandlers(
 	cfg *config.Config, cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres,
 	tokens *jwt.Manager,
 ) error {
-	passkeyCeremony, err := newPasskeyCeremony(cfg)
+	// Invalid WebAuthn settings fail here. SSO never fails on the provider: it is discovered on the
+	// first sign-in, so the app starts while it is down.
+	passkeyCeremony, err := ceremony.New(cfg.JWT.Secret, cfg.WebAuthn, time.Now)
 	if err != nil {
-		return err
+		return fmt.Errorf("ceremony.New: %w", err)
 	}
 
-	signIn, err := newSSO(cfg)
+	signIn, err := sso.New(cfg.JWT.Secret, cfg.OIDC, cfg.App.BaseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("sso.New: %w", err)
 	}
 
-	mailDeps, err := newMailDeps(cfg)
+	mailDeps, err := newMailDeps(&cfg.Mail)
 	if err != nil {
 		return err
 	}
@@ -123,14 +129,14 @@ func projectors(pg *postgres.Postgres) []projection.Projector {
 }
 
 // eventHandlers lists the side effects that follow events. Nothing waits for them, and they are
-// never rebuilt: replaying one would repeat its side effects.
-func eventHandlers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber {
+// never rebuilt: replaying one would repeat its side effects. The welcome email links to loginURL.
+func eventHandlers(pg *postgres.Postgres, loginURL string) []repo.Subscriber {
 	return []repo.Subscriber{
-		userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(pg), loginURL(cfg))},
+		userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(pg), loginURL)},
 	}
 }
 
-// loginURL is the sign-in page the welcome email links to.
-func loginURL(cfg *config.Config) string {
-	return strings.TrimSuffix(cfg.App.BaseURL, "/") + "/login"
+// loginURL is the sign-in page of the app at baseURL.
+func loginURL(baseURL string) string {
+	return baseURL + "/login"
 }

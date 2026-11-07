@@ -1,27 +1,43 @@
+// Command openapi writes the REST OpenAPI document to stdout. It reads no environment: the document
+// depends only on the code and the version it states, which -version sets (make openapi passes
+// APP_VERSION).
 package main
 
 import (
-	"log"
+	"errors"
+	"flag"
+	"fmt"
 	"os"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 )
 
+var errNoVersion = errors.New("-version is required")
+
 func main() {
-	// Configuration
-	cfg, err := config.NewConfig()
-	if err != nil {
-		log.Fatalf("Config error: %s", err)
+	version := flag.String("version", "", "the API version the document states (required)")
+
+	flag.Parse()
+
+	if err := run(*version); err != nil {
+		fmt.Fprintln(os.Stderr, "openapi:", err)
+		os.Exit(1)
+	}
+}
+
+func run(version string) error {
+	if version == "" {
+		return errNoVersion
 	}
 
-	// Export
-	doc, err := restapi.OpenAPI(cfg.App.Version)
+	doc, err := restapi.OpenAPI(version)
 	if err != nil {
-		log.Fatalf("OpenAPI error: %s", err)
+		return fmt.Errorf("restapi.OpenAPI: %w", err)
 	}
 
 	if _, err = os.Stdout.Write(append(doc, '\n')); err != nil {
-		log.Fatalf("Write error: %s", err)
+		return fmt.Errorf("write: %w", err)
 	}
+
+	return nil
 }

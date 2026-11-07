@@ -55,3 +55,14 @@ func TestNewConfig_CQRSDefaults(t *testing.T) {
 	assert.Equal(t, time.Second, cfg.CQRS.ProjectionPollInterval)
 	assert.Equal(t, 100, cfg.CQRS.ProjectionBatchSize)
 }
+
+// The links the app builds join paths to APP_BASE_URL, so a trailing slash would double.
+func TestNewConfig_BaseURLLosesItsTrailingSlash(t *testing.T) {
+	setRequired(t)
+	t.Setenv("APP_BASE_URL", "https://app.example.com/")
+
+	cfg, err := config.NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://app.example.com", cfg.App.BaseURL)
+}

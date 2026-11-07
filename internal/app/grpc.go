@@ -3,7 +3,6 @@ package app
 import (
 	"log/slog"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/grpcserver"
@@ -12,11 +11,11 @@ import (
 	pbgrpc "google.golang.org/grpc"
 )
 
-// newGRPCServer builds the gRPC server with every v1 service registered.
-func newGRPCServer(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l *slog.Logger) namedServer {
+// newGRPCServer builds the gRPC server on port with every v1 service registered.
+func newGRPCServer(port string, uc *useCases, jwtManager *jwt.Manager, l *slog.Logger) namedServer {
 	grpcServer := grpcserver.New(
 		l,
-		grpcserver.Port(cfg.GRPC.Port),
+		grpcserver.Port(port),
 		grpcserver.ServerOptions(
 			pbgrpc.UnaryInterceptor(grpcmw.AuthInterceptor(jwtManager)),
 			pbgrpc.StatsHandler(otelgrpc.NewServerHandler()),

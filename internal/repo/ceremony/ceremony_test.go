@@ -10,6 +10,7 @@ import (
 	"github.com/descope/virtualwebauthn"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
+	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/ceremony"
 	"github.com/m7medvision/go-clean-template/internal/repo/ceremony/ceremonytest"
@@ -21,14 +22,17 @@ import (
 func newCeremony(t *testing.T, ttl time.Duration, now func() time.Time) *ceremony.Ceremony {
 	t.Helper()
 
-	c, err := ceremony.New(ceremonytest.SigningKey, &ceremony.Config{
-		RPID:         ceremonytest.RPID,
-		RPName:       ceremonytest.RPName,
-		RPOrigins:    []string{ceremonytest.RPOrigin},
-		Timeout:      ttl,
-		ReauthMaxAge: ceremonytest.ReauthMaxAge,
-		Now:          now,
-	})
+	if now == nil {
+		now = time.Now
+	}
+
+	c, err := ceremony.New(ceremonytest.SigningKey, config.WebAuthn{
+		RPID:            ceremonytest.RPID,
+		RPName:          ceremonytest.RPName,
+		RPOrigins:       []string{ceremonytest.RPOrigin},
+		CeremonyTimeout: ttl,
+		ReauthMaxAge:    ceremonytest.ReauthMaxAge,
+	}, now)
 	require.NoError(t, err)
 
 	return c

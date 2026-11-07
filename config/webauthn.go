@@ -6,7 +6,7 @@ import (
 
 // WebAuthn -. Passkeys only work on an origin listed in RPOrigins whose host is RPID or a
 // subdomain of it. The defaults cover Caddy, a dev server and the app's own port.
-type webAuthn struct {
+type WebAuthn struct {
 	RPID      string   `env:"WEBAUTHN_RP_ID" envDefault:"localhost"`
 	RPName    string   `env:"WEBAUTHN_RP_NAME" envDefault:"Go Clean Template"`
 	RPOrigins []string `env:"WEBAUTHN_RP_ORIGINS" envDefault:"http://localhost,http://localhost:3000,http://localhost:8080" envSeparator:","`

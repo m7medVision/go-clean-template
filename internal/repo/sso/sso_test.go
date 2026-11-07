@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/sso"
 	"github.com/m7medvision/go-clean-template/internal/repo/sso/ssotest"
@@ -13,19 +14,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newSSO(t *testing.T, idp *ssotest.IDP, configure ...func(*sso.Config)) *sso.SSO {
+func newSSO(t *testing.T, idp *ssotest.IDP, configure ...func(*config.OIDC)) *sso.SSO {
 	t.Helper()
 
-	cfg := &sso.Config{
+	cfg := config.OIDC{
 		Issuer: idp.Issuer(), ClientID: ssotest.ClientID, ClientSecret: ssotest.ClientSecret,
-		BaseURL: ssotest.BaseURL, RolesClaim: "realm_access.roles",
-		RoleMap: map[string]string{"app-admin": "admin", "app-user": "user"},
+		RolesClaim: "realm_access.roles",
+		RoleMap:    map[string]string{"app-admin": "admin", "app-user": "user"},
 	}
 	for _, c := range configure {
-		c(cfg)
+		c(&cfg)
 	}
 
-	s, err := sso.New("test-secret", cfg)
+	s, err := sso.New("test-secret", cfg, ssotest.BaseURL)
 	require.NoError(t, err)
 
 	return s
@@ -46,7 +47,7 @@ func signIn(t *testing.T, s *sso.SSO, idp *ssotest.IDP, claims map[string]any) (
 func TestDisabledSSO(t *testing.T) {
 	t.Parallel()
 
-	s := newSSO(t, ssotest.New(t), func(c *sso.Config) { c.Issuer = "" })
+	s := newSSO(t, ssotest.New(t), func(c *config.OIDC) { c.Issuer = "" })
 
 	assert.False(t, s.Enabled())
 
@@ -138,19 +139,19 @@ func TestAnIdentityWithoutAUsernameIsNamedByItsEmail(t *testing.T) {
 func TestVerifyMapsTheProvidersRoles(t *testing.T) {
 	t.Parallel()
 
-	keycloak := func(*sso.Config) {}
-	entra := func(c *sso.Config) {
+	keycloak := func(*config.OIDC) {}
+	entra := func(c *config.OIDC) {
 		c.RolesClaim = "roles"
 		c.RoleMap = map[string]string{"Tasks.Admin": "admin"}
 	}
-	okta := func(c *sso.Config) {
+	okta := func(c *config.OIDC) {
 		c.RolesClaim = "groups"
 		c.RoleMap = map[string]string{"task-admins": "admin", "everyone": "user"}
 	}
 
 	tests := []struct {
 		name      string
-		configure func(*sso.Config)
+		configure func(*config.OIDC)
 		claims    map[string]any
 		want      []entity.Role
 	}{
@@ -173,7 +174,7 @@ func TestVerifyMapsTheProvidersRoles(t *testing.T) {
 		},
 		{"a missing claim falls back to user", keycloak, nil, []entity.Role{entity.RoleUser}},
 		{"a claim of the wrong type falls back to user", keycloak, map[string]any{"realm_access": 42}, []entity.Role{entity.RoleUser}},
-		{"a map value that is no app role is dropped", func(c *sso.Config) {
+		{"a map value that is no app role is dropped", func(c *config.OIDC) {
 			c.RolesClaim = "roles"
 			c.RoleMap = map[string]string{"root": "superuser"}
 		}, map[string]any{"roles": []string{"root"}}, []entity.Role{entity.RoleUser}},

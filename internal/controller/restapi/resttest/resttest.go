@@ -7,58 +7,25 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
 )
 
-// _signingKey is the JWT_SECRET Main sets, so the tokens Token and AdminToken sign are valid.
+// _signingKey signs the tokens Token and AdminToken return, and the router checks them with it.
 const _signingKey = "test-secret"
 
-// Main sets the environment config.NewConfig reads, then runs the tests. Call it from TestMain.
-func Main(m *testing.M) {
-	for _, env := range []struct{ key, value string }{
-		{"APP_NAME", "test"},
-		{"APP_VERSION", "1.0.0"},
-		{"HTTP_PORT", "0"},
-		{"LOG_LEVEL", "info"},
-		{"PG_POOL_MAX", "1"},
-		{"PG_URL", "postgres://localhost/db"},
+// NewRouter serves the REST router over the given buses, plus each option's operations, with the
+// docs and metrics on. A bus the test never reaches may be nil.
+func NewRouter(b cqrs.Buses, opts ...restapi.Option) http.Handler {
+	s := restapi.Settings{Version: "1.0.0", Docs: true, Metrics: true}
 
-		{"JWT_SECRET", _signingKey},
-		{"DOCS_ENABLED", "true"},
-	} {
-		if err := os.Setenv(env.key, env.value); err != nil {
-			panic(err)
-		}
-	}
-
-	os.Exit(m.Run())
-}
-
-// Config returns the configuration Main's environment describes.
-func Config(t *testing.T) *config.Config {
-	t.Helper()
-
-	cfg, err := config.NewConfig()
-	require.NoError(t, err)
-
-	return cfg
-}
-
-// NewRouter serves the REST router over the given buses, plus each option's operations. A bus the
-// test never reaches may be nil.
-func NewRouter(cfg *config.Config, b cqrs.Buses, opts ...restapi.Option) http.Handler {
-	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
-
-	return restapi.NewRouter(cfg, b, jwtManager, slog.New(slog.DiscardHandler), opts...)
+	return restapi.NewRouter(s, b, jwt.New(_signingKey, time.Hour), slog.New(slog.DiscardHandler), opts...)
 }
 
 // NewBuses returns empty command and query buses with no pipeline steps, for a test to register

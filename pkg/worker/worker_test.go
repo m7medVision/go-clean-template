@@ -73,13 +73,9 @@ func (f *fakeQueue) deletedIDs() []int64 {
 }
 
 func newWorker(q worker.Queue) *worker.Worker {
-	return worker.New(
-		slog.New(slog.DiscardHandler),
-		q,
-		worker.PollInterval(_poll),
-		worker.BatchSize(2),
-		worker.ShutdownTimeout(_timeout),
-	)
+	return worker.New(slog.New(slog.DiscardHandler), q, worker.Settings{
+		PollInterval: _poll, VisibilityTimeout: _timeout, BatchSize: 2, ShutdownTimeout: _timeout,
+	})
 }
 
 func TestWorker_DeletesMessageWhenHandlerSucceeds(t *testing.T) {
@@ -210,7 +206,9 @@ func TestWorker_ShutdownCancelsHandlerAfterTimeout(t *testing.T) {
 	q := newFakeQueue(worker.Message{ID: 1})
 	started := make(chan struct{})
 
-	w := worker.New(slog.New(slog.DiscardHandler), q, worker.PollInterval(_poll), worker.ShutdownTimeout(_poll))
+	w := worker.New(slog.New(slog.DiscardHandler), q, worker.Settings{
+		PollInterval: _poll, VisibilityTimeout: _timeout, BatchSize: 1, ShutdownTimeout: _poll,
+	})
 	w.Handle(_queue, func(ctx context.Context, _ *worker.Message) error {
 		close(started)
 		<-ctx.Done()

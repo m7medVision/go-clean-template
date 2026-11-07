@@ -168,7 +168,7 @@ domain folders inside.
 ```
 restapi/v1/<domain>/   controller.go (struct, NewRoutes), <domain>.go (Huma ops and their
                        input/output structs), request.go, response.go, <domain>_test.go,
-                       fake_test.go, main_test.go
+                       fake_test.go
 grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface),
                        <domain>.go (RPCs), request.go, response.go, tests
 graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go, input.go or
@@ -181,8 +181,8 @@ graphql/<domain>/      resolver.go (Query/Mutation, New), query.go, mutation.go,
 - Each version's `router.go` (`restapi/v1`, `grpc/v1`) is the only file that lists the domains: one
   call per domain, each passed the `cqrs.Buses`. `restapi/router.go`, `grpc/router.go` and `docs/api.md`'s v2 examples call it.
 - Tests go through the real server and real buses, with fake handlers registered for the domain's
-  messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (`TestMain` calls
-  `resttest.Main`, which sets the env the config reads), GraphQL with `graphql/graphqltest`, gRPC over
+  messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (it sets no env:
+  no controller reads config), GraphQL with `graphql/graphqltest`, gRPC over
   `bufconn` in the test itself. Router-wide tests (public routes,
   auth exemption, panics, the OpenAPI export) stay in `restapi/router_test.go`.
 - **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
@@ -278,7 +278,11 @@ through `sql.Scanner`/`driver.Valuer`. Transports carry decimals as strings: Hum
 schema for `decimal.Decimal`, so REST returns the `Conversion` DTO (`restapi/v1/exchange/response.go`),
 not the entity.
 
-**Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env`. A new
+**Config is environment-only.** `config/config.go` parses env vars with `caarlos0/env` into
+exported sections (`config.OIDC`, `config.Worker`, …). Pass a part the section or the values it
+reads, never `*config.Config`; no controller imports `config`. Defaults are written only in
+`config/`: a `pkg/` constructor takes explicit values (a `pkg` type with a section's fields converts
+from it, as `worker.Settings(cfg.Worker)`). A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
 startup. `.env.example` is read both by `make` (`include`) and by the shell in CI

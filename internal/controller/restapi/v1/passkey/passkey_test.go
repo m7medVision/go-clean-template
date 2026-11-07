@@ -127,9 +127,7 @@ func doCeremonyRequest(
 func newPasskeyRouter(t *testing.T, pk *fakePasskey) http.Handler {
 	t.Helper()
 
-	cfg := resttest.Config(t)
-
-	return resttest.NewRouter(cfg, pk.buses(), restapi.WithPasskeys())
+	return resttest.NewRouter(pk.buses(), restapi.WithPasskeys())
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

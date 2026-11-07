@@ -29,7 +29,7 @@ func TestConvertExchange(t *testing.T) {
 	t.Run("success returns amounts as strings and the rate date", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(resttest.Config(t), &fakeExchange{converted: converted})
+		handler := newRouter(&fakeExchange{converted: converted})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token, body)
 		require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
@@ -41,7 +41,7 @@ func TestConvertExchange(t *testing.T) {
 	t.Run("malformed amount is rejected by validation", func(t *testing.T) {
 		t.Parallel()
 
-		handler := newRouter(resttest.Config(t), &fakeExchange{converted: converted})
+		handler := newRouter(&fakeExchange{converted: converted})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token,
 			`{"from":"EUR","to":"USD","amount":"1e3"}`)
@@ -60,7 +60,7 @@ func TestConvertExchange(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			handler := newRouter(resttest.Config(t), &fakeExchange{err: tt.err})
+			handler := newRouter(&fakeExchange{err: tt.err})
 
 			resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token, body)
 			assert.Equal(t, tt.code, resp.Code)
@@ -76,7 +76,7 @@ func TestExchangeHistory(t *testing.T) {
 		Rate: decimal.RequireFromString("1.1225"), Result: decimal.RequireFromString("1.12"),
 		RateDate: time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC),
 	}}
-	handler := newRouter(resttest.Config(t), exchange)
+	handler := newRouter(exchange)
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/exchange/history?limit=5&offset=10", resttest.Token(t), "")
 	require.Equal(t, http.StatusOK, resp.Code)

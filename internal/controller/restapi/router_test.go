@@ -19,10 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	resttest.Main(m)
-}
-
 // The router-wide tests reach only these use-case methods; each v1 domain folder fakes its own use
 // case in full.
 
@@ -61,7 +57,7 @@ func panickingBuses() cqrs.Buses {
 func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(taskBuses(&entity.Task{}))
 
 	for _, tt := range []struct{ method, target string }{
 		{http.MethodGet, "/v1/auth/oidc"},
@@ -80,7 +76,7 @@ func TestOptionalFeaturesServeNothingWithoutTheirOption(t *testing.T) {
 func TestApplianceRoutesArePublic(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(taskBuses(&entity.Task{}))
 
 	for _, target := range []string{"/healthz", "/metrics", "/openapi.json", "/docs"} {
 		resp := resttest.Do(t.Context(), handler, http.MethodGet, target, "", "")
@@ -91,7 +87,7 @@ func TestApplianceRoutesArePublic(t *testing.T) {
 func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(taskBuses(&entity.Task{}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -101,7 +97,7 @@ func TestUnauthenticatedRequestsAreRejected(t *testing.T) {
 func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), userBuses(&entity.User{ID: "user-1"}))
+	handler := resttest.NewRouter(userBuses(&entity.User{ID: "user-1"}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/user/profile", resttest.Token(t), "")
 	require.Equal(t, http.StatusOK, resp.Code)
@@ -112,8 +108,7 @@ func TestResponseBodyHasNoSchemaLink(t *testing.T) {
 func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t),
-		taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}))
+	handler := resttest.NewRouter(taskBuses(&entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPut, "/v1/tasks/task-1", resttest.Token(t),
 		`{"id":"task-1","title":"t","description":"","status":"todo","created_at":"2026-01-01T00:00:00Z"}`)
@@ -123,7 +118,7 @@ func TestUnknownBodyFieldsAreIgnored(t *testing.T) {
 func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(taskBuses(&entity.Task{}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/auth/register", "",
 		`{"username":"johndoe","email":"john@example.com","password":"s3cr"}`)
@@ -135,7 +130,7 @@ func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(taskBuses(&entity.Task{}))
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
@@ -144,7 +139,7 @@ func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
 func TestPanicAnswers500AndIsCounted(t *testing.T) {
 	t.Parallel()
 
-	handler := resttest.NewRouter(resttest.Config(t), panickingBuses())
+	handler := resttest.NewRouter(panickingBuses())
 
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", resttest.Token(t), "")
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)

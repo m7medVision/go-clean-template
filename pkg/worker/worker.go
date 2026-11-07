@@ -15,13 +15,6 @@ import (
 	"time"
 )
 
-const (
-	_defaultPollInterval      = time.Second
-	_defaultVisibilityTimeout = 30 * time.Second
-	_defaultBatchSize         = 10
-	_defaultShutdownTimeout   = 10 * time.Second
-)
-
 // Message is a message read from a queue.
 type Message struct {
 	ID         int64
@@ -37,6 +30,20 @@ type Message struct {
 type Queue interface {
 	Read(ctx context.Context, queue string, vt time.Duration, qty int) ([]Message, error)
 	Delete(ctx context.Context, queue string, id int64) error
+}
+
+// Settings say how the worker reads its queues.
+type Settings struct {
+	// PollInterval is how long a queue loop sleeps after a read returns no messages.
+	PollInterval time.Duration
+	// VisibilityTimeout is how long a read message stays hidden from other readers. A message whose
+	// handler fails is redelivered once it expires.
+	VisibilityTimeout time.Duration
+	// BatchSize is the most messages read per poll.
+	BatchSize int
+	// ShutdownTimeout is how long Shutdown waits for in-flight handlers before canceling their
+	// context.
+	ShutdownTimeout time.Duration
 }
 
 // HandlerFunc processes one message. Returning nil deletes the message; returning an error leaves
@@ -56,36 +63,25 @@ type Worker struct {
 	handlerCtx   context.Context
 	stopHandlers context.CancelFunc
 
-	pollInterval      time.Duration
-	visibilityTimeout time.Duration
-	batchSize         int
-	shutdownTimeout   time.Duration
+	settings Settings
 
 	logger *slog.Logger
 }
 
-// New -.
-func New(l *slog.Logger, q Queue, opts ...Option) *Worker {
+// New returns a worker reading q with s.
+func New(l *slog.Logger, q Queue, s Settings) *Worker {
 	pollCtx, stopPolling := context.WithCancel(context.Background())
 	handlerCtx, stopHandlers := context.WithCancel(context.Background())
 
 	w := &Worker{
-		queue:             q,
-		handlers:          make(map[string]HandlerFunc),
-		pollCtx:           pollCtx,
-		stopPolling:       stopPolling,
-		handlerCtx:        handlerCtx,
-		stopHandlers:      stopHandlers,
-		pollInterval:      _defaultPollInterval,
-		visibilityTimeout: _defaultVisibilityTimeout,
-		batchSize:         _defaultBatchSize,
-		shutdownTimeout:   _defaultShutdownTimeout,
-		logger:            l,
-	}
-
-	// Custom options
-	for _, opt := range opts {
-		opt(w)
+		queue:        q,
+		handlers:     make(map[string]HandlerFunc),
+		pollCtx:      pollCtx,
+		stopPolling:  stopPolling,
+		handlerCtx:   handlerCtx,
+		stopHandlers: stopHandlers,
+		settings:     s,
+		logger:       l,
 	}
 
 	return w
@@ -123,7 +119,7 @@ func (w *Worker) Shutdown() error {
 
 	select {
 	case <-done:
-	case <-time.After(w.shutdownTimeout):
+	case <-time.After(w.settings.ShutdownTimeout):
 		w.logger.Warn("worker - Worker - Shutdown - timeout, canceling in-flight handlers")
 		w.stopHandlers()
 		<-done
@@ -143,14 +139,14 @@ func (w *Worker) poll(queue string, h HandlerFunc) {
 
 		select {
 		case <-w.pollCtx.Done():
-		case <-time.After(w.pollInterval):
+		case <-time.After(w.settings.PollInterval):
 		}
 	}
 }
 
 // readBatch handles one batch and returns how many messages it read.
 func (w *Worker) readBatch(queue string, h HandlerFunc) int {
-	msgs, err := w.queue.Read(w.pollCtx, queue, w.visibilityTimeout, w.batchSize)
+	msgs, err := w.queue.Read(w.pollCtx, queue, w.settings.VisibilityTimeout, w.settings.BatchSize)
 	if err != nil {
 		if w.pollCtx.Err() == nil {
 			w.logger.Error("worker - read a batch", "queue", queue, "error", err)
