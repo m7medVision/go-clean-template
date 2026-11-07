@@ -13,8 +13,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-type beginPasskeyRegistrationInput struct{}
-
 func (r *controller) beginPasskeyRegistration(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "begin-passkey-registration",
@@ -29,7 +27,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		Tags:     []string{_tag},
 		Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:   apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*ceremonyOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*ceremonyOutput, error) {
 		// IssuedAt is when the caller last signed in: the use case asks a stale one to sign in again.
 		caller := authn.MustCaller(ctx)
 

@@ -37,9 +37,9 @@ type (
 		BaseURL string `env:"APP_BASE_URL" envDefault:"http://localhost"`
 	}
 
-	// HTTP is read only by the app, which refuses to start without a port; the worker serves no HTTP.
+	// HTTP is read only by the app; the worker serves no HTTP.
 	HTTP struct {
-		Port string `env:"HTTP_PORT"`
+		Port string `env:"HTTP_PORT" envDefault:"8080"`
 	}
 
 	Log struct {

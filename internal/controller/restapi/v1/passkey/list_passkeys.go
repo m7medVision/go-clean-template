@@ -12,8 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-type listPasskeysInput struct{}
-
 type listPasskeysOutput struct {
 	Body PasskeyList
 }
@@ -28,7 +26,7 @@ func (r *controller) listPasskeys(api huma.API) {
 		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
-	}, func(ctx context.Context, _ *listPasskeysInput) (*listPasskeysOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*listPasskeysOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 
 		passkeys, err := cqrs.SendQuery(ctx, r.qs, query.ListPasskeys{UserID: userID})

@@ -20,8 +20,8 @@ func setRequired(t *testing.T) {
 	}
 }
 
-// The worker reads neither HTTP_PORT nor JWT_SECRET, so it starts without them; the app checks them
-// itself.
+// The worker reads neither HTTP_PORT nor JWT_SECRET, so it starts without them. HTTP_PORT has a
+// default, as GRPC_PORT has; the app checks JWT_SECRET itself.
 func TestNewConfig_TheAppOnlySettingsAreOptional(t *testing.T) {
 	setRequired(t)
 
@@ -34,7 +34,7 @@ func TestNewConfig_TheAppOnlySettingsAreOptional(t *testing.T) {
 	cfg, err := config.NewConfig()
 	require.NoError(t, err)
 
-	assert.Empty(t, cfg.HTTP.Port)
+	assert.Equal(t, "8080", cfg.HTTP.Port)
 	assert.Empty(t, cfg.JWT.Secret)
 }
 

@@ -19,7 +19,7 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `APP_NAME` | required | |
 | `APP_VERSION` | required | |
 | `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds; a trailing slash is dropped. The web client's routes those links name (`/login`, `/sso/callback`) are built in one place, `config.App` |
-| `HTTP_PORT` | required by the app | the HTTP API, its docs and metrics |
+| `HTTP_PORT` | `8080` | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `GRPC_PORT` | `8081` | the gRPC transport |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |

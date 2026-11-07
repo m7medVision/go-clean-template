@@ -28,10 +28,6 @@ func New(b cqrs.Buses, l *slog.Logger) (Query, Mutation) {
 	return Query{qs: b.Queries, l: l}, Mutation{cmds: b.Commands, qs: b.Queries, l: l}
 }
 
-func (m Mutation) readBack(ctx context.Context, userID, taskID string) (entity.Task, error) {
-	return cqrs.SendQuery(ctx, m.qs, query.GetTask{UserID: userID, TaskID: taskID})
-}
-
 func page[L cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, q Query, list L, op string) (*model.TaskList, error) {
 	p, err := cqrs.SendQuery(ctx, q.qs, list)
 	if err != nil {
@@ -41,11 +37,21 @@ func page[L cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, q Query
 	return &model.TaskList{Tasks: p.Items, Total: p.Total}, nil
 }
 
+// result reads back the task a mutation wrote, as its answer.
 func (m Mutation) result(ctx context.Context, userID, taskID, op string) (*entity.Task, error) {
-	task, err := m.readBack(ctx, userID, taskID)
+	task, err := cqrs.SendQuery(ctx, m.qs, query.GetTask{UserID: userID, TaskID: taskID})
 	if err != nil {
 		return nil, gqlerr.Map(ctx, m.l, err, op)
 	}
 
 	return &task, nil
+}
+
+// deref returns the description a mutation was given, or "" when it was left out.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+
+	return *s
 }

@@ -12,7 +12,10 @@ import (
 )
 
 const (
-	_tracerName = "rest-api"
+	// _operation is otelhttp's operation: the name a request's span keeps when no route served it
+	// (nameSpanByRoute names the others after their route). It names the HTTP server, which serves
+	// REST and GraphQL alike.
+	_operation = "http"
 	// _mountPattern is the pattern of a router mounted at the root, as chi reports it.
 	_mountPattern = "/*"
 )
@@ -26,7 +29,7 @@ func Tracing(untraced ...string) func(http.Handler) http.Handler {
 	}
 
 	return func(next http.Handler) http.Handler {
-		return otelhttp.NewHandler(nameSpanByRoute(next), _tracerName, otelhttp.WithFilter(traced))
+		return otelhttp.NewHandler(nameSpanByRoute(next), _operation, otelhttp.WithFilter(traced))
 	}
 }
 

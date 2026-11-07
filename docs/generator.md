@@ -90,8 +90,7 @@ The operations, on each transport:
 | delete | `DELETE /v1/invoices/{id}` | `DeleteInvoice` | `mutation deleteInvoice` |
 
 The create and update request bodies and messages are empty, as the place to add fields. GraphQL has
-no empty input type, so its mutations take only `id`, and the domain gets no `input.go` until it has
-a field.
+no empty input type, so its mutations take only `id` until the domain has a field.
 
 The shared files it edits are the lists a domain joins, which cannot be split per domain:
 
@@ -279,7 +278,7 @@ The fields are yours too. The generated comments say where each one goes: the re
 `internal/entity/invoice.go`, the events that set it and the aggregate's `Apply`, the table and its
 SQL (then `make sqlc`), the projector, the create and update DTOs on REST and gRPC, the proto
 messages and `NewInvoiceResponse`, and the GraphQL type in `invoice_types.graphqls`, with a
-`CreateInvoiceInput` and `UpdateInvoiceInput` in their fields' schema files (and an `input.go`)
+`CreateInvoiceInput` and `UpdateInvoiceInput` in their fields' schema files
 once there is a first field.
 
 After a command:

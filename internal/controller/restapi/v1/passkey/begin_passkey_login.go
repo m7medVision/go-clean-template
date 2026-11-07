@@ -11,8 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-type beginPasskeyLoginInput struct{}
-
 func (r *controller) beginPasskeyLogin(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "begin-passkey-login",
@@ -24,7 +22,7 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 		Path:   "/v1/auth/passkey/begin",
 		Tags:   []string{apidoc.AuthTag},
 		Errors: apierr.QueryErrors(),
-	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*ceremonyOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*ceremonyOutput, error) {
 		started, err := cqrs.SendQuery(ctx, r.qs, query.BeginPasskeyLogin{})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyLogin")

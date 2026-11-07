@@ -12,8 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-type profileInput struct{}
-
 func (r *controller) profile(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "profile",
@@ -24,7 +22,7 @@ func (r *controller) profile(api huma.API) {
 		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
-	}, func(ctx context.Context, _ *profileInput) (*userOutput, error) {
+	}, func(ctx context.Context, _ *struct{}) (*userOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 
 		user, err := cqrs.SendQuery(ctx, r.qs, query.GetUser{UserID: userID})
