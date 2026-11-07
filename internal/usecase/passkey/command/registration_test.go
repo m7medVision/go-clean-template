@@ -33,7 +33,7 @@ func TestFinishPasskeyRegistrationRecordsTheCredential(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, f.user.ID, registered.UserID)
 	assert.Equal(t, "Laptop", registered.Name)
-	assert.Equal(t, nowStored(), registered.At)
+	assert.Equal(t, now(), registered.At)
 
 	var record webauthn.Credential
 
@@ -81,7 +81,7 @@ func TestRenamePasskeyRecordsTheNewName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, id.String(), written.ID)
 
-	assert.Equal(t, entity.PasskeyRenamed{PasskeyID: id, Name: "Passkey", At: nowStored()}, f.events(id)[1])
+	assert.Equal(t, entity.PasskeyRenamed{PasskeyID: id, Name: "Passkey", At: now()}, f.events(id)[1])
 }
 
 func TestDeletePasskeyRecordsTheDeletion(t *testing.T) {
@@ -94,7 +94,7 @@ func TestDeletePasskeyRecordsTheDeletion(t *testing.T) {
 		command.DeletePasskey{UserID: f.user.ID, ID: id.String()})
 	require.NoError(t, err)
 
-	assert.Equal(t, entity.PasskeyDeleted{PasskeyID: id, At: nowStored()}, f.events(id)[1])
+	assert.Equal(t, entity.PasskeyDeleted{PasskeyID: id, At: now()}, f.events(id)[1])
 }
 
 func TestRenameAndDeleteOfAnUnknownIDAreNotFound(t *testing.T) {

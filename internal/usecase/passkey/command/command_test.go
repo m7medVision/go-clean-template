@@ -20,9 +20,7 @@ import (
 
 var errGuard = errors.New("guard failed")
 
-func now() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 999, time.UTC) }
-
-func nowStored() time.Time { return now().Truncate(time.Microsecond) }
+func now() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
 
 func newCeremony(t *testing.T) *ceremony.Ceremony {
 	t.Helper()

@@ -237,8 +237,8 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
   records the conversion as one event, `CurrencyConverted`. A conversion never changes, so its stream
   `conversion-<id>` holds that one event. Its amounts are `decimal.Decimal`, which encode to JSON as
   strings, so no amount passes through a float on its way to the store.
-- `aggregate.Save` saves the new aggregate and returns `Written`. `aggregate.Now` is the time to the
-  microsecond in UTC, the precision of the read model's timestamp columns.
+- `aggregate.Save` saves the new aggregate and returns `Written`. `aggregate.Now` is the time in UTC
+  (`h.Now` is the clock, which tests fix).
 
 ## 6. The outbound API
 

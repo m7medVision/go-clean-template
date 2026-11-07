@@ -58,8 +58,9 @@ func (t *TaskAggregate) ID() string {
 	return t.task.ID
 }
 
-func (*TaskAggregate) StreamOf(id string) string {
-	return TaskStreamID(id)
+// StreamOf names the stream of the task with id. Every ID names one.
+func (*TaskAggregate) StreamOf(id string) (string, error) {
+	return TaskStreamID(id), nil
 }
 
 // NotFound is the error for a task ID with no stream.

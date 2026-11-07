@@ -20,5 +20,5 @@ func TestDeleteTaskRecordsTaskDeleted(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, taskID, written.ID)
-	assert.Equal(t, []entity.Event{entity.TaskDeleted{TaskID: taskID, At: nowStored()}}, appended(store))
+	assert.Equal(t, []entity.Event{entity.TaskDeleted{TaskID: taskID, At: now()}}, appended(store))
 }

@@ -83,15 +83,17 @@ func (h *FinishPasskeyLoginHandler) find(ctx context.Context, userID string, id 
 		return entity.User{}, nil, fmt.Errorf("h.Users.ByID: %w", err)
 	}
 
-	passkey := &entity.PasskeyAggregate{}
+	passkey, err := aggregate.Load[entity.PasskeyAggregate](ctx, h.Store, id.String())
+	if err == nil {
+		err = passkey.OwnedBy(userID)
+	}
 
-	err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey)
-	if errors.Is(err, entity.ErrStreamNotFound) || (err == nil && passkey.OwnedBy(userID) != nil) {
+	if errors.Is(err, entity.ErrPasskeyNotFound) {
 		return entity.User{}, nil, fmt.Errorf("no such passkey: %w", entity.ErrPasskeyCeremonyInvalid)
 	}
 
 	if err != nil {
-		return entity.User{}, nil, fmt.Errorf("h.Store.Load: %w", err)
+		return entity.User{}, nil, fmt.Errorf("aggregate.Load: %w", err)
 	}
 
 	return user, passkey, nil

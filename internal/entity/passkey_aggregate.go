@@ -75,14 +75,15 @@ func (a *PasskeyAggregate) ID() string {
 	return a.passkey.ID.String()
 }
 
-// StreamOf names the stream of the passkey whose ID is id, unpadded base64url.
-func (*PasskeyAggregate) StreamOf(id string) string {
+// StreamOf names the stream of the passkey whose ID is id, unpadded base64url. An id that is not
+// base64url names no passkey: ErrPasskeyNotFound.
+func (*PasskeyAggregate) StreamOf(id string) (string, error) {
 	var pid PasskeyID
-	if pid.UnmarshalText([]byte(id)) != nil {
-		return PasskeyStreamID(nil) // no passkey has the empty ID, so its stream has no events
+	if err := pid.UnmarshalText([]byte(id)); err != nil {
+		return "", err
 	}
 
-	return PasskeyStreamID(pid)
+	return PasskeyStreamID(pid), nil
 }
 
 // NotFound is the error for a passkey ID with no stream.

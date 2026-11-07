@@ -54,6 +54,15 @@ func TestChangeOfAMissingStreamIsTheNotFoundError(t *testing.T) {
 	require.ErrorIs(t, err, entity.ErrTaskNotFound)
 }
 
+// A passkey ID that is not base64url names no stream: it is not found, without a load.
+func TestLoadOfAnIDThatNamesNoStreamIsTheNotFoundError(t *testing.T) {
+	t.Parallel()
+
+	_, err := aggregate.Load[entity.PasskeyAggregate](context.Background(), memstore.New(entity.EventTypes()), "not base64!")
+
+	require.ErrorIs(t, err, entity.ErrPasskeyNotFound)
+}
+
 func TestARefusedChangeSavesNothing(t *testing.T) {
 	t.Parallel()
 
@@ -67,11 +76,11 @@ func TestARefusedChangeSavesNothing(t *testing.T) {
 	assert.Len(t, store.Events(entity.TaskStreamID("t1")), 1)
 }
 
-func TestNowIsUTCToTheMicrosecond(t *testing.T) {
+func TestNowIsUTC(t *testing.T) {
 	t.Parallel()
 
 	local := time.Date(2026, 1, 1, 13, 0, 0, 123456789, time.FixedZone("GST", 4*60*60))
 
-	assert.Equal(t, time.Date(2026, 1, 1, 9, 0, 0, 123456000, time.UTC), aggregate.Now(func() time.Time { return local }))
+	assert.Equal(t, time.Date(2026, 1, 1, 9, 0, 0, 123456789, time.UTC), aggregate.Now(func() time.Time { return local }))
 	assert.Equal(t, time.UTC, aggregate.Now(nil).Location())
 }

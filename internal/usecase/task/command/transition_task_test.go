@@ -22,6 +22,6 @@ func TestTransitionTaskRecordsTaskTransitioned(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, taskID, written.ID)
 	assert.Equal(t, []entity.Event{entity.TaskTransitioned{
-		TaskID: taskID, From: entity.TaskStatusTodo, To: entity.TaskStatusInProgress, At: nowStored(),
+		TaskID: taskID, From: entity.TaskStatusTodo, To: entity.TaskStatusInProgress, At: now(),
 	}}, appended(store))
 }

@@ -22,6 +22,6 @@ func TestUpdateTaskRecordsTaskUpdated(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, taskID, written.ID)
 	assert.Equal(t, []entity.Event{
-		entity.TaskUpdated{TaskID: taskID, Title: "Edit", Description: "the plan", At: nowStored()},
+		entity.TaskUpdated{TaskID: taskID, Title: "Edit", Description: "the plan", At: now()},
 	}, appended(store))
 }

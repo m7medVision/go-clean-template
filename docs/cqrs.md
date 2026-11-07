@@ -73,10 +73,13 @@ returned ID.
 The shared helpers in `internal/usecase/aggregate` do the store work:
 - `aggregate.Save` saves what an aggregate recorded, new or loaded, and answers `Written` with the
   aggregate's own `ID()`;
-- `aggregate.Change(ctx, store, id, func(t *entity.TaskAggregate) error {...})` loads one, runs the
-  change and saves it. The aggregate type says the rest: `StreamOf(id)` names its stream and
-  `NotFound()` is its error for an ID with none;
-- `aggregate.Now` is the time in UTC, to the microsecond the read model keeps.
+- `aggregate.Load[entity.PasskeyAggregate](ctx, store, id)` loads one by ID. The aggregate type says
+  the rest: `StreamOf(id)` names its stream, or answers the not-found error for an ID that names
+  none (a passkey ID that is not base64url), and `NotFound()` is its error for an ID with no stream.
+  Passkey registration takes that error to mean a new credential;
+- `aggregate.Change(ctx, store, id, func(t *entity.TaskAggregate) error {...})` loads one as `Load`
+  does, runs the change and saves it;
+- `aggregate.Now` is the time in UTC.
 
 ### Queries
 

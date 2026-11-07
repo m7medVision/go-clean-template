@@ -17,7 +17,7 @@ import (
 
 func rateDate() time.Time { return time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC) }
 
-func now() time.Time { return time.Date(2026, 10, 19, 9, 0, 0, 999, time.UTC) }
+func now() time.Time { return time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC) }
 
 func TestConvertCurrencyRecordsTheConversionAtTheRate(t *testing.T) {
 	t.Parallel()
@@ -42,7 +42,7 @@ func TestConvertCurrencyRecordsTheConversionAtTheRate(t *testing.T) {
 	assert.Equal(t, "CNY", converted.To)
 	assert.Equal(t, "1740.65", converted.Result.String())
 	assert.Equal(t, rateDate(), converted.RateDate)
-	assert.Equal(t, now().Truncate(time.Microsecond), converted.At)
+	assert.Equal(t, now(), converted.At)
 }
 
 func TestConvertCurrencyRefusesAnInvalidRequestBeforeAskingForARate(t *testing.T) {

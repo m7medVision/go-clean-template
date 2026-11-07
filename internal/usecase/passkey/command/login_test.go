@@ -76,7 +76,7 @@ func TestFinishPasskeyLoginSignsInAndRecordsTheUse(t *testing.T) {
 
 	used, ok := f.events(id)[1].(entity.PasskeyUsed)
 	require.True(t, ok)
-	assert.Equal(t, nowStored(), used.At)
+	assert.Equal(t, now(), used.At)
 
 	var record webauthn.Credential
 

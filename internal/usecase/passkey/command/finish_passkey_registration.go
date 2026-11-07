@@ -41,10 +41,15 @@ func (h FinishPasskeyRegistrationHandler) Handle(ctx context.Context, cmd Finish
 		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
 	}
 
-	// A credential that was deleted has a stream already, and can be registered again on it.
-	passkey := &entity.PasskeyAggregate{}
-	if err = h.Store.Load(ctx, entity.PasskeyStreamID(id), passkey); err != nil && !errors.Is(err, entity.ErrStreamNotFound) {
-		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - h.Store.Load: %w", err)
+	// A credential never registered is new; one that was deleted has a stream already, and can be
+	// registered again on it.
+	passkey, err := aggregate.Load[entity.PasskeyAggregate](ctx, h.Store, id.String())
+
+	switch {
+	case errors.Is(err, entity.ErrPasskeyNotFound):
+		passkey = &entity.PasskeyAggregate{}
+	case err != nil:
+		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - aggregate.Load: %w", err)
 	}
 
 	if err = passkey.Register(id, cmd.UserID, cmd.Name, record, aggregate.Now(h.Now)); err != nil {

@@ -23,7 +23,7 @@ func TestCreateTaskRecordsTaskCreated(t *testing.T) {
 	assert.NotEmpty(t, written.ID)
 	assert.Positive(t, written.Position)
 	assert.Equal(t, []entity.Event{entity.TaskCreated{
-		TaskID: written.ID, UserID: owner, Title: "Write", Description: "the spec", At: nowStored(),
+		TaskID: written.ID, UserID: owner, Title: "Write", Description: "the spec", At: now(),
 	}}, store.Events(entity.TaskStreamID(written.ID)))
 }
 

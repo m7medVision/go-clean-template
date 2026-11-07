@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func now() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 999, time.UTC) }
+func now() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
 
 func TestRegisterUserRecordsUserRegisteredWithAHash(t *testing.T) {
 	t.Parallel()
@@ -33,7 +33,7 @@ func TestRegisterUserRecordsUserRegisteredWithAHash(t *testing.T) {
 	assert.Equal(t, written.ID, registered.UserID)
 	assert.Equal(t, "jo", registered.Username)
 	assert.Equal(t, "jo@example.com", registered.Email)
-	assert.Equal(t, now().Truncate(time.Microsecond), registered.At)
+	assert.Equal(t, now(), registered.At)
 	require.NoError(t, bcrypt.CompareHashAndPassword([]byte(registered.PasswordHash), []byte("secret-pass")))
 }
 

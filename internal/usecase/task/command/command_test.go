@@ -17,10 +17,8 @@ const (
 
 func createdAt() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
 
-// now is the tests' clock: an hour after the task was created, with nanoseconds the handlers drop.
-func now() time.Time { return createdAt().Add(time.Hour + 999) }
-
-func nowStored() time.Time { return createdAt().Add(time.Hour) }
+// now is the tests' clock: an hour after the task was created.
+func now() time.Time { return createdAt().Add(time.Hour) }
 
 // givenTask is a store holding owner's task, written at createdAt.
 func givenTask(t *testing.T) *memstore.Store {
