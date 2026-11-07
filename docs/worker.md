@@ -57,7 +57,8 @@ The settings are in [configuration.md](configuration.md#worker).
 
 Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker/v1), each with a
 function that registers it on the worker (`w.Handle(queue, handler)`), which its module's `queues`
-in `internal/app` calls. A
+in `internal/app` calls before the worker runs: `Run` polls the queues registered when it starts, and
+`Handle` panics after that. A
 queue message is an inbound request like an HTTP call, so a handler has the same shape: decode the
 body into a transport-local DTO, send a command on the command bus with the handler's `ctx`, and
 return its error. The one queue today is `mail` (below): `mail.go` delivers email from it.

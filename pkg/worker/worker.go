@@ -50,17 +50,30 @@ type HandlerFunc func(ctx context.Context, msg *Message) error
 // Worker reads its queues and hands each message to the queue's handler.
 type Worker struct {
 	queue    Queue
-	handlers map[string]HandlerFunc
 	settings Settings
 	logger   *slog.Logger
+
+	// mu guards handlers and running: Run polls the queues registered when it starts, so Handle
+	// refuses to add one after.
+	mu       sync.Mutex
+	handlers map[string]HandlerFunc
+	running  bool
 }
 
 func New(l *slog.Logger, q Queue, s Settings) *Worker {
 	return &Worker{queue: q, handlers: make(map[string]HandlerFunc), settings: s, logger: l}
 }
 
-// Handle registers the handler for a queue. Call it before Run.
+// Handle registers the handler for a queue. Run polls only the queues registered before it starts,
+// so Handle panics once Run has: a handler registered then would never be called.
 func (w *Worker) Handle(queue string, h HandlerFunc) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.running {
+		panic("worker: Handle(" + queue + ") after Run")
+	}
+
 	w.handlers[queue] = h
 }
 
@@ -68,17 +81,22 @@ func (w *Worker) Handle(queue string, h HandlerFunc) {
 // flight, and cancels their context once ShutdownTimeout passes. It returns nil: a failed read or
 // handler is logged and retried, never fatal.
 func (w *Worker) Run(ctx context.Context) error {
+	w.mu.Lock()
+	w.running = true
+	handlers := w.handlers
+	w.mu.Unlock()
+
 	// Handlers keep ctx's values but not its end, so they get ShutdownTimeout to finish.
 	handlerCtx, stopHandlers := context.WithCancel(context.WithoutCancel(ctx))
 	defer stopHandlers()
 
 	var wg sync.WaitGroup
 
-	for queue, h := range w.handlers {
+	for queue, h := range handlers {
 		wg.Go(func() { w.poll(ctx, handlerCtx, queue, h) })
 	}
 
-	w.logger.Info("worker - started", "queues", len(w.handlers))
+	w.logger.Info("worker - started", "queues", len(handlers))
 
 	<-ctx.Done()
 

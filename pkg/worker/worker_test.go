@@ -183,6 +183,30 @@ func TestWorker_DispatchesEachQueueToItsOwnHandler(t *testing.T) {
 	assert.Equal(t, map[string]int64{"a": 1, "b": 2}, got)
 }
 
+// Run polls only the queues registered before it starts, so a later Handle would register a handler
+// nothing ever calls: it panics instead.
+func TestWorker_RefusesAHandlerAfterRun(t *testing.T) {
+	t.Parallel()
+
+	q := newFakeQueue(worker.Message{ID: 1})
+	handled := make(chan struct{})
+
+	w := newWorker(q)
+	w.Handle(_queue, func(context.Context, *worker.Message) error {
+		close(handled)
+
+		return nil
+	})
+
+	stop := run(t, w)
+
+	<-handled
+	assert.PanicsWithValue(t, "worker: Handle(late) after Run", func() {
+		w.Handle("late", func(context.Context, *worker.Message) error { return nil })
+	})
+	require.NoError(t, stop())
+}
+
 func TestWorker_StopWaitsForInFlightHandler(t *testing.T) {
 	t.Parallel()
 
