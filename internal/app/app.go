@@ -57,8 +57,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	grpcServer := newGRPCServer(b.buses, d.tokens, b.metrics, b.l)
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error { return serveHTTP(ctx, httpServer, b.l) })
-	g.Go(func() error { return serveGRPC(ctx, grpcServer, cfg.GRPC.Port, b.l) })
+	g.Go(func() error { return serveHTTP(ctx, httpServer, _shutdownTimeout, b.l) })
+	g.Go(func() error { return serveGRPC(ctx, grpcServer, cfg.GRPC.Port, _shutdownTimeout, b.l) })
 
 	if err = g.Wait(); err != nil {
 		return fmt.Errorf("app - Run: %w", err)
