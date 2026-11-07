@@ -630,7 +630,7 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 
 	var out bytes.Buffer
 	require.NoError(t, newDomain(t.Context(), &domainRequest{root: dir, name: "invoice", transports: rules.Transports()}, &out))
-	assert.Contains(t, out.String(), "created 58, edited 3")
+	assert.Contains(t, out.String(), "created 59, edited 3")
 
 	events, err := os.ReadFile(filepath.Join(dir, "internal", "entity", "event.go"))
 	require.NoError(t, err)

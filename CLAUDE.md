@@ -600,7 +600,7 @@ make new-domain name=invoice            # plural= when English gets it wrong, tr
 ```
 
 It writes steps 1 to 7 and 9 for a user-owned domain with create, update, delete, get and list on
-the base fields (`id`, `user_id`, `created_at`, `updated_at`): 58 files on all three transports, and
+the base fields (`id`, `user_id`, `created_at`, `updated_at`): 59 files on all three transports, and
 three edits, the lists a domain joins: `entity.EventTypes()`, `modules()` and, with GraphQL,
 `graphql/resolver.go`. The command and query handlers are stubs returning
 `entity.ErrNotImplemented`, so every operation answers 501 / `Unimplemented` / `NOT_IMPLEMENTED`,
