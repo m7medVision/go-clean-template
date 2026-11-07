@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/goccy/go-json"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const graphqlURL = httpURL + "/graphql"
@@ -60,20 +62,18 @@ func graphqlDo(t *testing.T, token, query string, vars map[string]any) graphqlRe
 	return parseJSON[graphqlResponse](t, resp)
 }
 
+// GraphQL: the task CRUD flow, every write read back at once.
 func TestGraphQLTaskCRUD(t *testing.T) {
 	token := registerAndLogin(t)
 
 	created := graphqlDo(t, token,
 		`mutation($input: CreateTaskInput!) { createTask(input: $input) { id title status } }`,
 		map[string]any{"input": map[string]any{"title": "graphql task", "description": "via graphql"}})
-	if len(created.Errors) > 0 {
-		t.Fatalf("createTask: %v", created.Errors)
-	}
+	require.Empty(t, created.Errors, "createTask")
+	require.NotEmpty(t, created.Data.CreateTask.ID, "createTask")
+	require.Equal(t, "TODO", created.Data.CreateTask.Status, "createTask")
 
 	id := created.Data.CreateTask.ID
-	if id == "" || created.Data.CreateTask.Status != "TODO" {
-		t.Fatalf("createTask: unexpected task %+v", created.Data.CreateTask)
-	}
 
 	got := graphqlDo(t, token, `query($id: ID!) { task(id: $id) { id title } }`, map[string]any{"id": id})
 	if got.Data.Task.Title != "graphql task" {
@@ -92,28 +92,6 @@ func TestGraphQLTaskCRUD(t *testing.T) {
 		t.Errorf("updateTask: unexpected task %+v (errors %v)", updated.Data.UpdateTask, updated.Errors)
 	}
 
-	deleted := graphqlDo(t, token, `mutation($id: ID!) { deleteTask(id: $id) }`, map[string]any{"id": id})
-	if !deleted.Data.DeleteTask {
-		t.Errorf("deleteTask: expected true (errors %v)", deleted.Errors)
-	}
-
-	missing := graphqlDo(t, token, `query($id: ID!) { task(id: $id) { id } }`, map[string]any{"id": id})
-	if len(missing.Errors) == 0 || missing.Errors[0].Extensions["code"] != "NOT_FOUND" {
-		t.Errorf("task after delete: expected NOT_FOUND, got %v", missing.Errors)
-	}
-}
-
-func TestGraphQLTaskTransition(t *testing.T) {
-	token := registerAndLogin(t)
-
-	created := graphqlDo(t, token,
-		`mutation { createTask(input: {title: "graphql transition"}) { id } }`, nil)
-
-	id := created.Data.CreateTask.ID
-	if id == "" {
-		t.Fatalf("createTask: %v", created.Errors)
-	}
-
 	const transition = `mutation($id: ID!) { transitionTask(id: $id, status: IN_PROGRESS) { status } }`
 
 	moved := graphqlDo(t, token, transition, map[string]any{"id": id})
@@ -122,7 +100,22 @@ func TestGraphQLTaskTransition(t *testing.T) {
 	}
 
 	repeated := graphqlDo(t, token, transition, map[string]any{"id": id})
-	if len(repeated.Errors) == 0 || repeated.Errors[0].Extensions["code"] != "BAD_USER_INPUT" {
-		t.Errorf("repeated transitionTask: expected BAD_USER_INPUT, got %v", repeated.Errors)
+	assert.Equal(t, "BAD_USER_INPUT", errorCode(&repeated), "repeated transitionTask: %v", repeated.Errors)
+
+	deleted := graphqlDo(t, token, `mutation($id: ID!) { deleteTask(id: $id) }`, map[string]any{"id": id})
+	if !deleted.Data.DeleteTask {
+		t.Errorf("deleteTask: expected true (errors %v)", deleted.Errors)
 	}
+
+	missing := graphqlDo(t, token, `query($id: ID!) { task(id: $id) { id } }`, map[string]any{"id": id})
+	assert.Equal(t, "NOT_FOUND", errorCode(&missing), "task after delete: %v", missing.Errors)
+}
+
+// errorCode is the code of the response's first error, or nil when it has none.
+func errorCode(r *graphqlResponse) any {
+	if len(r.Errors) == 0 {
+		return nil
+	}
+
+	return r.Errors[0].Extensions["code"]
 }

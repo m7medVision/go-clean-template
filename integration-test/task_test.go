@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -58,169 +62,60 @@ func httpTransitionTask(t *testing.T, token, id, status string) (*http.Response,
 	return doAuthenticatedRequest(ctx, http.MethodPatch, basePathV1+"/tasks/"+id+"/status", bytes.NewBufferString(body), token)
 }
 
-// HTTP: create task and verify fields.
-func TestHTTPTaskCreateV1(t *testing.T) {
+// HTTP: the task CRUD flow, every write read back at once: the web client lists its tasks straight
+// after every write, so a write must not answer before the read model has it.
+func TestHTTPTaskV1(t *testing.T) {
 	token := registerAndLogin(t)
+
 	created := httpCreateTask(t, token, "integration task", "test description")
+	require.NotEmpty(t, created.ID)
+	assert.Equal(t, statusTodo, created.Status)
 
-	if created.ID == "" {
-		t.Fatal("expected non-empty id")
+	listed := httpGetJSON[taskListResponse](t, token, "/tasks?limit=10&offset=0")
+	assert.Contains(t, taskIDs(listed.Tasks), created.ID)
+	assert.Equal(t, created.ID, httpGetJSON[taskResponse](t, token, "/tasks/"+created.ID).ID)
+
+	updated := httpSend[taskResponse](t, token, http.MethodPut, "/tasks/"+created.ID,
+		`{"title":"updated title","description":"updated description"}`, http.StatusOK)
+	assert.Equal(t, "updated title", updated.Title)
+	assert.Equal(t, "updated title", httpGetJSON[taskResponse](t, token, "/tasks/"+created.ID).Title)
+
+	for _, status := range []string{statusInProgress, "done"} {
+		moved := httpSend[taskResponse](t, token, http.MethodPatch, "/tasks/"+created.ID+"/status",
+			fmt.Sprintf(`{"status":%q}`, status), http.StatusOK)
+		assert.Equal(t, status, moved.Status)
 	}
 
-	if created.Status != statusTodo {
-		t.Errorf("expected status 'todo', got %q", created.Status)
-	}
+	httpSend[struct{}](t, token, http.MethodDelete, "/tasks/"+created.ID, "", http.StatusNoContent)
+	httpSend[struct{}](t, token, http.MethodGet, "/tasks/"+created.ID, "", http.StatusNotFound)
 }
 
-// HTTP: get task by ID.
-func TestHTTPTaskGetV1(t *testing.T) {
-	token := registerAndLogin(t)
-	created := httpCreateTask(t, token, "get task", "test description")
+// httpSend sends method to /v1 + path with body (none when empty), requires the status want, and
+// decodes a 200 answer into T.
+func httpSend[T any](t *testing.T, token, method, path, body string, want int) T {
+	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
 	defer cancel()
 
-	resp, err := doAuthenticatedRequest(ctx, http.MethodGet, basePathV1+"/tasks/"+created.ID, http.NoBody, token)
-	if err != nil {
-		t.Fatalf("Get task: %v", err)
+	var reqBody io.Reader = http.NoBody
+	if body != "" {
+		reqBody = bytes.NewBufferString(body)
 	}
+
+	resp, err := doAuthenticatedRequest(ctx, method, basePathV1+path, reqBody, token)
+	require.NoError(t, err)
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	require.Equal(t, want, resp.StatusCode, "%s %s", method, path)
+
+	var out T
+	if want == http.StatusOK {
+		out = parseJSON[T](t, resp)
 	}
 
-	got := parseJSON[taskResponse](t, resp)
-
-	if got.ID != created.ID {
-		t.Errorf("expected id %q, got %q", created.ID, got.ID)
-	}
-}
-
-// HTTP: list tasks.
-func TestHTTPTaskListV1(t *testing.T) {
-	token := registerAndLogin(t)
-	httpCreateTask(t, token, "list task", "test description")
-
-	ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
-	defer cancel()
-
-	resp, err := doAuthenticatedRequest(ctx, http.MethodGet, basePathV1+"/tasks/?limit=10&offset=0", http.NoBody, token)
-	if err != nil {
-		t.Fatalf("List tasks: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	type listResponse struct {
-		Tasks []taskResponse `json:"tasks"`
-		Total int            `json:"total"`
-	}
-
-	listed := parseJSON[listResponse](t, resp)
-
-	if listed.Total < 1 {
-		t.Errorf("expected total >= 1, got %d", listed.Total)
-	}
-}
-
-// HTTP: update task.
-func TestHTTPTaskUpdateV1(t *testing.T) {
-	token := registerAndLogin(t)
-	created := httpCreateTask(t, token, "update task", "test description")
-
-	updateBody := `{"title":"updated title","description":"updated description"}`
-
-	ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
-	defer cancel()
-
-	resp, err := doAuthenticatedRequest(ctx, http.MethodPut, basePathV1+"/tasks/"+created.ID, bytes.NewBufferString(updateBody), token)
-	if err != nil {
-		t.Fatalf("Update task: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	updated := parseJSON[taskResponse](t, resp)
-
-	if updated.Title != "updated title" {
-		t.Errorf("expected title 'updated title', got %q", updated.Title)
-	}
-}
-
-// HTTP: delete task.
-func TestHTTPTaskDeleteV1(t *testing.T) {
-	token := registerAndLogin(t)
-	created := httpCreateTask(t, token, "delete task", "test description")
-
-	ctx, cancel := context.WithTimeout(t.Context(), requestTimeout)
-	defer cancel()
-
-	resp, err := doAuthenticatedRequest(ctx, http.MethodDelete, basePathV1+"/tasks/"+created.ID, http.NoBody, token)
-	if err != nil {
-		t.Fatalf("Delete task: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", resp.StatusCode)
-	}
-}
-
-// HTTP: valid task status transition chain.
-func TestHTTPTaskStatusTransitionValidV1(t *testing.T) {
-	token := registerAndLogin(t)
-	task := httpCreateTask(t, token, "transition task", "testing transitions")
-
-	if task.Status != statusTodo {
-		t.Fatalf("Expected initial status 'todo', got %q", task.Status)
-	}
-
-	// Transition: from "todo" to "in_progress".
-	resp, err := httpTransitionTask(t, token, task.ID, statusInProgress)
-	if err != nil {
-		t.Fatalf("Transition to in_progress: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	transitioned := parseJSON[taskResponse](t, resp)
-
-	if transitioned.Status != statusInProgress {
-		t.Errorf("Expected status 'in_progress', got %q", transitioned.Status)
-	}
-
-	// Transition: in_progress to done.
-	resp2, err := httpTransitionTask(t, token, task.ID, "done")
-	if err != nil {
-		t.Fatalf("Transition to done: %v", err)
-	}
-
-	defer resp2.Body.Close()
-
-	if resp2.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp2.StatusCode)
-	}
-
-	transitioned2 := parseJSON[taskResponse](t, resp2)
-
-	if transitioned2.Status != "done" {
-		t.Errorf("Expected status 'done', got %q", transitioned2.Status)
-	}
+	return out
 }
 
 // HTTP: invalid task status transition is rejected.

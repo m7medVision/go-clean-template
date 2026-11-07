@@ -11,15 +11,12 @@ import (
 	"testing"
 	"time"
 
-	protov1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -75,56 +72,6 @@ func taskIDs(tasks []taskResponse) []string {
 	}
 
 	return ids
-}
-
-// The web client lists its tasks straight after every write: the write must not answer before the
-// read model has it.
-func TestHTTPTaskWritesAreReadableAtOnce(t *testing.T) {
-	token := registerAndLogin(t)
-
-	created := httpCreateTask(t, token, "read me", "at once")
-	listed := httpGetJSON[taskListResponse](t, token, "/tasks")
-	assert.Contains(t, taskIDs(listed.Tasks), created.ID)
-
-	require.Equal(t, http.StatusOK, httpUpdateTask(t, token, created.ID, "read me again"))
-	assert.Equal(t, "read me again", httpGetJSON[taskResponse](t, token, "/tasks/"+created.ID).Title)
-}
-
-func TestGRPCTaskWritesAreReadableAtOnce(t *testing.T) {
-	token := registerAndLoginGRPC(t)
-
-	conn, err := grpc.NewClient(grpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-
-	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
-
-	client := protov1.NewTaskServiceClient(conn)
-	ctx := grpcAuthCtx(t, token)
-
-	created, err := client.CreateTask(ctx, &protov1.CreateTaskRequest{Title: "read me", Description: "at once"})
-	require.NoError(t, err)
-
-	listed, err := client.ListTasks(ctx, &protov1.ListTasksRequest{Limit: 10})
-	require.NoError(t, err)
-
-	ids := make([]string, 0, len(listed.GetTasks()))
-	for _, task := range listed.GetTasks() {
-		ids = append(ids, task.GetId())
-	}
-
-	assert.Contains(t, ids, created.GetId())
-}
-
-func TestGraphQLTaskWritesAreReadableAtOnce(t *testing.T) {
-	token := registerAndLogin(t)
-
-	created := graphqlDo(t, token, `mutation { createTask(input: {title: "read me"}) { id } }`, nil)
-	require.Empty(t, created.Errors)
-
-	read := graphqlDo(t, token, `query($id: ID!) { task(id: $id) { id title } }`,
-		map[string]any{"id": created.Data.CreateTask.ID})
-	require.Empty(t, read.Errors)
-	assert.Equal(t, "read me", read.Data.Task.Title)
 }
 
 // Concurrent updates of one task conflict on its stream; the command bus retries them, and any

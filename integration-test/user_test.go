@@ -138,7 +138,8 @@ func TestHTTPLoginV1(t *testing.T) {
 	}
 }
 
-// HTTP GET: /v1/user/profile.
+// HTTP GET: /v1/user/profile. A user who registers can sign in and read their profile at once: the
+// write does not answer before the user read model has them.
 func TestHTTPProfileV1(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		token := registerAndLogin(t)
@@ -166,8 +167,8 @@ func TestHTTPProfileV1(t *testing.T) {
 			t.Error("Expected non-empty id")
 		}
 
-		if result.Username == "" {
-			t.Error("Expected non-empty username")
+		if want := sanitizeTestName(t); result.Username != want {
+			t.Errorf("Expected username %q, got %q", want, result.Username)
 		}
 	})
 

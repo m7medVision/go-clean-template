@@ -21,8 +21,9 @@ import (
 
 const (
 	storePoolSize = 10
-	// lateWriteWait is how long the ordering test lets a second writer run before it reads.
-	lateWriteWait = 300 * time.Millisecond
+
+	lockWait = 10 * time.Second
+	lockPoll = 10 * time.Millisecond
 )
 
 var errRollBack = errors.New("roll back")
@@ -116,6 +117,17 @@ func (tl *tailer) read(ctx context.Context, t *testing.T) {
 	require.NoError(t, rows.Err())
 }
 
+// waitingForAnAdvisoryLock reports whether a session waits for an advisory lock: during the ordering
+// test, only its second writer can, behind the first one's hold on the store's append lock.
+func waitingForAnAdvisoryLock(ctx context.Context, pg *postgres.Postgres) bool {
+	var waiting bool
+
+	err := pg.Executor(ctx).QueryRow(ctx,
+		"SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted)").Scan(&waiting)
+
+	return err == nil && waiting
+}
+
 // A reader that tails the store by position must never pass a position that commits later. A
 // slow writer appends inside an open transaction and waits; a second writer appends meanwhile; the
 // reader reads; then the slow writer commits. Without the append lock the second writer commits a
@@ -155,11 +167,18 @@ func TestAWriteCommittedLateIsStillReadInOrder(t *testing.T) {
 		fastDone <- err
 	}()
 
-	select {
-	case err := <-fastDone:
-		fastDone <- err
-	case <-time.After(lateWriteWait):
-	}
+	// Read only once the fast writer has either committed (which the append lock forbids) or is
+	// waiting for the lock, so the read cannot come before it and pass by chance.
+	require.Eventually(t, func() bool {
+		select {
+		case err := <-fastDone:
+			fastDone <- err
+
+			return true
+		default:
+			return waitingForAnAdvisoryLock(ctx, pg)
+		}
+	}, lockWait, lockPoll, "the second writer neither committed nor waited for the append lock")
 
 	tl.read(ctx, t)
 	close(release)

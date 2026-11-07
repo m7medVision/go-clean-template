@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/user/event"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,22 +45,64 @@ func mailpitGet[T any](t *testing.T, path string) T {
 	return parseJSON[T](t, resp)
 }
 
+// mailsTo lists the messages Mailpit holds for addr, newest first.
+func mailsTo(t *testing.T, addr string) []mailpitMessage {
+	t.Helper()
+
+	return mailpitGet[struct {
+		Messages []mailpitMessage `json:"messages"`
+	}](t, "/search?query="+url.QueryEscape(`to:"`+addr+`"`)).Messages
+}
+
 // findMailTo returns the ID of the newest message to addr, or "" while there is none.
 func findMailTo(t *testing.T, addr string) string {
 	t.Helper()
 
-	found := mailpitGet[struct {
-		Messages []mailpitMessage `json:"messages"`
-	}](t, "/search?query="+url.QueryEscape(`to:"`+addr+`"`))
-
-	if len(found.Messages) == 0 {
+	found := mailsTo(t, addr)
+	if len(found) == 0 {
 		return ""
 	}
 
-	return found.Messages[0].ID
+	return found[0].ID
 }
 
-// Registering over REST enqueues a welcome email; the worker renders it and sends it to Mailpit.
+// requireNoWelcomeToFollow waits until no second welcome email to the user can still arrive: the
+// event handler's checkpoint has passed the user's registration, so it will not run for it again,
+// and the mail queue holds nothing for email, so whatever it enqueued has been delivered.
+func requireNoWelcomeToFollow(t *testing.T, userID, email string) {
+	t.Helper()
+
+	ctx := t.Context()
+	db := newQueuePostgres(t).Executor(ctx)
+
+	var registered int64
+
+	err := db.QueryRow(ctx, "SELECT max(position) FROM events WHERE stream_id = $1", entity.UserStreamID(userID)).
+		Scan(&registered)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		var at int64
+
+		err := db.QueryRow(ctx, "SELECT position FROM projection_checkpoints WHERE name = $1",
+			event.SendWelcomeEmail{}.Name()).Scan(&at)
+
+		return err == nil && at >= registered
+	}, mailWait, mailPoll, "the welcome email handler never passed position %d", registered)
+
+	require.Eventually(t, func() bool {
+		var pending bool
+
+		err := db.QueryRow(ctx,
+			"SELECT EXISTS (SELECT 1 FROM queue_messages WHERE queue = $1 AND body->'data'->>'to' = $2)",
+			entity.EmailQueue, email).Scan(&pending)
+
+		return err == nil && !pending
+	}, mailWait, mailPoll, "the mail queue never delivered the email to %s", email)
+}
+
+// Registering over REST enqueues a welcome email, once: the event handler enqueues it in the
+// transaction that moves its checkpoint. The worker renders it and sends it to Mailpit.
 func TestHTTPRegisterSendsWelcomeEmail(t *testing.T) {
 	name := sanitizeTestName(t)
 	email := name + "@test.com"
@@ -82,4 +126,7 @@ func TestHTTPRegisterSendsWelcomeEmail(t *testing.T) {
 	assert.Contains(t, msg.HTML, "Hi "+name+",")
 	assert.Contains(t, msg.Text, "/login")
 	assert.Contains(t, msg.HTML, `href="http://localhost/login"`)
+
+	requireNoWelcomeToFollow(t, profileID(t, loginUser(t, email, testPassword)), email)
+	assert.Len(t, mailsTo(t, email), 1, "a registration sends one welcome email")
 }
