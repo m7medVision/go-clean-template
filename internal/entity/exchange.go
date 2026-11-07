@@ -21,12 +21,6 @@ type Conversion struct {
 	RateDate time.Time
 }
 
-// ExchangeHistory is one page of a user's conversions, newest first, and how many there are in all.
-type ExchangeHistory struct {
-	History []Conversion
-	Total   int
-}
-
 // NewConversion validates a conversion request. Currency codes are trimmed and uppercased and
 // must be three letters (ISO 4217 shape); the two codes must differ and the amount must be
 // positive. Whether a code is a currency the rate provider knows is checked by the provider.

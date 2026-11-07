@@ -18,32 +18,6 @@ func readModel(t *testing.T) *repomock.MockExchangeReadModel {
 	return repomock.NewMockExchangeReadModel(gomock.NewController(t))
 }
 
-func TestGetExchangeHistoryPagesTheUsersConversions(t *testing.T) {
-	t.Parallel()
-
-	read := readModel(t)
-	want := []entity.Conversion{{From: "OMR", To: "CNY"}}
-	read.EXPECT().History(gomock.Any(), "u1", int64(5), int64(10)).Return(want, 11, nil)
-
-	got, err := query.GetExchangeHistoryHandler{History: read}.Handle(context.Background(),
-		query.GetExchangeHistory{UserID: "u1", Limit: 5, Offset: 10})
-
-	require.NoError(t, err)
-	assert.Equal(t, entity.ExchangeHistory{History: want, Total: 11}, got)
-}
-
-func TestGetExchangeHistoryDefaultsThePage(t *testing.T) {
-	t.Parallel()
-
-	read := readModel(t)
-	read.EXPECT().History(gomock.Any(), "u1", int64(10), int64(0)).Return(nil, 0, nil)
-
-	_, err := query.GetExchangeHistoryHandler{History: read}.Handle(context.Background(),
-		query.GetExchangeHistory{UserID: "u1", Limit: 0, Offset: -1})
-
-	require.NoError(t, err)
-}
-
 func TestGetConversionReadsOneOfTheUsersConversions(t *testing.T) {
 	t.Parallel()
 

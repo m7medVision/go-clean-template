@@ -16,7 +16,6 @@ import (
 	time "time"
 
 	entity "github.com/m7medvision/go-clean-template/internal/entity"
-	repo "github.com/m7medvision/go-clean-template/internal/repo"
 	smtp "github.com/m7medvision/go-clean-template/pkg/smtp"
 	worker "github.com/m7medvision/go-clean-template/pkg/worker"
 	decimal "github.com/shopspring/decimal"
@@ -279,19 +278,18 @@ func (mr *MockExchangeReadModelMockRecorder) Conversion(ctx, userID, conversionI
 }
 
 // History mocks base method.
-func (m *MockExchangeReadModel) History(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
+func (m *MockExchangeReadModel) History(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Conversion], error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "History", ctx, userID, limit, offset)
-	ret0, _ := ret[0].([]entity.Conversion)
-	ret1, _ := ret[1].(int)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret := m.ctrl.Call(m, "History", ctx, userID, page)
+	ret0, _ := ret[0].(entity.List[entity.Conversion])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // History indicates an expected call of History.
-func (mr *MockExchangeReadModelMockRecorder) History(ctx, userID, limit, offset any) *gomock.Call {
+func (mr *MockExchangeReadModelMockRecorder) History(ctx, userID, page any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockExchangeReadModel)(nil).History), ctx, userID, limit, offset)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "History", reflect.TypeOf((*MockExchangeReadModel)(nil).History), ctx, userID, page)
 }
 
 // MockExchangeWebAPI is a mock of ExchangeWebAPI interface.
@@ -428,35 +426,33 @@ func (mr *MockTaskReadModelMockRecorder) Get(ctx, userID, taskID any) *gomock.Ca
 }
 
 // List mocks base method.
-func (m *MockTaskReadModel) List(ctx context.Context, userID string, filter repo.TaskFilter) ([]entity.Task, int, error) {
+func (m *MockTaskReadModel) List(ctx context.Context, userID string, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", ctx, userID, filter)
-	ret0, _ := ret[0].([]entity.Task)
-	ret1, _ := ret[1].(int)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret := m.ctrl.Call(m, "List", ctx, userID, status, page)
+	ret0, _ := ret[0].(entity.List[entity.Task])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockTaskReadModelMockRecorder) List(ctx, userID, filter any) *gomock.Call {
+func (mr *MockTaskReadModelMockRecorder) List(ctx, userID, status, page any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskReadModel)(nil).List), ctx, userID, filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockTaskReadModel)(nil).List), ctx, userID, status, page)
 }
 
 // ListAll mocks base method.
-func (m *MockTaskReadModel) ListAll(ctx context.Context, filter repo.TaskFilter) ([]entity.Task, int, error) {
+func (m *MockTaskReadModel) ListAll(ctx context.Context, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAll", ctx, filter)
-	ret0, _ := ret[0].([]entity.Task)
-	ret1, _ := ret[1].(int)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret := m.ctrl.Call(m, "ListAll", ctx, status, page)
+	ret0, _ := ret[0].(entity.List[entity.Task])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // ListAll indicates an expected call of ListAll.
-func (mr *MockTaskReadModelMockRecorder) ListAll(ctx, filter any) *gomock.Call {
+func (mr *MockTaskReadModelMockRecorder) ListAll(ctx, status, page any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockTaskReadModel)(nil).ListAll), ctx, filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockTaskReadModel)(nil).ListAll), ctx, status, page)
 }
 
 // MockPasskeyReadModel is a mock of PasskeyReadModel interface.

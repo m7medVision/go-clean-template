@@ -31,11 +31,11 @@ func (f *fakeExchange) buses() cqrs.Buses {
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetConversion, entity.Conversion](
 		func(context.Context, query.GetConversion) (entity.Conversion, error) { return f.converted, f.err }))
-	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetExchangeHistory, entity.ExchangeHistory](
-		func(_ context.Context, q query.GetExchangeHistory) (entity.ExchangeHistory, error) {
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetExchangeHistory, entity.List[entity.Conversion]](
+		func(_ context.Context, q query.GetExchangeHistory) (entity.List[entity.Conversion], error) {
 			f.gotLimit, f.gotOffset = q.Limit, q.Offset
 
-			return entity.ExchangeHistory{History: []entity.Conversion{f.converted}, Total: 11}, f.err
+			return entity.List[entity.Conversion]{Items: []entity.Conversion{f.converted}, Total: 11}, f.err
 		}))
 
 	return b

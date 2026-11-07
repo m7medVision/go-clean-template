@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -50,46 +49,6 @@ func TestGetTaskKeepsTheReadModelsError(t *testing.T) {
 
 		require.ErrorIs(t, err, sentinel)
 	}
-}
-
-func TestListTasksPagesTheUsersTasks(t *testing.T) {
-	t.Parallel()
-
-	status := entity.TaskStatusDone
-	tasks := readModel(t)
-	want := []entity.Task{{ID: taskID}}
-	tasks.EXPECT().List(gomock.Any(), owner, repo.TaskFilter{Status: &status, Limit: 5, Offset: 10}).Return(want, 11, nil)
-
-	page, err := query.ListTasksHandler{Tasks: tasks}.Handle(context.Background(),
-		query.ListTasks{UserID: owner, Status: &status, Limit: 5, Offset: 10})
-
-	require.NoError(t, err)
-	assert.Equal(t, query.TaskPage{Tasks: want, Total: 11}, page)
-}
-
-func TestListTasksDefaultsThePage(t *testing.T) {
-	t.Parallel()
-
-	tasks := readModel(t)
-	tasks.EXPECT().List(gomock.Any(), owner, repo.TaskFilter{Limit: 10, Offset: 0}).Return(nil, 0, nil)
-
-	_, err := query.ListTasksHandler{Tasks: tasks}.Handle(context.Background(),
-		query.ListTasks{UserID: owner, Limit: 0, Offset: -3})
-
-	require.NoError(t, err)
-}
-
-func TestListAllTasksPagesEveryUsersTasks(t *testing.T) {
-	t.Parallel()
-
-	tasks := readModel(t)
-	want := []entity.Task{{ID: taskID}, {ID: "task-2"}}
-	tasks.EXPECT().ListAll(gomock.Any(), repo.TaskFilter{Limit: 10}).Return(want, 2, nil)
-
-	page, err := query.ListAllTasksHandler{Tasks: tasks}.Handle(context.Background(), query.ListAllTasks{})
-
-	require.NoError(t, err)
-	assert.Equal(t, query.TaskPage{Tasks: want, Total: 2}, page)
 }
 
 func TestListAllTasksIsForAdmins(t *testing.T) {

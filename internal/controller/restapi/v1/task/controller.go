@@ -39,11 +39,11 @@ func (r *controller) readBack(ctx context.Context, userID, taskID string) (entit
 }
 
 // listPage sends a list query and answers with its page.
-func listPage[Q cqrs.QueryOf[query.TaskPage]](ctx context.Context, r *controller, q Q, op string) (*listTasksOutput, error) {
+func listPage[Q cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, r *controller, q Q, op string) (*listTasksOutput, error) {
 	page, err := cqrs.SendQuery(ctx, r.qs, q)
 	if err != nil {
 		return nil, apierr.Problem(ctx, r.l, err, op)
 	}
 
-	return &listTasksOutput{Body: TaskList{Tasks: page.Tasks, Total: page.Total}}, nil
+	return &listTasksOutput{Body: TaskList{Tasks: page.Items, Total: page.Total}}, nil
 }

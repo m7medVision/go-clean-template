@@ -80,8 +80,10 @@ var (
 	ErrTaskNotFound       = newError(KindNotFound, "task not found")
 	ErrTaskForbidden      = newError(KindForbidden, "forbidden")
 	// ErrAdminRequired is a request only a caller holding RoleAdmin may make.
-	ErrAdminRequired       = newError(KindForbidden, "admin role required")
-	ErrInvalidTransition   = newError(KindInvalid, "invalid status transition")
+	ErrAdminRequired     = newError(KindForbidden, "admin role required")
+	ErrInvalidTransition = newError(KindInvalid, "invalid status transition")
+	// ErrInvalidPage is a list asked for with a negative offset or a limit outside 0–MaxPageLimit.
+	ErrInvalidPage         = newError(KindInvalid, "limit must be 1–100 and offset at least 0")
 	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
 	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
 	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")

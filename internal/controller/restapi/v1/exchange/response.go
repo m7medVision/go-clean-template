@@ -39,10 +39,10 @@ func NewConversion(c *entity.Conversion) Conversion {
 }
 
 // NewExchangeHistory -.
-func NewExchangeHistory(h entity.ExchangeHistory) ExchangeHistory {
-	history := make([]Conversion, 0, len(h.History))
-	for i := range h.History {
-		history = append(history, NewConversion(&h.History[i]))
+func NewExchangeHistory(h entity.List[entity.Conversion]) ExchangeHistory {
+	history := make([]Conversion, 0, len(h.Items))
+	for i := range h.Items {
+		history = append(history, NewConversion(&h.Items[i]))
 	}
 
 	return ExchangeHistory{History: history, Total: h.Total}

@@ -79,7 +79,8 @@ CRUD with a status state machine. Tasks are scoped to the authenticated user.
 | Delete | `DELETE /v1/tasks/{id}` |
 
 - Status transitions: `todo` → `in_progress` → `done`, and `in_progress` → `todo`.
-- Lists page with `limit`/`offset` and take an optional `status` filter.
+- Lists page with `limit`/`offset` (10 by default, at most 100; `entity.Page` holds the rule for
+  every transport, and on gRPC an unset `limit` is the default) and take an optional `status` filter.
 - The admin list needs the `admin` role in the caller's token, or it answers `403`. A password
   sign-in grants only `user`; see [architecture.md](architecture.md#roles).
 
@@ -124,7 +125,7 @@ changes show up in review and clients can generate types without a running serve
 - **Any operation** whose handler is still the stub the generator wrote answers `501`
   (`entity.ErrNotImplemented`) until the handler is written ([generator.md](generator.md)).
 - **Validation** failures answer `422`. That includes query parameters: on `GET /v1/tasks`, `limit`
-  must be at least 1, `offset` at least 0, and `status` one of `todo`, `in_progress`, `done`.
+  must be 1–100, `offset` at least 0, and `status` one of `todo`, `in_progress`, `done`.
   Unknown fields in a request body are ignored.
 - **Metrics** at `/metrics` (`METRICS_ENABLED`): `http_requests_total` and
   `http_request_duration_seconds`, labeled by `method`, `route` (the chi pattern, or `unmatched`) and

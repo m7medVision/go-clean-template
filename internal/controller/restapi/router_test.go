@@ -180,3 +180,44 @@ func TestOpenAPIExportsEveryOperation(t *testing.T) {
 		assert.Contains(t, spec.Paths, path)
 	}
 }
+
+// The schema hints of every list's limit document the domain's paging rule (entity.Page).
+func TestEveryLimitDocumentsTheDomainsPage(t *testing.T) {
+	t.Parallel()
+
+	doc, err := restapi.OpenAPI("test")
+	require.NoError(t, err)
+
+	var spec struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name   string `json:"name"`
+				Schema struct {
+					Default float64 `json:"default"`
+					Maximum float64 `json:"maximum"`
+				} `json:"schema"`
+			} `json:"parameters"`
+		} `json:"paths"`
+	}
+
+	require.NoError(t, json.Unmarshal(doc, &spec))
+
+	limits := 0
+
+	for path, ops := range spec.Paths {
+		for method, op := range ops {
+			for _, p := range op.Parameters {
+				if p.Name != "limit" {
+					continue
+				}
+
+				limits++
+
+				assert.InDelta(t, entity.DefaultPageLimit, p.Schema.Default, 0, method+" "+path)
+				assert.InDelta(t, entity.MaxPageLimit, p.Schema.Maximum, 0, method+" "+path)
+			}
+		}
+	}
+
+	assert.Positive(t, limits)
+}

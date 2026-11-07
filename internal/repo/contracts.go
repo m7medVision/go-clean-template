@@ -58,7 +58,7 @@ type (
 	// one page of the user's conversions, newest first, and their total count. Conversion of
 	// another user's or a missing conversion is entity.ErrConversionNotFound.
 	ExchangeReadModel interface {
-		History(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error)
+		History(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Conversion], error)
 		Conversion(ctx context.Context, userID, conversionID string) (entity.Conversion, error)
 	}
 
@@ -79,9 +79,10 @@ type (
 	// task is entity.ErrTaskNotFound, and of another user's task entity.ErrTaskForbidden.
 	TaskReadModel interface {
 		Get(ctx context.Context, userID, taskID string) (entity.Task, error)
-		List(ctx context.Context, userID string, filter TaskFilter) ([]entity.Task, int, error)
+		// List is one page of the user's tasks, of status when it is set, newest first.
+		List(ctx context.Context, userID string, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error)
 		// ListAll is List across every user.
-		ListAll(ctx context.Context, filter TaskFilter) ([]entity.Task, int, error)
+		ListAll(ctx context.Context, status *entity.TaskStatus, page entity.Page) (entity.List[entity.Task], error)
 	}
 
 	// PasskeyReadModel reads webauthn_credentials, which only the passkey projector writes.
@@ -130,12 +131,5 @@ type (
 	// implementation.
 	Mailer interface {
 		Send(ctx context.Context, m smtp.Message) error
-	}
-
-	// TaskFilter -.
-	TaskFilter struct {
-		Status *entity.TaskStatus
-		Limit  int64
-		Offset int64
 	}
 )

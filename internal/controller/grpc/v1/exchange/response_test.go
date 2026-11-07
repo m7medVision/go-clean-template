@@ -37,7 +37,7 @@ func TestNewConversionResponse(t *testing.T) {
 func TestNewExchangeHistoryResponse(t *testing.T) {
 	t.Parallel()
 
-	history := entity.ExchangeHistory{History: []entity.Conversion{
+	history := entity.List[entity.Conversion]{Items: []entity.Conversion{
 		{From: "EUR", To: "USD", Result: decimal.RequireFromString("1")},
 		{From: "GBP", To: "JPY", Result: decimal.RequireFromString("2.5")},
 	}, Total: 7}

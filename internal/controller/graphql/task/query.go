@@ -6,7 +6,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
-	"github.com/m7medvision/go-clean-template/internal/controller/graphql/paging"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -34,10 +33,6 @@ func (q Query) Tasks(ctx context.Context, status *entity.TaskStatus, limit, offs
 		return nil, err
 	}
 
-	if !paging.Valid(limit, offset) {
-		return nil, gqlerr.InvalidInput()
-	}
-
 	return page(ctx, q, query.ListTasks{UserID: caller.UserID, Status: status, Limit: limit, Offset: offset}, "tasks")
 }
 
@@ -48,19 +43,15 @@ func (q Query) AllTasks(ctx context.Context, status *entity.TaskStatus, limit, o
 		return nil, err
 	}
 
-	if !paging.Valid(limit, offset) {
-		return nil, gqlerr.InvalidInput()
-	}
-
 	return page(ctx, q, query.ListAllTasks{Principal: caller, Status: status, Limit: limit, Offset: offset}, "allTasks")
 }
 
 // page sends a list query and returns its page.
-func page[L cqrs.QueryOf[query.TaskPage]](ctx context.Context, q Query, list L, op string) (*model.TaskList, error) {
+func page[L cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, q Query, list L, op string) (*model.TaskList, error) {
 	p, err := cqrs.SendQuery(ctx, q.qs, list)
 	if err != nil {
 		return nil, gqlerr.Map(ctx, q.l, err, op)
 	}
 
-	return &model.TaskList{Tasks: p.Tasks, Total: p.Total}, nil
+	return &model.TaskList{Tasks: p.Items, Total: p.Total}, nil
 }

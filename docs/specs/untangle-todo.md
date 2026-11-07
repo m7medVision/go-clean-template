@@ -58,8 +58,8 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 3: Domain rules
 
 ### 7. One page type and one paging rule  (B)
-- [ ] `entity.Page` (default 10, max 100) normalizes every list query; read-model contracts take it.
-- [ ] REST task list max 100; gRPC list limits enforced; GraphQL and REST hints match the entity.
+- [x] `entity.Page` (default 10, max 100) normalizes every list query; read-model contracts take it.
+- [x] REST task list max 100; gRPC list limits enforced; GraphQL and REST hints match the entity.
 
 **Verify:** G2. **Depends on:** 4, 5. **Size:** L
 

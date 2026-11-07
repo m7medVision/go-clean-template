@@ -43,15 +43,17 @@ func (r *Repo) Conversion(ctx context.Context, userID, conversionID string) (ent
 }
 
 // History returns one page of the user's conversions, newest first, and their total count.
-func (r *Repo) History(ctx context.Context, userID string, limit, offset int64) ([]entity.Conversion, int, error) {
+func (r *Repo) History(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Conversion], error) {
 	total, err := r.q.CountExchanges(ctx, userID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("ExchangeReadModel - History - r.q.CountExchanges: %w", err)
+		return entity.List[entity.Conversion]{}, fmt.Errorf("ExchangeReadModel - History - r.q.CountExchanges: %w", err)
 	}
 
-	rows, err := r.q.ListExchanges(ctx, queries.ListExchangesParams{UserID: userID, Limit: limit, Offset: offset})
+	rows, err := r.q.ListExchanges(ctx, queries.ListExchangesParams{
+		UserID: userID, Limit: int64(page.Size()), Offset: int64(page.Offset),
+	})
 	if err != nil {
-		return nil, 0, fmt.Errorf("ExchangeReadModel - History - r.q.ListExchanges: %w", err)
+		return entity.List[entity.Conversion]{}, fmt.Errorf("ExchangeReadModel - History - r.q.ListExchanges: %w", err)
 	}
 
 	history := make([]entity.Conversion, 0, len(rows))
@@ -66,5 +68,5 @@ func (r *Repo) History(ctx context.Context, userID string, limit, offset int64) 
 		})
 	}
 
-	return history, int(total), nil
+	return entity.List[entity.Conversion]{Items: history, Total: int(total)}, nil
 }

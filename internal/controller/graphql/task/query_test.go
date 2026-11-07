@@ -57,17 +57,6 @@ func TestListTasks(t *testing.T) {
 	assert.Equal(t, entity.TaskStatusTodo, *tk.listStatus)
 }
 
-func TestListTasksInvalidLimit(t *testing.T) {
-	t.Parallel()
-
-	tk := &fakeTask{}
-
-	resp := do(t, tk, true, `query { tasks(limit: 0) { total } }`, nil)
-
-	assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
-	assert.False(t, tk.called)
-}
-
 func TestAllTasks(t *testing.T) {
 	t.Parallel()
 
@@ -88,17 +77,6 @@ func TestAllTasksAdminRequired(t *testing.T) {
 	resp := doAs(t, &fakeTask{err: entity.ErrAdminRequired}, []string{"user"}, `query { allTasks { total } }`)
 
 	assert.Equal(t, "FORBIDDEN", resp.Code(t))
-}
-
-func TestAllTasksInvalidLimit(t *testing.T) {
-	t.Parallel()
-
-	tk := &fakeTask{}
-
-	resp := doAs(t, tk, []string{"admin"}, `query { allTasks(limit: 0) { total } }`)
-
-	assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
-	assert.False(t, tk.called)
 }
 
 func TestAllTasksUnauthenticated(t *testing.T) {

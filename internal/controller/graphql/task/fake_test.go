@@ -64,17 +64,17 @@ func (f *fakeTask) buses() cqrs.Buses {
 
 			return f.stored, f.err
 		}))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, query.TaskPage](
-		func(_ context.Context, q query.ListTasks) (query.TaskPage, error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, entity.List[entity.Task]](
+		func(_ context.Context, q query.ListTasks) (entity.List[entity.Task], error) {
 			f.called, f.listStatus = true, q.Status
 
-			return query.TaskPage{Tasks: []entity.Task{f.stored}, Total: 1}, f.err
+			return entity.List[entity.Task]{Items: []entity.Task{f.stored}, Total: 1}, f.err
 		}))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, query.TaskPage](
-		func(_ context.Context, q query.ListAllTasks) (query.TaskPage, error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[entity.Task]](
+		func(_ context.Context, q query.ListAllTasks) (entity.List[entity.Task], error) {
 			f.called, f.listCaller, f.listStatus = true, q.Principal, q.Status
 
-			return query.TaskPage{Tasks: []entity.Task{f.stored}, Total: 1}, f.err
+			return entity.List[entity.Task]{Items: []entity.Task{f.stored}, Total: 1}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}

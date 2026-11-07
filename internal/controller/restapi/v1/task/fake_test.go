@@ -41,15 +41,15 @@ func (f *fakeTask) buses() cqrs.Buses {
 
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
 		func(context.Context, query.GetTask) (entity.Task, error) { return f.stored, f.err }))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, query.TaskPage](
-		func(context.Context, query.ListTasks) (query.TaskPage, error) {
-			return query.TaskPage{Tasks: []entity.Task{f.stored}, Total: 1}, f.err
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, entity.List[entity.Task]](
+		func(context.Context, query.ListTasks) (entity.List[entity.Task], error) {
+			return entity.List[entity.Task]{Items: []entity.Task{f.stored}, Total: 1}, f.err
 		}))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, query.TaskPage](
-		func(_ context.Context, q query.ListAllTasks) (query.TaskPage, error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[entity.Task]](
+		func(_ context.Context, q query.ListAllTasks) (entity.List[entity.Task], error) {
 			f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = q.Principal, q.Status, q.Limit, q.Offset
 
-			return query.TaskPage{Tasks: f.listed, Total: len(f.listed)}, f.err
+			return entity.List[entity.Task]{Items: f.listed, Total: len(f.listed)}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}

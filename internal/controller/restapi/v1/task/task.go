@@ -24,7 +24,7 @@ type createTaskOutput struct {
 
 type listTasksInput struct {
 	Status entity.TaskStatus `query:"status" required:"false" enum:"todo,in_progress,done" example:"todo"`
-	Limit  int               `query:"limit" default:"10" minimum:"1"`
+	Limit  int               `query:"limit" default:"10" minimum:"1" maximum:"100"`
 	Offset int               `query:"offset" default:"0" minimum:"0"`
 }
 

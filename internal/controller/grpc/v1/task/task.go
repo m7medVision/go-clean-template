@@ -86,13 +86,13 @@ func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest)
 }
 
 // listPage sends a list query and answers with its page.
-func listPage[Q cqrs.QueryOf[query.TaskPage]](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
+func listPage[Q cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
 	page, err := cqrs.SendQuery(ctx, c.qs, q)
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, op)
 	}
 
-	return NewListTasksResponse(page.Tasks, page.Total), nil
+	return NewListTasksResponse(page.Items, page.Total), nil
 }
 
 // UpdateTask -.

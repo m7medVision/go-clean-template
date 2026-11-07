@@ -39,11 +39,11 @@ type fakeTask struct {
 
 func (f *fakeTask) buses() cqrs.Buses {
 	qs := cqrs.NewQueries()
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, query.TaskPage](
-		func(_ context.Context, q query.ListAllTasks) (query.TaskPage, error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[entity.Task]](
+		func(_ context.Context, q query.ListAllTasks) (entity.List[entity.Task], error) {
 			f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = q.Principal, q.Status, q.Limit, q.Offset
 
-			return query.TaskPage{Tasks: f.listed, Total: len(f.listed)}, f.err
+			return entity.List[entity.Task]{Items: f.listed, Total: len(f.listed)}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: qs}

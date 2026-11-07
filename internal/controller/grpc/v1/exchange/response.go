@@ -24,10 +24,10 @@ func NewConversionResponse(c *entity.Conversion) *v1.ConversionResponse {
 }
 
 // NewExchangeHistoryResponse -.
-func NewExchangeHistoryResponse(h entity.ExchangeHistory) *v1.ExchangeHistoryResponse {
-	history := make([]*v1.ConversionResponse, len(h.History))
-	for i := range h.History {
-		history[i] = NewConversionResponse(&h.History[i])
+func NewExchangeHistoryResponse(h entity.List[entity.Conversion]) *v1.ExchangeHistoryResponse {
+	history := make([]*v1.ConversionResponse, len(h.Items))
+	for i := range h.Items {
+		history[i] = NewConversionResponse(&h.Items[i])
 	}
 
 	return &v1.ExchangeHistoryResponse{History: history, Total: clampInt32(h.Total)}

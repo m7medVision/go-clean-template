@@ -16,7 +16,7 @@ const _exchangeHistory = `query { exchangeHistory(limit: 5, offset: 10) {
 func TestExchangeHistory(t *testing.T) {
 	t.Parallel()
 
-	ex := &fakeExchange{history: entity.ExchangeHistory{Total: 11, History: []entity.Conversion{{
+	ex := &fakeExchange{history: entity.List[entity.Conversion]{Total: 11, Items: []entity.Conversion{{
 		From: "OMR", To: "CNY",
 		Amount:   decimal.RequireFromString("100.10"),
 		Rate:     decimal.RequireFromString("17.406483"),
@@ -43,9 +43,6 @@ func TestExchangeHistoryRejects(t *testing.T) {
 		code          string
 	}{
 		{"no token", false, _exchangeHistory, "UNAUTHENTICATED"},
-		{"limit below 1", true, `query { exchangeHistory(limit: 0) { total } }`, "BAD_USER_INPUT"},
-		{"limit above 100", true, `query { exchangeHistory(limit: 101) { total } }`, "BAD_USER_INPUT"},
-		{"negative offset", true, `query { exchangeHistory(offset: -1) { total } }`, "BAD_USER_INPUT"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
