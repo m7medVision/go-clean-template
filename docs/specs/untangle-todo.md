@@ -267,7 +267,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ### 35. Fresh-eyes sweep until nothing is worth fixing
 - [x] Sweep 1: three reviewers, findings S1–S5 recorded in the decision log.
 - [x] S1–S5 fixed and merged.
-- [ ] The generator's templates and goldens re-synced to S1–S5.
+- [x] The generator's templates and goldens re-synced to S1–S5 (gen-check and gen-e2e green).
 - [ ] Sweep 2 reports nothing worth fixing.
 - [ ] Fresh reviewers report no remaining special case, hidden link, needless link or surplus worth
       fixing; whatever they found is fixed.
