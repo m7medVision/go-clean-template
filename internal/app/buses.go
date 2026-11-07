@@ -19,6 +19,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
@@ -95,16 +96,18 @@ func registerHandlers(
 		return err
 	}
 
+	sessions := session.New(tokens)
+
 	task.Register(cmds, qs, task.Deps{Store: store, Tasks: persistTaskRepo.NewReadModel(pg)})
-	user.Register(cmds, qs, user.Deps{Store: store, Users: persistUserRepo.NewReadModel(pg), Tokens: tokens})
+	user.Register(cmds, qs, user.Deps{Store: store, Users: persistUserRepo.NewReadModel(pg), Sessions: sessions})
 	exchange.Register(cmds, qs, exchange.Deps{
 		Store: store, Rates: webapi.New(cfg.Exchange.ServiceURL), History: persistExchangeRepo.NewReadModel(pg),
 	})
 	passkey.Register(cmds, qs, &passkey.Deps{
 		Ceremony: passkeyCeremony, Store: store, Users: persistUserRepo.NewReadModel(pg),
-		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Tx: pg, Tokens: tokens,
+		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Tx: pg, Sessions: sessions,
 	})
-	oidc.Register(cmds, qs, oidc.Deps{SSO: signIn, Store: store, Tokens: tokens})
+	oidc.Register(cmds, qs, oidc.Deps{SSO: signIn, Store: store, Sessions: sessions})
 	mail.Register(cmds, qs, mailDeps)
 
 	return nil

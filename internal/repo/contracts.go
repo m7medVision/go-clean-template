@@ -68,6 +68,11 @@ type (
 		Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error)
 	}
 
+	// SessionIssuer signs the auth token a sign-in answers with, carrying the user's roles.
+	SessionIssuer interface {
+		Issue(userID string, roles []entity.Role) (string, error)
+	}
+
 	// UserReadModel reads the users table, which only the user projector writes. A missing user is
 	// entity.ErrUserNotFound.
 	UserReadModel interface {

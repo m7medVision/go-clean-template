@@ -78,6 +78,14 @@ type Write interface {
 
 var _ Write = Written{}
 
+// SignedIn is what every sign-in answers: the user it signed in (with the position of their
+// creation when the sign-in created them, else 0) and the auth token.
+type SignedIn struct {
+	Written
+
+	Token string
+}
+
 // WrittenAt is the position of the write.
 func (w Written) WrittenAt() int64 {
 	return w.Position

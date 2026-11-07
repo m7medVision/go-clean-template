@@ -74,12 +74,12 @@ func (r *controller) login(api huma.API) {
 		Tags:        []string{apidoc.AuthTag},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *loginInput) (*loginOutput, error) {
-		token, err := cqrs.SendQuery(ctx, r.qs, query.LogIn{Email: input.Body.Email, Password: input.Body.Password})
+		signedIn, err := cqrs.SendQuery(ctx, r.qs, query.LogIn{Email: input.Body.Email, Password: input.Body.Password})
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "login")
 		}
 
-		return &loginOutput{Body: response.Token{Token: token}}, nil
+		return &loginOutput{Body: response.Token{Token: signedIn.Token}}, nil
 	})
 }
 

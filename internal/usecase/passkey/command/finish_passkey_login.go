@@ -11,7 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/ceremony"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
 )
 
 // FinishPasskeyLogin verifies the browser's assertion against the ceremony in Token, burns the
@@ -23,17 +22,10 @@ import (
 // signature from a registered passkey can consume a challenge, so a captured token with a forged body
 // cannot burn a ceremony its owner is still completing. The burn and the use commit together.
 type FinishPasskeyLogin struct {
-	cqrs.Command[SignedIn]
+	cqrs.Command[entity.SignedIn]
 
 	Token string
 	Body  []byte
-}
-
-// SignedIn is a sign-in's result: the passkey it recorded the use of, and the auth token.
-type SignedIn struct {
-	entity.Written
-
-	Token string
 }
 
 // FinishPasskeyLoginHandler handles FinishPasskeyLogin. Now is the clock (time.Now when nil).
@@ -43,34 +35,34 @@ type FinishPasskeyLoginHandler struct {
 	Users    repo.UserReadModel
 	Guard    repo.ChallengeGuard
 	Tx       repo.Transactor
-	Tokens   *jwt.Manager
+	Sessions repo.SessionIssuer
 	Now      func() time.Time
 }
 
 // Handle -.
-func (h *FinishPasskeyLoginHandler) Handle(ctx context.Context, cmd FinishPasskeyLogin) (SignedIn, error) {
+func (h *FinishPasskeyLoginHandler) Handle(ctx context.Context, cmd FinishPasskeyLogin) (entity.SignedIn, error) {
 	var used *entity.PasskeyAggregate
 
 	login, err := h.Ceremony.FinishLogin(cmd.Token, cmd.Body, h.lookup(ctx, &used))
 	if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
-		return SignedIn{}, fmt.Errorf("FinishPasskeyLogin: %w: %w", entity.ErrPasskeyLoginInvalid, err)
+		return entity.SignedIn{}, fmt.Errorf("FinishPasskeyLogin: %w: %w", entity.ErrPasskeyLoginInvalid, err)
 	}
 
 	if err != nil {
-		return SignedIn{}, fmt.Errorf("FinishPasskeyLogin: %w", err)
+		return entity.SignedIn{}, fmt.Errorf("FinishPasskeyLogin: %w", err)
 	}
 
 	written, err := h.record(ctx, &login, used)
 	if err != nil {
-		return SignedIn{}, err
+		return entity.SignedIn{}, err
 	}
 
-	token, err := h.Tokens.GenerateToken(login.UserID, entity.RoleNames(entity.LocalRoles()))
+	token, err := h.Sessions.Issue(login.UserID, entity.LocalRoles())
 	if err != nil {
-		return SignedIn{}, fmt.Errorf("FinishPasskeyLogin - h.Tokens.GenerateToken: %w", err)
+		return entity.SignedIn{}, fmt.Errorf("FinishPasskeyLogin - h.Sessions.Issue: %w", err)
 	}
 
-	return SignedIn{Written: written, Token: token}, nil
+	return entity.SignedIn{Written: written, Token: token}, nil
 }
 
 // lookup finds the user and passkey an assertion names, and keeps the passkey's aggregate in used.

@@ -332,6 +332,45 @@ func (mr *MockExchangeWebAPIMockRecorder) Rate(ctx, from, to any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rate", reflect.TypeOf((*MockExchangeWebAPI)(nil).Rate), ctx, from, to)
 }
 
+// MockSessionIssuer is a mock of SessionIssuer interface.
+type MockSessionIssuer struct {
+	ctrl     *gomock.Controller
+	recorder *MockSessionIssuerMockRecorder
+	isgomock struct{}
+}
+
+// MockSessionIssuerMockRecorder is the mock recorder for MockSessionIssuer.
+type MockSessionIssuerMockRecorder struct {
+	mock *MockSessionIssuer
+}
+
+// NewMockSessionIssuer creates a new mock instance.
+func NewMockSessionIssuer(ctrl *gomock.Controller) *MockSessionIssuer {
+	mock := &MockSessionIssuer{ctrl: ctrl}
+	mock.recorder = &MockSessionIssuerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSessionIssuer) EXPECT() *MockSessionIssuerMockRecorder {
+	return m.recorder
+}
+
+// Issue mocks base method.
+func (m *MockSessionIssuer) Issue(userID string, roles []entity.Role) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Issue", userID, roles)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Issue indicates an expected call of Issue.
+func (mr *MockSessionIssuerMockRecorder) Issue(userID, roles any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Issue", reflect.TypeOf((*MockSessionIssuer)(nil).Issue), userID, roles)
+}
+
 // MockUserReadModel is a mock of UserReadModel interface.
 type MockUserReadModel struct {
 	ctrl     *gomock.Controller

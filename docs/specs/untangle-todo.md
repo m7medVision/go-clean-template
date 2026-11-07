@@ -101,7 +101,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1 (eventstore contract suite included). **Depends on:** 11. **Size:** L
 
 ### 13. Sessions and passwords  (F)
-- [ ] One port issues tokens (over `pkg/jwt`); every sign-in uses it; one sign-in result type;
+- [x] One port issues tokens (over `pkg/jwt`); every sign-in uses it; one sign-in result type;
       bcrypt hash and compare live together on `entity.User`; use cases no longer import `*jwt.Manager`.
 
 **Verify:** G1. **Depends on:** 5. **Size:** L

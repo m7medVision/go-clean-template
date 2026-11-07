@@ -72,11 +72,11 @@ func (f *fakePasskey) buses() cqrs.Buses {
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyLogin, ceremony.Started](
 		func(context.Context, query.BeginPasskeyLogin) (ceremony.Started, error) { return started() }))
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyLogin, command.SignedIn](
-		func(_ context.Context, c command.FinishPasskeyLogin) (command.SignedIn, error) {
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyLogin, entity.SignedIn](
+		func(_ context.Context, c command.FinishPasskeyLogin) (entity.SignedIn, error) {
 			f.gotToken, f.gotBody = c.Token, c.Body
 
-			return command.SignedIn{Token: f.token}, f.err
+			return entity.SignedIn{Token: f.token}, f.err
 		}))
 
 	return b

@@ -32,12 +32,12 @@ func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1
 
 // Login -.
 func (c *Controller) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
-	token, err := cqrs.SendQuery(ctx, c.qs, query.LogIn{Email: req.GetEmail(), Password: req.GetPassword()})
+	signedIn, err := cqrs.SendQuery(ctx, c.qs, query.LogIn{Email: req.GetEmail(), Password: req.GetPassword()})
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, "Login")
 	}
 
-	return &v1.LoginResponse{Token: token}, nil
+	return &v1.LoginResponse{Token: signedIn.Token}, nil
 }
 
 // GetProfile -.

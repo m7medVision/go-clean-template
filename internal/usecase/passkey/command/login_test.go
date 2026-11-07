@@ -10,6 +10,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/passkeytest"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -37,7 +38,7 @@ func (f *fixture) login(t *testing.T) login {
 
 	return login{
 		handler: &command.FinishPasskeyLoginHandler{
-			Ceremony: f.ceremony, Store: f.store, Users: users, Guard: guard, Tx: inline{}, Tokens: tokens, Now: now,
+			Ceremony: f.ceremony, Store: f.store, Users: users, Guard: guard, Tx: inline{}, Sessions: session.New(tokens), Now: now,
 		},
 		guard:  guard,
 		tokens: tokens,

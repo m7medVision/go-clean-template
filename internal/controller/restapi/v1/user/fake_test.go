@@ -28,8 +28,10 @@ func (f *fakeUser) buses() cqrs.Buses {
 		func(context.Context, command.RegisterUser) (entity.Written, error) {
 			return entity.Written{ID: f.registered.ID}, f.registerErr
 		}))
-	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.LogIn, string](
-		func(context.Context, query.LogIn) (string, error) { return f.token, f.loginErr }))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.LogIn, entity.SignedIn](
+		func(context.Context, query.LogIn) (entity.SignedIn, error) {
+			return entity.SignedIn{Token: f.token}, f.loginErr
+		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetUser, entity.User](
 		func(context.Context, query.GetUser) (entity.User, error) { return f.registered, f.getErr }))
 

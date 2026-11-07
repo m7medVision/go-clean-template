@@ -13,7 +13,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/aggregate"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
 )
 
 // FinishOIDCLogin checks the provider's redirect (Code and State) against the ceremony in Token and
@@ -24,47 +23,39 @@ import (
 // an identity finds its user even before the user read model has it. An email or username another
 // account holds is entity.ErrAccountConflict: accounts are never linked by email.
 type FinishOIDCLogin struct {
-	cqrs.Command[SignedIn]
+	cqrs.Command[entity.SignedIn]
 
 	Code  string
 	State string
 	Token string
 }
 
-// SignedIn is a sign-in's result: the user, the position of their creation when this sign-in created
-// them, and the auth token.
-type SignedIn struct {
-	entity.Written
-
-	Token string
-}
-
 // FinishOIDCLoginHandler handles FinishOIDCLogin. Now is the clock (time.Now when nil).
 type FinishOIDCLoginHandler struct {
-	SSO    *sso.SSO
-	Store  repo.EventStore
-	Tokens *jwt.Manager
-	Now    func() time.Time
+	SSO      *sso.SSO
+	Store    repo.EventStore
+	Sessions repo.SessionIssuer
+	Now      func() time.Time
 }
 
 // Handle -.
-func (h FinishOIDCLoginHandler) Handle(ctx context.Context, cmd FinishOIDCLogin) (SignedIn, error) {
+func (h FinishOIDCLoginHandler) Handle(ctx context.Context, cmd FinishOIDCLogin) (entity.SignedIn, error) {
 	identity, err := h.SSO.Verify(ctx, cmd.Code, cmd.State, cmd.Token)
 	if err != nil {
-		return SignedIn{}, fmt.Errorf("FinishOIDCLogin - h.SSO.Verify: %w", err)
+		return entity.SignedIn{}, fmt.Errorf("FinishOIDCLogin - h.SSO.Verify: %w", err)
 	}
 
 	written, err := h.user(ctx, &identity)
 	if err != nil {
-		return SignedIn{}, fmt.Errorf("FinishOIDCLogin: %w", err)
+		return entity.SignedIn{}, fmt.Errorf("FinishOIDCLogin: %w", err)
 	}
 
-	token, err := h.Tokens.GenerateToken(written.ID, entity.RoleNames(identity.Roles))
+	token, err := h.Sessions.Issue(written.ID, identity.Roles)
 	if err != nil {
-		return SignedIn{}, fmt.Errorf("FinishOIDCLogin - h.Tokens.GenerateToken: %w", err)
+		return entity.SignedIn{}, fmt.Errorf("FinishOIDCLogin - h.Sessions.Issue: %w", err)
 	}
 
-	return SignedIn{Written: written, Token: token}, nil
+	return entity.SignedIn{Written: written, Token: token}, nil
 }
 
 // user returns the user the identity's claim names, or creates one.

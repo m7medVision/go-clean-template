@@ -10,6 +10,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/oidctest"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/sso"
@@ -49,12 +50,12 @@ func newFixture(t *testing.T, store repo.EventStore) *fixture {
 
 	return &fixture{
 		idp: idp, sso: s, store: mem, tokens: tokens,
-		handler: command.FinishOIDCLoginHandler{SSO: s, Store: store, Tokens: tokens},
+		handler: command.FinishOIDCLoginHandler{SSO: s, Store: store, Sessions: session.New(tokens)},
 	}
 }
 
 // signIn begins a sign-in, signs in at the provider with claims, and finishes it.
-func (f *fixture) signIn(t *testing.T, claims map[string]any) (command.SignedIn, error) {
+func (f *fixture) signIn(t *testing.T, claims map[string]any) (entity.SignedIn, error) {
 	t.Helper()
 
 	authURL, token, err := f.sso.Begin(t.Context())

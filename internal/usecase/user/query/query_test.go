@@ -8,6 +8,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
+	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/query"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
@@ -39,11 +40,12 @@ func TestLogInIssuesATokenWithTheLocalRoles(t *testing.T) {
 		Return(entity.User{ID: "u1", PasswordHash: hashed(t, "secret")}, nil)
 
 	tokens := jwt.New("key", time.Hour)
-	token, err := query.LogInHandler{Users: read, Tokens: tokens}.Handle(context.Background(),
+	signedIn, err := query.LogInHandler{Users: read, Sessions: session.New(tokens)}.Handle(context.Background(),
 		query.LogIn{Email: "jo@example.com", Password: "secret"})
 	require.NoError(t, err)
+	assert.Equal(t, "u1", signedIn.ID)
 
-	claims, err := tokens.Parse(token)
+	claims, err := tokens.Parse(signedIn.Token)
 	require.NoError(t, err)
 	assert.Equal(t, "u1", claims.UserID)
 	assert.Equal(t, entity.RoleNames(entity.LocalRoles()), claims.Roles)
@@ -64,7 +66,7 @@ func TestLogInRefusesEveryWrongCredentialAlike(t *testing.T) {
 		read := users(t)
 		read.EXPECT().ByEmail(gomock.Any(), "jo@example.com").Return(found.user, found.err)
 
-		_, err := query.LogInHandler{Users: read, Tokens: jwt.New("key", time.Hour)}.Handle(context.Background(),
+		_, err := query.LogInHandler{Users: read, Sessions: session.New(jwt.New("key", time.Hour))}.Handle(context.Background(),
 			query.LogIn{Email: "jo@example.com", Password: "secret"})
 
 		require.ErrorIs(t, err, entity.ErrInvalidCredentials, name)

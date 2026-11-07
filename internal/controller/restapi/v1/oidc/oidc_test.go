@@ -41,11 +41,11 @@ func (f *fakeOIDC) buses() cqrs.Buses {
 		func(context.Context, query.BeginOIDCLogin) (query.Started, error) {
 			return query.Started{AuthURL: f.authURL, Token: f.token}, f.err
 		}))
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishOIDCLogin, command.SignedIn](
-		func(_ context.Context, c command.FinishOIDCLogin) (command.SignedIn, error) {
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishOIDCLogin, entity.SignedIn](
+		func(_ context.Context, c command.FinishOIDCLogin) (entity.SignedIn, error) {
 			f.gotCode, f.gotState, f.gotToken = c.Code, c.State, c.Token
 
-			return command.SignedIn{Token: f.token}, f.err
+			return entity.SignedIn{Token: f.token}, f.err
 		}))
 
 	return b

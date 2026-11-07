@@ -1,9 +1,12 @@
 package entity
 
 import (
+	"fmt"
 	"net/mail"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -40,4 +43,20 @@ type User struct {
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"  example:"2026-01-01T00:00:00Z"`
 	UpdatedAt    time.Time `json:"updated_at"  example:"2026-01-01T00:00:00Z"`
+}
+
+// HashPassword is the bcrypt hash a user's password is stored as.
+func HashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("bcrypt.GenerateFromPassword: %w", err)
+	}
+
+	return string(hash), nil
+}
+
+// PasswordMatches reports whether password is u's. A user with no password, created by an SSO
+// sign-in, has none to match.
+func (u *User) PasswordMatches(password string) bool {
+	return u.PasswordHash != "" && bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) == nil
 }

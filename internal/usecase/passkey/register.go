@@ -6,7 +6,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/jwt"
 )
 
 // Deps is what the passkey handlers are built from.
@@ -17,7 +16,7 @@ type Deps struct {
 	Passkeys repo.PasskeyReadModel
 	Guard    repo.ChallengeGuard
 	Tx       repo.Transactor
-	Tokens   *jwt.Manager
+	Sessions repo.SessionIssuer
 }
 
 // Register registers every passkey command and query handler, one line each.
@@ -26,7 +25,7 @@ func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d *Deps) {
 	cqrs.HandleCommand(cmds, command.RenamePasskeyHandler{Store: d.Store})
 	cqrs.HandleCommand(cmds, command.DeletePasskeyHandler{Store: d.Store})
 	cqrs.HandleCommand(cmds, &command.FinishPasskeyLoginHandler{
-		Ceremony: d.Ceremony, Store: d.Store, Users: d.Users, Guard: d.Guard, Tx: d.Tx, Tokens: d.Tokens,
+		Ceremony: d.Ceremony, Store: d.Store, Users: d.Users, Guard: d.Guard, Tx: d.Tx, Sessions: d.Sessions,
 	})
 
 	cqrs.HandleQuery(qs, query.BeginPasskeyRegistrationHandler{Ceremony: d.Ceremony, Users: d.Users, Passkeys: d.Passkeys})
