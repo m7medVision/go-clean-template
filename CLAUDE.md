@@ -174,7 +174,7 @@ Layout rules:
   carries; the pool itself is unexported. A handler is a struct
   whose exported fields are its dependencies, filled in by `register.go`. No package-level state —
   `gochecknoglobals` and `gochecknoinits` are on.
-- Unexported package constants are prefixed with an underscore (`_defaultEntityCap`,
+- Unexported package constants are prefixed with an underscore (`_commandAttempts`,
   `_tracerName`). `mnd` rejects bare numeric literals, so add a constant rather than inlining one.
 
 ## Controller layout
@@ -191,7 +191,7 @@ restapi/v1/<domain>/   controller.go (struct, NewRoutes, the _tag its ops carry,
                        and the input/output structs several ops share), <domain>_test.go,
                        fake_test.go
 grpc/v1/<domain>/      controller.go (struct, New returning the proto server interface, shared
-                       helpers), one file per RPC (create_task.go), request.go, response.go, tests
+                       helpers), one file per RPC (create_task.go), response.go, tests
 graphql/<domain>/      resolver.go (Query/Mutation, New, shared helpers), one file per field
                        (create_task.go resolves createTask), input.go or response.go, tests
 graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_types.graphqls
@@ -363,7 +363,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   `internal/controller/graphql/schema/*.graphqls` and the `graphql(...)` operations in `web/src/`.
 - `web/src/routeTree.gen.ts` ← the TanStack Router Vite plugin, on every `vp dev` / `vp build`.
 - `docs/openapi/v1.json` ← `make openapi`, exported by `cmd/openapi` from the same Huma config the
-  server uses (`restapi.OpenAPI`). Huma still serves the live document at `/openapi.json` when
+  server uses (`app.OpenAPI` in `internal/app/http.go`, which calls `restapi.Document`). Huma still serves the live document at `/openapi.json` when
   `DOCS_ENABLED`; the checked-in copy exists so REST contract changes show up as a reviewable diff
   and so clients can generate types without a running server. CI fails when it is stale.
 
@@ -645,8 +645,9 @@ generated files copy — read it before writing. The steps are what the generate
    gRPC method called without a token; then the module in `modules()`
    (`internal/app/modules.go`).
 7. **Transports** — for each one, a new domain folder (see **Controller layout**):
-   `<transport>/v1/<domain>/` with its `controller.go`, one file per operation, `request.go`,
-   `response.go` and tests (with a `fake_test.go` registering fake handlers), registered by the
+   `<transport>/v1/<domain>/` with its `controller.go`, one file per operation, `response.go`, a
+   `request.go` where it decodes DTOs, and tests (REST and GraphQL register fake handlers in a
+   `fake_test.go`; gRPC's tests keep theirs inside the test), registered by the
    domain's module (`rest: <domain>.NewRoutes`, `grpc` registering its service).
    gRPC also needs `docs/proto/v1/<domain>.proto` and `make proto-v1`.
    GraphQL instead gets `schema/<domain>_types.graphqls` and a schema file per field, a

@@ -52,8 +52,9 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
 4. **Controllers send messages, never call repositories.** No SQL, no `pkg/postgres`, no outbound
    HTTP in a controller: it sends a command or a query on the buses.
 5. **Transports are independent.** The packages under `internal/controller/` never import each other,
-   with one exception: `authn`, which turns a token into the caller for all three and imports none
-   of them. Logic two transports share belongs in a handler. Inside a transport, the domain folders
+   with two exceptions that import none of them: `authn`, which turns a token into the caller for
+   all three, and `httpmw`, the middleware around every HTTP request, whose problem writer REST's
+   `Auth` middleware borrows. Logic two transports share belongs in a handler. Inside a transport, the domain folders
    (`restapi/v1/task`, `grpc/v1/task`, `graphql/task`, …) never import each other either; what
    several domains share has its own package in that transport (`restapi/v1/response`,
    `restapi/v1/apidoc`, `restapi/v1/apierr`, `grpc/v1/rpcerr`, `graphql/middleware`, `graphql/gqlerr`).
@@ -211,6 +212,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -221,7 +223,16 @@ type GetTaskHandler struct {
 }
 
 func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (entity.Task, error) {
-	return h.Tasks.Get(ctx, q.UserID, q.TaskID)
+	task, err := h.Tasks.Get(ctx, q.TaskID)
+	if err != nil {
+		return entity.Task{}, fmt.Errorf("GetTask - h.Tasks.Get: %w", err)
+	}
+
+	if err = task.ReadableBy(q.UserID); err != nil {
+		return entity.Task{}, fmt.Errorf("GetTask: %w", err)
+	}
+
+	return task, nil
 }
 ```
 
