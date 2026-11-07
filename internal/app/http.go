@@ -21,10 +21,6 @@ const (
 	_metricsPath = "/metrics"
 )
 
-// newHTTPHandler is the app's one HTTP mux. Every request is logged, counted and recovered from a
-// panic, and traced unless it is the health check or the metrics scrape. It serves /healthz,
-// /metrics when metrics are on, GraphQL at /graphql (and GraphiQL when docs are on), and mounts the
-// REST API, whose operations check the token their Security asks for, and its docs, on the rest.
 func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, l *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 

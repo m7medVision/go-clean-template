@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// GetProfile -.
 func (c *Controller) GetProfile(ctx context.Context, _ *v1.GetProfileRequest) (*v1.GetProfileResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

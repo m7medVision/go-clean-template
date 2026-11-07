@@ -38,7 +38,6 @@ func ReadToken(tokens *jwt.Manager, token string) (Caller, error) {
 	}, nil
 }
 
-// WithCaller returns a copy of ctx that carries c.
 func WithCaller(ctx context.Context, c Caller) context.Context {
 	return context.WithValue(ctx, callerKey{}, c)
 }

@@ -38,8 +38,6 @@ func StreamRecovery(l *slog.Logger) grpc.StreamServerInterceptor {
 	}
 }
 
-// panicked logs p, a panic in a call of method, with its stack trace, and returns the status the
-// call answers instead.
 func panicked(ctx context.Context, l *slog.Logger, method string, p any) error {
 	l.Error("grpc panic", "client", clientAddr(ctx), "method", method,
 		"panic", fmt.Sprint(p), "stack", string(debug.Stack()))

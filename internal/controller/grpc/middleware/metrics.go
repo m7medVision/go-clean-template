@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Metrics collects gRPC call counters and latencies.
 type Metrics struct {
 	calls     *prometheus.CounterVec
 	durations *prometheus.HistogramVec
@@ -34,7 +33,6 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	}
 }
 
-// Interceptor counts and times every unary call, labeled by its full method name and status code.
 func (m *Metrics) Interceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	start := time.Now()
 
@@ -47,8 +45,6 @@ func (m *Metrics) Interceptor(ctx context.Context, req any, info *grpc.UnaryServ
 	return resp, err
 }
 
-// reuseRegistered registers c on reg and returns it, or returns the collector of the same name
-// already registered. Any other failure is a programming error, and panics.
 func reuseRegistered[T prometheus.Collector](reg prometheus.Registerer, c T) T {
 	err := reg.Register(c)
 	if err == nil {

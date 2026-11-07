@@ -17,13 +17,11 @@ type Conversion struct {
 	RateDate string `json:"rate_date" example:"2026-10-19" format:"date"`
 }
 
-// ExchangeHistory -.
 type ExchangeHistory struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	History []Conversion `json:"history"`
 	Total   int          `json:"total" example:"42"`
 }
 
-// NewConversion -.
 func NewConversion(c *entity.Conversion) Conversion {
 	return Conversion{
 		From:     c.From,
@@ -35,7 +33,6 @@ func NewConversion(c *entity.Conversion) Conversion {
 	}
 }
 
-// NewExchangeHistory -.
 func NewExchangeHistory(h entity.List[entity.Conversion]) ExchangeHistory {
 	history := make([]Conversion, 0, len(h.Items))
 	for i := range h.Items {

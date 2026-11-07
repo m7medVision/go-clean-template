@@ -10,14 +10,12 @@ import (
 // owned by the WebAuthn spec and checked by the use case, so the schema only requires an object.
 type PasskeyCredential json.RawMessage //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 
-// UnmarshalJSON keeps the body's bytes as they are.
 func (c *PasskeyCredential) UnmarshalJSON(data []byte) error {
 	*c = append((*c)[:0], data...)
 
 	return nil
 }
 
-// Schema describes the body as an open object.
 func (PasskeyCredential) Schema(huma.Registry) *huma.Schema {
 	return &huma.Schema{
 		Type: huma.TypeObject,
@@ -27,8 +25,8 @@ func (PasskeyCredential) Schema(huma.Registry) *huma.Schema {
 	}
 }
 
-// RenamePasskey -. The name is trimmed by the use case; one that is blank after trimming gets the
-// default name.
+// RenamePasskey's name is trimmed by the use case; one that is blank after trimming gets the default
+// name.
 type RenamePasskey struct {
 	_ struct{} `additionalProperties:"true"`
 

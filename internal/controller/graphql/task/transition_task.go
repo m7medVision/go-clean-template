@@ -10,7 +10,7 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// TransitionTask resolves Mutation.transitionTask. The aggregate decides which moves are allowed.
+// TransitionTask leaves which moves are allowed to the aggregate.
 func (m Mutation) TransitionTask(ctx context.Context, id string, status entity.TaskStatus) (*entity.Task, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {

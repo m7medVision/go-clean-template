@@ -50,7 +50,6 @@ func Auth(tokens *jwt.Manager, l *slog.Logger) func(ctx huma.Context, next func(
 	}
 }
 
-// readCaller reads the caller of a bearer Authorization header, or says why it cannot.
 func readCaller(tokens *jwt.Manager, header string) (c authn.Caller, failure string) {
 	if header == "" {
 		return authn.Caller{}, "missing authorization header"

@@ -11,7 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// CreateTask resolves Mutation.createTask.
 func (m Mutation) CreateTask(ctx context.Context, input model.CreateTaskInput) (*entity.Task, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {

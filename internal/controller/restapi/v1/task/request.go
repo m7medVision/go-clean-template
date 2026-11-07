@@ -2,7 +2,6 @@ package task
 
 import "github.com/m7medvision/go-clean-template/internal/entity"
 
-// CreateTask -.
 type CreateTask struct {
 	_ struct{} `additionalProperties:"true"`
 
@@ -10,7 +9,6 @@ type CreateTask struct {
 	Description string `json:"description" required:"false" maxLength:"1000" example:"Task description"`
 }
 
-// UpdateTask -.
 type UpdateTask struct {
 	_ struct{} `additionalProperties:"true"`
 
@@ -18,7 +16,6 @@ type UpdateTask struct {
 	Description string `json:"description" required:"false" maxLength:"1000" example:"Updated description"`
 }
 
-// TransitionTask -.
 type TransitionTask struct {
 	_ struct{} `additionalProperties:"true"`
 

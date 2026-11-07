@@ -1,6 +1,5 @@
 package oidc
 
-// OIDCStatus -.
 type OIDCStatus struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	Enabled bool `json:"enabled" doc:"Whether SSO sign-in is configured"`
 }

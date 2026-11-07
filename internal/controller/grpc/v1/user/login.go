@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Login -.
 func (c *Controller) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
 	signedIn, err := cqrs.SendQuery(ctx, c.qs, query.LogIn{Email: req.GetEmail(), Password: req.GetPassword()})
 	if err != nil {

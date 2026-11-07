@@ -12,7 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Controller -.
 type Controller struct {
 	v1.UnimplementedTaskServiceServer
 
@@ -21,12 +20,10 @@ type Controller struct {
 	l    *slog.Logger
 }
 
-// New -.
 func New(b cqrs.Buses, l *slog.Logger) v1.TaskServiceServer {
 	return &Controller{cmds: b.Commands, qs: b.Queries, l: l}
 }
 
-// readBack reads the task a command just wrote, for the response.
 func (c *Controller) readBack(ctx context.Context, userID, taskID string) (*v1.TaskResponse, error) {
 	task, err := cqrs.SendQuery(ctx, c.qs, query.GetTask{UserID: userID, TaskID: taskID})
 	if err != nil {
@@ -36,7 +33,6 @@ func (c *Controller) readBack(ctx context.Context, userID, taskID string) (*v1.T
 	return NewTaskResponse(&task), nil
 }
 
-// listPage sends a list query and answers with its page.
 func listPage[Q cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
 	page, err := cqrs.SendQuery(ctx, c.qs, q)
 	if err != nil {

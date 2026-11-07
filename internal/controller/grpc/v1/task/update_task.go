@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// UpdateTask -.
 func (c *Controller) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) (*v1.TaskResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

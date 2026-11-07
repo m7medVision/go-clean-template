@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 )
 
-// ListTasks -.
 func (c *Controller) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// ExchangeHistory resolves Query.exchangeHistory.
 func (q Query) ExchangeHistory(ctx context.Context, limit, offset int) (*model.ConversionList, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {

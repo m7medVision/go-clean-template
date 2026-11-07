@@ -11,7 +11,6 @@ import (
 
 const _unmatchedRoute = "unmatched"
 
-// Metrics collects HTTP request counters and latencies.
 type Metrics struct {
 	requests  *prometheus.CounterVec
 	durations *prometheus.HistogramVec
@@ -41,8 +40,6 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	}
 }
 
-// registerMetric returns the registered collector, keeping the pre-existing
-// one when the name was already taken.
 func registerMetric[T prometheus.Collector](reg prometheus.Registerer, c T) T {
 	err := reg.Register(c)
 	if err == nil {
@@ -61,8 +58,6 @@ func registerMetric[T prometheus.Collector](reg prometheus.Registerer, c T) T {
 	panic(err)
 }
 
-// Middleware instruments every request with the request counter and the
-// latency histogram, labeled by method, chi route pattern and status code.
 func (m *Metrics) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

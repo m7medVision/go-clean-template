@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// DeleteTask resolves Mutation.deleteTask.
 func (m Mutation) DeleteTask(ctx context.Context, id string) (bool, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {

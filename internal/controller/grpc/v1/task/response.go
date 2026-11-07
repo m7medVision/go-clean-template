@@ -6,7 +6,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// NewTaskResponse -.
 func NewTaskResponse(task *entity.Task) *v1.TaskResponse {
 	return &v1.TaskResponse{
 		Id:          task.ID,
@@ -19,7 +18,6 @@ func NewTaskResponse(task *entity.Task) *v1.TaskResponse {
 	}
 }
 
-// NewListTasksResponse -.
 func NewListTasksResponse(tasks []entity.Task, total int) *v1.ListTasksResponse {
 	pbTasks := make([]*v1.TaskResponse, len(tasks))
 	for i := range tasks {

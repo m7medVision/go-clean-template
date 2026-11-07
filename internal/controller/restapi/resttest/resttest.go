@@ -21,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// _signingKey signs the tokens Token and AdminToken return, and the router checks them with it.
 const _signingKey = "test-secret"
 
 // Routes registers a domain folder's operations: its NewRoutes.

@@ -10,8 +10,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Logger returns the interceptor that logs the client address, method and status code of every
-// unary call when it ends.
 func Logger(l *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		resp, err := handler(ctx, req)
@@ -22,7 +20,6 @@ func Logger(l *slog.Logger) grpc.UnaryServerInterceptor {
 	}
 }
 
-// clientAddr is the host the call came from, or empty when gRPC does not know it.
 func clientAddr(ctx context.Context) string {
 	p, ok := peer.FromContext(ctx)
 	if !ok || p.Addr == nil {

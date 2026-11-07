@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// DeleteTask -.
 func (c *Controller) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) (*v1.DeleteTaskResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

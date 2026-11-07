@@ -11,7 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// TransitionTask -.
 func (c *Controller) TransitionTask(ctx context.Context, req *v1.TransitionTaskRequest) (*v1.TaskResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

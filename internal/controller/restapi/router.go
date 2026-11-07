@@ -50,8 +50,6 @@ func Document(version string, register func(api huma.API)) ([]byte, error) {
 	return b, nil
 }
 
-// newAPI returns the Huma API on r, stating version, with the bearer-token scheme the operations
-// that need a token name. With docs off it serves no docs UI, OpenAPI document or schemas.
 func newAPI(r chi.Router, version string, docs bool) huma.API {
 	apiConfig := huma.DefaultConfig(_apiTitle, version)
 	// The default hook adds a `$schema` field and a `Link` header to every response body.

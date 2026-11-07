@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// GetHistory -.
 func (c *Controller) GetHistory(
 	ctx context.Context, req *v1.GetExchangeHistoryRequest,
 ) (*v1.ExchangeHistoryResponse, error) {

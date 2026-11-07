@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Register -.
 func (c *Controller) Register(ctx context.Context, req *v1.RegisterRequest) (*v1.RegisterResponse, error) {
 	written, err := cqrs.SendCommand(ctx, c.cmds, command.RegisterUser{
 		Username: req.GetUsername(), Email: req.GetEmail(), Password: req.GetPassword(),

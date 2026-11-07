@@ -41,7 +41,6 @@ func (r *controller) renamePasskey(api huma.API) {
 	})
 }
 
-// rename renames the passkey, then reads it back for the response.
 func (r *controller) rename(ctx context.Context, userID, id, name string) (entity.Passkey, error) {
 	written, err := cqrs.SendCommand(ctx, r.cmds, command.RenamePasskey{UserID: userID, ID: id, Name: name})
 	if err != nil {

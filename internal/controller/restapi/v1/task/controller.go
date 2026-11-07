@@ -20,7 +20,6 @@ type controller struct {
 	l    *slog.Logger
 }
 
-// NewRoutes registers the task operations.
 func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	r := &controller{cmds: b.Commands, qs: b.Queries, l: l}
 
@@ -33,12 +32,10 @@ func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	r.deleteTask(api)
 }
 
-// readBack reads the task a command just wrote, for the response body.
 func (r *controller) readBack(ctx context.Context, userID, taskID string) (entity.Task, error) {
 	return cqrs.SendQuery(ctx, r.qs, query.GetTask{UserID: userID, TaskID: taskID})
 }
 
-// listPage sends a list query and answers with its page.
 func listPage[Q cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, r *controller, q Q, op string) (*listTasksOutput, error) {
 	page, err := cqrs.SendQuery(ctx, r.qs, q)
 	if err != nil {

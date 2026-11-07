@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 )
 
-// ListAllTasks -.
 func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest) (*v1.ListTasksResponse, error) {
 	return listPage(ctx, c, query.ListAllTasks{
 		Principal: authn.MustCaller(ctx).Principal, Status: listStatus(req), Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),

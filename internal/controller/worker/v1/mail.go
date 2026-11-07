@@ -14,18 +14,15 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
-// MailController -.
 type MailController struct {
 	cmds *cqrs.Commands
 	l    *slog.Logger
 }
 
-// NewMailController -.
 func NewMailController(cmds *cqrs.Commands, l *slog.Logger) *MailController {
 	return &MailController{cmds: cmds, l: l}
 }
 
-// NewMailRoutes registers the handler of entity.EmailQueue on w, delivering through cmds.
 func NewMailRoutes(w *worker.Worker, cmds *cqrs.Commands, l *slog.Logger) {
 	w.Handle(entity.EmailQueue, NewMailController(cmds, l).Handle)
 }

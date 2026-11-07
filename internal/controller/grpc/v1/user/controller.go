@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Controller -.
 type Controller struct {
 	v1.UnimplementedAuthServiceServer
 
@@ -17,7 +16,6 @@ type Controller struct {
 	l    *slog.Logger
 }
 
-// New -.
 func New(b cqrs.Buses, l *slog.Logger) v1.AuthServiceServer {
 	return &Controller{cmds: b.Commands, qs: b.Queries, l: l}
 }

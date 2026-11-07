@@ -1,6 +1,5 @@
 package user
 
-// Register -.
 type Register struct {
 	_ struct{} `additionalProperties:"true"`
 
@@ -9,7 +8,6 @@ type Register struct {
 	Password string `json:"password" minLength:"6" example:"secret123"`
 }
 
-// Login -.
 type Login struct {
 	_ struct{} `additionalProperties:"true"`
 

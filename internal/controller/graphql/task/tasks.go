@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 )
 
-// Tasks resolves Query.tasks.
 func (q Query) Tasks(ctx context.Context, status *entity.TaskStatus, limit, offset int) (*model.TaskList, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {

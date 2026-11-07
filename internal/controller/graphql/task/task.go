@@ -10,7 +10,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// Task resolves Query.task.
 func (q Query) Task(ctx context.Context, id string) (*entity.Task, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {

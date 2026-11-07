@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Convert -.
 func (c *Controller) Convert(ctx context.Context, req *v1.ConvertRequest) (*v1.ConversionResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

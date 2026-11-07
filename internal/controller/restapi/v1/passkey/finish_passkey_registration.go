@@ -44,7 +44,6 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 	})
 }
 
-// finishRegistration registers the passkey, then reads it back for the response.
 func (r *controller) finishRegistration(ctx context.Context, userID, token, name string, body []byte) (entity.Passkey, error) {
 	written, err := cqrs.SendCommand(ctx, r.cmds,
 		command.FinishPasskeyRegistration{UserID: userID, Token: token, Name: name, Body: body})

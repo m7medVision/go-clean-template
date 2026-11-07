@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
 )
 
-// GetTask -.
 func (c *Controller) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*v1.TaskResponse, error) {
 	userID := authn.MustCaller(ctx).UserID
 

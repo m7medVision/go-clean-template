@@ -8,7 +8,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-// NewConversionResponse -.
 func NewConversionResponse(c *entity.Conversion) *v1.ConversionResponse {
 	return &v1.ConversionResponse{
 		From:     c.From,
@@ -20,7 +19,6 @@ func NewConversionResponse(c *entity.Conversion) *v1.ConversionResponse {
 	}
 }
 
-// NewExchangeHistoryResponse -.
 func NewExchangeHistoryResponse(h entity.List[entity.Conversion]) *v1.ExchangeHistoryResponse {
 	history := make([]*v1.ConversionResponse, len(h.Items))
 	for i := range h.Items {

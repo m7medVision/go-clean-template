@@ -21,7 +21,6 @@ import (
 
 const _playgroundTitle = "Go Clean Template GraphQL"
 
-// NewHandler builds the GraphQL endpoint.
 func NewHandler(b cqrs.Buses, jwtManager *jwt.Manager, l *slog.Logger) http.Handler {
 	srv := handler.New(generated.NewExecutableSchema(generated.Config{
 		Resolvers: newResolver(b, l),

@@ -16,7 +16,6 @@ type controller struct {
 	l    *slog.Logger
 }
 
-// NewRoutes registers the exchange operations.
 func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	r := &controller{cmds: b.Commands, qs: b.Queries, l: l}
 
