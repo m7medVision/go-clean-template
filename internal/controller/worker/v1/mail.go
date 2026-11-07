@@ -4,27 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // MailController -.
 type MailController struct {
 	cmds *cqrs.Commands
-	l    logger.Interface
+	l    *slog.Logger
 }
 
 // NewMailController -.
-func NewMailController(cmds *cqrs.Commands, l logger.Interface) *MailController {
+func NewMailController(cmds *cqrs.Commands, l *slog.Logger) *MailController {
 	return &MailController{cmds: cmds, l: l}
 }
 
 // NewMailRoutes -.
-func NewMailRoutes(w *worker.Worker, cmds *cqrs.Commands, l logger.Interface) {
+func NewMailRoutes(w *worker.Worker, cmds *cqrs.Commands, l *slog.Logger) {
 	w.Handle(entity.EmailQueue, NewMailController(cmds, l).Handle)
 }
 
@@ -39,14 +39,14 @@ func (c *MailController) Handle(ctx context.Context, msg *worker.Message) error 
 	// A body that does not decode, or names an email this build does not know, never will, so it is
 	// dropped rather than retried.
 	if err != nil {
-		c.l.Error(fmt.Errorf("worker - v1 - Mail - entity.DecodeEmail: message %d: %w", msg.ID, err))
+		c.l.Error("worker - v1 - mail - decode", "message", msg.ID, "error", err)
 
 		return nil
 	}
 
 	_, err = cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeliverEmail{Email: email})
 	if errors.Is(err, entity.ErrUnknownEmail) {
-		c.l.Error(fmt.Errorf("worker - v1 - Mail - DeliverEmail: message %d: %w", msg.ID, err))
+		c.l.Error("worker - v1 - mail - deliver", "message", msg.ID, "error", err)
 
 		return nil
 	}

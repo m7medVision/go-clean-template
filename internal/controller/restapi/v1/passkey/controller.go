@@ -3,6 +3,7 @@ package passkey
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -11,7 +12,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const _passkeysTag = "passkeys"
@@ -19,11 +19,11 @@ const _passkeysTag = "passkeys"
 type controller struct {
 	cmds *cqrs.Commands
 	qs   *cqrs.Queries
-	l    logger.Interface
+	l    *slog.Logger
 }
 
 // NewRoutes registers the passkey sign-in and passkey management operations.
-func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	r := &controller{cmds: b.Commands, qs: b.Queries, l: l}
 
 	r.beginPasskeyLogin(api)

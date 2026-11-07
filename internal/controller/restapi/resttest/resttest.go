@@ -4,6 +4,7 @@ package resttest
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -57,7 +58,7 @@ func Config(t *testing.T) *config.Config {
 func NewRouter(cfg *config.Config, b cqrs.Buses, opts ...restapi.Option) http.Handler {
 	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
 
-	return restapi.NewRouter(cfg, b, jwtManager, noopLogger{}, opts...)
+	return restapi.NewRouter(cfg, b, jwtManager, slog.New(slog.DiscardHandler), opts...)
 }
 
 // NewBuses returns empty command and query buses with no pipeline steps, for a test to register
@@ -98,11 +99,3 @@ func Do(ctx context.Context, handler http.Handler, method, target, token, body s
 
 	return resp
 }
-
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}

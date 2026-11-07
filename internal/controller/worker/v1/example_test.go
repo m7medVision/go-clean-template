@@ -3,10 +3,10 @@ package v1_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ func TestExampleController_Handle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := v1.NewExampleController(logger.New("error"))
+			c := v1.NewExampleController(slog.New(slog.DiscardHandler))
 
 			err := c.Handle(context.Background(), &worker.Message{ID: 1, Body: json.RawMessage(tc.body)})
 

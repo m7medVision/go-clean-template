@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,24 +12,13 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}
-
-var _ logger.Interface = noopLogger{}
-
 func newTestHandler(jwtManager *jwt.Manager) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Auth(jwtManager, noopLogger{}))
+	r.Use(middleware.Auth(jwtManager, slog.New(slog.DiscardHandler)))
 	r.Get("/v1/test", func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := middleware.UserID(r.Context())
 		if !ok {
@@ -115,7 +105,7 @@ func TestAuthMiddlewareAuthTime(t *testing.T) {
 	)
 
 	r := chi.NewRouter()
-	r.Use(middleware.Auth(jwtManager, noopLogger{}))
+	r.Use(middleware.Auth(jwtManager, slog.New(slog.DiscardHandler)))
 	r.Get("/v1/test", func(_ http.ResponseWriter, r *http.Request) {
 		authTime, ok = middleware.AuthTime(r.Context())
 	})
@@ -169,7 +159,7 @@ func TestAuthMiddlewarePrincipal(t *testing.T) {
 			)
 
 			r := chi.NewRouter()
-			r.Use(middleware.Auth(jwtManager, noopLogger{}))
+			r.Use(middleware.Auth(jwtManager, slog.New(slog.DiscardHandler)))
 			r.Get("/v1/test", func(_ http.ResponseWriter, r *http.Request) {
 				got, ok = middleware.Principal(r.Context())
 			})

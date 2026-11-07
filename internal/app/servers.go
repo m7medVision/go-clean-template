@@ -2,9 +2,8 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
-
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // server is one listener the app runs, such as the HTTP server.
@@ -31,7 +30,7 @@ func (s servers) start() {
 }
 
 // waitForShutdown blocks until a signal arrives or any server fails, then shuts every server down.
-func (s servers) waitForShutdown(interrupt <-chan os.Signal, l logger.Interface) {
+func (s servers) waitForShutdown(interrupt <-chan os.Signal, l *slog.Logger) {
 	failed := make(chan error, len(s))
 
 	for _, n := range s {
@@ -44,14 +43,14 @@ func (s servers) waitForShutdown(interrupt <-chan os.Signal, l logger.Interface)
 
 	select {
 	case sig := <-interrupt:
-		l.Info("app - Run - signal: %s", sig.String())
+		l.Info("app - Run - signal", "signal", sig.String())
 	case err := <-failed:
-		l.Error(err)
+		l.Error("app - Run - a server failed", "error", err)
 	}
 
 	for _, n := range s {
 		if err := n.server.Shutdown(); err != nil {
-			l.Error(fmt.Errorf("app - Run - %s.Shutdown: %w", n.name, err))
+			l.Error("app - Run - shutdown", "server", n.name, "error", err)
 		}
 	}
 }

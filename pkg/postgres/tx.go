@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -58,9 +57,7 @@ func inTx(
 
 	defer func() {
 		if p := recover(); p != nil {
-			if rbErr := tx.Rollback(context.WithoutCancel(ctx)); rbErr != nil {
-				log.Printf("postgres - InTx - rollback after panic: %v", rbErr)
-			}
+			_ = tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck // the panic goes on; a failed rollback's connection is discarded by the pool
 
 			panic(p)
 		}

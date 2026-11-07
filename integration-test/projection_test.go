@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -93,7 +93,7 @@ func startRunner(t *testing.T, pg *postgres.Postgres, c *runCounter) func() {
 	t.Helper()
 
 	events := append(entity.EventTypes(), eventstoretest.Events()...)
-	l := logger.New("error")
+	l := slog.New(slog.DiscardHandler)
 	store := projection.NewStore(pg, eventstore.NewReader(pg, events).IncludingScratch(), l)
 
 	// An hour between polls: only the LISTEN notification can wake the runner in time.

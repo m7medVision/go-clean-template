@@ -5,6 +5,7 @@ package graphqltest
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -68,7 +69,7 @@ func Post(t *testing.T, b cqrs.Buses, token, query string, vars map[string]any) 
 	}
 
 	rec := httptest.NewRecorder()
-	graphql.NewHandler(b, jwt.New(_signingKey, time.Hour), noopLogger{}).ServeHTTP(rec, req)
+	graphql.NewHandler(b, jwt.New(_signingKey, time.Hour), slog.New(slog.DiscardHandler)).ServeHTTP(rec, req)
 
 	var resp Response
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp), rec.Body.String())
@@ -77,11 +78,3 @@ func Post(t *testing.T, b cqrs.Buses, token, query string, vars map[string]any) 
 
 	return resp
 }
-
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}

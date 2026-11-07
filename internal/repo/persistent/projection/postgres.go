@@ -3,13 +3,13 @@ package projection
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
 
@@ -25,7 +25,7 @@ type Reader interface {
 type PostgresStore struct {
 	pg     *postgres.Postgres
 	reader Reader
-	logger logger.Interface
+	logger *slog.Logger
 
 	once   sync.Once
 	notify chan struct{}
@@ -36,7 +36,7 @@ type PostgresStore struct {
 var _ Store = (*PostgresStore)(nil)
 
 // NewStore returns the runner's store on pg, reading events through reader.
-func NewStore(pg *postgres.Postgres, reader Reader, l logger.Interface) *PostgresStore {
+func NewStore(pg *postgres.Postgres, reader Reader, l *slog.Logger) *PostgresStore {
 	return &PostgresStore{pg: pg, reader: reader, logger: l, notify: make(chan struct{}, 1), done: make(chan struct{})}
 }
 
@@ -101,7 +101,7 @@ func (s *PostgresStore) listen(ctx context.Context) {
 
 	for ctx.Err() == nil {
 		if err := s.listenOnce(ctx); err != nil && ctx.Err() == nil {
-			s.logger.Warn("projection - PostgresStore - listen: %v; polling until it reconnects", err)
+			s.logger.Warn("projection - listen failed; polling until it reconnects", "error", err)
 
 			select {
 			case <-ctx.Done():
@@ -120,7 +120,7 @@ func (s *PostgresStore) listenOnce(ctx context.Context) error {
 
 	defer func() {
 		if closeErr := conn.Close(context.WithoutCancel(ctx)); closeErr != nil {
-			s.logger.Warn("projection - PostgresStore - close listener: %v", closeErr)
+			s.logger.Warn("projection - close the listener", "error", closeErr)
 		}
 	}()
 

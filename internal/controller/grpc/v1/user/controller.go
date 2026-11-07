@@ -3,13 +3,13 @@ package user
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -20,12 +20,12 @@ type Controller struct {
 
 	cmds *cqrs.Commands
 	qs   *cqrs.Queries
-	l    logger.Interface
+	l    *slog.Logger
 	v    *validator.Validate
 }
 
 // New -.
-func New(b cqrs.Buses, l logger.Interface) v1.AuthServiceServer {
+func New(b cqrs.Buses, l *slog.Logger) v1.AuthServiceServer {
 	return &Controller{cmds: b.Commands, qs: b.Queries, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
 }
 
@@ -33,7 +33,7 @@ func New(b cqrs.Buses, l logger.Interface) v1.AuthServiceServer {
 // the user errors, and anything else to a logged Internal.
 func (c *Controller) fail(err error, op string) error {
 	if shared := rpcerr.Shared(err); shared != nil {
-		c.l.Warn("grpc - v1 - %s: %v", op, err)
+		c.l.Warn("grpc - v1 - "+op, "error", err)
 
 		return shared
 	}
@@ -46,7 +46,7 @@ func (c *Controller) fail(err error, op string) error {
 	case errors.Is(err, entity.ErrUserNotFound):
 		return status.Error(codes.NotFound, "user not found")
 	default:
-		c.l.Error(err, "grpc - v1 - "+op)
+		c.l.Error("grpc - v1 - "+op, "error", err)
 
 		return status.Error(codes.Internal, "internal server error")
 	}

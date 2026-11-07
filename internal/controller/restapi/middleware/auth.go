@@ -3,13 +3,13 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const (
@@ -60,7 +60,7 @@ func AuthTime(ctx context.Context) (time.Time, bool) {
 // Auth authenticates the request and stores the caller identifier in the request
 // context. Routes outside /v1 (docs, health, metrics) and the auth endpoints
 // under /v1/auth are public.
-func Auth(jwtManager *jwt.Manager, l logger.Interface) func(http.Handler) http.Handler {
+func Auth(jwtManager *jwt.Manager, l *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			public := !strings.HasPrefix(r.URL.Path, _apiPrefix) || strings.HasPrefix(r.URL.Path, _authPrefix)
@@ -99,7 +99,7 @@ func Auth(jwtManager *jwt.Manager, l logger.Interface) func(http.Handler) http.H
 }
 
 // writeProblem writes an RFC 9457 problem response on the auth failures.
-func writeProblem(l logger.Interface, w http.ResponseWriter, status int, detail string) {
+func writeProblem(l *slog.Logger, w http.ResponseWriter, status int, detail string) {
 	body, err := json.Marshal(problem{
 		Type:   _problemTypeBlank,
 		Title:  http.StatusText(status),
@@ -107,7 +107,7 @@ func writeProblem(l logger.Interface, w http.ResponseWriter, status int, detail 
 		Detail: detail,
 	})
 	if err != nil {
-		l.Error(err, "restapi - middleware - writeProblem")
+		l.Error("restapi - middleware - write a problem", "error", err)
 
 		return
 	}
@@ -116,6 +116,6 @@ func writeProblem(l logger.Interface, w http.ResponseWriter, status int, detail 
 	w.WriteHeader(status)
 
 	if _, err := w.Write(body); err != nil {
-		l.Error(err, "restapi - middleware - writeProblem")
+		l.Error("restapi - middleware - write a problem", "error", err)
 	}
 }

@@ -107,7 +107,8 @@ internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → intern
   that domain's handlers, DTOs and tests (GraphQL has no `v1/`). A controller takes `cqrs.Buses` and
   imports its domain's `command`/`query` packages only for the message types. Controllers never
   import each other; see **Controller layout** below.
-- `pkg/` — transport-agnostic infrastructure (buses, servers, logger, jwt, postgres, tracing). Must
+- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, tracing). Logging is
+  `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
   module (`github.com/m7medvision/go-clean-template/tools/gen`). It imports nothing from the app, and

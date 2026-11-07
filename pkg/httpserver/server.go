@@ -4,10 +4,10 @@ package httpserver
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -31,11 +31,11 @@ type Server struct {
 	writeTimeout    time.Duration
 	shutdownTimeout time.Duration
 
-	logger logger.Interface
+	logger *slog.Logger
 }
 
 // New -.
-func New(l logger.Interface, opts ...Option) *Server {
+func New(l *slog.Logger, opts ...Option) *Server {
 	group, ctx := errgroup.WithContext(context.Background())
 	group.SetLimit(1) // Run only one goroutine
 
@@ -97,7 +97,7 @@ func (s *Server) Shutdown() error {
 
 	err := s.srv.Shutdown(shutdownCtx)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		s.logger.Error(err, "httpserver server - Server - Shutdown - s.srv.Shutdown")
+		s.logger.Error("httpserver - shutdown", "error", err)
 
 		shutdownErrors = append(shutdownErrors, err)
 	}
@@ -105,7 +105,7 @@ func (s *Server) Shutdown() error {
 	// Wait for all goroutines to finish and get any error
 	err = s.eg.Wait()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		s.logger.Error(err, "httpserver server - Server - Shutdown - s.eg.Wait")
+		s.logger.Error("httpserver - serve", "error", err)
 
 		shutdownErrors = append(shutdownErrors, err)
 	}

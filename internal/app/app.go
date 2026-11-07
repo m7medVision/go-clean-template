@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +16,6 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/httpserver"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/tracing"
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,7 +31,7 @@ type useCases struct {
 // The worker builds them with the same call.
 // It fails when a handler cannot be built from its settings, such as a broken email template.
 func initUseCases(
-	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l logger.Interface,
+	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l *slog.Logger,
 ) (useCases, error) {
 	cmds, qs := newBuses(cfg, pg, projectorNames(subscribers(cfg, pg)), l)
 	if err := registerHandlers(cfg, cmds, qs, newEventStore(cfg, pg), pg, jwtManager); err != nil {
@@ -41,7 +41,7 @@ func initUseCases(
 	return useCases{buses: cqrs.Buses{Commands: cmds, Queries: qs}}, nil
 }
 
-func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l logger.Interface) servers {
+func initServers(cfg *config.Config, uc *useCases, jwtManager *jwt.Manager, l *slog.Logger) servers {
 	router := restapi.NewRouter(
 		cfg, uc.buses, jwtManager, l,
 		restapi.WithPasskeys(),
@@ -77,35 +77,37 @@ func initTracing(ctx context.Context, cfg *config.Config, serviceName string) (t
 	return shutdown, nil
 }
 
-// Run creates objects via constructors.
-func Run(cfg *config.Config) {
-	l := logger.New(cfg.Log.Level)
+// Run serves the app until SIGINT/SIGTERM or a server fails.
+func Run(cfg *config.Config) error {
+	l := newLogger(cfg.Log.Level)
 
 	ctx := context.Background()
 
 	// Tracing
 	shutdownTracing, err := initTracing(ctx, cfg, cfg.App.Name)
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - Run - initTracing: %w", err))
+		return fmt.Errorf("app - Run - initTracing: %w", err)
 	}
 	defer func() {
 		if err := shutdownTracing(ctx); err != nil {
-			l.Error(fmt.Errorf("app - Run - shutdownTracing: %w", err))
+			l.Error("app - Run - shutdownTracing", "error", err)
 		}
 	}()
-
-	syncSchema()
 
 	// Repository
 	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - Run - postgres.New: %w", err))
+		return fmt.Errorf("app - Run - postgres.New: %w", err)
 	}
 	defer pg.Close()
 
+	if err = syncSchema(ctx, l, cfg.PG.URL); err != nil {
+		return fmt.Errorf("app - Run - syncSchema: %w", err)
+	}
+
 	// Rows written before a domain stored events become its first events, once.
 	if err = eventstore.Backfill(ctx, pg, importers(pg, newEventStore(cfg, pg))...); err != nil {
-		l.Fatal(fmt.Errorf("app - Run - eventstore.Backfill: %w", err))
+		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
 	}
 
 	// JWT
@@ -113,13 +115,13 @@ func Run(cfg *config.Config) {
 
 	uc, err := initUseCases(cfg, pg, jwtManager, l)
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - Run - initUseCases: %w", err))
+		return fmt.Errorf("app - Run - initUseCases: %w", err)
 	}
 
 	// The worker runs the projections; the app serves /metrics, so it reports how far behind they are.
 	if cfg.Metrics.Enabled {
 		if err = prometheus.DefaultRegisterer.Register(projection.NewLagCollector(pg)); err != nil {
-			l.Fatal(fmt.Errorf("app - Run - register the projection lag collector: %w", err))
+			return fmt.Errorf("app - Run - register the projection lag collector: %w", err)
 		}
 	}
 
@@ -130,4 +132,17 @@ func Run(cfg *config.Config) {
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
 	s.waitForShutdown(interrupt, l)
+
+	return nil
+}
+
+// newLogger writes JSON lines to stdout at the level named by LOG_LEVEL (debug, info, warn or
+// error); any other name is info.
+func newLogger(level string) *slog.Logger {
+	var lvl slog.Level
+	if err := lvl.UnmarshalText([]byte(level)); err != nil {
+		lvl = slog.LevelInfo
+	}
+
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
 }

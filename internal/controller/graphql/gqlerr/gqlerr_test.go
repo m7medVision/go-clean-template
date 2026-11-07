@@ -3,11 +3,11 @@ package gqlerr_test
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -27,7 +27,7 @@ func code(t *testing.T, err error) string {
 func TestMapGivesEachSentinelItsCode(t *testing.T) {
 	t.Parallel()
 
-	l := logger.New("error")
+	l := slog.New(slog.DiscardHandler)
 
 	for sentinel, want := range map[error]string{
 		entity.ErrTaskNotFound:        "NOT_FOUND",

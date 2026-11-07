@@ -3,12 +3,12 @@ package worker_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,7 +74,7 @@ func (f *fakeQueue) deletedIDs() []int64 {
 
 func newWorker(q worker.Queue) *worker.Worker {
 	return worker.New(
-		logger.New("error"),
+		slog.New(slog.DiscardHandler),
 		q,
 		worker.PollInterval(_poll),
 		worker.BatchSize(2),
@@ -210,7 +210,7 @@ func TestWorker_ShutdownCancelsHandlerAfterTimeout(t *testing.T) {
 	q := newFakeQueue(worker.Message{ID: 1})
 	started := make(chan struct{})
 
-	w := worker.New(logger.New("error"), q, worker.PollInterval(_poll), worker.ShutdownTimeout(_poll))
+	w := worker.New(slog.New(slog.DiscardHandler), q, worker.PollInterval(_poll), worker.ShutdownTimeout(_poll))
 	w.Handle(_queue, func(ctx context.Context, _ *worker.Message) error {
 		close(started)
 		<-ctx.Done()

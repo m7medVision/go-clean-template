@@ -8,12 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const (
@@ -51,7 +51,7 @@ type Runner struct {
 	subscribers  []repo.Subscriber
 	pollInterval time.Duration
 	batchSize    int
-	logger       logger.Interface
+	logger       *slog.Logger
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -61,7 +61,7 @@ type Runner struct {
 }
 
 // New returns a runner reading s.
-func New(l logger.Interface, s Store, opts ...Option) *Runner {
+func New(l *slog.Logger, s Store, opts ...Option) *Runner {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r := &Runner{
@@ -106,7 +106,7 @@ func (r *Runner) Start() {
 		r.wg.Go(func() { r.fanOut(n) })
 	}
 
-	r.logger.Info("projection - Runner - Started %d subscribers", len(r.subscribers))
+	r.logger.Info("projection - runner started", "subscribers", len(r.subscribers))
 }
 
 // Shutdown stops every loop and waits for the event in hand to finish or roll back.
@@ -180,7 +180,7 @@ func (r *Runner) ensureCheckpoint(s repo.Subscriber) bool {
 
 func (r *Runner) logError(s repo.Subscriber, err error) {
 	if r.ctx.Err() == nil {
-		r.logger.Error(fmt.Errorf("projection - Runner - %s: %w", s.Name(), err))
+		r.logger.Error("projection - handle an event", "subscriber", s.Name(), "error", err)
 	}
 }
 

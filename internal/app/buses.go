@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -29,7 +30,6 @@ import (
 	userevent "github.com/m7medvision/go-clean-template/internal/usecase/user/event"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
@@ -50,7 +50,7 @@ var (
 // newBuses builds the command and query buses with their pipelines, outermost step first:
 // trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
 // concurrent write; then authorize and validate on both, right before the handler.
-func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l logger.Interface) (
+func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l *slog.Logger) (
 	*cqrs.Commands, *cqrs.Queries,
 ) {
 	outer := []cqrs.Step{

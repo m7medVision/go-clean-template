@@ -8,13 +8,11 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"sync"
 	"time"
-
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 const (
@@ -63,11 +61,11 @@ type Worker struct {
 	batchSize         int
 	shutdownTimeout   time.Duration
 
-	logger logger.Interface
+	logger *slog.Logger
 }
 
 // New -.
-func New(l logger.Interface, q Queue, opts ...Option) *Worker {
+func New(l *slog.Logger, q Queue, opts ...Option) *Worker {
 	pollCtx, stopPolling := context.WithCancel(context.Background())
 	handlerCtx, stopHandlers := context.WithCancel(context.Background())
 
@@ -155,7 +153,7 @@ func (w *Worker) readBatch(queue string, h HandlerFunc) int {
 	msgs, err := w.queue.Read(w.pollCtx, queue, w.visibilityTimeout, w.batchSize)
 	if err != nil {
 		if w.pollCtx.Err() == nil {
-			w.logger.Error(fmt.Errorf("worker - readBatch - w.queue.Read %q: %w", queue, err))
+			w.logger.Error("worker - read a batch", "queue", queue, "error", err)
 		}
 
 		return 0
@@ -175,12 +173,12 @@ func (w *Worker) readBatch(queue string, h HandlerFunc) int {
 
 func (w *Worker) process(queue string, h HandlerFunc, msg *Message) {
 	if err := h(w.handlerCtx, msg); err != nil {
-		w.logger.Error(fmt.Errorf("worker - process - queue %q, message %d: %w", queue, msg.ID, err))
+		w.logger.Error("worker - handle a message", "queue", queue, "message", msg.ID, "error", err)
 
 		return
 	}
 
 	if err := w.queue.Delete(w.handlerCtx, queue, msg.ID); err != nil {
-		w.logger.Error(fmt.Errorf("worker - process - w.queue.Delete %q, message %d: %w", queue, msg.ID, err))
+		w.logger.Error("worker - delete a message", "queue", queue, "message", msg.ID, "error", err)
 	}
 }

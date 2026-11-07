@@ -29,6 +29,7 @@ func main() {
 		return
 	}
 
-	// Run
-	app.RunWorker(cfg)
+	if err = app.RunWorker(cfg); err != nil {
+		log.Fatalf("Run error: %s", err)
+	}
 }

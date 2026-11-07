@@ -3,9 +3,9 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"golang.org/x/sync/errgroup"
 	pbgrpc "google.golang.org/grpc"
 )
@@ -24,11 +24,11 @@ type Server struct {
 	address    string
 	serverOpts []pbgrpc.ServerOption
 
-	logger logger.Interface
+	logger *slog.Logger
 }
 
 // New -.
-func New(l logger.Interface, opts ...Option) *Server {
+func New(l *slog.Logger, opts ...Option) *Server {
 	group, ctx := errgroup.WithContext(context.Background())
 	group.SetLimit(1)
 
@@ -91,7 +91,7 @@ func (s *Server) Shutdown() error {
 
 	err := s.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
-		s.logger.Error(err, "grpc server - Server - Shutdown - s.eg.Wait")
+		s.logger.Error("grpcserver - serve", "error", err)
 		shutdownErrors = append(shutdownErrors, err)
 	}
 

@@ -3,28 +3,28 @@ package task
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // Query resolves the task fields of Query.
 type Query struct {
 	qs *cqrs.Queries
-	l  logger.Interface
+	l  *slog.Logger
 }
 
 // Mutation resolves the task fields of Mutation.
 type Mutation struct {
 	cmds *cqrs.Commands
 	qs   *cqrs.Queries
-	l    logger.Interface
+	l    *slog.Logger
 }
 
 // New returns the task resolvers for Query and Mutation.
-func New(b cqrs.Buses, l logger.Interface) (Query, Mutation) {
+func New(b cqrs.Buses, l *slog.Logger) (Query, Mutation) {
 	return Query{qs: b.Queries, l: l}, Mutation{cmds: b.Commands, qs: b.Queries, l: l}
 }
 

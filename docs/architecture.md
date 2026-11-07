@@ -32,7 +32,7 @@ its handlers in `internal/controller/worker` send commands on the same command b
 Each transport is a controller package: [the packages table](#packages) lists them.
 Controllers never import each other, and none of them knows about Postgres. A REST handler that needs
 data sends a query, whose handler goes through a read-model interface. `pkg/` holds infrastructure
-with no domain knowledge (buses, servers, logger, JWT, Postgres pool, tracing and the like) and must
+with no domain knowledge (buses, servers, JWT, Postgres pool, tracing and the like) and must
 not import `internal/`.
 
 ## Rules
@@ -142,7 +142,7 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 
 | Package | What it holds |
 | --- | --- |
-| [`cmd/app`](../cmd/app/main.go) | Reads config, builds the logger, then hands over to `internal/app.Run`. |
+| [`cmd/app`](../cmd/app/main.go) | Reads config, then hands over to `internal/app.Run`, which builds the `log/slog` logger (JSON lines at `LOG_LEVEL`) and passes it to everything that logs. |
 | [`cmd/worker`](../cmd/worker/main.go) | Reads config, then `RunWorker` in `internal/app/worker.go`. Same Docker image as the app (`/worker` instead of `/app`); it never applies the schema. |
 | [`cmd/openapi`](../cmd/openapi/main.go) | Prints the REST OpenAPI document without a server or database. `make openapi` writes it to `docs/openapi/v1.json`. |
 | [`internal/app`](../internal/app) | Wiring. `buses.go` builds the command and query buses with their steps, registers every domain's handlers (`registerHandlers`) and lists the worker's projectors and event handlers (`subscribers`); `backfill.go` lists each domain's importer. `app.go` runs the backfill, starts the servers (`initServers`) and waits for a signal to shut down; `worker.go` runs the queue worker and the projection runner. See [Schema](#schema) for `migrate.go`. |

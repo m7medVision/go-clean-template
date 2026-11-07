@@ -3,6 +3,7 @@ package projection_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"sync"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -226,7 +226,7 @@ func start(t *testing.T, s *fakeStore, poll time.Duration, subs ...*recorder) {
 
 	opts := []projection.Option{projection.PollInterval(poll), projection.BatchSize(2)}
 
-	runner := projection.New(logger.New("error"), s, opts...)
+	runner := projection.New(slog.New(slog.DiscardHandler), s, opts...)
 	for _, sub := range subs {
 		runner.Add(sub)
 	}

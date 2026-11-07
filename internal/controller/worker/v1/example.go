@@ -3,7 +3,6 @@ package v1
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/worker/v1/request"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
@@ -16,12 +15,12 @@ func (c *ExampleController) Handle(_ context.Context, msg *worker.Message) error
 
 	// A message that does not decode will never decode, so it is dropped rather than retried.
 	if err := json.Unmarshal(msg.Body, &body); err != nil {
-		c.l.Error(fmt.Errorf("worker - v1 - Example - json.Unmarshal: message %d: %w", msg.ID, err))
+		c.l.Error("worker - v1 - example - decode", "message", msg.ID, "error", err)
 
 		return nil
 	}
 
-	c.l.Info("worker - v1 - Example - message %d (read %d times): %s", msg.ID, msg.ReadCount, body.Text)
+	c.l.Info("worker - v1 - example", "message", msg.ID, "reads", msg.ReadCount, "text", body.Text)
 
 	return nil
 }

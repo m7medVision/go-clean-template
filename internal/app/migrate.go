@@ -7,77 +7,45 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
-	"os"
+	"log/slog"
+	"net/url"
 	"time"
 
 	"ariga.io/atlas/atlasexec"
-	"github.com/jackc/pgx/v5"
 )
 
 //go:embed schema
 var schemaFS embed.FS
 
-const (
-	_defaultAttempts = 20
-	_defaultTimeout  = time.Second
-	_applyTimeout    = 5 * time.Minute
-)
+const _applyTimeout = 5 * time.Minute
 
-func syncSchema() {
-	databaseURL, ok := os.LookupEnv("PG_URL")
-	if !ok || databaseURL == "" {
-		log.Fatalf("migrate: environment variable not declared: PG_URL")
-	}
-
-	databaseURL += "?sslmode=disable"
-
-	waitForPostgres(databaseURL)
-
-	if err := applySchema(databaseURL); err != nil {
-		log.Fatalf("Migrate: schema apply error: %s", err)
-	}
-
-	log.Printf("Migrate: schema is synced")
-}
-
-func waitForPostgres(url string) {
-	var err error
-
-	for attempts := _defaultAttempts; attempts > 0; attempts-- {
-		err = ping(url)
-		if err == nil {
-			return
-		}
-
-		log.Printf("Migrate: postgres is trying to connect, attempts left: %d", attempts)
-		time.Sleep(_defaultTimeout)
-	}
-
-	log.Fatalf("Migrate: postgres connect error: %s", err)
-}
-
-func ping(url string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), _defaultTimeout)
-	defer cancel()
-
-	conn, err := pgx.Connect(ctx, url)
+// syncSchema applies the HCL schema to the database at databaseURL. Atlas connects on its own and
+// asks for TLS unless the URL says otherwise, so a URL without sslmode gets sslmode=disable.
+func syncSchema(ctx context.Context, l *slog.Logger, databaseURL string) error {
+	u, err := url.Parse(databaseURL)
 	if err != nil {
-		return fmt.Errorf("migrate - pgx.Connect: %w", err)
+		return fmt.Errorf("migrate - url.Parse: %w", err)
 	}
-	defer conn.Close(ctx)
 
-	if err = conn.Ping(ctx); err != nil {
-		return fmt.Errorf("migrate - conn.Ping: %w", err)
+	q := u.Query()
+	if !q.Has("sslmode") {
+		q.Set("sslmode", "disable")
+		u.RawQuery = q.Encode()
 	}
+
+	if err := applySchema(ctx, u.String()); err != nil {
+		return err
+	}
+
+	l.Info("migrate - schema applied")
 
 	return nil
 }
 
 // applySchema diffs the HCL schema directly against the app database: no Atlas dev database, so the
 // stack runs exactly one database.
-func applySchema(databaseURL string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), _applyTimeout)
+func applySchema(ctx context.Context, databaseURL string) error {
+	ctx, cancel := context.WithTimeout(ctx, _applyTimeout)
 	defer cancel()
 
 	workdir, err := atlasexec.NewWorkingDir()

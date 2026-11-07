@@ -2,4 +2,9 @@
 
 package app
 
-func syncSchema() {}
+import (
+	"context"
+	"log/slog"
+)
+
+func syncSchema(context.Context, *slog.Logger, string) error { return nil }

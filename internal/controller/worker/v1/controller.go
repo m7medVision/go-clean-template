@@ -1,10 +1,10 @@
 package v1
 
 import (
-	"github.com/m7medvision/go-clean-template/pkg/logger"
+	"log/slog"
 )
 
 // ExampleController -.
 type ExampleController struct {
-	l logger.Interface
+	l *slog.Logger
 }

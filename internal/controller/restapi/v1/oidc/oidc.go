@@ -98,7 +98,7 @@ func (r *controller) finishOIDC(api huma.API) {
 
 func (r *controller) oidcError(err error, op string) error {
 	if shared := apierr.Shared(err); shared != nil {
-		r.l.Warn("restapi - v1 - %s: %v", op, err)
+		r.l.Warn("restapi - v1 - "+op, "error", err)
 
 		return shared
 	}
@@ -111,11 +111,11 @@ func (r *controller) oidcError(err error, op string) error {
 	case errors.Is(err, entity.ErrAccountConflict):
 		return huma.Error409Conflict("an account with this email or username already exists; sign in with it instead")
 	case errors.Is(err, entity.ErrOIDCUnavailable):
-		r.l.Error(err, "restapi - v1 - "+op)
+		r.l.Error("restapi - v1 - "+op, "error", err)
 
 		return huma.Error502BadGateway("sso provider unavailable")
 	default:
-		r.l.Error(err, "restapi - v1 - "+op)
+		r.l.Error("restapi - v1 - "+op, "error", err)
 
 		return huma.Error500InternalServerError("internal server error")
 	}

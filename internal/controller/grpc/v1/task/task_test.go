@@ -3,6 +3,7 @@ package task_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"testing"
 	"time"
@@ -25,14 +26,6 @@ import (
 )
 
 const _bufSize = 1 << 20
-
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}
 
 // fakeTask answers ListAllTasks on real buses, and keeps what it was asked.
 type fakeTask struct {
@@ -63,7 +56,7 @@ func dial(t *testing.T, tk *fakeTask) (pb.TaskServiceClient, *jwt.Manager) {
 	manager := jwt.New("test-secret", time.Hour)
 	lis := bufconn.Listen(_bufSize)
 	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
-	pb.RegisterTaskServiceServer(srv, task.New(tk.buses(), noopLogger{}))
+	pb.RegisterTaskServiceServer(srv, task.New(tk.buses(), slog.New(slog.DiscardHandler)))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {

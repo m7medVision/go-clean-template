@@ -3,9 +3,9 @@ package gqlerr
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
@@ -43,7 +43,7 @@ func Internal() error {
 
 // Map turns a use-case error into the GraphQL error for its entity.Err* sentinel. Any other error
 // is logged under op and reported as Internal.
-func Map(l logger.Interface, err error, op string) error {
+func Map(l *slog.Logger, err error, op string) error {
 	for _, m := range []mapping{
 		{entity.ErrTaskNotFound, _codeNotFound, "task not found"},
 		{entity.ErrTaskForbidden, _codeForbidden, "forbidden"},
@@ -59,7 +59,7 @@ func Map(l logger.Interface, err error, op string) error {
 		}
 	}
 
-	l.Error(err, "graphql - "+op)
+	l.Error("graphql - "+op, "error", err)
 
 	return Internal()
 }

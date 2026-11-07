@@ -2,12 +2,11 @@ package app
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"sync"
 	"syscall"
 	"testing"
-
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 var errListen = errors.New("listen failed")
@@ -71,7 +70,7 @@ func TestServersWaitShutsAllDownWhenOneFails(t *testing.T) {
 
 	b.notify <- errListen
 
-	s.waitForShutdown(make(chan os.Signal), logger.New("error"))
+	s.waitForShutdown(make(chan os.Signal), slog.New(slog.DiscardHandler))
 
 	for name, f := range map[string]*fakeServer{"a": a, "b": b} {
 		if _, shutdown := f.state(); !shutdown {
@@ -89,7 +88,7 @@ func TestServersWaitShutsAllDownOnSignal(t *testing.T) {
 	interrupt := make(chan os.Signal, 1)
 	interrupt <- syscall.SIGTERM
 
-	s.waitForShutdown(interrupt, logger.New("error"))
+	s.waitForShutdown(interrupt, slog.New(slog.DiscardHandler))
 
 	if _, shutdown := a.state(); !shutdown {
 		t.Error("server was not shut down")

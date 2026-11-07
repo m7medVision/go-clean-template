@@ -1,11 +1,9 @@
 package middleware
 
 import (
-	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
-
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 type statusRecorder struct {
@@ -42,28 +40,19 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 
 // Logger returns a middleware that logs method, path, status code, and body size
 // of every response.
-func Logger(l logger.Interface) func(http.Handler) http.Handler {
+func Logger(l *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
 			defer func() {
-				l.Info("%s", buildRequestMessage(r, rec))
+				l.Info("http request", "client", clientAddr(r), "method", r.Method, "uri", r.URL.RequestURI(),
+					"status", rec.status, "bytes", rec.bytes)
 			}()
 
 			next.ServeHTTP(rec, r)
 		})
 	}
-}
-
-func buildRequestMessage(r *http.Request, rec *statusRecorder) string {
-	return fmt.Sprintf("%s - %s %s - %d %d",
-		clientAddr(r),
-		r.Method,
-		r.URL.RequestURI(),
-		rec.status,
-		rec.bytes,
-	)
 }
 
 func clientAddr(r *http.Request) string {

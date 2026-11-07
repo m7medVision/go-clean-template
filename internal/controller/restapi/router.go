@@ -4,6 +4,7 @@
 package restapi
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -15,7 +16,6 @@ import (
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -27,7 +27,7 @@ func NewRouter(
 	cfg *config.Config,
 	b cqrs.Buses,
 	jwtManager *jwt.Manager,
-	l logger.Interface,
+	l *slog.Logger,
 	opts ...Option,
 ) *chi.Mux {
 	apiConfig := newAPIConfig(cfg.App.Version)
@@ -72,7 +72,7 @@ func NewRouter(
 }
 
 // Option registers an optional feature's operations on the REST API, over the buses.
-type Option func(api huma.API, b cqrs.Buses, l logger.Interface)
+type Option func(api huma.API, b cqrs.Buses, l *slog.Logger)
 
 // newAPIConfig is shared by NewRouter and OpenAPI so the exported document matches the served one.
 func newAPIConfig(version string) huma.Config {

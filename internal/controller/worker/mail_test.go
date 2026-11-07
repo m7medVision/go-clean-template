@@ -1,11 +1,11 @@
 package worker_test
 
 import (
+	"log/slog"
 	"testing"
 
 	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,9 +13,9 @@ import (
 func TestWithMailRegistersTheMailQueue(t *testing.T) {
 	t.Parallel()
 
-	w := worker.New(logger.New("error"), nil)
+	w := worker.New(slog.New(slog.DiscardHandler), nil)
 
-	workerctl.NewRouter(w, logger.New("error"), workerctl.WithMail(cqrs.NewCommands()))
+	workerctl.NewRouter(w, slog.New(slog.DiscardHandler), workerctl.WithMail(cqrs.NewCommands()))
 
 	assert.Equal(t, []string{"example", "mail"}, w.Queues())
 }

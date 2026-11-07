@@ -64,7 +64,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 
 		started, err := r.beginRegistration(ctx, userID, authTime)
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - beginPasskeyRegistration")
+			r.l.Error("restapi - v1 - beginPasskeyRegistration", "error", err)
 
 			if errors.Is(err, entity.ErrPasskeyReauthRequired) {
 				return nil, huma.Error401Unauthorized(_reauthRequired)
@@ -109,7 +109,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 				return nil, shared
 			}
 
-			r.l.Error(err, "restapi - v1 - finishPasskeyRegistration")
+			r.l.Error("restapi - v1 - finishPasskeyRegistration", "error", err)
 
 			if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
 				return nil, huma.Error400BadRequest("invalid passkey ceremony")
@@ -144,7 +144,7 @@ func (r *controller) listPasskeys(api huma.API) {
 
 		passkeys, err := r.list(ctx, userID)
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - listPasskeys")
+			r.l.Error("restapi - v1 - listPasskeys", "error", err)
 
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
@@ -192,7 +192,7 @@ func (r *controller) renamePasskey(api huma.API) {
 				return nil, shared
 			}
 
-			r.l.Error(err, "restapi - v1 - renamePasskey")
+			r.l.Error("restapi - v1 - renamePasskey", "error", err)
 
 			if errors.Is(err, entity.ErrPasskeyNotFound) {
 				return nil, huma.Error404NotFound("passkey not found")
@@ -229,7 +229,7 @@ func (r *controller) deletePasskey(api huma.API) {
 				return nil, shared
 			}
 
-			r.l.Error(err, "restapi - v1 - deletePasskey")
+			r.l.Error("restapi - v1 - deletePasskey", "error", err)
 
 			if errors.Is(err, entity.ErrPasskeyNotFound) {
 				return nil, huma.Error404NotFound("passkey not found")
@@ -272,7 +272,7 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*beginPasskeyLoginOutput, error) {
 		started, err := r.beginLogin(ctx)
 		if err != nil {
-			r.l.Error(err, "restapi - v1 - beginPasskeyLogin")
+			r.l.Error("restapi - v1 - beginPasskeyLogin", "error", err)
 
 			return nil, huma.Error500InternalServerError("internal server error")
 		}
@@ -303,7 +303,7 @@ func (r *controller) finishPasskeyLogin(api huma.API) {
 				return nil, shared
 			}
 
-			r.l.Error(err, "restapi - v1 - finishPasskeyLogin")
+			r.l.Error("restapi - v1 - finishPasskeyLogin", "error", err)
 
 			if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
 				return nil, huma.Error401Unauthorized("invalid passkey login")

@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"log/slog"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/exchange"
@@ -9,14 +11,13 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 )
 
 // NewRoutes registers the core v1 REST operations on the Huma API and sets up the
 // security scheme reproducing the BearerAuth header of the previous transport. Each domain
 // registers its own operations from its folder; optional features register theirs afterwards
 // through NewPasskeyRoutes and NewOIDCRoutes.
-func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+func NewRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	api.OpenAPI().Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		apidoc.BearerAuthScheme: {
 			Type: "apiKey",
@@ -31,11 +32,11 @@ func NewRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
 }
 
 // NewPasskeyRoutes registers the passkey sign-in and passkey management operations.
-func NewPasskeyRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+func NewPasskeyRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	passkey.NewRoutes(api, b, l)
 }
 
 // NewOIDCRoutes registers the SSO status and sign-in operations.
-func NewOIDCRoutes(api huma.API, b cqrs.Buses, l logger.Interface) {
+func NewOIDCRoutes(api huma.API, b cqrs.Buses, l *slog.Logger) {
 	oidc.NewRoutes(api, b, l)
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,46 +15,45 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
-	"github.com/m7medvision/go-clean-template/pkg/logger"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
 // RunWorker runs the queue worker: it consumes the queues registered in internal/controller/worker
 // until SIGINT/SIGTERM. It does not apply the schema; the app does.
-func RunWorker(cfg *config.Config) {
-	l := logger.New(cfg.Log.Level)
+func RunWorker(cfg *config.Config) error {
+	l := newLogger(cfg.Log.Level)
 
 	ctx := context.Background()
 
 	// Tracing
 	shutdownTracing, err := initTracing(ctx, cfg, cfg.App.Name+"-worker")
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - RunWorker - initTracing: %w", err))
+		return fmt.Errorf("app - RunWorker - initTracing: %w", err)
 	}
 	defer func() {
 		if err := shutdownTracing(ctx); err != nil {
-			l.Error(fmt.Errorf("app - RunWorker - shutdownTracing: %w", err))
+			l.Error("app - RunWorker - shutdownTracing", "error", err)
 		}
 	}()
 
 	// Repository
 	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - RunWorker - postgres.New: %w", err))
+		return fmt.Errorf("app - RunWorker - postgres.New: %w", err)
 	}
 	defer pg.Close()
 
 	// Use cases, built as the app builds them; the worker's handlers use only some
 	uc, err := initUseCases(cfg, pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), l)
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - RunWorker - initUseCases: %w", err))
+		return fmt.Errorf("app - RunWorker - initUseCases: %w", err)
 	}
 
 	// Projections and event handlers
 	runner, store, err := newRunner(cfg, pg, l)
 	if err != nil {
-		l.Fatal(fmt.Errorf("app - RunWorker - newRunner: %w", err))
+		return fmt.Errorf("app - RunWorker - newRunner: %w", err)
 	}
 
 	// Worker
@@ -77,19 +77,21 @@ func RunWorker(cfg *config.Config) {
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
 	sig := <-interrupt
-	l.Info("app - RunWorker - signal: %s", sig.String())
+	l.Info("app - RunWorker - signal", "signal", sig.String())
 
 	if err = w.Shutdown(); err != nil {
-		l.Error(fmt.Errorf("app - RunWorker - worker.Shutdown: %w", err))
+		l.Error("app - RunWorker - worker.Shutdown", "error", err)
 	}
 
 	runner.Shutdown()
 	store.Close()
+
+	return nil
 }
 
 // newRunner returns the runner of every subscriber, and the store it reads, which must be closed
 // after the runner shuts down.
-func newRunner(cfg *config.Config, pg *postgres.Postgres, l logger.Interface) (
+func newRunner(cfg *config.Config, pg *postgres.Postgres, l *slog.Logger) (
 	*projection.Runner, *projection.PostgresStore, error,
 ) {
 	subs := subscribers(cfg, pg)

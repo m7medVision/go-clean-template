@@ -16,9 +16,9 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** `go vet ./integration-test/...`. **Depends on:** none. **Size:** S
 
 ### 2. Log through `log/slog`; delete `pkg/logger`  (K)
-- [ ] Every logger is a `*slog.Logger`; `pkg/logger` is gone; the level comes from `LOG_LEVEL`.
-- [ ] No `err.Error()` used as a format; std `log` calls (`pkg/postgres`, `app/migrate.go`) use slog.
-- [ ] `pkg/cqrs` no longer imports a module package for logging; the 5 fake loggers are a discard handler.
+- [x] Every logger is a `*slog.Logger`; `pkg/logger` is gone; the level comes from `LOG_LEVEL`.
+- [x] No `err.Error()` used as a format; std `log` calls (`pkg/postgres`, `app/migrate.go`) use slog.
+- [x] `pkg/cqrs` no longer imports a module package for logging; the 5 fake loggers are a discard handler.
 
 **Verify:** G1. **Depends on:** none. **Size:** mechanical sweep.
 

@@ -4,7 +4,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"time"
 
@@ -53,8 +52,6 @@ func New(url string, opts ...Option) (*Postgres, error) {
 		if err == nil {
 			break
 		}
-
-		log.Printf("Postgres is trying to connect, attempts left: %d", pg.connAttempts)
 
 		time.Sleep(pg.connTimeout)
 

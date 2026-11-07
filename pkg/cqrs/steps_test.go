@@ -1,10 +1,11 @@
 package cqrs_test
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"encoding/json"
+	"log/slog"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -61,7 +62,9 @@ func TestTraceMarksAFailedMessage(t *testing.T) {
 func TestLogRecordsTheMessageAndItsOutcome(t *testing.T) {
 	t.Parallel()
 
-	l := &recordingLogger{}
+	var buf bytes.Buffer
+
+	l := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	_, err := cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Log(l), nil), createThing{})
 	require.NoError(t, err)
@@ -69,11 +72,26 @@ func TestLogRecordsTheMessageAndItsOutcome(t *testing.T) {
 	_, err = cqrs.SendCommand[cqrs.Written](context.Background(), commandsWith(cqrs.Log(l), errHandler), createThing{})
 	require.ErrorIs(t, err, errHandler)
 
-	lines := l.lines()
-	require.Len(t, lines, 2)
-	assert.True(t, strings.HasPrefix(lines[0], "cqrs - command CreateThing - ok in "), lines[0])
-	assert.True(t, strings.HasPrefix(lines[1], "cqrs - command CreateThing - error in "), lines[1])
-	assert.True(t, strings.HasSuffix(lines[1], ": "+errHandler.Error()), lines[1])
+	var records []map[string]any
+
+	dec := json.NewDecoder(&buf)
+	for dec.More() {
+		var r map[string]any
+		require.NoError(t, dec.Decode(&r))
+
+		records = append(records, r)
+	}
+
+	require.Len(t, records, 2)
+
+	for _, r := range records {
+		assert.Equal(t, "command", r["kind"])
+		assert.Equal(t, "CreateThing", r["name"])
+		assert.Contains(t, r, "duration")
+	}
+
+	assert.NotContains(t, records[0], "error")
+	assert.Equal(t, errHandler.Error(), records[1]["error"])
 }
 
 func TestMetricsCountsMessagesByOutcome(t *testing.T) {
@@ -99,28 +117,3 @@ cqrs_messages_total{kind="command",name="CreateThing",outcome="ok"} 1
 	require.NoError(t, err)
 	assert.Equal(t, 2, series, "one duration series per outcome")
 }
-
-// recordingLogger keeps every Debug line.
-type recordingLogger struct {
-	mu    sync.Mutex
-	debug []string
-}
-
-func (l *recordingLogger) lines() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	return append([]string(nil), l.debug...)
-}
-
-func (l *recordingLogger) Debug(message any, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.debug = append(l.debug, fmt.Sprintf(fmt.Sprint(message), args...))
-}
-
-func (*recordingLogger) Info(string, ...any) {}
-func (*recordingLogger) Warn(string, ...any) {}
-func (*recordingLogger) Error(any, ...any)   {}
-func (*recordingLogger) Fatal(any, ...any)   {}
