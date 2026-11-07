@@ -19,7 +19,8 @@ func main() {
 	stop()
 
 	if err != nil {
-		slog.Error("app stopped", "error", err)
+		// JSON on stdout, as every other line is; config may not have loaded, so at info.
+		slog.New(slog.NewJSONHandler(os.Stdout, nil)).Error("app stopped", "error", err)
 		os.Exit(1)
 	}
 }
