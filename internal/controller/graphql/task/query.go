@@ -21,7 +21,7 @@ func (q Query) Task(ctx context.Context, id string) (*entity.Task, error) {
 
 	task, err := cqrs.SendQuery[entity.Task](ctx, q.qs, query.GetTask{UserID: caller.UserID, TaskID: id})
 	if err != nil {
-		return nil, gqlerr.Map(q.l, err, "task")
+		return nil, gqlerr.Map(ctx, q.l, err, "task")
 	}
 
 	return &task, nil
@@ -59,7 +59,7 @@ func (q Query) AllTasks(ctx context.Context, status *entity.TaskStatus, limit, o
 func page[L cqrs.Query](ctx context.Context, q Query, list L, op string) (*model.TaskList, error) {
 	p, err := cqrs.SendQuery[query.TaskPage](ctx, q.qs, list)
 	if err != nil {
-		return nil, gqlerr.Map(q.l, err, op)
+		return nil, gqlerr.Map(ctx, q.l, err, op)
 	}
 
 	return &model.TaskList{Tasks: p.Tasks, Total: p.Total}, nil

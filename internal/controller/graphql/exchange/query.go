@@ -29,7 +29,7 @@ func (q Query) ExchangeHistory(ctx context.Context, limit, offset int) (*model.C
 	history, err := cqrs.SendQuery[entity.ExchangeHistory](ctx, q.qs,
 		query.GetExchangeHistory{UserID: caller.UserID, Limit: limit, Offset: offset})
 	if err != nil {
-		return nil, gqlerr.Map(q.l, err, "exchangeHistory")
+		return nil, gqlerr.Map(ctx, q.l, err, "exchangeHistory")
 	}
 
 	return newConversionList(history), nil

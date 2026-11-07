@@ -221,14 +221,15 @@ shape from a neighbouring handler in the same transport.
    DTO's fields; never put a DTO in it. A command answers only `cqrs.Written` (or a result embedding
    it, such as a sign-in's token): a transport that returns the resource sends a query for it next.
    `context.Context` is the first parameter of every method that crosses a layer.
-5. **Map the error.** First the failures any command can produce, through the transport's shared
-   package (`apierr.Shared`, `rpcerr.Shared`, `gqlerr`): `entity.ErrReadModelBehind` → 503 /
-   `Unavailable` / `UNAVAILABLE`, `entity.ErrConcurrencyConflict` → 409 / `Aborted` / `CONFLICT`,
-   `entity.ErrNotImplemented` (a generated stub handler) → 501 / `Unimplemented` / `NOT_IMPLEMENTED`.
-   Then `errors.Is` against the domain's `entity.Err*` sentinels → a transport status. On REST
-   the sentinel maps to a `huma.Error*` constructor, which renders the standard RFC 9457
-   `application/problem+json` model — no custom error type. Log the
-   wrapped error, return a generic message to the caller.
+5. **Map the error** with the transport's one function: `apierr.Problem`, `rpcerr.Status` or
+   `gqlerr.Map`. Each `entity.Err*` is an `*entity.Error` carrying its kind (not found, forbidden,
+   invalid, exists, conflict, unavailable, upstream, not implemented) and the message the caller is
+   shown; the function turns the kind into the transport's status (on REST a `huma.Error*`, which
+   renders the standard RFC 9457 `application/problem+json` model) and logs what needs logging.
+   Any other error is logged and answered as a generic 500 / `Internal` / `INTERNAL`. A domain folder
+   never maps errors itself: a new sentinel needs only its kind. A REST operation lists its statuses
+   with `apierr.CommandErrors(...)` or `apierr.QueryErrors(...)`, which add the ones every command or
+   query can answer.
 6. **Encode the response.** Return an `entity` type directly only when its JSON shape is already
    the API shape — `entity.User` is safe this way because `PasswordHash` is tagged `json:"-"`.
    Anything with a wrapper, a projection or a different field set gets a type in the domain
@@ -240,7 +241,7 @@ shape from a neighbouring handler in the same transport.
 
 **Pipeline steps, not decorators.** Every message passes the buses' steps, built in `newBuses`
 (`internal/app/buses.go`): trace, log, metrics and stamp on both buses; wait (for the projections)
-and retry (on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`RequiredRole()`)
+and retry (on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`AdminOnly()`)
 and validate (`Validate()`). A handler carries none of these. A message type with no registered
 handler is `cqrs.ErrNoHandler` at the first send, so a new message needs its line in `register.go`.
 Repositories still return their interface wrapped in a traced decorator: `func New(...)
@@ -266,10 +267,11 @@ usernames, SSO identities) is a claim saved with the events, not a unique index 
 against `internal/repo/memstore`; projectors against a fake of sqlc's `Querier`.
 
 **Error style.** Domain failures are sentinel errors in `internal/entity/errors.go`
-(`ErrTaskNotFound`, `ErrTaskForbidden`, `ErrInvalidTransition`, …). Every other error is wrapped
-with the layer path: `fmt.Errorf("CreateTask - aggregate.Create: %w", err)`. The `err113`
-linter rejects `errors.New`/`fmt.Errorf` for new dynamic errors — add a sentinel to `entity`
-instead. Controllers are the only place that translates a sentinel into a transport status.
+(`ErrTaskNotFound`, `ErrTaskForbidden`, `ErrInvalidTransition`, …), each an `*entity.Error` built
+with its kind and the message callers see. Every other error is wrapped with the layer path:
+`fmt.Errorf("CreateTask - aggregate.Create: %w", err)`, and is internal: logged, never shown. The
+`err113` linter rejects `errors.New`/`fmt.Errorf` for new dynamic errors — add a sentinel to `entity`
+instead. Only the transports' one mapping function each turns a kind into a transport status.
 
 **Money is `decimal.Decimal`, never `float64`.** `entity.Conversion` holds `shopspring/decimal`
 values; sqlc maps every `numeric` column to it (`sqlc.yaml` override) and pgx reads and writes it
@@ -471,7 +473,7 @@ messages and the gRPC method, the GraphQL field and its resolver. The REST route
 
 - the handler's body, and tests of what it does in place of the stub's test;
 - for a command, the event it records, the aggregate's behavior method with its `Apply` case, and the
-  projector's case; `RequiredRole()` or `Validate()` if it needs them;
+  projector's case; `AdminOnly()` or `Validate()` if it needs them;
 - for a query, the read-model method with its SQL, `make sqlc` and `make mock`, and the fields of its
   result on each transport;
 - its row in `docs/api.md`.
@@ -486,7 +488,7 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
      `<domain>_aggregate.go` a behavior method that checks the rule and calls `entity.Record`, and
      a case in its `Apply`. Test it in `internal/entity`.
    - Add `internal/usecase/<domain>/command/<name>.go`: the command type (`CommandName()`, and
-     `ActorID()` when it acts for a user, `RequiredRole()` when it needs one, `Validate()` for
+     `ActorID()` when it acts for a user, `AdminOnly()` when only an admin may send it, `Validate()` for
      domain checks) and its handler, which goes through `aggregate.Create` or `aggregate.Change` and
      returns `cqrs.Written`. Test it beside it against `internal/repo/memstore`.
    - Handle the new event in the domain's projector (`internal/repo/persistent/<domain>/projector.go`),

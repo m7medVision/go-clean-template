@@ -39,6 +39,6 @@ func TestMapGivesEachSentinelItsCode(t *testing.T) {
 		entity.ErrNotImplemented:      "NOT_IMPLEMENTED",
 		errBroken:                     "INTERNAL",
 	} {
-		assert.Equal(t, want, code(t, gqlerr.Map(l, fmt.Errorf("wrapped: %w", sentinel), "op")), sentinel.Error())
+		assert.Equal(t, want, code(t, gqlerr.Map(t.Context(), l, fmt.Errorf("wrapped: %w", sentinel), "op")), sentinel.Error())
 	}
 }

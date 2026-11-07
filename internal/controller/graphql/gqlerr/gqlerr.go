@@ -2,7 +2,7 @@
 package gqlerr
 
 import (
-	"errors"
+	"context"
 	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -20,12 +20,6 @@ const (
 	_codeInternal        = "INTERNAL"
 )
 
-type mapping struct {
-	sentinel error
-	code     string
-	message  string
-}
-
 // Unauthenticated is the error for a request without a valid bearer token.
 func Unauthenticated() error {
 	return newError(_codeUnauthenticated, "unauthorized")
@@ -41,27 +35,30 @@ func Internal() error {
 	return newError(_codeInternal, "internal server error")
 }
 
-// Map turns a use-case error into the GraphQL error for its entity.Err* sentinel. Any other error
-// is logged under op and reported as Internal.
-func Map(l *slog.Logger, err error, op string) error {
-	for _, m := range []mapping{
-		{entity.ErrTaskNotFound, _codeNotFound, "task not found"},
-		{entity.ErrTaskForbidden, _codeForbidden, "forbidden"},
-		{entity.ErrAdminRequired, _codeForbidden, "admin role required"},
-		{entity.ErrInvalidTransition, _codeBadUserInput, "invalid status transition"},
-		// Any message can produce these three, whatever its domain.
-		{entity.ErrReadModelBehind, _codeUnavailable, "saved, but not yet readable: read it again shortly"},
-		{entity.ErrConcurrencyConflict, _codeConflict, "the record changed while this request ran: try again"},
-		{entity.ErrNotImplemented, _codeNotImplemented, "not implemented"},
-	} {
-		if errors.Is(err, m.sentinel) {
-			return newError(m.code, m.message)
-		}
+// Map turns a failed command or query into the GraphQL error for the kind of its entity.Error,
+// logged under op as its kind says.
+func Map(ctx context.Context, l *slog.Logger, err error, op string) error {
+	kind := entity.KindOf(err)
+	if level, ok := kind.LogLevel(); ok {
+		l.Log(ctx, level, "graphql - "+op, "error", err)
 	}
 
-	l.Error("graphql - "+op, "error", err)
+	return newError(code(kind), entity.Message(err))
+}
 
-	return Internal()
+func code(k entity.Kind) string {
+	return [...]string{
+		entity.KindInternal:        _codeInternal,
+		entity.KindInvalid:         _codeBadUserInput,
+		entity.KindUnauthenticated: _codeUnauthenticated,
+		entity.KindForbidden:       _codeForbidden,
+		entity.KindNotFound:        _codeNotFound,
+		entity.KindExists:          _codeConflict,
+		entity.KindConflict:        _codeConflict,
+		entity.KindUnavailable:     _codeUnavailable,
+		entity.KindUpstream:        _codeUnavailable,
+		entity.KindNotImplemented:  _codeNotImplemented,
+	}[k]
 }
 
 func newError(code, message string) error {

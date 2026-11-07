@@ -142,13 +142,13 @@ written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.ConvertCurre
 	UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
 })
 if err != nil {
-	return nil, r.problem(err, "convert")  // 4. sentinel → status
+	return nil, apierr.Problem(r.l, err, "convert")  // 4. error kind → status
 }
 
 conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,  // 5. read it back
 	query.GetConversion{UserID: userID, ConversionID: written.ID})
 if err != nil {
-	return nil, r.problem(err, "convert")
+	return nil, apierr.Problem(r.l, err, "convert")
 }
 
 return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO
@@ -160,12 +160,11 @@ return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → r
 - **`ctx` is passed down unchanged.** It is Huma's request context: it carries the trace span, and
   it is cancelled if the client disconnects, which cancels the outbound HTTP call and the event
   store's transaction below.
-- **`problem`, in the folder's [`controller.go`](../internal/controller/restapi/v1/exchange/controller.go),
-  maps errors.** First come the failures any command can produce, from the shared
-  [`apierr`](../internal/controller/restapi/v1/apierr/apierr.go) package: 503 when the read model
-  is behind, 409 when a concurrent write won, and 501 while a handler is still a
-  [generated](generator.md) stub. Then the domain sentinels: 400 for an invalid
-  conversion or an unknown currency. Anything else is logged and becomes a 500.
+- **[`apierr.Problem`](../internal/controller/restapi/v1/apierr/apierr.go) maps errors, for every
+  domain.** Each `entity.Err*` carries its kind: `ErrInvalidConversion` and `ErrUnsupportedCurrency`
+  are invalid (400), `ErrReadModelBehind` is unavailable (503), `ErrConcurrencyConflict` a conflict
+  (409), and a [generated](generator.md) stub's `ErrNotImplemented` 501. Anything that is not an
+  `*entity.Error` is logged and becomes a 500.
 - **The DTO and the entity never cross the boundary.** The handler never passes the `Convert` DTO to
   a command, and never returns `entity.Conversion` as the body. `NewConversion` (the folder's
   [`response.go`](../internal/controller/restapi/v1/exchange/response.go)) turns every
@@ -350,7 +349,7 @@ six steps with different types:
 | the request | a Huma DTO | the generated `v1.ConvertRequest` |
 | errors | 400 | `codes.InvalidArgument` |
 | the response | `NewConversion` | `NewConversionResponse` |
-| the shared failures | `apierr` | `rpcerr` |
+| error kind → status | `apierr.Problem` | `rpcerr.Status` |
 
 It sends the identical `ConvertCurrency` and `GetConversion`, so the two transports cannot disagree
 about a rule.

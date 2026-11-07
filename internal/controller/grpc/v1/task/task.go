@@ -5,6 +5,7 @@ import (
 
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -24,12 +25,12 @@ func (c *Controller) CreateTask(ctx context.Context, req *v1.CreateTaskRequest) 
 		UserID: userID, Title: req.GetTitle(), Description: req.GetDescription(),
 	})
 	if err != nil {
-		return nil, c.fail(err, "CreateTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "CreateTask")
 	}
 
 	resp, err := c.readBack(ctx, userID, written.ID)
 	if err != nil {
-		return nil, c.fail(err, "CreateTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "CreateTask")
 	}
 
 	return resp, nil
@@ -44,7 +45,7 @@ func (c *Controller) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*v1.T
 
 	resp, err := c.readBack(ctx, userID, req.GetId())
 	if err != nil {
-		return nil, c.fail(err, "GetTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "GetTask")
 	}
 
 	return resp, nil
@@ -88,7 +89,7 @@ func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest)
 func listPage[Q cqrs.Query](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
 	page, err := cqrs.SendQuery[query.TaskPage](ctx, c.qs, q)
 	if err != nil {
-		return nil, c.fail(err, op)
+		return nil, rpcerr.Status(ctx, c.l, err, op)
 	}
 
 	return NewListTasksResponse(page.Tasks, page.Total), nil
@@ -105,12 +106,12 @@ func (c *Controller) UpdateTask(ctx context.Context, req *v1.UpdateTaskRequest) 
 		UserID: userID, TaskID: req.GetId(), Title: req.GetTitle(), Description: req.GetDescription(),
 	})
 	if err != nil {
-		return nil, c.fail(err, "UpdateTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "UpdateTask")
 	}
 
 	resp, err := c.readBack(ctx, userID, req.GetId())
 	if err != nil {
-		return nil, c.fail(err, "UpdateTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "UpdateTask")
 	}
 
 	return resp, nil
@@ -127,12 +128,12 @@ func (c *Controller) TransitionTask(ctx context.Context, req *v1.TransitionTaskR
 		UserID: userID, TaskID: req.GetId(), Status: entity.TaskStatus(req.GetStatus()),
 	})
 	if err != nil {
-		return nil, c.fail(err, "TransitionTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "TransitionTask")
 	}
 
 	resp, err := c.readBack(ctx, userID, req.GetId())
 	if err != nil {
-		return nil, c.fail(err, "TransitionTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "TransitionTask")
 	}
 
 	return resp, nil
@@ -147,7 +148,7 @@ func (c *Controller) DeleteTask(ctx context.Context, req *v1.DeleteTaskRequest) 
 
 	_, err := cqrs.SendCommand[cqrs.Written](ctx, c.cmds, command.DeleteTask{UserID: userID, TaskID: req.GetId()})
 	if err != nil {
-		return nil, c.fail(err, "DeleteTask")
+		return nil, rpcerr.Status(ctx, c.l, err, "DeleteTask")
 	}
 
 	return &v1.DeleteTaskResponse{}, nil

@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -78,7 +79,7 @@ func (r *controller) createTask(api huma.API) {
 		Tags:          []string{_tasksTag},
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusCreated,
-		Errors:        []int{http.StatusUnauthorized, http.StatusInternalServerError},
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *createTaskInput) (*createTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -89,12 +90,12 @@ func (r *controller) createTask(api huma.API) {
 			UserID: userID, Title: input.Body.Title, Description: input.Body.Description,
 		})
 		if err != nil {
-			return nil, r.problem(err, "createTask")
+			return nil, apierr.Problem(ctx, r.l, err, "createTask")
 		}
 
 		task, err := r.readBack(ctx, userID, written.ID)
 		if err != nil {
-			return nil, r.problem(err, "createTask")
+			return nil, apierr.Problem(ctx, r.l, err, "createTask")
 		}
 
 		return &createTaskOutput{Body: task}, nil
@@ -110,7 +111,7 @@ func (r *controller) listTasks(api huma.API) {
 		Path:        "/v1/tasks",
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -132,7 +133,7 @@ func (r *controller) listAllTasks(api huma.API) {
 		Path:        "/v1/admin/tasks",
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusForbidden),
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
 		caller, ok := middleware.Principal(ctx)
 		if !ok {
@@ -154,7 +155,7 @@ func (r *controller) getTask(api huma.API) {
 		Path:        "/v1/tasks/{id}",
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound),
 	}, func(ctx context.Context, input *taskPathInput) (*updateTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -163,7 +164,7 @@ func (r *controller) getTask(api huma.API) {
 
 		task, err := r.readBack(ctx, userID, input.ID)
 		if err != nil {
-			return nil, r.problem(err, "getTask")
+			return nil, apierr.Problem(ctx, r.l, err, "getTask")
 		}
 
 		return &updateTaskOutput{Body: task}, nil
@@ -179,7 +180,7 @@ func (r *controller) updateTask(api huma.API) {
 		Path:        "/v1/tasks/{id}",
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound),
 	}, func(ctx context.Context, input *updateTaskInput) (*updateTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -190,12 +191,12 @@ func (r *controller) updateTask(api huma.API) {
 			UserID: userID, TaskID: input.ID, Title: input.Body.Title, Description: input.Body.Description,
 		})
 		if err != nil {
-			return nil, r.problem(err, "updateTask")
+			return nil, apierr.Problem(ctx, r.l, err, "updateTask")
 		}
 
 		task, err := r.readBack(ctx, userID, input.ID)
 		if err != nil {
-			return nil, r.problem(err, "updateTask")
+			return nil, apierr.Problem(ctx, r.l, err, "updateTask")
 		}
 
 		return &updateTaskOutput{Body: task}, nil
@@ -211,7 +212,7 @@ func (r *controller) transitionTask(api huma.API) {
 		Path:        "/v1/tasks/{id}/status",
 		Tags:        []string{_tasksTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound),
 	}, func(ctx context.Context, input *transitionTaskInput) (*transitionTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -222,12 +223,12 @@ func (r *controller) transitionTask(api huma.API) {
 			UserID: userID, TaskID: input.ID, Status: input.Body.Status,
 		})
 		if err != nil {
-			return nil, r.problem(err, "transitionTask")
+			return nil, apierr.Problem(ctx, r.l, err, "transitionTask")
 		}
 
 		task, err := r.readBack(ctx, userID, input.ID)
 		if err != nil {
-			return nil, r.problem(err, "transitionTask")
+			return nil, apierr.Problem(ctx, r.l, err, "transitionTask")
 		}
 
 		return &transitionTaskOutput{Body: task}, nil
@@ -244,7 +245,7 @@ func (r *controller) deleteTask(api huma.API) {
 		Tags:          []string{_tasksTag},
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, input *taskPathInput) (*deleteTaskOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -253,7 +254,7 @@ func (r *controller) deleteTask(api huma.API) {
 
 		_, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.DeleteTask{UserID: userID, TaskID: input.ID})
 		if err != nil {
-			return nil, r.problem(err, "deleteTask")
+			return nil, apierr.Problem(ctx, r.l, err, "deleteTask")
 		}
 
 		return &deleteTaskOutput{Status: http.StatusNoContent}, nil

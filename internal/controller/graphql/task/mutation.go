@@ -26,7 +26,7 @@ func (m Mutation) CreateTask(ctx context.Context, input model.CreateTaskInput) (
 		UserID: caller.UserID, Title: input.Title, Description: deref(input.Description),
 	})
 	if err != nil {
-		return nil, gqlerr.Map(m.l, err, "createTask")
+		return nil, gqlerr.Map(ctx, m.l, err, "createTask")
 	}
 
 	return m.result(ctx, caller.UserID, written.ID, "createTask")
@@ -47,7 +47,7 @@ func (m Mutation) UpdateTask(ctx context.Context, id string, input model.UpdateT
 		UserID: caller.UserID, TaskID: id, Title: input.Title, Description: deref(input.Description),
 	})
 	if err != nil {
-		return nil, gqlerr.Map(m.l, err, "updateTask")
+		return nil, gqlerr.Map(ctx, m.l, err, "updateTask")
 	}
 
 	return m.result(ctx, caller.UserID, id, "updateTask")
@@ -64,7 +64,7 @@ func (m Mutation) TransitionTask(ctx context.Context, id string, status entity.T
 		UserID: caller.UserID, TaskID: id, Status: status,
 	})
 	if err != nil {
-		return nil, gqlerr.Map(m.l, err, "transitionTask")
+		return nil, gqlerr.Map(ctx, m.l, err, "transitionTask")
 	}
 
 	return m.result(ctx, caller.UserID, id, "transitionTask")
@@ -79,7 +79,7 @@ func (m Mutation) DeleteTask(ctx context.Context, id string) (bool, error) {
 
 	_, err = cqrs.SendCommand[cqrs.Written](ctx, m.cmds, command.DeleteTask{UserID: caller.UserID, TaskID: id})
 	if err != nil {
-		return false, gqlerr.Map(m.l, err, "deleteTask")
+		return false, gqlerr.Map(ctx, m.l, err, "deleteTask")
 	}
 
 	return true, nil
@@ -89,7 +89,7 @@ func (m Mutation) DeleteTask(ctx context.Context, id string) (bool, error) {
 func (m Mutation) result(ctx context.Context, userID, taskID, op string) (*entity.Task, error) {
 	task, err := m.readBack(ctx, userID, taskID)
 	if err != nil {
-		return nil, gqlerr.Map(m.l, err, op)
+		return nil, gqlerr.Map(ctx, m.l, err, op)
 	}
 
 	return &task, nil

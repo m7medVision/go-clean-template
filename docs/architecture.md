@@ -65,14 +65,14 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
 ### Each layer's job
 
 8. **A controller handler does six things, in order:** get the caller, decode into a transport-local
-   DTO, validate structure, send the command or query with the request's `ctx`, map `entity.Err*`
-   sentinels to a transport status, and encode a response DTO. Nothing else. It never passes a request
+   DTO, validate structure, send the command or query with the request's `ctx`, map the error's
+   kind to a transport status (one function per transport), and encode a response DTO. Nothing else. It never passes a request
    DTO into a message, and returns an entity directly only when its JSON shape already is the API shape.
 9. **A domain rule is written once, on the aggregate or in the handler.** Never in a controller, and
    never duplicated per transport. A rule about one record goes on its aggregate
    (`TaskAggregate.Transition`, `entity.NewConversion`); a rule across records uses a claim
    (unique emails). Authorization is a domain rule too: "only an admin lists every user's tasks" is
-   `ListAllTasks.RequiredRole`, enforced by the buses' authorize step for every transport.
+   `ListAllTasks.AdminOnly`, enforced by the buses' authorize step for every transport.
 10. **State changes only through aggregates recording events.** A command handler loads an
     aggregate, calls its behavior method and saves what it recorded. A command returns what
     identifies the write (`cqrs.Written`), never resource data; a query reads only read models; and
@@ -147,8 +147,8 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`cmd/openapi`](../cmd/openapi/main.go) | Prints the REST OpenAPI document without a server or database. `make openapi` writes it to `docs/openapi/v1.json`. |
 | [`internal/app`](../internal/app) | Wiring. `buses.go` builds the command and query buses with their steps, registers every domain's handlers (`registerHandlers`) and lists the worker's projectors and event handlers (`subscribers`); `backfill.go` lists each domain's importer. `app.go` runs the backfill, starts the servers (`initServers`) and waits for a signal to shut down; `worker.go` runs the queue worker and the projection runner. See [Schema](#schema) for `migrate.go`. |
 | [`internal/controller`](../internal/controller) | One package per transport. Inside each, one folder per domain (`restapi/v1/task/`, `grpc/v1/task/`, `graphql/task/`) holds that domain's handlers, request and response DTOs, and tests; the version's `router.go` registers every domain over the buses. Handlers decode, send a command or query, map `entity.Err*` sentinels to a transport status, and encode. |
-| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `v1/response/` (`Token`), `v1/apidoc/` (the security scheme and the `auth` tag) and `v1/apierr/` (the failures any command can produce) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with, over fake handlers on real buses. |
-| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which `v1/router.go` registers; `v1/rpcerr/` maps the failures any command can produce. |
+| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `v1/response/` (`Token`), `v1/apidoc/` (the security scheme and the `auth` tag) and `v1/apierr/` (an error's kind → its problem, for every domain) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with, over fake handlers on real buses. |
+| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which `v1/router.go` registers; `v1/rpcerr/` maps an error's kind to its status, for every service. |
 | [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen), mounted on the REST router. One folder per domain (`task/`, `exchange/`) holds its resolvers and their tests; `resolver.go` joins them into the root `Query` and `Mutation`. `middleware/` (the caller), `gqlerr/` (error codes) and `paging/` are shared, and `graphqltest/` is the test kit. gqlgen generates only `generated/` and `model/`. |
 | [`internal/controller/worker`](../internal/controller/worker) | The queue worker's message handlers; the mail handler sends `DeliverEmail`. |
 | [`internal/entity`](../internal/entity) | Domain types (the read shapes the API returns), the aggregates and their events, the claims, and sentinel errors. `EventTypes()` lists every event the store can decode. |

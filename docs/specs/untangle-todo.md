@@ -34,11 +34,11 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** none. **Size:** M
 
 ### 4. Each transport maps kinds once  (A)
-- [ ] REST `apierr`, gRPC `rpcerr`, GraphQL `gqlerr` each have one kind→status function that logs
+- [x] REST `apierr`, gRPC `rpcerr`, GraphQL `gqlerr` each have one kind→status function that logs
       Internal once; every domain `problem`/`fail` and passkey's inline blocks are gone; `gqlerr` holds
       no domain sentinel.
-- [ ] Every REST command operation lists 409, 503 and 501 (one helper); status codes and messages
-      on the wire are unchanged.
+- [x] Every REST command operation lists 409 and 503 (one helper; 501 only a generated stub can
+      answer, so its op lists it); status codes and messages on the wire are unchanged.
 
 **Verify:** G2. **Depends on:** 3. **Size:** L
 

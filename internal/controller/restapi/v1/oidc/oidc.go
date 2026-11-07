@@ -2,14 +2,12 @@ package oidc
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
-	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -44,7 +42,7 @@ func (r *controller) oidcStatus(api huma.API) {
 	}, func(ctx context.Context, _ *struct{}) (*oidcStatusOutput, error) {
 		enabled, err := cqrs.SendQuery[bool](ctx, r.qs, query.GetOIDCStatus{})
 		if err != nil {
-			return nil, r.oidcError(err, "oidcStatus")
+			return nil, apierr.Problem(ctx, r.l, err, "oidcStatus")
 		}
 
 		return &oidcStatusOutput{Body: OIDCStatus{Enabled: enabled}}, nil
@@ -60,11 +58,11 @@ func (r *controller) beginOIDC(api huma.API) {
 		Method: http.MethodPost,
 		Path:   "/v1/auth/oidc/begin",
 		Tags:   []string{apidoc.AuthTag},
-		Errors: []int{http.StatusNotFound, http.StatusBadGateway, http.StatusInternalServerError},
+		Errors: apierr.QueryErrors(http.StatusNotFound, http.StatusBadGateway),
 	}, func(ctx context.Context, _ *struct{}) (*beginOIDCOutput, error) {
 		started, err := cqrs.SendQuery[query.Started](ctx, r.qs, query.BeginOIDCLogin{})
 		if err != nil {
-			return nil, r.oidcError(err, "beginOIDC")
+			return nil, apierr.Problem(ctx, r.l, err, "beginOIDC")
 		}
 
 		return &beginOIDCOutput{Body: OIDCRedirect{URL: started.AuthURL, CeremonyToken: started.Token}}, nil
@@ -80,43 +78,15 @@ func (r *controller) finishOIDC(api huma.API) {
 		Method: http.MethodPost,
 		Path:   "/v1/auth/oidc/finish",
 		Tags:   []string{apidoc.AuthTag},
-		Errors: []int{
-			http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict,
-			http.StatusBadGateway, http.StatusInternalServerError,
-		},
+		Errors: apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict, http.StatusBadGateway),
 	}, func(ctx context.Context, input *finishOIDCInput) (*finishOIDCOutput, error) {
 		signedIn, err := cqrs.SendCommand[command.SignedIn](ctx, r.cmds, command.FinishOIDCLogin{
 			Code: input.Body.Code, State: input.Body.State, Token: input.CeremonyToken,
 		})
 		if err != nil {
-			return nil, r.oidcError(err, "finishOIDC")
+			return nil, apierr.Problem(ctx, r.l, err, "finishOIDC")
 		}
 
 		return &finishOIDCOutput{Body: response.Token{Token: signedIn.Token}}, nil
 	})
-}
-
-func (r *controller) oidcError(err error, op string) error {
-	if shared := apierr.Shared(err); shared != nil {
-		r.l.Warn("restapi - v1 - "+op, "error", err)
-
-		return shared
-	}
-
-	switch {
-	case errors.Is(err, entity.ErrOIDCDisabled):
-		return huma.Error404NotFound("sso sign-in is not configured")
-	case errors.Is(err, entity.ErrOIDCCeremonyInvalid):
-		return huma.Error401Unauthorized("invalid sso sign-in")
-	case errors.Is(err, entity.ErrAccountConflict):
-		return huma.Error409Conflict("an account with this email or username already exists; sign in with it instead")
-	case errors.Is(err, entity.ErrOIDCUnavailable):
-		r.l.Error("restapi - v1 - "+op, "error", err)
-
-		return huma.Error502BadGateway("sso provider unavailable")
-	default:
-		r.l.Error("restapi - v1 - "+op, "error", err)
-
-		return huma.Error500InternalServerError("internal server error")
-	}
 }

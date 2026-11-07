@@ -1,6 +1,9 @@
 package entity
 
-import "errors"
+import (
+	"errors"
+	"log/slog"
+)
 
 // Kind is what a failure means to the caller, whatever the transport: each transport turns a kind
 // into its own status once.
@@ -35,22 +38,40 @@ func (e *Error) Error() string { return e.msg }
 // Kind is what the failure means to the caller.
 func (e *Error) Kind() Kind { return e.kind }
 
-// AsError finds the first *Error in err's chain.
-func AsError(err error) (*Error, bool) {
-	var e *Error
-
-	ok := errors.As(err, &e)
-
-	return e, ok
-}
-
 // KindOf is the kind of the first *Error in err's chain, or KindInternal.
 func KindOf(err error) Kind {
-	if e, ok := AsError(err); ok {
+	var e *Error
+	if errors.As(err, &e) {
 		return e.kind
 	}
 
 	return KindInternal
+}
+
+// Message is what the caller may be told about err: the message of the first *Error in its chain,
+// or a generic one for an internal failure.
+func Message(err error) string {
+	var e *Error
+	if errors.As(err, &e) && e.kind != KindInternal {
+		return e.msg
+	}
+
+	return "internal server error"
+}
+
+// LogLevel is how a failure of this kind is logged where it is answered: the caller's own mistakes
+// not at all, conditions that pass (a lost race, a read model still behind, a stub) as warnings,
+// and the app's own faults, its dependencies' included, as errors.
+func (k Kind) LogLevel() (slog.Level, bool) {
+	switch k {
+	case KindInvalid, KindUnauthenticated, KindForbidden, KindNotFound, KindExists:
+		return 0, false
+	case KindConflict, KindUnavailable, KindNotImplemented:
+		return slog.LevelWarn, true
+	case KindInternal, KindUpstream:
+	}
+
+	return slog.LevelError, true
 }
 
 var (

@@ -2,7 +2,6 @@ package passkey
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -12,10 +11,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
-
-// _reauthRequired is the problem detail of a register/begin refused for a stale sign-in. Clients
-// match on it to ask for the password again, so it must not change.
-const _reauthRequired = "reauthentication required"
 
 type beginPasskeyRegistrationInput struct{}
 
@@ -47,12 +42,13 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		Description: "Start a WebAuthn registration ceremony for the current user. Pass `options` to " +
 			"navigator.credentials.create and send the result to finish with `ceremony_token` in the " +
 			"X-Ceremony-Token header. The caller must have signed in recently (WEBAUTHN_REAUTH_MAX_AGE); " +
-			"otherwise the answer is a 401 whose detail is \"" + _reauthRequired + "\": sign in again and retry.",
+			"otherwise the answer is a 401 whose detail is \"" + entity.ErrPasskeyReauthRequired.Error() +
+			"\": sign in again and retry.",
 		Method:   http.MethodPost,
 		Path:     "/v1/passkeys/register/begin",
 		Tags:     []string{_passkeysTag},
 		Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:   []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:   apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*beginPasskeyRegistrationOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -64,17 +60,7 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 
 		started, err := r.beginRegistration(ctx, userID, authTime)
 		if err != nil {
-			r.l.Error("restapi - v1 - beginPasskeyRegistration", "error", err)
-
-			if errors.Is(err, entity.ErrPasskeyReauthRequired) {
-				return nil, huma.Error401Unauthorized(_reauthRequired)
-			}
-
-			if errors.Is(err, entity.ErrUserNotFound) {
-				return nil, huma.Error404NotFound("user not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyRegistration")
 		}
 
 		return &beginPasskeyRegistrationOutput{Body: PasskeyCeremony{
@@ -94,9 +80,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 		Tags:          []string{_passkeysTag},
 		DefaultStatus: http.StatusCreated,
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors: []int{
-			http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusInternalServerError,
-		},
+		Errors:        apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict),
 	}, func(ctx context.Context, input *finishPasskeyRegistrationInput) (*finishPasskeyRegistrationOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -105,21 +89,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 
 		passkey, err := r.finishRegistration(ctx, userID, input.CeremonyToken, input.Name, input.Body)
 		if err != nil {
-			if shared := apierr.Shared(err); shared != nil {
-				return nil, shared
-			}
-
-			r.l.Error("restapi - v1 - finishPasskeyRegistration", "error", err)
-
-			if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
-				return nil, huma.Error400BadRequest("invalid passkey ceremony")
-			}
-
-			if errors.Is(err, entity.ErrPasskeyExists) {
-				return nil, huma.Error409Conflict("passkey already registered")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "finishPasskeyRegistration")
 		}
 
 		return &finishPasskeyRegistrationOutput{Body: passkey}, nil
@@ -135,7 +105,7 @@ func (r *controller) listPasskeys(api huma.API) {
 		Path:        "/v1/passkeys",
 		Tags:        []string{_passkeysTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, _ *listPasskeysInput) (*listPasskeysOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -144,9 +114,7 @@ func (r *controller) listPasskeys(api huma.API) {
 
 		passkeys, err := r.list(ctx, userID)
 		if err != nil {
-			r.l.Error("restapi - v1 - listPasskeys", "error", err)
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "listPasskeys")
 		}
 
 		return &listPasskeysOutput{Body: NewPasskeyList(passkeys)}, nil
@@ -179,7 +147,7 @@ func (r *controller) renamePasskey(api huma.API) {
 		Path:        "/v1/passkeys/{id}",
 		Tags:        []string{_passkeysTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:      apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, input *renamePasskeyInput) (*renamePasskeyOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -188,17 +156,7 @@ func (r *controller) renamePasskey(api huma.API) {
 
 		passkey, err := r.rename(ctx, userID, input.ID, input.Body.Name)
 		if err != nil {
-			if shared := apierr.Shared(err); shared != nil {
-				return nil, shared
-			}
-
-			r.l.Error("restapi - v1 - renamePasskey", "error", err)
-
-			if errors.Is(err, entity.ErrPasskeyNotFound) {
-				return nil, huma.Error404NotFound("passkey not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "renamePasskey")
 		}
 
 		return &renamePasskeyOutput{Body: passkey}, nil
@@ -216,7 +174,7 @@ func (r *controller) deletePasskey(api huma.API) {
 		Tags:          []string{_passkeysTag},
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		DefaultStatus: http.StatusNoContent,
-		Errors:        []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, input *passkeyPathInput) (*deletePasskeyOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -225,17 +183,7 @@ func (r *controller) deletePasskey(api huma.API) {
 
 		err := r.delete(ctx, userID, input.ID)
 		if err != nil {
-			if shared := apierr.Shared(err); shared != nil {
-				return nil, shared
-			}
-
-			r.l.Error("restapi - v1 - deletePasskey", "error", err)
-
-			if errors.Is(err, entity.ErrPasskeyNotFound) {
-				return nil, huma.Error404NotFound("passkey not found")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "deletePasskey")
 		}
 
 		return &deletePasskeyOutput{Status: http.StatusNoContent}, nil
@@ -268,13 +216,11 @@ func (r *controller) beginPasskeyLogin(api huma.API) {
 		Method: http.MethodPost,
 		Path:   "/v1/auth/passkey/begin",
 		Tags:   []string{apidoc.AuthTag},
-		Errors: []int{http.StatusInternalServerError},
+		Errors: apierr.QueryErrors(),
 	}, func(ctx context.Context, _ *beginPasskeyLoginInput) (*beginPasskeyLoginOutput, error) {
 		started, err := r.beginLogin(ctx)
 		if err != nil {
-			r.l.Error("restapi - v1 - beginPasskeyLogin", "error", err)
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyLogin")
 		}
 
 		return &beginPasskeyLoginOutput{Body: PasskeyCeremony{
@@ -293,27 +239,11 @@ func (r *controller) finishPasskeyLogin(api huma.API) {
 		Method: http.MethodPost,
 		Path:   "/v1/auth/passkey/finish",
 		Tags:   []string{apidoc.AuthTag},
-		Errors: []int{
-			http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusInternalServerError,
-		},
+		Errors: apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict),
 	}, func(ctx context.Context, input *finishPasskeyLoginInput) (*finishPasskeyLoginOutput, error) {
 		token, err := r.finishLogin(ctx, input.CeremonyToken, input.Body)
 		if err != nil {
-			if shared := apierr.Shared(err); shared != nil {
-				return nil, shared
-			}
-
-			r.l.Error("restapi - v1 - finishPasskeyLogin", "error", err)
-
-			if errors.Is(err, entity.ErrPasskeyCeremonyInvalid) {
-				return nil, huma.Error401Unauthorized("invalid passkey login")
-			}
-
-			if errors.Is(err, entity.ErrPasskeyChallengeUsed) {
-				return nil, huma.Error409Conflict("passkey login already completed")
-			}
-
-			return nil, huma.Error500InternalServerError("internal server error")
+			return nil, apierr.Problem(ctx, r.l, err, "finishPasskeyLogin")
 		}
 
 		return &finishPasskeyLoginOutput{Body: response.Token{Token: token}}, nil

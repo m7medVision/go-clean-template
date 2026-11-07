@@ -3,17 +3,13 @@ package task
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/go-playground/validator/v10"
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
-	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // Controller -.
@@ -39,29 +35,4 @@ func (c *Controller) readBack(ctx context.Context, userID, taskID string) (*v1.T
 	}
 
 	return NewTaskResponse(&task), nil
-}
-
-// fail maps a failed command or query to its status: first what any command can fail with, then
-// the task errors, and anything else to a logged Internal.
-func (c *Controller) fail(err error, op string) error {
-	if shared := rpcerr.Shared(err); shared != nil {
-		c.l.Warn("grpc - v1 - "+op, "error", err)
-
-		return shared
-	}
-
-	switch {
-	case errors.Is(err, entity.ErrTaskNotFound):
-		return status.Error(codes.NotFound, "task not found")
-	case errors.Is(err, entity.ErrTaskForbidden):
-		return status.Error(codes.PermissionDenied, "forbidden")
-	case errors.Is(err, entity.ErrAdminRequired):
-		return status.Error(codes.PermissionDenied, "admin role required")
-	case errors.Is(err, entity.ErrInvalidTransition):
-		return status.Error(codes.InvalidArgument, "invalid status transition")
-	default:
-		c.l.Error("grpc - v1 - "+op, "error", err)
-
-		return status.Error(codes.Internal, "internal server error")
-	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/response"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/command"
@@ -45,18 +46,18 @@ func (r *controller) register(api huma.API) {
 		Path:          "/v1/auth/register",
 		Tags:          []string{apidoc.AuthTag},
 		DefaultStatus: http.StatusCreated,
-		Errors:        []int{http.StatusConflict, http.StatusInternalServerError},
+		Errors:        apierr.CommandErrors(http.StatusConflict),
 	}, func(ctx context.Context, input *registerInput) (*registerOutput, error) {
 		written, err := cqrs.SendCommand[cqrs.Written](ctx, r.cmds, command.RegisterUser{
 			Username: input.Body.Username, Email: input.Body.Email, Password: input.Body.Password,
 		})
 		if err != nil {
-			return nil, r.problem(err, "register")
+			return nil, apierr.Problem(ctx, r.l, err, "register")
 		}
 
 		user, err := cqrs.SendQuery[entity.User](ctx, r.qs, query.GetUser{UserID: written.ID})
 		if err != nil {
-			return nil, r.problem(err, "register")
+			return nil, apierr.Problem(ctx, r.l, err, "register")
 		}
 
 		return &registerOutput{Body: user}, nil
@@ -71,11 +72,11 @@ func (r *controller) login(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/v1/auth/login",
 		Tags:        []string{apidoc.AuthTag},
-		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *loginInput) (*loginOutput, error) {
 		token, err := cqrs.SendQuery[string](ctx, r.qs, query.LogIn{Email: input.Body.Email, Password: input.Body.Password})
 		if err != nil {
-			return nil, r.problem(err, "login")
+			return nil, apierr.Problem(ctx, r.l, err, "login")
 		}
 
 		return &loginOutput{Body: response.Token{Token: token}}, nil
@@ -91,7 +92,7 @@ func (r *controller) profile(api huma.API) {
 		Path:        "/v1/user/profile",
 		Tags:        []string{_usersTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, _ *profileInput) (*profileOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -100,7 +101,7 @@ func (r *controller) profile(api huma.API) {
 
 		user, err := cqrs.SendQuery[entity.User](ctx, r.qs, query.GetUser{UserID: userID})
 		if err != nil {
-			return nil, r.problem(err, "profile")
+			return nil, apierr.Problem(ctx, r.l, err, "profile")
 		}
 
 		return &profileOutput{Body: user}, nil

@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange/query"
@@ -40,7 +41,7 @@ func (r *controller) convert(api huma.API) {
 		Path:        "/v1/exchange/convert",
 		Tags:        []string{_exchangeTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError},
+		Errors:      apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized),
 	}, func(ctx context.Context, input *convertInput) (*convertOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -56,13 +57,13 @@ func (r *controller) convert(api huma.API) {
 			UserID: userID, From: input.Body.From, To: input.Body.To, Amount: amount,
 		})
 		if err != nil {
-			return nil, r.problem(err, "convert")
+			return nil, apierr.Problem(ctx, r.l, err, "convert")
 		}
 
 		conversion, err := cqrs.SendQuery[entity.Conversion](ctx, r.qs,
 			query.GetConversion{UserID: userID, ConversionID: written.ID})
 		if err != nil {
-			return nil, r.problem(err, "convert")
+			return nil, apierr.Problem(ctx, r.l, err, "convert")
 		}
 
 		return &convertOutput{Body: NewConversion(&conversion)}, nil
@@ -78,7 +79,7 @@ func (r *controller) exchangeHistory(api huma.API) {
 		Path:        "/v1/exchange/history",
 		Tags:        []string{_exchangeTag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      []int{http.StatusUnauthorized, http.StatusInternalServerError},
+		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, input *exchangeHistoryInput) (*exchangeHistoryOutput, error) {
 		userID, ok := middleware.UserID(ctx)
 		if !ok {
@@ -88,7 +89,7 @@ func (r *controller) exchangeHistory(api huma.API) {
 		history, err := cqrs.SendQuery[entity.ExchangeHistory](ctx, r.qs,
 			query.GetExchangeHistory{UserID: userID, Limit: input.Limit, Offset: input.Offset})
 		if err != nil {
-			return nil, r.problem(err, "exchangeHistory")
+			return nil, apierr.Problem(ctx, r.l, err, "exchangeHistory")
 		}
 
 		return &exchangeHistoryOutput{Body: NewExchangeHistory(history)}, nil

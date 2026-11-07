@@ -470,7 +470,7 @@ func TestFinishPasskeyLogin(t *testing.T) {
 		err  error
 		code int
 	}{
-		{"invalid ceremony maps to 401", entity.ErrPasskeyCeremonyInvalid, http.StatusUnauthorized},
+		{"invalid login maps to 401", entity.ErrPasskeyLoginInvalid, http.StatusUnauthorized},
 		{"replayed login maps to 409", entity.ErrPasskeyChallengeUsed, http.StatusConflict},
 		{"other failure maps to 500", io.EOF, http.StatusInternalServerError},
 	} {

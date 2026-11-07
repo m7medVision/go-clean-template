@@ -52,7 +52,7 @@ The steps, outermost first:
 | stamp | ✓ | ✓ | the actor (`ActorID()`) and the message name into the event metadata |
 | wait | ✓ | | after the handler: until every projector has passed the write's position, or `CQRS_CONSISTENCY_TIMEOUT` (then `entity.ErrReadModelBehind`) |
 | retry | ✓ | | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
-| authorize | ✓ | ✓ | a message with `RequiredRole()` is refused for a caller without it (`ListAllTasks` needs admin) |
+| authorize | ✓ | ✓ | an `AdminOnly()` message is refused with `entity.ErrAdminRequired` for a caller who is not an admin (`ListAllTasks`) |
 | validate | ✓ | ✓ | calls `Validate()` when the message has one |
 
 ### Commands
