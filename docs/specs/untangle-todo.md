@@ -210,7 +210,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2 (no diff in `docs/openapi/v1.json` or the GraphQL schema). **Depends on:** 24. **Size:** mechanical.
 
 ### Checkpoint 5
-- [ ] G3 green.
+- [x] G3 green (453fa40).
 
 ## Phase 7: Backfill
 
