@@ -29,15 +29,14 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// ByID reads the user with id. An ID that is not a UUID names no user, so it is
-// entity.ErrUserNotFound, not the error users.id would raise.
+// ByID reads the user with id. An ID other than a UUID as the app writes them, in lower case,
+// names no user, so it is entity.ErrUserNotFound, not the error users.id would raise.
 func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
-	parsed, err := uuid.Parse(id)
-	if err != nil {
+	if parsed, err := uuid.Parse(id); err != nil || parsed.String() != id {
 		return entity.User{}, entity.ErrUserNotFound
 	}
 
-	user, err := r.q(ctx).GetUserByID(ctx, parsed.String())
+	user, err := r.q(ctx).GetUserByID(ctx, id)
 	if err != nil {
 		return entity.User{}, mapGetError(err, "ByID - r.q(ctx).GetUserByID")
 	}

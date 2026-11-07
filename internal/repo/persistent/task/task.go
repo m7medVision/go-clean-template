@@ -29,15 +29,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// Get reads the task with taskID. An ID that is not a UUID names no task, so it is
-// entity.ErrTaskNotFound, as it is on the write side, not the error tasks.id would raise.
+// Get reads the task with taskID. An ID other than a UUID as the app writes them, in lower case,
+// names no task, so it is entity.ErrTaskNotFound, as it is on the write side, not the error
+// tasks.id would raise.
 func (r *Repo) Get(ctx context.Context, taskID string) (entity.Task, error) {
-	id, err := uuid.Parse(taskID)
-	if err != nil {
+	if id, err := uuid.Parse(taskID); err != nil || id.String() != taskID {
 		return entity.Task{}, entity.ErrTaskNotFound
 	}
 
-	task, err := r.q(ctx).GetTask(ctx, id.String())
+	task, err := r.q(ctx).GetTask(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Task{}, entity.ErrTaskNotFound

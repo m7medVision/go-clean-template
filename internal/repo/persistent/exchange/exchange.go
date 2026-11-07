@@ -29,15 +29,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
-// Conversion reads the conversion with conversionID. An ID that is not a UUID names no conversion,
-// so it is entity.ErrConversionNotFound, not the error exchange_history.conversion_id would raise.
+// Conversion reads the conversion with conversionID. An ID other than a UUID as the app writes
+// them, in lower case, names no conversion, so it is entity.ErrConversionNotFound, not the error
+// exchange_history.conversion_id would raise.
 func (r *Repo) Conversion(ctx context.Context, conversionID string) (entity.Conversion, error) {
-	id, err := uuid.Parse(conversionID)
-	if err != nil {
+	if id, err := uuid.Parse(conversionID); err != nil || id.String() != conversionID {
 		return entity.Conversion{}, entity.ErrConversionNotFound
 	}
 
-	row, err := r.q(ctx).GetConversion(ctx, new(id.String()))
+	row, err := r.q(ctx).GetConversion(ctx, &conversionID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Conversion{}, entity.ErrConversionNotFound
