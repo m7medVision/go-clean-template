@@ -9,7 +9,8 @@ import (
 //go:generate mockgen -source={{.Name.Snake}}.go -destination=repomock/{{.Name.Snake}}.go -package=repomock
 
 // {{.Name.Go}}ReadModel reads the {{.Name.Plural.Snake}} table, which only the {{.Name.Words}} projector writes. Get of
-// one missing {{.Name.Words}} is entity.Err{{.Name.Go}}NotFound; whether the caller may read it is entity.{{.Name.Go}}'s rule.
+// one missing {{.Name.Words}}, or of an ID that is not a UUID, is entity.Err{{.Name.Go}}NotFound; whether the caller
+// may read it is entity.{{.Name.Go}}'s rule.
 type {{.Name.Go}}ReadModel interface {
 	Get(ctx context.Context, {{.Name.Lower}}ID string) (entity.{{.Name.Go}}, error)
 	// List is one page of the user's {{.Name.Plural.Words}}, newest first.

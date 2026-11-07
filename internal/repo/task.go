@@ -9,7 +9,8 @@ import (
 //go:generate mockgen -source=task.go -destination=repomock/task.go -package=repomock
 
 // TaskReadModel reads the tasks table, which only the task projector writes. Get of a missing
-// task is entity.ErrTaskNotFound; whether the caller may read it is entity.Task's rule.
+// task, or of an ID that is not a UUID, is entity.ErrTaskNotFound; whether the caller may read it
+// is entity.Task's rule.
 type TaskReadModel interface {
 	Get(ctx context.Context, taskID string) (entity.Task, error)
 	// List is one page of the user's tasks, of status when it is set, newest first.

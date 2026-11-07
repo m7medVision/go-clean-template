@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo"
@@ -27,8 +28,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
+// Get reads the {{.Name.Words}} with {{.Name.Lower}}ID. An ID that is not a UUID names no {{.Name.Words}}, so it is
+// entity.Err{{.Name.Go}}NotFound, as it is on the write side, not the error {{.Name.Plural.Snake}}.id would raise.
 func (r *Repo) Get(ctx context.Context, {{.Name.Lower}}ID string) (entity.{{.Name.Go}}, error) {
-	row, err := r.q(ctx).Get{{.Name.Go}}(ctx, {{.Name.Lower}}ID)
+	id, err := uuid.Parse({{.Name.Lower}}ID)
+	if err != nil {
+		return entity.{{.Name.Go}}{}, entity.Err{{.Name.Go}}NotFound
+	}
+
+	row, err := r.q(ctx).Get{{.Name.Go}}(ctx, id.String())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.{{.Name.Go}}{}, entity.Err{{.Name.Go}}NotFound

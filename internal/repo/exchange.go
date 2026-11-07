@@ -13,8 +13,8 @@ import (
 type (
 	// ExchangeReadModel reads exchange_history, which only the exchange projector writes. History is
 	// one page of the user's conversions, newest first, and their total count. Conversion of a
-	// missing conversion is entity.ErrConversionNotFound; whether the caller may read it is
-	// entity.Conversion's rule.
+	// missing conversion, or of an ID that is not a UUID, is entity.ErrConversionNotFound; whether
+	// the caller may read it is entity.Conversion's rule.
 	ExchangeReadModel interface {
 		History(ctx context.Context, userID string, page entity.Page) (entity.List[entity.Conversion], error)
 		Conversion(ctx context.Context, conversionID string) (entity.Conversion, error)

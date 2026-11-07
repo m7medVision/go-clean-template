@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -28,8 +29,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
+// Get reads the task with taskID. An ID that is not a UUID names no task, so it is
+// entity.ErrTaskNotFound, as it is on the write side, not the error tasks.id would raise.
 func (r *Repo) Get(ctx context.Context, taskID string) (entity.Task, error) {
-	task, err := r.q(ctx).GetTask(ctx, taskID)
+	id, err := uuid.Parse(taskID)
+	if err != nil {
+		return entity.Task{}, entity.ErrTaskNotFound
+	}
+
+	task, err := r.q(ctx).GetTask(ctx, id.String())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Task{}, entity.ErrTaskNotFound

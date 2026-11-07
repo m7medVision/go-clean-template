@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -28,8 +29,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
+// Conversion reads the conversion with conversionID. An ID that is not a UUID names no conversion,
+// so it is entity.ErrConversionNotFound, not the error exchange_history.conversion_id would raise.
 func (r *Repo) Conversion(ctx context.Context, conversionID string) (entity.Conversion, error) {
-	row, err := r.q(ctx).GetConversion(ctx, &conversionID)
+	id, err := uuid.Parse(conversionID)
+	if err != nil {
+		return entity.Conversion{}, entity.ErrConversionNotFound
+	}
+
+	row, err := r.q(ctx).GetConversion(ctx, new(id.String()))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Conversion{}, entity.ErrConversionNotFound

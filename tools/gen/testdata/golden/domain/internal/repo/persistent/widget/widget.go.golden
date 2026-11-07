@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -27,8 +28,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
+// Get reads the widget with widgetID. An ID that is not a UUID names no widget, so it is
+// entity.ErrWidgetNotFound, as it is on the write side, not the error widgets.id would raise.
 func (r *Repo) Get(ctx context.Context, widgetID string) (entity.Widget, error) {
-	row, err := r.q(ctx).GetWidget(ctx, widgetID)
+	id, err := uuid.Parse(widgetID)
+	if err != nil {
+		return entity.Widget{}, entity.ErrWidgetNotFound
+	}
+
+	row, err := r.q(ctx).GetWidget(ctx, id.String())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Widget{}, entity.ErrWidgetNotFound

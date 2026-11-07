@@ -9,8 +9,8 @@ import (
 //go:generate mockgen -source=user.go -destination=repomock/user.go -package=repomock
 
 type (
-	// UserReadModel reads the users table, which only the user projector writes. A missing user is
-	// entity.ErrUserNotFound.
+	// UserReadModel reads the users table, which only the user projector writes. A missing user, or
+	// an ID that is not a UUID, is entity.ErrUserNotFound.
 	UserReadModel interface {
 		ByID(ctx context.Context, id string) (entity.User, error)
 		ByEmail(ctx context.Context, email string) (entity.User, error)

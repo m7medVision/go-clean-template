@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
@@ -28,8 +29,15 @@ func (r *Repo) q(ctx context.Context) *queries.Queries {
 	return queries.New(r.pg.Executor(ctx))
 }
 
+// ByID reads the user with id. An ID that is not a UUID names no user, so it is
+// entity.ErrUserNotFound, not the error users.id would raise.
 func (r *Repo) ByID(ctx context.Context, id string) (entity.User, error) {
-	user, err := r.q(ctx).GetUserByID(ctx, id)
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return entity.User{}, entity.ErrUserNotFound
+	}
+
+	user, err := r.q(ctx).GetUserByID(ctx, parsed.String())
 	if err != nil {
 		return entity.User{}, mapGetError(err, "ByID - r.q(ctx).GetUserByID")
 	}
