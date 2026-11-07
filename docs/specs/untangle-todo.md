@@ -235,13 +235,13 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G4. **Depends on:** 29. **Size:** L
 
 ### 31. The generator asks the app instead of copying it  (O)
-- [ ] Regenerator list only in the Makefile, undo from `git status`; reserved packages from `go list`;
+- [x] Regenerator list only in the Makefile, undo from `git status`; reserved packages from `go list`;
       transport paths in one place; routes read from `docs/openapi/v1.json`.
 
 **Verify:** G4. **Depends on:** 30. **Size:** M
 
 ### 32. Generator special cases  (O)
-- [ ] Swallowed errors returned; porcelain rename/quoting fixed; `AfterLastStmt` exactly once;
+- [x] Swallowed errors returned; porcelain rename/quoting fixed; `AfterLastStmt` one run of matches;
       test-only exports and duplicated helpers gone; per-domain exceptions that uniform domains remove gone.
 
 **Verify:** G4. **Depends on:** 31. **Size:** M
