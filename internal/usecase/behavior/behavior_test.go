@@ -25,7 +25,7 @@ var (
 )
 
 type WriteThing struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[entity.Written]
 
 	UserID string
 	Title  string
@@ -78,7 +78,7 @@ func (f *fakeCheckpoints) catchUp(p int64) {
 	f.at = p
 }
 
-func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[WriteThing, cqrs.Written], cmd WriteThing) (cqrs.Written, error) {
+func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[WriteThing, entity.Written], cmd WriteThing) (entity.Written, error) {
 	t.Helper()
 
 	cmds := cqrs.NewCommands(steps...)
@@ -87,9 +87,9 @@ func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[WriteThing, c
 	return cqrs.SendCommand(context.Background(), cmds, cmd)
 }
 
-func writes(position int64) cqrs.HandlerFunc[WriteThing, cqrs.Written] {
-	return func(context.Context, WriteThing) (cqrs.Written, error) {
-		return cqrs.Written{ID: "t1", Position: position}, nil
+func writes(position int64) cqrs.HandlerFunc[WriteThing, entity.Written] {
+	return func(context.Context, WriteThing) (entity.Written, error) {
+		return entity.Written{ID: "t1", Position: position}, nil
 	}
 }
 
@@ -147,13 +147,13 @@ func TestRetryRunsTheHandlerAgainOnAConflict(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	h := func(context.Context, WriteThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (entity.Written, error) {
 		calls++
 		if calls < 3 {
-			return cqrs.Written{}, entity.ErrConcurrencyConflict
+			return entity.Written{}, entity.ErrConcurrencyConflict
 		}
 
-		return cqrs.Written{ID: "t1"}, nil
+		return entity.Written{ID: "t1"}, nil
 	}
 
 	written, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, WriteThing{Title: "a"})
@@ -167,10 +167,10 @@ func TestRetryGivesUpAfterItsAttempts(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	h := func(context.Context, WriteThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (entity.Written, error) {
 		calls++
 
-		return cqrs.Written{}, entity.ErrConcurrencyConflict
+		return entity.Written{}, entity.ErrConcurrencyConflict
 	}
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, WriteThing{Title: "a"})
@@ -183,10 +183,10 @@ func TestRetryLeavesOtherFailuresAlone(t *testing.T) {
 	t.Parallel()
 
 	calls := 0
-	h := func(context.Context, WriteThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (entity.Written, error) {
 		calls++
 
-		return cqrs.Written{}, entity.ErrTaskNotFound
+		return entity.Written{}, entity.ErrTaskNotFound
 	}
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Retry(3)}, h, WriteThing{Title: "a"})
@@ -217,10 +217,10 @@ func TestValidateStopsAnInvalidMessage(t *testing.T) {
 	t.Parallel()
 
 	called := false
-	h := func(context.Context, WriteThing) (cqrs.Written, error) {
+	h := func(context.Context, WriteThing) (entity.Written, error) {
 		called = true
 
-		return cqrs.Written{}, nil
+		return entity.Written{}, nil
 	}
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Validate()}, h, WriteThing{})
@@ -234,10 +234,10 @@ func TestStampPutsTheActorAndTheMessageInTheMetadata(t *testing.T) {
 
 	var md entity.Metadata
 
-	h := func(ctx context.Context, _ WriteThing) (cqrs.Written, error) {
+	h := func(ctx context.Context, _ WriteThing) (entity.Written, error) {
 		md = entity.MetadataFromContext(ctx)
 
-		return cqrs.Written{}, nil
+		return entity.Written{}, nil
 	}
 
 	_, err := sendWrite(t, []cqrs.Step{behavior.Stamp()}, h, WriteThing{UserID: "u1", Title: "a"})
@@ -248,7 +248,7 @@ func TestStampPutsTheActorAndTheMessageInTheMetadata(t *testing.T) {
 
 // signedIn is a command result that carries a token beside the write, as a sign-in does.
 type signedIn struct {
-	cqrs.Written
+	entity.Written
 
 	Token string
 }

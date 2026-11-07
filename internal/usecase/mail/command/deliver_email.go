@@ -15,7 +15,7 @@ import (
 // delivery is the side effect. A render error will not go away on a retry; the caller tells it apart
 // with errors.Is(err, entity.ErrUnknownEmail) for an email no template exists for.
 type DeliverEmail struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[struct{}]
 
 	Email entity.Email
 }
@@ -27,15 +27,15 @@ type DeliverEmailHandler struct {
 }
 
 // Handle -.
-func (h DeliverEmailHandler) Handle(ctx context.Context, cmd DeliverEmail) (cqrs.Written, error) {
+func (h DeliverEmailHandler) Handle(ctx context.Context, cmd DeliverEmail) (struct{}, error) {
 	msg, err := h.Renderer.Render(ctx, cmd.Email)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("DeliverEmail - h.Renderer.Render: %w", err)
+		return struct{}{}, fmt.Errorf("DeliverEmail - h.Renderer.Render: %w", err)
 	}
 
 	if err = h.Mailer.Send(ctx, msg); err != nil {
-		return cqrs.Written{}, fmt.Errorf("DeliverEmail - h.Mailer.Send: %w", err)
+		return struct{}{}, fmt.Errorf("DeliverEmail - h.Mailer.Send: %w", err)
 	}
 
-	return cqrs.Written{}, nil
+	return struct{}{}, nil
 }

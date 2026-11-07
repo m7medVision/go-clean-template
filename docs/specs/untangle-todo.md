@@ -50,7 +50,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** none. **Size:** mechanical sweep.
 
 ### 6. `Written` leaves `pkg/cqrs`; the wait step reads a named interface  (D)
-- [ ] `Written` (ID, position) lives in the use-case layer; `Wait` uses a named interface, not an
+- [x] `Written` (ID, position) lives in `entity` beside the events; `Wait` uses a named interface, not an
       inline duck type; `DeliverEmail` returns no `Written`; `mail.Register` has the common shape.
 
 **Verify:** G1. **Depends on:** 5. **Size:** M

@@ -14,7 +14,7 @@ import (
 // UpdateTask replaces the title and description of UserID's task. Another user's task is
 // entity.ErrTaskForbidden.
 type UpdateTask struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[entity.Written]
 
 	UserID      string
 	TaskID      string
@@ -32,13 +32,13 @@ type UpdateTaskHandler struct {
 }
 
 // Handle -.
-func (h UpdateTaskHandler) Handle(ctx context.Context, cmd UpdateTask) (cqrs.Written, error) {
+func (h UpdateTaskHandler) Handle(ctx context.Context, cmd UpdateTask) (entity.Written, error) {
 	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, entity.TaskStreamID(cmd.TaskID), &entity.TaskAggregate{},
 		entity.ErrTaskNotFound, func(t *entity.TaskAggregate) error {
 			return t.Update(cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now))
 		})
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("UpdateTask: %w", err)
+		return entity.Written{}, fmt.Errorf("UpdateTask: %w", err)
 	}
 
 	return written, nil

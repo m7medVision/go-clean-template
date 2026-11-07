@@ -25,11 +25,11 @@ type fakeMail struct {
 
 func (f *fakeMail) commands() *cqrs.Commands {
 	cmds := cqrs.NewCommands()
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeliverEmail, cqrs.Written](
-		func(_ context.Context, c command.DeliverEmail) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeliverEmail, struct{}](
+		func(_ context.Context, c command.DeliverEmail) (struct{}, error) {
 			f.delivered = append(f.delivered, c.Email)
 
-			return cqrs.Written{}, f.err
+			return struct{}{}, f.err
 		}))
 
 	return cmds

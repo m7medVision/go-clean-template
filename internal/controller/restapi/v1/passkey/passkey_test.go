@@ -48,27 +48,27 @@ func (f *fakePasskey) buses() cqrs.Buses {
 
 			return started()
 		}))
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyRegistration, cqrs.Written](
-		func(_ context.Context, c command.FinishPasskeyRegistration) (cqrs.Written, error) {
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishPasskeyRegistration, entity.Written](
+		func(_ context.Context, c command.FinishPasskeyRegistration) (entity.Written, error) {
 			f.gotToken, f.gotName, f.gotBody = c.Token, c.Name, c.Body
 
-			return cqrs.Written{ID: f.stored.ID.String()}, f.err
+			return entity.Written{ID: f.stored.ID.String()}, f.err
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetPasskey, entity.Passkey](
 		func(context.Context, query.GetPasskey) (entity.Passkey, error) { return f.stored, f.err }))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.ListPasskeys, []entity.Passkey](
 		func(context.Context, query.ListPasskeys) ([]entity.Passkey, error) { return f.passkeys, f.err }))
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.RenamePasskey, cqrs.Written](
-		func(_ context.Context, c command.RenamePasskey) (cqrs.Written, error) {
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.RenamePasskey, entity.Written](
+		func(_ context.Context, c command.RenamePasskey) (entity.Written, error) {
 			f.gotUser, f.gotID, f.gotName = c.UserID, c.ID, c.Name
 
-			return cqrs.Written{ID: c.ID}, f.err
+			return entity.Written{ID: c.ID}, f.err
 		}))
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.DeletePasskey, cqrs.Written](
-		func(_ context.Context, c command.DeletePasskey) (cqrs.Written, error) {
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.DeletePasskey, entity.Written](
+		func(_ context.Context, c command.DeletePasskey) (entity.Written, error) {
 			f.gotUser, f.gotID = c.UserID, c.ID
 
-			return cqrs.Written{ID: c.ID}, f.err
+			return entity.Written{ID: c.ID}, f.err
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginPasskeyLogin, ceremony.Started](
 		func(context.Context, query.BeginPasskeyLogin) (ceremony.Started, error) { return started() }))

@@ -23,38 +23,38 @@ type fakeTask struct {
 }
 
 // write runs change on stored, as a command handler would, unless err is set.
-func (f *fakeTask) write(change func(t *entity.Task)) (cqrs.Written, error) {
+func (f *fakeTask) write(change func(t *entity.Task)) (entity.Written, error) {
 	f.called = true
 	if f.err != nil {
-		return cqrs.Written{}, f.err
+		return entity.Written{}, f.err
 	}
 
 	change(&f.stored)
 
-	return cqrs.Written{ID: f.stored.ID}, nil
+	return entity.Written{ID: f.stored.ID}, nil
 }
 
 func (f *fakeTask) buses() cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(), cqrs.NewQueries()
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.CreateTask, cqrs.Written](
-		func(_ context.Context, c command.CreateTask) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.CreateTask, entity.Written](
+		func(_ context.Context, c command.CreateTask) (entity.Written, error) {
 			return f.write(func(t *entity.Task) {
 				*t = entity.Task{
 					ID: "task-1", UserID: c.UserID, Title: c.Title, Description: c.Description, Status: entity.TaskStatusTodo,
 				}
 			})
 		}))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, cqrs.Written](
-		func(_ context.Context, c command.UpdateTask) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, entity.Written](
+		func(_ context.Context, c command.UpdateTask) (entity.Written, error) {
 			return f.write(func(t *entity.Task) { t.Title, t.Description = c.Title, c.Description })
 		}))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.TransitionTask, cqrs.Written](
-		func(_ context.Context, c command.TransitionTask) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.TransitionTask, entity.Written](
+		func(_ context.Context, c command.TransitionTask) (entity.Written, error) {
 			return f.write(func(t *entity.Task) { t.Status = c.Status })
 		}))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeleteTask, cqrs.Written](
-		func(context.Context, command.DeleteTask) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeleteTask, entity.Written](
+		func(context.Context, command.DeleteTask) (entity.Written, error) {
 			return f.write(func(*entity.Task) {})
 		}))
 

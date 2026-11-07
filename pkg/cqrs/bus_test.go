@@ -12,8 +12,14 @@ import (
 
 var errHandler = errors.New("handler failed")
 
+// written stands in for the app's result of a write.
+type written struct {
+	ID       string
+	Position int64
+}
+
 type CreateThing struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[written]
 
 	Title string
 }
@@ -37,16 +43,16 @@ func TestSendCommandReturnsTheHandlersResult(t *testing.T) {
 	t.Parallel()
 
 	cmds := cqrs.NewCommands()
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, cqrs.Written](
-		func(_ context.Context, cmd CreateThing) (cqrs.Written, error) {
-			return cqrs.Written{ID: "thing-" + cmd.Title, Position: 7}, nil
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, written](
+		func(_ context.Context, cmd CreateThing) (written, error) {
+			return written{ID: "thing-" + cmd.Title, Position: 7}, nil
 		},
 	))
 
-	written, err := cqrs.SendCommand(context.Background(), cmds, CreateThing{Title: "a"})
+	got, err := cqrs.SendCommand(context.Background(), cmds, CreateThing{Title: "a"})
 
 	require.NoError(t, err)
-	assert.Equal(t, cqrs.Written{ID: "thing-a", Position: 7}, written)
+	assert.Equal(t, written{ID: "thing-a", Position: 7}, got)
 }
 
 func TestSendQueryReturnsTheHandlersResult(t *testing.T) {
@@ -90,8 +96,8 @@ func TestASecondHandlerForOneTypePanics(t *testing.T) {
 	t.Parallel()
 
 	cmds := cqrs.NewCommands()
-	h := cqrs.HandlerFunc[CreateThing, cqrs.Written](func(context.Context, CreateThing) (cqrs.Written, error) {
-		return cqrs.Written{}, nil
+	h := cqrs.HandlerFunc[CreateThing, written](func(context.Context, CreateThing) (written, error) {
+		return written{}, nil
 	})
 	cqrs.HandleCommand(cmds, h)
 
@@ -145,11 +151,11 @@ func TestStepsRunInTheOrderGivenAroundTheHandler(t *testing.T) {
 	}
 
 	cmds := cqrs.NewCommands(record("outer"), record("inner"))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, cqrs.Written](
-		func(context.Context, CreateThing) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, written](
+		func(context.Context, CreateThing) (written, error) {
 			trail = append(trail, "handler")
 
-			return cqrs.Written{}, nil
+			return written{}, nil
 		},
 	))
 
@@ -171,8 +177,8 @@ func TestAStepSeesTheMessage(t *testing.T) {
 	}
 
 	cmds := cqrs.NewCommands(step)
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, cqrs.Written](
-		func(context.Context, CreateThing) (cqrs.Written, error) { return cqrs.Written{}, nil },
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, written](
+		func(context.Context, CreateThing) (written, error) { return written{}, nil },
 	))
 
 	qs := cqrs.NewQueries(step)
@@ -199,11 +205,11 @@ func TestAStepCanStopTheMessage(t *testing.T) {
 	deny := func(context.Context, cqrs.Message, cqrs.Next) (any, error) { return nil, errHandler }
 
 	cmds := cqrs.NewCommands(deny)
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, cqrs.Written](
-		func(context.Context, CreateThing) (cqrs.Written, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, written](
+		func(context.Context, CreateThing) (written, error) {
 			called = true
 
-			return cqrs.Written{}, nil
+			return written{}, nil
 		},
 	))
 

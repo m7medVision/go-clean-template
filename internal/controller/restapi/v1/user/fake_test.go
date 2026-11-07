@@ -24,9 +24,9 @@ type fakeUser struct {
 func (f *fakeUser) buses() cqrs.Buses {
 	b := resttest.NewBuses()
 
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.RegisterUser, cqrs.Written](
-		func(context.Context, command.RegisterUser) (cqrs.Written, error) {
-			return cqrs.Written{ID: f.registered.ID}, f.registerErr
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.RegisterUser, entity.Written](
+		func(context.Context, command.RegisterUser) (entity.Written, error) {
+			return entity.Written{ID: f.registered.ID}, f.registerErr
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.LogIn, string](
 		func(context.Context, query.LogIn) (string, error) { return f.token, f.loginErr }))

@@ -105,7 +105,7 @@ func registerHandlers(
 		Passkeys: persistPasskeyRepo.NewReadModel(pg), Guard: persistPasskeyRepo.NewGuard(pg), Tx: pg, Tokens: tokens,
 	})
 	oidc.Register(cmds, qs, oidc.Deps{SSO: signIn, Store: store, Tokens: tokens})
-	mail.Register(cmds, mailDeps)
+	mail.Register(cmds, qs, mailDeps)
 
 	return nil
 }

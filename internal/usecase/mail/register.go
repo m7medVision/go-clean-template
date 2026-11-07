@@ -13,7 +13,7 @@ type Deps struct {
 	Mailer   repo.Mailer
 }
 
-// Register registers the mail command handler.
-func Register(cmds *cqrs.Commands, d Deps) {
+// Register registers the mail command handler; mail answers no queries.
+func Register(cmds *cqrs.Commands, _ *cqrs.Queries, d Deps) {
 	cqrs.HandleCommand(cmds, command.DeliverEmailHandler{Renderer: d.Renderer, Mailer: d.Mailer})
 }

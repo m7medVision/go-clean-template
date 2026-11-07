@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
 	"github.com/m7medvision/go-clean-template/pkg/smtp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -47,10 +46,9 @@ func TestDeliverEmailSendsTheRenderedMessage(t *testing.T) {
 	renderer.EXPECT().Render(gomock.Any(), note()).Return(rendered(), nil)
 	mailer.EXPECT().Send(gomock.Any(), rendered()).Return(nil)
 
-	written, err := h.Handle(context.Background(), command.DeliverEmail{Email: note()})
+	_, err := h.Handle(context.Background(), command.DeliverEmail{Email: note()})
 
 	require.NoError(t, err)
-	assert.Zero(t, written.Position, "delivering writes nothing to the store, so nothing waits for it")
 }
 
 func TestARenderErrorSendsNothing(t *testing.T) {

@@ -31,7 +31,7 @@ type FinishPasskeyLogin struct {
 
 // SignedIn is a sign-in's result: the passkey it recorded the use of, and the auth token.
 type SignedIn struct {
-	cqrs.Written
+	entity.Written
 
 	Token string
 }
@@ -103,13 +103,13 @@ func (h *FinishPasskeyLoginHandler) lookup(ctx context.Context, used **entity.Pa
 
 // record burns the login's challenge and records the passkey's use, in one transaction.
 func (h *FinishPasskeyLoginHandler) record(ctx context.Context, login *ceremony.Login, used *entity.PasskeyAggregate) (
-	cqrs.Written, error,
+	entity.Written, error,
 ) {
 	if used == nil {
-		return cqrs.Written{}, fmt.Errorf("FinishPasskeyLogin - no passkey: %w", entity.ErrPasskeyLoginInvalid)
+		return entity.Written{}, fmt.Errorf("FinishPasskeyLogin - no passkey: %w", entity.ErrPasskeyLoginInvalid)
 	}
 
-	var written cqrs.Written
+	var written entity.Written
 
 	err := h.Tx.InTx(ctx, func(ctx context.Context) error {
 		if err := h.Guard.DeleteExpiredChallenges(ctx); err != nil {
@@ -131,7 +131,7 @@ func (h *FinishPasskeyLoginHandler) record(ctx context.Context, login *ceremony.
 		return err
 	})
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("FinishPasskeyLogin: %w", err)
+		return entity.Written{}, fmt.Errorf("FinishPasskeyLogin: %w", err)
 	}
 
 	return written, nil

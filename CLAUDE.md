@@ -127,7 +127,7 @@ Decide by asking what the code knows about:
 | --- | --- | --- |
 | nothing but the domain | `internal/entity/<name>.go` | struct + methods (`TaskStatus.CanMoveTo`, `entity.NewConversion`) |
 | a state change and its rules | `internal/entity/<name>_aggregate.go`, events in `<name>_events.go` | aggregate method that checks the rule and calls `entity.Record`; every event type listed in `EventTypes()` |
-| one change a caller asks for | `internal/usecase/<domain>/command/<name>.go` | command type + handler returning `cqrs.Written`, one line in `register.go` |
+| one change a caller asks for | `internal/usecase/<domain>/command/<name>.go` | command type + handler returning `entity.Written`, one line in `register.go` |
 | one thing a caller reads | `internal/usecase/<domain>/query/<name>.go` | query type + handler reading a read model, one line in `register.go` |
 | a side effect that follows an event | `internal/usecase/<domain>/event/<name>.go` | `repo.Subscriber` (`Name`, `Handle`), listed in `subscribers` (`internal/app/buses.go`) |
 | a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
@@ -219,7 +219,7 @@ shape from a neighbouring handler in the same transport.
    `cqrs.SendQuery(ctx, r.qs, query.GetTask{...})` (the message's embedded `cqrs.Command[R]` or
    `cqrs.Query[R]` gives the result type), with the Huma handler's `ctx` on REST
    (do not build a second context) and the handler's `ctx` everywhere else. Build the message from the
-   DTO's fields; never put a DTO in it. A command answers only `cqrs.Written` (or a result embedding
+   DTO's fields; never put a DTO in it. A command answers only `entity.Written` (or a result embedding
    it, such as a sign-in's token): a transport that returns the resource sends a query for it next.
    `context.Context` is the first parameter of every method that crosses a layer.
 5. **Map the error** with the transport's one function: `apierr.Problem`, `rpcerr.Status` or
@@ -489,9 +489,9 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
      `<domain>_aggregate.go` a behavior method that checks the rule and calls `entity.Record`, and
      a case in its `Apply`. Test it in `internal/entity`.
    - Add `internal/usecase/<domain>/command/<name>.go`: the command type (embedding
-     `cqrs.Command[cqrs.Written]`, with `ActorID()` when it acts for a user, `AdminOnly()` when only an admin may send it, `Validate()` for
+     `cqrs.Command[entity.Written]`, with `ActorID()` when it acts for a user, `AdminOnly()` when only an admin may send it, `Validate()` for
      domain checks) and its handler, which goes through `aggregate.Create` or `aggregate.Change` and
-     returns `cqrs.Written`. Test it beside it against `internal/repo/memstore`.
+     returns `entity.Written`. Test it beside it against `internal/repo/memstore`.
    - Handle the new event in the domain's projector (`internal/repo/persistent/<domain>/projector.go`),
      with any new SQL in `queries/<domain>.sql` and `make sqlc`; test it against the fake `Querier`.
 2. **A query:** add `internal/usecase/<domain>/query/<name>.go`: the query type (embedding

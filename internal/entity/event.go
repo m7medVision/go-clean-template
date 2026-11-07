@@ -61,3 +61,24 @@ func MetadataFromContext(ctx context.Context) Metadata {
 
 	return md
 }
+
+// Written is what a command that writes answers: the aggregate it wrote and the store position of
+// the last event it appended. A command never returns resource data; read that with a query. A zero
+// Position means the command appended nothing, as when a sign-in finds the account it signs in to.
+type Written struct {
+	ID       string
+	Position int64
+}
+
+// Write is a command result that carries a Written: a Written itself, or a result that embeds one,
+// such as a sign-in that also carries a token. The command bus's wait step waits for its position.
+type Write interface {
+	WrittenAt() int64
+}
+
+var _ Write = Written{}
+
+// WrittenAt is the position of the write.
+func (w Written) WrittenAt() int64 {
+	return w.Position
+}

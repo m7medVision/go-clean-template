@@ -17,7 +17,7 @@ import (
 // RegisterUser registers a user with a password. An email or username already taken is
 // entity.ErrUserAlreadyExists. The welcome email follows from the UserRegistered event.
 type RegisterUser struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[entity.Written]
 
 	Username string
 	Email    string
@@ -31,10 +31,10 @@ type RegisterUserHandler struct {
 }
 
 // Handle -.
-func (h RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUser) (cqrs.Written, error) {
+func (h RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUser) (entity.Written, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(cmd.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("RegisterUser - bcrypt.GenerateFromPassword: %w", err)
+		return entity.Written{}, fmt.Errorf("RegisterUser - bcrypt.GenerateFromPassword: %w", err)
 	}
 
 	id := uuid.NewString()
@@ -42,7 +42,7 @@ func (h RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUser) (cqrs
 
 	written, err := aggregate.Create(ctx, h.Store, id, user, claims...)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("RegisterUser - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("RegisterUser - aggregate.Create: %w", err)
 	}
 
 	return written, nil

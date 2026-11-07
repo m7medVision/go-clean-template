@@ -63,8 +63,10 @@ The steps, outermost first:
 One file per command, in `internal/usecase/<domain>/command/`. The file holds the command type and
 its handler.
 
-The handler returns `cqrs.Written`: the aggregate's ID and the position of its last event. A
-sign-in embeds it beside the auth token (`SignedIn`). A transport that answers with the resource
+The handler returns `entity.Written`: the aggregate's ID and the position of its last event (zero
+when it appended nothing). A sign-in embeds it beside the auth token (`SignedIn`); the wait step finds
+it in either through the `entity.Write` interface. A command that writes no events, such as
+`DeliverEmail`, answers `struct{}`, and nothing waits for it. A transport that answers with the resource
 sends a query after the command: REST `POST /v1/tasks` sends `CreateTask`, then `GetTask` with the
 returned ID.
 
@@ -193,8 +195,8 @@ database with a running worker.
 ## Adding to it
 
 - **A command.** Add `internal/usecase/<domain>/command/<name>.go`, holding the type, which embeds
-  `cqrs.Command[cqrs.Written]` (and has `ActorID()` when it acts for a user), and a handler returning
-  `cqrs.Written`.
+  `cqrs.Command[entity.Written]` (and has `ActorID()` when it acts for a user), and a handler returning
+  `entity.Written`.
   Put its test beside it, against `internal/repo/memstore`. Add one line to the domain's
   `register.go`. Then send it from each transport.
 - **A query.** Add `internal/usecase/<domain>/query/<name>.go` and a test against

@@ -34,7 +34,7 @@ type FinishOIDCLogin struct {
 // SignedIn is a sign-in's result: the user, the position of their creation when this sign-in created
 // them, and the auth token.
 type SignedIn struct {
-	cqrs.Written
+	entity.Written
 
 	Token string
 }
@@ -68,16 +68,16 @@ func (h FinishOIDCLoginHandler) Handle(ctx context.Context, cmd FinishOIDCLogin)
 }
 
 // user returns the user the identity's claim names, or creates one.
-func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *sso.Identity) (cqrs.Written, error) {
+func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *sso.Identity) (entity.Written, error) {
 	claim := entity.OIDCIdentity(identity.Issuer, identity.Subject)
 
 	owner, err := h.Store.ClaimOwner(ctx, entity.ClaimOIDCIdentity, claim)
 	if err == nil {
-		return cqrs.Written{ID: owner}, nil
+		return entity.Written{ID: owner}, nil
 	}
 
 	if !errors.Is(err, entity.ErrClaimNotFound) {
-		return cqrs.Written{}, fmt.Errorf("h.Store.ClaimOwner: %w", err)
+		return entity.Written{}, fmt.Errorf("h.Store.ClaimOwner: %w", err)
 	}
 
 	id := uuid.NewString()
@@ -89,10 +89,10 @@ func (h FinishOIDCLoginHandler) user(ctx context.Context, identity *sso.Identity
 		// A concurrent first sign-in of the same identity created its user first.
 		owner, err = h.Store.ClaimOwner(ctx, entity.ClaimOIDCIdentity, claim)
 		if err != nil {
-			return cqrs.Written{}, fmt.Errorf("h.Store.ClaimOwner after a race: %w", err)
+			return entity.Written{}, fmt.Errorf("h.Store.ClaimOwner after a race: %w", err)
 		}
 
-		return cqrs.Written{ID: owner}, nil
+		return entity.Written{ID: owner}, nil
 	}
 
 	return written, err

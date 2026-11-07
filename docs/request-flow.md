@@ -154,7 +154,7 @@ if err != nil {
 return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO
 ```
 
-- **A command returns only what identifies the write.** `cqrs.Written` holds the conversion's ID and
+- **A command returns only what identifies the write.** `entity.Written` holds the conversion's ID and
   the event store position of its event, never the conversion itself. The body comes from a query,
   so every response a client sees was read from the read model, just as its next request will be.
 - **`ctx` is passed down unchanged.** It is Huma's request context: it carries the trace span, and
@@ -194,15 +194,15 @@ Tracing, logging and metrics are steps, so no handler carries them, and none can
 holds the command and its handler, and nothing else:
 
 ```go
-func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (cqrs.Written, error) {
+func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (entity.Written, error) {
 	conversion, err := entity.NewConversion(cmd.From, cmd.To, cmd.Amount)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
 	}
 
 	rate, date, err := h.Rates.Rate(ctx, conversion.From, conversion.To)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
 	}
 
 	conversion.ApplyRate(rate, date)
@@ -212,7 +212,7 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
 	written, err := aggregate.Create(ctx, h.Store, id,
 		entity.NewConversionAggregate(id, cmd.UserID, &conversion, aggregate.Now(h.Now)))
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
 	}
 
 	return written, nil

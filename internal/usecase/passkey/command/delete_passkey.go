@@ -15,7 +15,7 @@ import (
 // passkey is allowed, since every account still has its password. Any other ID, including another
 // user's passkey, is entity.ErrPasskeyNotFound.
 type DeletePasskey struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[entity.Written]
 
 	UserID string
 	ID     string
@@ -31,10 +31,10 @@ type DeletePasskeyHandler struct {
 }
 
 // Handle -.
-func (h DeletePasskeyHandler) Handle(ctx context.Context, cmd DeletePasskey) (cqrs.Written, error) {
+func (h DeletePasskeyHandler) Handle(ctx context.Context, cmd DeletePasskey) (entity.Written, error) {
 	var id entity.PasskeyID
 	if err := id.UnmarshalText([]byte(cmd.ID)); err != nil {
-		return cqrs.Written{}, fmt.Errorf("DeletePasskey: %w", err)
+		return entity.Written{}, fmt.Errorf("DeletePasskey: %w", err)
 	}
 
 	written, err := aggregate.Change(ctx, h.Store, id.String(), entity.PasskeyStreamID(id), &entity.PasskeyAggregate{},
@@ -42,7 +42,7 @@ func (h DeletePasskeyHandler) Handle(ctx context.Context, cmd DeletePasskey) (cq
 			return p.Delete(cmd.UserID, aggregate.Now(h.Now))
 		})
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("DeletePasskey: %w", err)
+		return entity.Written{}, fmt.Errorf("DeletePasskey: %w", err)
 	}
 
 	return written, nil

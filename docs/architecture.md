@@ -75,7 +75,7 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
    `ListAllTasks.AdminOnly`, enforced by the buses' authorize step for every transport.
 10. **State changes only through aggregates recording events.** A command handler loads an
     aggregate, calls its behavior method and saves what it recorded. A command returns what
-    identifies the write (`cqrs.Written`), never resource data; a query reads only read models; and
+    identifies the write (`entity.Written`), never resource data; a query reads only read models; and
     only a read model's projector writes its tables.
 11. **Only controllers know transport errors.** Lower layers return sentinels from
     `internal/entity/errors.go` or errors wrapped with their layer path

@@ -22,8 +22,8 @@ import (
 // success).
 func commandsWith(step cqrs.Step, err error) *cqrs.Commands {
 	cmds := cqrs.NewCommands(step)
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, cqrs.Written](
-		func(context.Context, CreateThing) (cqrs.Written, error) { return cqrs.Written{}, err },
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[CreateThing, written](
+		func(context.Context, CreateThing) (written, error) { return written{}, err },
 	))
 
 	return cmds

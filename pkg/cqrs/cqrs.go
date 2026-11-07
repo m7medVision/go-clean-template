@@ -22,7 +22,7 @@ var (
 // names the message after the type:
 //
 //	type CreateTask struct {
-//		cqrs.Command[cqrs.Written]
+//		cqrs.Command[entity.Written]
 //
 //		Title string
 //	}
@@ -56,19 +56,6 @@ type HandlerFunc[M, R any] func(ctx context.Context, msg M) (R, error)
 // Handle calls f.
 func (f HandlerFunc[M, R]) Handle(ctx context.Context, msg M) (R, error) {
 	return f(ctx, msg)
-}
-
-// Written is what a command handler returns: the aggregate it wrote and the store position of the
-// last event it appended. A command never returns resource data; read that with a query.
-type Written struct {
-	ID       string
-	Position int64
-}
-
-// WrittenAt is the position of the write. A result that embeds Written, such as a sign-in that also
-// carries a token, has it too, so the pipeline can tell what it wrote.
-func (w Written) WrittenAt() int64 {
-	return w.Position
 }
 
 // Kind names the bus a message travels on.

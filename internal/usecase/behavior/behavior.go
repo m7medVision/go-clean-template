@@ -49,7 +49,7 @@ func Stamp() cqrs.Step {
 }
 
 // Wait holds a command's result until every projector in projectors has handled the event at its
-// position (cqrs.Written, alone or embedded), checking every tick, so a read sent straight after the
+// position (entity.Written, alone or embedded), checking every tick, so a read sent straight after the
 // command sees the write.
 // Past timeout it returns entity.ErrReadModelBehind: the write itself is committed.
 func Wait(checkpoints repo.ProjectionCheckpoints, projectors []string, timeout, tick time.Duration) cqrs.Step {
@@ -59,7 +59,7 @@ func Wait(checkpoints repo.ProjectionCheckpoints, projectors []string, timeout, 
 			return out, err
 		}
 
-		written, ok := out.(interface{ WrittenAt() int64 })
+		written, ok := out.(entity.Write)
 		if !ok || written.WrittenAt() == 0 {
 			return out, nil
 		}

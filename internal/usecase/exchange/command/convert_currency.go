@@ -18,7 +18,7 @@ import (
 // records it in UserID's history. An invalid request is entity.ErrInvalidConversion, and a currency
 // the rate provider does not know entity.ErrUnsupportedCurrency.
 type ConvertCurrency struct {
-	cqrs.Command[cqrs.Written]
+	cqrs.Command[entity.Written]
 
 	UserID string
 	From   string
@@ -37,15 +37,15 @@ type ConvertCurrencyHandler struct {
 }
 
 // Handle -.
-func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (cqrs.Written, error) {
+func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency) (entity.Written, error) {
 	conversion, err := entity.NewConversion(cmd.From, cmd.To, cmd.Amount)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - entity.NewConversion: %w", err)
 	}
 
 	rate, date, err := h.Rates.Rate(ctx, conversion.From, conversion.To)
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - h.Rates.Rate: %w", err)
 	}
 
 	conversion.ApplyRate(rate, date)
@@ -55,7 +55,7 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
 	written, err := aggregate.Create(ctx, h.Store, id,
 		entity.NewConversionAggregate(id, cmd.UserID, &conversion, aggregate.Now(h.Now)))
 	if err != nil {
-		return cqrs.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
 	}
 
 	return written, nil

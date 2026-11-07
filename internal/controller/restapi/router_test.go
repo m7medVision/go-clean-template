@@ -38,9 +38,9 @@ func userBuses(registered *entity.User) cqrs.Buses {
 func taskBuses(stored *entity.Task) cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(), cqrs.NewQueries()
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, cqrs.Written](
-		func(context.Context, command.UpdateTask) (cqrs.Written, error) {
-			return cqrs.Written{ID: stored.ID}, nil
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateTask, entity.Written](
+		func(context.Context, command.UpdateTask) (entity.Written, error) {
+			return entity.Written{ID: stored.ID}, nil
 		}))
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
 		func(context.Context, query.GetTask) (entity.Task, error) { return *stored, nil }))

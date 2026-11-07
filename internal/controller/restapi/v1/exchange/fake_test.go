@@ -25,9 +25,9 @@ type fakeExchange struct {
 func (f *fakeExchange) buses() cqrs.Buses {
 	b := resttest.NewBuses()
 
-	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.ConvertCurrency, cqrs.Written](
-		func(context.Context, command.ConvertCurrency) (cqrs.Written, error) {
-			return cqrs.Written{ID: "c1"}, f.err
+	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.ConvertCurrency, entity.Written](
+		func(context.Context, command.ConvertCurrency) (entity.Written, error) {
+			return entity.Written{ID: "c1"}, f.err
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetConversion, entity.Conversion](
 		func(context.Context, query.GetConversion) (entity.Conversion, error) { return f.converted, f.err }))
