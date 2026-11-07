@@ -3,9 +3,9 @@ package middleware_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net"
-	"strings"
 	"testing"
 
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
@@ -33,20 +33,69 @@ func notFound(context.Context, any) (any, error) {
 	return nil, status.Error(codes.NotFound, "task not found")
 }
 
+// onlyRecord decodes the one JSON log record in logs.
+func onlyRecord(t *testing.T, logs *bytes.Buffer) map[string]any {
+	t.Helper()
+
+	var records []map[string]any
+
+	dec := json.NewDecoder(logs)
+	for dec.More() {
+		var r map[string]any
+		require.NoError(t, dec.Decode(&r))
+
+		records = append(records, r)
+	}
+
+	require.Len(t, records, 1)
+
+	return records[0]
+}
+
+// callCount reads grpc_requests_total for method and code from reg.
+func callCount(t *testing.T, reg *prometheus.Registry, method, code string) float64 {
+	t.Helper()
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+
+	for _, f := range families {
+		if f.GetName() != "grpc_requests_total" {
+			continue
+		}
+
+		for _, m := range f.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+
+			if labels["method"] == method && labels["code"] == code {
+				return m.GetCounter().GetValue()
+			}
+		}
+	}
+
+	return 0
+}
+
 func TestRecoveryTurnsAPanicIntoInternal(t *testing.T) {
 	t.Parallel()
 
 	var logs bytes.Buffer
 
-	resp, err := grpcmw.Recovery(slog.New(slog.NewTextHandler(&logs, nil)))(fromClient(t.Context()), nil, unaryInfo(), panics)
+	resp, err := grpcmw.Recovery(slog.New(slog.NewJSONHandler(&logs, nil)))(fromClient(t.Context()), nil, unaryInfo(), panics)
 
 	assert.Nil(t, resp)
 	assert.Equal(t, codes.Internal, status.Code(err))
 	assert.Equal(t, "internal server error", status.Convert(err).Message(), "the panic stays out of the answer")
-	assert.Contains(t, logs.String(), "grpc panic")
-	assert.Contains(t, logs.String(), "panic=boom")
-	assert.Contains(t, logs.String(), "client=10.0.0.7")
-	assert.Contains(t, logs.String(), "stack=")
+
+	r := onlyRecord(t, &logs)
+	assert.Equal(t, slog.LevelError.String(), r["level"])
+	assert.Equal(t, "boom", r["panic"])
+	assert.Equal(t, "10.0.0.7", r["client"])
+	assert.Equal(t, _method, r["method"])
+	assert.NotEmpty(t, r["stack"])
 }
 
 func TestRecoveryPassesAnAnswerThrough(t *testing.T) {
@@ -76,10 +125,14 @@ func TestLoggerLogsEveryCall(t *testing.T) {
 
 	var logs bytes.Buffer
 
-	_, err := grpcmw.Logger(slog.New(slog.NewTextHandler(&logs, nil)))(fromClient(t.Context()), nil, unaryInfo(), notFound)
+	_, err := grpcmw.Logger(slog.New(slog.NewJSONHandler(&logs, nil)))(fromClient(t.Context()), nil, unaryInfo(), notFound)
 
 	assert.Equal(t, codes.NotFound, status.Code(err))
-	assert.Contains(t, logs.String(), `msg="grpc request" client=10.0.0.7 method=`+_method+" code=NotFound")
+
+	r := onlyRecord(t, &logs)
+	assert.Equal(t, "10.0.0.7", r["client"])
+	assert.Equal(t, _method, r["method"])
+	assert.Equal(t, codes.NotFound.String(), r["code"])
 }
 
 func TestMetricsCountAndTimeEveryCall(t *testing.T) {
@@ -96,11 +149,7 @@ func TestMetricsCountAndTimeEveryCall(t *testing.T) {
 	_, err = again.Interceptor(t.Context(), nil, unaryInfo(), notFound)
 	assert.Equal(t, codes.NotFound, status.Code(err))
 
-	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(`
-# HELP grpc_requests_total Total number of gRPC calls served.
-# TYPE grpc_requests_total counter
-grpc_requests_total{code="NotFound",method="`+_method+`"} 2
-`), "grpc_requests_total"))
+	assert.Equal(t, 2.0, callCount(t, reg, _method, codes.NotFound.String()))
 
 	count, err := testutil.GatherAndCount(reg, "grpc_request_duration_seconds")
 	require.NoError(t, err)

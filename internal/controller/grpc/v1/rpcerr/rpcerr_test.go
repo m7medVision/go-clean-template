@@ -30,6 +30,7 @@ func TestStatusAnswersEachKindWithItsCodeAndMessage(t *testing.T) {
 		{entity.ErrUserAlreadyExists, codes.AlreadyExists, "user already exists"},
 		{entity.ErrConcurrencyConflict, codes.Aborted, entity.ErrConcurrencyConflict.Error()},
 		{entity.ErrReadModelBehind, codes.Unavailable, entity.ErrReadModelBehind.Error()},
+		{entity.ErrOIDCUnavailable, codes.Unavailable, "sso provider unavailable"},
 		{entity.ErrNotImplemented, codes.Unimplemented, "not implemented"},
 		{errors.New("db down"), codes.Internal, "internal server error"}, //nolint:err113 // a one-off error is the point
 	} {

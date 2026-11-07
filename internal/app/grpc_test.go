@@ -52,7 +52,8 @@ func dialGRPC(t *testing.T, b cqrs.Buses, tokens *jwt.Manager) *grpc.ClientConn 
 	return conn
 }
 
-// Only signing up and signing in are called without a token.
+// Only signing up and signing in are called without a token: they reach the (empty) buses, where
+// every other method is turned away first.
 func TestGRPCPublicMethodsAreTheSignInOnes(t *testing.T) {
 	t.Parallel()
 
@@ -60,10 +61,10 @@ func TestGRPCPublicMethodsAreTheSignInOnes(t *testing.T) {
 	users, tasks := pb.NewAuthServiceClient(conn), pb.NewTaskServiceClient(conn)
 
 	_, err := users.Login(t.Context(), &pb.LoginRequest{})
-	assert.NotEqual(t, "missing authorization token", status.Convert(err).Message(), "Login is public")
+	assert.NotEqual(t, codes.Unauthenticated, status.Code(err), "Login is public")
 
 	_, err = users.Register(t.Context(), &pb.RegisterRequest{})
-	assert.NotEqual(t, "missing authorization token", status.Convert(err).Message(), "Register is public")
+	assert.NotEqual(t, codes.Unauthenticated, status.Code(err), "Register is public")
 
 	_, err = users.GetProfile(t.Context(), &pb.GetProfileRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
