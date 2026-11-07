@@ -22,19 +22,30 @@ func Problem(ctx context.Context, l *slog.Logger, err error, op string) error {
 	return huma.NewError(status(kind), entity.Message(err))
 }
 
+// status is the HTTP status of a kind. A switch, so that exhaustive fails the lint on a kind it
+// does not name.
 func status(k entity.Kind) int {
-	return [...]int{
-		entity.KindInternal:        http.StatusInternalServerError,
-		entity.KindInvalid:         http.StatusBadRequest,
-		entity.KindUnauthenticated: http.StatusUnauthorized,
-		entity.KindForbidden:       http.StatusForbidden,
-		entity.KindNotFound:        http.StatusNotFound,
-		entity.KindExists:          http.StatusConflict,
-		entity.KindConflict:        http.StatusConflict,
-		entity.KindUnavailable:     http.StatusServiceUnavailable,
-		entity.KindUpstream:        http.StatusBadGateway,
-		entity.KindNotImplemented:  http.StatusNotImplemented,
-	}[k]
+	switch k {
+	case entity.KindInvalid:
+		return http.StatusBadRequest
+	case entity.KindUnauthenticated:
+		return http.StatusUnauthorized
+	case entity.KindForbidden:
+		return http.StatusForbidden
+	case entity.KindNotFound:
+		return http.StatusNotFound
+	case entity.KindExists, entity.KindConflict:
+		return http.StatusConflict
+	case entity.KindUnavailable:
+		return http.StatusServiceUnavailable
+	case entity.KindUpstream:
+		return http.StatusBadGateway
+	case entity.KindNotImplemented:
+		return http.StatusNotImplemented
+	case entity.KindInternal:
+	}
+
+	return http.StatusInternalServerError
 }
 
 // CommandErrors lists the statuses of an operation that sends a command: its own, then the two any

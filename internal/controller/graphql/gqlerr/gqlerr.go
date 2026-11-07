@@ -41,19 +41,28 @@ func Map(ctx context.Context, l *slog.Logger, err error, op string) error {
 	return newError(code(kind), entity.Message(err))
 }
 
+// code is the extensions.code of a kind. A switch, so that exhaustive fails the lint on a kind it
+// does not name.
 func code(k entity.Kind) string {
-	return [...]string{
-		entity.KindInternal:        _codeInternal,
-		entity.KindInvalid:         _codeBadUserInput,
-		entity.KindUnauthenticated: _codeUnauthenticated,
-		entity.KindForbidden:       _codeForbidden,
-		entity.KindNotFound:        _codeNotFound,
-		entity.KindExists:          _codeConflict,
-		entity.KindConflict:        _codeConflict,
-		entity.KindUnavailable:     _codeUnavailable,
-		entity.KindUpstream:        _codeUnavailable,
-		entity.KindNotImplemented:  _codeNotImplemented,
-	}[k]
+	switch k {
+	case entity.KindInvalid:
+		return _codeBadUserInput
+	case entity.KindUnauthenticated:
+		return _codeUnauthenticated
+	case entity.KindForbidden:
+		return _codeForbidden
+	case entity.KindNotFound:
+		return _codeNotFound
+	case entity.KindExists, entity.KindConflict:
+		return _codeConflict
+	case entity.KindUnavailable, entity.KindUpstream:
+		return _codeUnavailable
+	case entity.KindNotImplemented:
+		return _codeNotImplemented
+	case entity.KindInternal:
+	}
+
+	return _codeInternal
 }
 
 func newError(code, message string) error {

@@ -21,17 +21,28 @@ func Status(ctx context.Context, l *slog.Logger, err error, op string) error {
 	return status.Error(code(kind), entity.Message(err))
 }
 
+// code is the gRPC code of a kind. A switch, so that exhaustive fails the lint on a kind it does
+// not name.
 func code(k entity.Kind) codes.Code {
-	return [...]codes.Code{
-		entity.KindInternal:        codes.Internal,
-		entity.KindInvalid:         codes.InvalidArgument,
-		entity.KindUnauthenticated: codes.Unauthenticated,
-		entity.KindForbidden:       codes.PermissionDenied,
-		entity.KindNotFound:        codes.NotFound,
-		entity.KindExists:          codes.AlreadyExists,
-		entity.KindConflict:        codes.Aborted,
-		entity.KindUnavailable:     codes.Unavailable,
-		entity.KindUpstream:        codes.Unavailable,
-		entity.KindNotImplemented:  codes.Unimplemented,
-	}[k]
+	switch k {
+	case entity.KindInvalid:
+		return codes.InvalidArgument
+	case entity.KindUnauthenticated:
+		return codes.Unauthenticated
+	case entity.KindForbidden:
+		return codes.PermissionDenied
+	case entity.KindNotFound:
+		return codes.NotFound
+	case entity.KindExists:
+		return codes.AlreadyExists
+	case entity.KindConflict:
+		return codes.Aborted
+	case entity.KindUnavailable, entity.KindUpstream:
+		return codes.Unavailable
+	case entity.KindNotImplemented:
+		return codes.Unimplemented
+	case entity.KindInternal:
+	}
+
+	return codes.Internal
 }
