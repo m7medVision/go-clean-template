@@ -51,12 +51,12 @@ func TestRunDryRunPrintsThePlanAndWritesNothing(t *testing.T) {
 		"new-domain": {
 			dir:  sharedRepo(t),
 			args: []string{"new-domain", "--name", "invoice", "--dry-run"},
-			want: "43 files to create, 9 to edit",
+			want: "57 files to create, 3 to edit",
 		},
 		"new-usecase": {
 			dir:  widgetRepo(t),
 			args: []string{"new-usecase", "--domain", "widget", "--name", "archive-widget", "--kind", "command", "--dry-run"},
-			want: "2 files to create, 10 to edit",
+			want: "9 files to create, 3 to edit",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -1,0 +1,4 @@
+extend type Mutation {
+  "Archive widget: answers the ID of the widget it wrote."
+  archiveWidget(id: ID!): ID!
+}

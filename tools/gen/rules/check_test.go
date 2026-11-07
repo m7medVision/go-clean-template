@@ -193,7 +193,7 @@ func TestValidAcceptsFilesThatParse(t *testing.T) {
 	p.Create("a.proto", []byte("syntax = \"proto3\";\n"))
 	p.Create("a.graphqls", []byte("type A { id: ID! }\n"))
 	p.Create("a.sql", []byte("not checked"))
-	p.Edit("gqlgen.yml", []byte("models:\n"), edit.Insertion{Offset: len("models:\n"), Text: "  A:\n    model: x.A\n"})
+	p.Edit("b.go", []byte("package b\n"), edit.Insertion{Offset: len("package b\n"), Text: "\nconst c = 1\n"})
 
 	require.NoError(t, checkPlan(t, p))
 }
@@ -206,7 +206,6 @@ func TestValidRefusesWhatNoLongerParses(t *testing.T) {
 		"unformatted Go": {"a.go", "package a\nfunc f() {  }\n"},
 		"proto":          {"a.proto", "service {"},
 		"GraphQL":        {"a.graphqls", "type A {"},
-		"YAML":           {"a.yml", "a: [b"},
 	} {
 		p := plan.New("x")
 		p.Create(create[0], []byte(create[1]))

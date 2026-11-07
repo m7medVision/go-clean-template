@@ -1,0 +1,25 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/grpc/v1/rpcerr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// {{.Usecase.Name.Go}} sends {{.Usecase.Name.Go}} and answers with the ID it wrote. The fields of the command
+// come from the request once they are added: put them in {{.Usecase.Name.Go}}Request{{if not .Usecase.ByID}}, and name the
+// request to read them{{end}}.
+func (c *Controller) {{.Usecase.Name.Go}}(ctx context.Context, {{if .Usecase.ByID}}req{{else}}_{{end}} *v1.{{.Usecase.Name.Go}}Request) (*v1.{{.Usecase.Name.Go}}Response, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	written, err := cqrs.SendCommand(ctx, c.cmds, command.{{.Usecase.Name.Go}}{UserID: userID{{if .Usecase.ByID}}, {{.Name.Go}}ID: req.GetId(){{end}}})
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "{{.Usecase.Name.Go}}")
+	}
+
+	return &v1.{{.Usecase.Name.Go}}Response{Id: written.ID}, nil
+}

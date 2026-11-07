@@ -3,62 +3,30 @@ package {{.Name.Pkg}}
 
 import (
 	"context"
-	"errors"
+	"log/slog"
 
-	"github.com/go-playground/validator/v10"
 	v1 "{{.Module}}/docs/proto/v1"
-	"{{.Module}}/internal/controller/grpc/v1/rpcerr"
-	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
 	"{{.Module}}/pkg/cqrs"
-	"{{.Module}}/pkg/logger"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// Controller -.
 type Controller struct {
 	v1.Unimplemented{{.Name.Go}}ServiceServer
 
 	cmds *cqrs.Commands
 	qs   *cqrs.Queries
-	l    logger.Interface
-	v    *validator.Validate
+	l    *slog.Logger
 }
 
-// New -.
-func New(b cqrs.Buses, l logger.Interface) v1.{{.Name.Go}}ServiceServer {
-	return &Controller{cmds: b.Commands, qs: b.Queries, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
+func New(b cqrs.Buses, l *slog.Logger) v1.{{.Name.Go}}ServiceServer {
+	return &Controller{cmds: b.Commands, qs: b.Queries, l: l}
 }
 
-// readBack reads the {{.Name.Words}} with the ID id, the one a command just wrote or the one a get asks
-// for, as the response of the RPC op, whose failure it maps with fail.
-func (c *Controller) readBack(ctx context.Context, userID, id, op string) (*v1.{{.Name.Go}}Response, error) {
-	row, err := cqrs.SendQuery[entity.{{.Name.Go}}](ctx, c.qs, query.Get{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: id})
+func (c *Controller) readBack(ctx context.Context, userID, {{.Name.Lower}}ID string) (*v1.{{.Name.Go}}Response, error) {
+	{{.Name.Lower}}, err := cqrs.SendQuery(ctx, c.qs, query.Get{{.Name.Go}}{UserID: userID, {{.Name.Go}}ID: {{.Name.Lower}}ID})
 	if err != nil {
-		return nil, c.fail(err, op)
+		return nil, err
 	}
 
-	return New{{.Name.Go}}Response(&row), nil
-}
-
-// fail maps a failed command or query to its status: first what any command can fail with, then
-// the {{.Name.Words}} errors, and anything else to a logged Internal.
-func (c *Controller) fail(err error, op string) error {
-	if shared := rpcerr.Shared(err); shared != nil {
-		c.l.Warn("grpc - v1 - %s: %v", op, err)
-
-		return shared
-	}
-
-	switch {
-	case errors.Is(err, entity.Err{{.Name.Go}}NotFound):
-		return status.Error(codes.NotFound, "{{.Name.Words}} not found")
-	case errors.Is(err, entity.Err{{.Name.Go}}Forbidden):
-		return status.Error(codes.PermissionDenied, "forbidden")
-	default:
-		c.l.Error(err, "grpc - v1 - "+op)
-
-		return status.Error(codes.Internal, "internal server error")
-	}
+	return New{{.Name.Go}}Response(&{{.Name.Lower}}), nil
 }

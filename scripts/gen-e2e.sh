@@ -81,9 +81,9 @@ operations create-widget list-widgets get-widget update-widget delete-widget
 for f in docs/proto/v1/widget.pb.go docs/proto/v1/widget_grpc.pb.go; do
 	[ -f "$f" ] || { echo "gen-e2e: make proto-v1 wrote no $f" >&2; exit 1; }
 done
-# So did make graphql: the resolvers build on what gqlgen generates from widget.graphqls, in the
-# file its follow-schema layout names after it, and on the WidgetList model it generates.
-f=internal/controller/graphql/generated/widget.generated.go
+# So did make graphql: the resolvers build on what gqlgen generates from widget_types.graphqls, in
+# the file its follow-schema layout names after it, and on the WidgetList model it generates.
+f=internal/controller/graphql/generated/widget_types.generated.go
 [ -f "$f" ] || { echo "gen-e2e: make graphql wrote no $f" >&2; exit 1; }
 grep -q '^type WidgetList struct' internal/controller/graphql/model/models_gen.go ||
 	{ echo "gen-e2e: make graphql generated no WidgetList model" >&2; exit 1; }
@@ -103,8 +103,8 @@ make new-usecase domain=widget name=archive-widget kind=command
 git status --short
 operations archive-widget
 has docs/proto/v1/widget_grpc.pb.go 'WidgetService_ArchiveWidget_FullMethodName' 'make proto-v1'
-# gqlgen puts a root type's fields in the file of the schema file that defines it, task's for
-# Mutation, which the other schema files extend.
+# gqlgen puts a root type's fields in the file of the schema file that defines it, schema.graphqls,
+# which every field's schema file extends.
 has internal/controller/graphql/generated '_Mutation_archiveWidget(' 'make graphql'
 make linter-golangci test
 commit "new-usecase widget archive-widget"

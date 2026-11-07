@@ -2,6 +2,11 @@ package entity
 
 import "time"
 
+var (
+	Err{{.Name.Go}}NotFound  = newError(KindNotFound, "{{.Name.Words}} not found")
+	Err{{.Name.Go}}Forbidden = newError(KindForbidden, "forbidden")
+)
+
 // {{.Name.Go}} is one {{.Name.Words}} as it is read: the shape the {{.Name.Plural.Snake}} table, and the API, hold. Its rules
 // live on {{.Name.Go}}Aggregate. Add a field here, to the events that set it, and to the table and the
 // projector that write it.

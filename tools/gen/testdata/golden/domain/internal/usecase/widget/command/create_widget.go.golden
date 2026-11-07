@@ -4,29 +4,30 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// CreateWidget creates one widget owned by UserID. The fields it is created with go here.
+// CreateWidget creates one widget owned by UserID. The fields it is created with go here, and the
+// rules they follow in Validate.
 type CreateWidget struct {
+	cqrs.Command[entity.Written]
+
 	UserID string
 }
 
-// CommandName -.
-func (CreateWidget) CommandName() string { return "CreateWidget" }
-
-// ActorID -.
 func (c CreateWidget) ActorID() string { return c.UserID }
 
-// CreateWidgetHandler handles CreateWidget.
+// CreateWidgetHandler's Now is the clock (time.Now when nil).
 type CreateWidgetHandler struct {
 	Store repo.EventStore
+	Now   func() time.Time
 }
 
-// Handle is a stub: write it to save entity.NewWidgetAggregate through aggregate.Create.
-func (CreateWidgetHandler) Handle(_ context.Context, _ CreateWidget) (cqrs.Written, error) {
-	return cqrs.Written{}, fmt.Errorf("CreateWidget: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to save entity.NewWidgetAggregate through aggregate.Save.
+func (CreateWidgetHandler) Handle(_ context.Context, _ CreateWidget) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("CreateWidget: %w", entity.ErrNotImplemented)
 }

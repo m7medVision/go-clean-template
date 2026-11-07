@@ -2,8 +2,15 @@ package widget
 
 import "github.com/m7medvision/go-clean-template/internal/entity"
 
-// WidgetList is one page of the current user's widgets, newest first, and how many there are in all.
 type WidgetList struct { //nolint:revive // Huma names the OpenAPI schema after this type, so the name is API contract
 	Widgets []entity.Widget `json:"widgets"`
 	Total   int             `json:"total" example:"42"`
+}
+
+type widgetOutput struct {
+	Body entity.Widget
+}
+
+type listWidgetsOutput struct {
+	Body WidgetList
 }

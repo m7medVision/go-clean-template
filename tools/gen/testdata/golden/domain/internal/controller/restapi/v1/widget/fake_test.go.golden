@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/widget"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
@@ -24,20 +24,20 @@ type fakeWidget struct {
 // buses registers the fake's handlers on real buses whose one step is keep.
 func (f *fakeWidget) buses() cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
-	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+	write := func(context.Context) (entity.Written, error) { return entity.Written{ID: f.stored.ID}, f.err }
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.CreateWidget, cqrs.Written](
-		func(ctx context.Context, _ command.CreateWidget) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateWidget, cqrs.Written](
-		func(ctx context.Context, _ command.UpdateWidget) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeleteWidget, cqrs.Written](
-		func(ctx context.Context, _ command.DeleteWidget) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.CreateWidget, entity.Written](
+		func(ctx context.Context, _ command.CreateWidget) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.UpdateWidget, entity.Written](
+		func(ctx context.Context, _ command.UpdateWidget) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.DeleteWidget, entity.Written](
+		func(ctx context.Context, _ command.DeleteWidget) (entity.Written, error) { return write(ctx) }))
 
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetWidget, entity.Widget](
 		func(context.Context, query.GetWidget) (entity.Widget, error) { return f.stored, f.err }))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListWidgets, query.WidgetPage](
-		func(context.Context, query.ListWidgets) (query.WidgetPage, error) {
-			return query.WidgetPage{Widgets: []entity.Widget{f.stored}, Total: 1}, f.err
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListWidgets, entity.List[entity.Widget]](
+		func(context.Context, query.ListWidgets) (entity.List[entity.Widget], error) {
+			return entity.List[entity.Widget]{Items: []entity.Widget{f.stored}, Total: 1}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}
@@ -51,6 +51,6 @@ func (f *fakeWidget) keep(ctx context.Context, msg cqrs.Message, next cqrs.Next)
 }
 
 // newRouter serves the REST router over f's buses.
-func newRouter(cfg *config.Config, f *fakeWidget) http.Handler {
-	return resttest.NewRouter(cfg, f.buses())
+func newRouter(f *fakeWidget) http.Handler {
+	return resttest.NewRouter(f.buses(), widget.NewRoutes)
 }

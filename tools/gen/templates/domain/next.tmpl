@@ -6,6 +6,10 @@ Next:
       internal/usecase/{{.Name.Pkg}}/command/delete_{{.Name.Snake}}.go
       internal/usecase/{{.Name.Pkg}}/query/get_{{.Name.Snake}}.go
       internal/usecase/{{.Name.Pkg}}/query/list_{{.Name.Plural.Snake}}.go
+{{- if .Has "rest"}}
+  - Once a handler is written, drop http.StatusNotImplemented from its REST operation's Errors, in
+    internal/controller/restapi/v1/{{.Name.Pkg}}/, and make openapi.
+{{- end}}
   - Add the {{.Name.Words}} section to docs/api.md, and a bullet for it to What you get in README.md.
   - Add the {{.Name.Words}} aggregate and projector rows to docs/cqrs.md.
   - Write {{.Name.Words}} before you generate another domain: until one of them has fields and bodies

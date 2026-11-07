@@ -1,0 +1,29 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	v1 "{{.Module}}/docs/proto/v1"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/grpc/v1/rpcerr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// Create{{.Name.Go}} sends Create{{.Name.Go}}, then reads the {{.Name.Words}} back. The fields of the request go
+// into the command once they are added: name the request to read them.
+func (c *Controller) Create{{.Name.Go}}(ctx context.Context, _ *v1.Create{{.Name.Go}}Request) (*v1.{{.Name.Go}}Response, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	written, err := cqrs.SendCommand(ctx, c.cmds, command.Create{{.Name.Go}}{UserID: userID})
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "Create{{.Name.Go}}")
+	}
+
+	resp, err := c.readBack(ctx, userID, written.ID)
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "Create{{.Name.Go}}")
+	}
+
+	return resp, nil
+}

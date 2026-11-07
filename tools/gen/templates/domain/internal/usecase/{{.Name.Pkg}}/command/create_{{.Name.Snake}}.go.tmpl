@@ -4,29 +4,30 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo"
 	"{{.Module}}/pkg/cqrs"
 )
 
-// Create{{.Name.Go}} creates one {{.Name.Words}} owned by UserID. The fields it is created with go here.
+// Create{{.Name.Go}} creates one {{.Name.Words}} owned by UserID. The fields it is created with go here, and the
+// rules they follow in Validate.
 type Create{{.Name.Go}} struct {
+	cqrs.Command[entity.Written]
+
 	UserID string
 }
 
-// CommandName -.
-func (Create{{.Name.Go}}) CommandName() string { return "Create{{.Name.Go}}" }
-
-// ActorID -.
 func (c Create{{.Name.Go}}) ActorID() string { return c.UserID }
 
-// Create{{.Name.Go}}Handler handles Create{{.Name.Go}}.
+// Create{{.Name.Go}}Handler's Now is the clock (time.Now when nil).
 type Create{{.Name.Go}}Handler struct {
 	Store repo.EventStore
+	Now   func() time.Time
 }
 
-// Handle is a stub: write it to save entity.New{{.Name.Go}}Aggregate through aggregate.Create.
-func (Create{{.Name.Go}}Handler) Handle(_ context.Context, _ Create{{.Name.Go}}) (cqrs.Written, error) {
-	return cqrs.Written{}, fmt.Errorf("Create{{.Name.Go}}: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to save entity.New{{.Name.Go}}Aggregate through aggregate.Save.
+func (Create{{.Name.Go}}Handler) Handle(_ context.Context, _ Create{{.Name.Go}}) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("Create{{.Name.Go}}: %w", entity.ErrNotImplemented)
 }

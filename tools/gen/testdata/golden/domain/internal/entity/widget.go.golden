@@ -2,6 +2,11 @@ package entity
 
 import "time"
 
+var (
+	ErrWidgetNotFound  = newError(KindNotFound, "widget not found")
+	ErrWidgetForbidden = newError(KindForbidden, "forbidden")
+)
+
 // Widget is one widget as it is read: the shape the widgets table, and the API, hold. Its rules
 // live on WidgetAggregate. Add a field here, to the events that set it, and to the table and the
 // projector that write it.

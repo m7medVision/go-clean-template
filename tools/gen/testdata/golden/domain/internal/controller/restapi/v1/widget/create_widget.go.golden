@@ -1,0 +1,47 @@
+package widget
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+type createWidgetInput struct {
+	Body CreateWidget
+}
+
+// createWidget sends CreateWidget, then reads the widget back. The fields of the request body
+// go into the command once they are added: name the input to read them.
+func (r *controller) createWidget(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-widget",
+		Summary:       "Create widget",
+		Description:   "Create one widget for the current user",
+		Method:        http.MethodPost,
+		Path:          "/v1/widgets",
+		Tags:          []string{_tag},
+		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+		DefaultStatus: http.StatusCreated,
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotImplemented),
+	}, func(ctx context.Context, _ *createWidgetInput) (*widgetOutput, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.CreateWidget{UserID: userID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "createWidget")
+		}
+
+		widget, err := r.readBack(ctx, userID, written.ID)
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "createWidget")
+		}
+
+		return &widgetOutput{Body: widget}, nil
+	})
+}

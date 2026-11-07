@@ -1,0 +1,91 @@
+package widget_test
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net"
+	"testing"
+	"time"
+
+	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/widget"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+)
+
+// TestArchiveWidgetRPC calls ArchiveWidget on a gRPC server over bufconn whose buses hold one handler, a
+// fake ArchiveWidget handler, so it holds once the handler is written: it checks what the method sends
+// and answers, and that the stub's entity.ErrNotImplemented answers Unimplemented.
+func TestArchiveWidgetRPC(t *testing.T) {
+	t.Parallel()
+
+	const bufSize = 1 << 20
+
+	manager := jwt.New("test-secret", time.Hour)
+	token, err := manager.GenerateToken("user-1", nil)
+	require.NoError(t, err)
+
+	sent := []command.ArchiveWidget{{UserID: "user-1", WidgetID: "widget-1"}}
+
+	for name, tc := range map[string]struct {
+		token string
+		err   error
+		code  codes.Code
+		want  string
+		sent  []command.ArchiveWidget
+	}{
+		"answers the ID it wrote":              {token: token, want: "widget-1", sent: sent},
+		"a stub handler answers Unimplemented": {token: token, err: entity.ErrNotImplemented, code: codes.Unimplemented, sent: sent},
+		"needs the caller":                     {code: codes.Unauthenticated},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []command.ArchiveWidget
+
+			b := cqrs.Buses{Commands: cqrs.NewCommands(), Queries: cqrs.NewQueries()}
+			cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.ArchiveWidget, entity.Written](
+				func(_ context.Context, cmd command.ArchiveWidget) (entity.Written, error) {
+					got = append(got, cmd)
+
+					return entity.Written{ID: "widget-1"}, tc.err
+				}))
+
+			lis := bufconn.Listen(bufSize)
+			srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.Auth(manager)))
+			pb.RegisterWidgetServiceServer(srv, widget.New(b, slog.New(slog.DiscardHandler)))
+
+			go func() {
+				if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+					t.Errorf("grpc serve: %v", err)
+				}
+			}()
+
+			t.Cleanup(srv.Stop)
+
+			conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = conn.Close() })
+
+			ctx := metadata.AppendToOutgoingContext(t.Context(), "authorization", tc.token)
+			resp, err := pb.NewWidgetServiceClient(conn).ArchiveWidget(ctx, &pb.ArchiveWidgetRequest{Id: "widget-1"})
+
+			assert.Equal(t, tc.code, status.Code(err), err)
+			assert.Equal(t, tc.want, resp.GetId())
+			assert.Equal(t, tc.sent, got)
+		})
+	}
+}

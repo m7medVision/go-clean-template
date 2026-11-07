@@ -33,12 +33,16 @@ func (g *Go) offset(p token.Pos) int {
 	return g.fset.Position(p).Offset
 }
 
+func (g *Go) line(p token.Pos) int {
+	return g.fset.Position(p).Line
+}
+
 func (g *Go) at(offset int, text string) Insertion {
 	return Insertion{Path: g.path, Offset: offset, Text: text}
 }
 
-// BeforeBlockEnd inserts text as the last lines of the file's one parenthesized block of tok, a
-// var ( … ) or a type ( … ), indented one tab.
+// BeforeBlockEnd inserts text as the last lines of the file's one parenthesized block of tok, such
+// as a type ( … ), indented one tab.
 func (g *Go) BeforeBlockEnd(tok token.Token, text string) (Insertion, error) {
 	var found []*ast.GenDecl
 
@@ -53,6 +57,154 @@ func (g *Go) BeforeBlockEnd(tok token.Token, text string) (Insertion, error) {
 	}
 
 	return g.at(lineStart(g.src, g.offset(found[0].Rparen)), indent(text, "\t")), nil
+}
+
+// AppendArg adds text as the last argument of the one call to callee, a path.Match pattern, in
+// function fn.
+func (g *Go) AppendArg(fn, callee, text string) (Insertion, error) {
+	body, err := g.body(fn)
+	if err != nil {
+		return Insertion{}, err
+	}
+
+	var found []*ast.CallExpr
+
+	ast.Inspect(body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && glob(callee, render(call.Fun)) {
+			found = append(found, call)
+		}
+
+		return true
+	})
+
+	if len(found) != 1 {
+		return Insertion{}, anchorError(g.path, "a call to "+callee+" in "+fn, len(found))
+	}
+
+	return g.appendItem(found[0].Args, found[0].Rparen, text), nil
+}
+
+// AppendElement adds text as the last element of the one composite literal of type lit, such as
+// []module, in function fn.
+func (g *Go) AppendElement(fn, lit, text string) (Insertion, error) {
+	body, err := g.body(fn)
+	if err != nil {
+		return Insertion{}, err
+	}
+
+	var found []*ast.CompositeLit
+
+	ast.Inspect(body, func(n ast.Node) bool {
+		if cl, ok := n.(*ast.CompositeLit); ok && render(cl.Type) == lit {
+			found = append(found, cl)
+		}
+
+		return true
+	})
+
+	if len(found) != 1 {
+		return Insertion{}, anchorError(g.path, "a "+lit+"{…} literal in "+fn, len(found))
+	}
+
+	return g.appendItem(found[0].Elts, found[0].Rbrace, text), nil
+}
+
+// appendItem adds text after the last of items, inside the list that closes at closing: on the
+// same line in a one-line list, on a line of its own with a trailing comma in a multi-line one.
+func (g *Go) appendItem(items []ast.Expr, closing token.Pos, text string) Insertion {
+	end := g.offset(closing)
+
+	switch {
+	case len(items) == 0:
+		return g.at(end, text)
+	case g.line(items[len(items)-1].End()) == g.line(closing):
+		return g.at(g.offset(items[len(items)-1].End()), ", "+text)
+	default:
+		return g.at(lineStart(g.src, end), indent(text+",", lineIndent(g.src, end)+"\t"))
+	}
+}
+
+// AfterLastStmt inserts text on the line after the last statement of function fn's body that
+// matches m, at that statement's indentation. Only the body's own statements count, not those
+// nested in blocks. The place is the end of the statements that match, which must be one run, one
+// statement after another, as a router's registrations are: two runs, split by a statement that
+// does not match, would be two places to choose from.
+func (g *Go) AfterLastStmt(fn string, m Match, text string) (Insertion, error) {
+	body, err := g.body(fn)
+	if err != nil {
+		return Insertion{}, err
+	}
+
+	var (
+		last ast.Stmt
+		runs int
+	)
+
+	for i, s := range body.List {
+		if !m.ok(s) {
+			continue
+		}
+
+		if i == 0 || !m.ok(body.List[i-1]) {
+			runs++
+		}
+
+		last = s
+	}
+
+	if runs != 1 {
+		return Insertion{}, anchorError(g.path, "a run of statements in "+fn+" that are each "+m.what, runs)
+	}
+
+	return g.at(nextLineStart(g.src, g.offset(last.End())), indent(text, lineIndent(g.src, g.offset(last.Pos())))), nil
+}
+
+// AppendField adds text as the last field of the multi-line struct type named name.
+func (g *Go) AppendField(name, text string) (Insertion, error) {
+	var found []*ast.StructType
+
+	for _, d := range g.file.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
+		}
+
+		for _, s := range gd.Specs {
+			ts, ok := s.(*ast.TypeSpec)
+			if !ok || ts.Name.Name != name {
+				continue
+			}
+
+			if st, ok := ts.Type.(*ast.StructType); ok && g.line(st.Fields.Opening) != g.line(st.Fields.Closing) {
+				found = append(found, st)
+			}
+		}
+	}
+
+	if len(found) != 1 {
+		return Insertion{}, anchorError(g.path, "a multi-line struct type "+name, len(found))
+	}
+
+	closing := g.offset(found[0].Fields.Closing)
+
+	return g.at(lineStart(g.src, closing), indent(text, lineIndent(g.src, closing)+"\t")), nil
+}
+
+// body is the body of the file's one function or method called fn.
+func (g *Go) body(fn string) (*ast.BlockStmt, error) {
+	var found []*ast.FuncDecl
+
+	for _, d := range g.file.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == fn && fd.Body != nil {
+			found = append(found, fd)
+		}
+	}
+
+	if len(found) != 1 {
+		return nil, anchorError(g.path, "func "+fn, len(found))
+	}
+
+	return found[0].Body, nil
 }
 
 // Import returns the insertion that imports path, under alias when it is set, or none when the
@@ -88,31 +240,6 @@ func (g *Go) Import(path, alias string) ([]Insertion, error) {
 	default:
 		return []Insertion{g.at(lineStart(g.src, g.offset(block.Rparen)), indent(spec, "\t"))}, nil
 	}
-}
-
-// ImportName returns the name the file binds path to. A file that imports path already, under any
-// alias, needs nothing inserted; one that does not gets the insertion that imports it under alias,
-// as Import does, and binds the alias, or the package's own name when alias is empty. Code inserted
-// into a file that chose its own alias, as a test file may for the package it tests, calls the
-// package by the name this returns.
-func (g *Go) ImportName(path, alias string) (string, []Insertion, error) {
-	block, err := g.importBlock()
-	if err != nil {
-		return "", nil, err
-	}
-
-	for _, s := range block.Specs {
-		if is, ok := s.(*ast.ImportSpec); ok && importPath(is) == path {
-			return importName(path, aliasOf(is)), nil, nil
-		}
-	}
-
-	ins, err := g.Import(path, alias)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return importName(path, alias), ins, nil
 }
 
 func (g *Go) importBlock() (*ast.GenDecl, error) {
@@ -233,67 +360,4 @@ func isStandard(path string) bool {
 	first, _, _ := strings.Cut(path, "/")
 
 	return !strings.Contains(first, ".")
-}
-
-// Const returns the name of the file's one top-level constant whose name matches the path.Match
-// pattern, as _*Tag matches _tasksTag.
-func (g *Go) Const(pattern string) (string, error) {
-	var found []string
-
-	for _, name := range g.constNames() {
-		if glob(pattern, name) {
-			found = append(found, name)
-		}
-	}
-
-	if len(found) != 1 {
-		return "", anchorError(g.path, "a constant "+pattern, len(found))
-	}
-
-	return found[0], nil
-}
-
-// constNames returns the names of the file's top-level constants, in source order.
-func (g *Go) constNames() []string {
-	var names []string
-
-	for _, d := range g.file.Decls {
-		gd, ok := d.(*ast.GenDecl)
-		if !ok || gd.Tok != token.CONST {
-			continue
-		}
-
-		for _, s := range gd.Specs {
-			if vs, ok := s.(*ast.ValueSpec); ok {
-				for _, id := range vs.Names {
-					names = append(names, id.Name)
-				}
-			}
-		}
-	}
-
-	return names
-}
-
-// RequireFunc checks that the file declares exactly one function or method called name.
-func (g *Go) RequireFunc(name string) error {
-	_, err := g.funcDecl(name)
-
-	return err
-}
-
-func (g *Go) funcDecl(name string) (*ast.FuncDecl, error) {
-	var found []*ast.FuncDecl
-
-	for _, d := range g.file.Decls {
-		if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == name {
-			found = append(found, fd)
-		}
-	}
-
-	if len(found) != 1 {
-		return nil, anchorError(g.path, "func "+name, len(found))
-	}
-
-	return found[0], nil
 }

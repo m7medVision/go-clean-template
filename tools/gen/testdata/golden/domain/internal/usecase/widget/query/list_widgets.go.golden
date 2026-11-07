@@ -6,31 +6,23 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-// WidgetPage is one page of widgets, newest first, and how many there are in all.
-type WidgetPage struct {
-	Widgets []entity.Widget
-	Total   int
-}
-
-// ListWidgets lists UserID's widgets, Limit of them from Offset.
+// ListWidgets lists one page of UserID's widgets, newest first. Its Page's Validate refuses
+// a page out of bounds; what a list filters by goes here too.
 type ListWidgets struct {
+	cqrs.Query[entity.List[entity.Widget]]
+	entity.Page
+
 	UserID string
-	Limit  int
-	Offset int
 }
 
-// QueryName -.
-func (ListWidgets) QueryName() string { return "ListWidgets" }
-
-// ListWidgetsHandler handles ListWidgets.
 type ListWidgetsHandler struct {
 	Widgets repo.WidgetReadModel
 }
 
-// Handle is a stub: write it to read the page with h.Widgets.List, defaulting the page size
-// when Limit is 0 or less.
-func (ListWidgetsHandler) Handle(_ context.Context, _ ListWidgets) (WidgetPage, error) {
-	return WidgetPage{}, fmt.Errorf("ListWidgets: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to read the page with h.Widgets.List.
+func (ListWidgetsHandler) Handle(_ context.Context, _ ListWidgets) (entity.List[entity.Widget], error) {
+	return entity.List[entity.Widget]{}, fmt.Errorf("ListWidgets: %w", entity.ErrNotImplemented)
 }

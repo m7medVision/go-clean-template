@@ -1,0 +1,62 @@
+package widget_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
+	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestCountWidgetsQuery asks for Query.countWidgets through real buses whose one handler is a fake
+// CountWidgets handler, so it holds once the handler is written: it checks what the field sends and
+// answers, and that the stub's entity.ErrNotImplemented answers NOT_IMPLEMENTED.
+func TestCountWidgetsQuery(t *testing.T) {
+	t.Parallel()
+
+	token := graphqltest.Token(t)
+	sent := []query.CountWidgets{{UserID: graphqltest.UserID}}
+
+	for name, tc := range map[string]struct {
+		token string
+		err   error
+		code  string
+		want  string
+		sent  []query.CountWidgets
+	}{
+		"answers the result":                     {token: token, want: `{"todo":null}`, sent: sent},
+		"a stub handler answers NOT_IMPLEMENTED": {token: token, err: entity.ErrNotImplemented, code: "NOT_IMPLEMENTED", sent: sent},
+		"needs the caller":                       {code: "UNAUTHENTICATED"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var got []query.CountWidgets
+
+			qs := cqrs.NewQueries()
+			cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.CountWidgets, query.CountWidgetsResult](
+				func(_ context.Context, q query.CountWidgets) (query.CountWidgetsResult, error) {
+					got = append(got, q)
+
+					return query.CountWidgetsResult{}, tc.err
+				}))
+
+			resp := graphqltest.Post(t, cqrs.Buses{Queries: qs}, tc.token, `query { countWidgets { todo } }`, nil)
+
+			assert.Equal(t, tc.sent, got)
+
+			if tc.code != "" {
+				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
+
+				return
+			}
+
+			require.Empty(t, resp.Errors, resp.Body)
+			assert.JSONEq(t, tc.want, string(resp.Data["countWidgets"]))
+		})
+	}
+}

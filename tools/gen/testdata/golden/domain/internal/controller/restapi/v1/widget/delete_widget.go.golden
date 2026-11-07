@@ -1,0 +1,40 @@
+package widget
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+type deleteWidgetOutput struct {
+	Status int
+}
+
+func (r *controller) deleteWidget(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "delete-widget",
+		Summary:       "Delete widget",
+		Description:   "Delete one of the current user's widgets by ID",
+		Method:        http.MethodDelete,
+		Path:          "/v1/widgets/{id}",
+		Tags:          []string{_tag},
+		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+		DefaultStatus: http.StatusNoContent,
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound, http.StatusNotImplemented),
+	}, func(ctx context.Context, input *widgetPathInput) (*deleteWidgetOutput, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		_, err := cqrs.SendCommand(ctx, r.cmds, command.DeleteWidget{UserID: userID, WidgetID: input.ID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "deleteWidget")
+		}
+
+		return &deleteWidgetOutput{Status: http.StatusNoContent}, nil
+	})
+}

@@ -8,19 +8,18 @@ import (
 
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo"
+	"{{.Module}}/pkg/cqrs"
 )
 
 // Get{{.Name.Go}} reads UserID's {{.Name.Words}}: entity.Err{{.Name.Go}}NotFound when there is none,
 // entity.Err{{.Name.Go}}Forbidden when it is another user's.
 type Get{{.Name.Go}} struct {
+	cqrs.Query[entity.{{.Name.Go}}]
+
 	UserID   string
 	{{.Name.Go}}ID string
 }
 
-// QueryName -.
-func (Get{{.Name.Go}}) QueryName() string { return "Get{{.Name.Go}}" }
-
-// Get{{.Name.Go}}Handler handles Get{{.Name.Go}}.
 type Get{{.Name.Go}}Handler struct {
 	{{.Name.Plural.Go}} repo.{{.Name.Go}}ReadModel
 }

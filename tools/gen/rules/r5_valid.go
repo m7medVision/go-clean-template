@@ -48,8 +48,6 @@ func parses(p string, src []byte) error {
 		_, err = edit.ParseProto(p, src)
 	case ".graphqls":
 		_, err = edit.ParseGraphQL(p, src)
-	case ".yml", ".yaml":
-		_, err = edit.ParseYAML(p, src)
 	}
 
 	return err

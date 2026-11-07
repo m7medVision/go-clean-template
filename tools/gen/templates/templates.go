@@ -1,6 +1,7 @@
 // Package templates holds every byte the generator writes, as text/template files laid out like the
-// repository they render into. domain/ is the set make new-domain renders, and usecase/ the set
-// make new-usecase renders. In both, .Name is the domain; a use case's own name is .Usecase.Name.
+// repository they render into. Each set is a folder: domain/ is what make new-domain renders, and
+// usecase/command/ and usecase/query/ what make new-usecase renders for each kind. In every set,
+// .Name is the domain; a use case's own name is .Usecase.Name.
 //
 // A file the generator creates is <set>/<repo path>.tmpl. Its path is a template too, rendered with
 // the same Data as its content, so domain/internal/entity/{{.Name.Snake}}.go.tmpl creates
@@ -52,6 +53,16 @@ func FS() fs.FS {
 	return _templates
 }
 
+// Set returns the templates of the set at dir, such as domain or usecase/command, rooted there.
+func Set(dir string) (fs.FS, error) {
+	set, err := fs.Sub(_templates, dir)
+	if err != nil {
+		return nil, fmt.Errorf("template set %s: %w", dir, err)
+	}
+
+	return set, nil
+}
+
 // Data is what every template renders with, whichever set and layer it belongs to.
 type Data struct {
 	// Module is the app's module path, from its go.mod: the start of every import of the app.
@@ -74,25 +85,9 @@ type Usecase struct {
 	// Method and Path are the REST operation's HTTP method and path, as in POST and
 	// /v1/tasks/{id}/archive.
 	Method, Path string
-
-	// The fields below are what the layers read from the domain's own files: a hand-written
-	// domain chose these names, so no name form gives them. Each layer fills in what it reads
-	// before it renders.
-
-	// Dep is the field of the domain's Deps, in register.go, that the handler is built from, and
-	// DepType its type in package repo: the event store for a command, as in Store and EventStore,
-	// and the read model for a query, as in Tasks and TaskReadModel.
-	Dep, DepType string
-	// RESTTag is the constant the domain's REST operations are tagged with, as in _tasksTag.
-	RESTTag string
-	// GRPCService is the service the domain's gRPC controller serves, as in TaskService, and
-	// ProtoFile the .proto file that declares it, as in docs/proto/v1/task.proto: user's controller
-	// serves AuthService, from auth.proto.
-	GRPCService, ProtoFile string
-	// ProtoPkg and ControllerPkg are the names the domain's gRPC test file imports the proto package
-	// and the controller package under, as in pb and task: a generated domain's test imports its
-	// controller as grpcwidget.
-	ProtoPkg, ControllerPkg string
+	// Service is the gRPC service the domain's controller serves, as in TaskService, and ProtoFile
+	// the .proto file that declares it, as in docs/proto/v1/task.proto.
+	Service, ProtoFile string
 }
 
 // ByID reports whether the use case acts on one record, named by its ID: its REST path holds
@@ -130,8 +125,8 @@ type File struct {
 	Content []byte
 }
 
-// render renders the template at name in fsys. The file's path is name rendered with data, without
-// its first element (the set) and its .tmpl suffix.
+// render renders the template at name in the set fsys. The file's path is name rendered with data,
+// without its .tmpl suffix.
 func render(fsys fs.FS, name string, data *Data) (File, error) {
 	src, err := fs.ReadFile(fsys, name)
 	if err != nil {
@@ -148,13 +143,11 @@ func render(fsys fs.FS, name string, data *Data) (File, error) {
 		return File{}, err
 	}
 
-	_, repoPath, _ := strings.Cut(strings.TrimSuffix(string(p), _suffix), "/")
-
-	return File{Path: repoPath, Content: content}, nil
+	return File{Path: strings.TrimSuffix(string(p), _suffix), Content: content}, nil
 }
 
-// Glob renders every template in fsys that matches pattern, which fs.Glob reads, in path order.
-// A pattern that matches none is an error.
+// Glob renders every template in the set fsys that matches pattern, which fs.Glob reads, in path
+// order. A pattern that matches none is an error.
 func Glob(fsys fs.FS, pattern string, data *Data) ([]File, error) {
 	matches, err := fs.Glob(fsys, pattern)
 	if err != nil {

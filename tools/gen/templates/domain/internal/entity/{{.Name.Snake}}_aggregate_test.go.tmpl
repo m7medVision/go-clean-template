@@ -39,9 +39,7 @@ func TestNew{{.Name.Go}}AggregateRecords{{.Name.Go}}Created(t *testing.T) {
 
 	assert.Equal(t, []entity.Event{ {{- .Name.Lower}}Created()}, a.Pending())
 	assert.Equal(t, "{{.Name.Pkg}}-"+_{{.Name.Lower}}ID, a.StreamID())
-	assert.Equal(t, entity.{{.Name.Go}}{
-		ID: _{{.Name.Lower}}ID, UserID: _{{.Name.Lower}}Owner, CreatedAt: {{.Name.Lower}}CreatedAt(), UpdatedAt: {{.Name.Lower}}CreatedAt(),
-	}, a.State())
+	assert.Equal(t, _{{.Name.Lower}}ID, a.ID())
 }
 
 func Test{{.Name.Go}}AggregateUpdateByItsOwner(t *testing.T) {
@@ -54,8 +52,6 @@ func Test{{.Name.Go}}AggregateUpdateByItsOwner(t *testing.T) {
 	assert.Equal(t, []entity.Event{
 		entity.{{.Name.Go}}Updated{ {{- .Name.Go}}ID: _{{.Name.Lower}}ID, At: {{.Name.Lower}}LaterAt()},
 	}, a.Pending())
-	assert.Equal(t, {{.Name.Lower}}LaterAt(), a.State().UpdatedAt)
-	assert.Equal(t, {{.Name.Lower}}CreatedAt(), a.State().CreatedAt)
 }
 
 func Test{{.Name.Go}}AggregateRefusesAnotherUser(t *testing.T) {
@@ -110,16 +106,8 @@ func Test{{.Name.Go}}AggregateSnapshotRestoresTheSame{{.Name.Go}}(t *testing.T) 
 
 			restored := &entity.{{.Name.Go}}Aggregate{}
 			require.NoError(t, restored.RestoreSnapshot(data))
-			assert.Equal(t, a.State(), restored.State())
-			assert.ErrorIs(t, restored.Update(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()), tc.update, "deleted or not, as snapshotted")
+			assert.Equal(t, a.StreamID(), restored.StreamID())
+			assert.ErrorIs(t, restored.Update(_{{.Name.Lower}}Owner, {{.Name.Lower}}LaterAt()), tc.update, "its owner, deleted or not, as snapshotted")
 		})
 	}
-}
-
-func TestThe{{.Name.Go}}EventsAreRegistered(t *testing.T) {
-	t.Parallel()
-
-	assert.Subset(t, entity.EventTypes(), []entity.Event{
-		entity.{{.Name.Go}}Created{}, entity.{{.Name.Go}}Updated{}, entity.{{.Name.Go}}Deleted{},
-	})
 }

@@ -1,0 +1,20 @@
+package widget
+
+import (
+	"context"
+
+	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
+)
+
+func (c *Controller) GetWidget(ctx context.Context, req *v1.GetWidgetRequest) (*v1.WidgetResponse, error) {
+	userID := authn.MustCaller(ctx).UserID
+
+	resp, err := c.readBack(ctx, userID, req.GetId())
+	if err != nil {
+		return nil, rpcerr.Status(ctx, c.l, err, "GetWidget")
+	}
+
+	return resp, nil
+}

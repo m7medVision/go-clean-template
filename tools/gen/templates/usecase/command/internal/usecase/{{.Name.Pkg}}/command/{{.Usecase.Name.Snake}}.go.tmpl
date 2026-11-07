@@ -1,0 +1,36 @@
+package command
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/repo"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// {{.Usecase.Name.Go}} is the command {{.Usecase.Name.Kebab}}, sent by UserID{{if .Usecase.ByID}} for the {{.Name.Words}} {{.Name.Go}}ID{{end}}.
+// Add the fields it needs, and the rules they follow in Validate.
+type {{.Usecase.Name.Go}} struct {
+	cqrs.Command[entity.Written]
+
+	UserID   string
+{{- if .Usecase.ByID}}
+	{{.Name.Go}}ID string
+{{- end}}
+}
+
+func (c {{.Usecase.Name.Go}}) ActorID() string { return c.UserID }
+
+// {{.Usecase.Name.Go}}Handler's Now is the clock (time.Now when nil).
+type {{.Usecase.Name.Go}}Handler struct {
+	Store repo.EventStore
+	Now   func() time.Time
+}
+
+// Handle is a stub: write it to change the {{.Name.Words}} through aggregate.Change, calling the
+// behavior method you add to its aggregate, which records the event you add for it.
+func ({{.Usecase.Name.Go}}Handler) Handle(_ context.Context, _ {{.Usecase.Name.Go}}) (entity.Written, error) {
+	return entity.Written{}, fmt.Errorf("{{.Usecase.Name.Go}}: %w", entity.ErrNotImplemented)
+}

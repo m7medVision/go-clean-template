@@ -7,18 +7,8 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
 	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestArchiveWidgetActsForItsUser(t *testing.T) {
-	t.Parallel()
-
-	cmd := command.ArchiveWidget{UserID: "user-1"}
-
-	assert.Equal(t, "ArchiveWidget", cmd.CommandName())
-	assert.Equal(t, "user-1", cmd.ActorID())
-}
 
 // The handler is the stub the generator wrote, so this test fails once the handler is written: the
 // first real implementation replaces it with tests of what ArchiveWidget records.

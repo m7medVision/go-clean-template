@@ -18,12 +18,10 @@ type Projector struct {
 
 var _ repo.Subscriber = (*Projector)(nil)
 
-// NewProjector returns the {{.Name.Words}} projector writing to pg.
 func NewProjector(pg *postgres.Postgres) *Projector {
 	return &Projector{pg: pg}
 }
 
-// Name -.
 func (*Projector) Name() string {
 	return "{{.Name.Pkg}}"
 }
@@ -33,12 +31,15 @@ func (*Projector) Tables() []string {
 	return []string{"{{.Name.Plural.Snake}}"}
 }
 
-// Handle -.
+func (*Projector) Handles() []entity.Event {
+	return entity.{{.Name.Go}}Events()
+}
+
 func (p *Projector) Handle(ctx context.Context, e *entity.RecordedEvent) error {
 	return Project(ctx, queries.New(p.pg.Executor(ctx)), e)
 }
 
-// Project applies one event to the {{.Name.Plural.Snake}} table through q. Events of other domains change nothing.
+// Project applies one event to the {{.Name.Plural.Snake}} table through q.
 func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) error {
 	var err error
 
@@ -51,6 +52,8 @@ func Project(ctx context.Context, q queries.Querier, e *entity.RecordedEvent) er
 		err = q.Update{{.Name.Go}}Row(ctx, queries.Update{{.Name.Go}}RowParams{ID: ev.{{.Name.Go}}ID, UpdatedAt: ev.At})
 	case entity.{{.Name.Go}}Deleted:
 		err = q.Delete{{.Name.Go}}Row(ctx, ev.{{.Name.Go}}ID)
+	default:
+		err = entity.ErrUnhandledEvent
 	}
 
 	if err != nil {

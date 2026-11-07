@@ -1,0 +1,42 @@
+package app
+
+import (
+{{- if .Has "grpc"}}
+	"log/slog"
+
+	pb "{{.Module}}/docs/proto/v1"
+	grpc{{.Name.Pkg}} "{{.Module}}/internal/controller/grpc/v1/{{.Name.Pkg}}"
+{{- end}}
+{{- if .Has "rest"}}
+	rest{{.Name.Pkg}} "{{.Module}}/internal/controller/restapi/v1/{{.Name.Pkg}}"
+{{- end}}
+	"{{.Module}}/internal/repo/persistent/projection"
+	persist{{.Name.Go}}Repo "{{.Module}}/internal/repo/persistent/{{.Name.Pkg}}"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}"
+	"{{.Module}}/pkg/cqrs"
+	"{{.Module}}/pkg/postgres"
+{{- if .Has "grpc"}}
+	"google.golang.org/grpc"
+{{- end}}
+)
+
+// {{.Name.Lower}}Module is the {{.Name.Words}} domain: its handlers over the {{.Name.Words}} read model, its projector,
+// and its operations on each transport but GraphQL, whose root resolver lists the domains itself.
+func {{.Name.Lower}}Module() module {
+	return module{
+		handlers: func(d *deps, b cqrs.Buses) error {
+			{{.Name.Pkg}}.Register(b.Commands, b.Queries, {{.Name.Pkg}}.Deps{Store: d.store, {{.Name.Plural.Go}}: persist{{.Name.Go}}Repo.NewReadModel(d.pg)})
+
+			return nil
+		},
+		projector: func(pg *postgres.Postgres) projection.Projector { return persist{{.Name.Go}}Repo.NewProjector(pg) },
+{{- if .Has "rest"}}
+		rest:      rest{{.Name.Pkg}}.NewRoutes,
+{{- end}}
+{{- if .Has "grpc"}}
+		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
+			pb.Register{{.Name.Go}}ServiceServer(s, grpc{{.Name.Pkg}}.New(b, l))
+		},
+{{- end}}
+	}
+}

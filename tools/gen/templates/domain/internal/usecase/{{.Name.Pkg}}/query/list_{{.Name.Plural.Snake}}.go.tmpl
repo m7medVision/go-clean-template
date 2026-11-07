@@ -6,31 +6,23 @@ import (
 
 	"{{.Module}}/internal/entity"
 	"{{.Module}}/internal/repo"
+	"{{.Module}}/pkg/cqrs"
 )
 
-// {{.Name.Go}}Page is one page of {{.Name.Plural.Words}}, newest first, and how many there are in all.
-type {{.Name.Go}}Page struct {
-	{{.Name.Plural.Go}} []entity.{{.Name.Go}}
-	Total   int
-}
-
-// List{{.Name.Plural.Go}} lists UserID's {{.Name.Plural.Words}}, Limit of them from Offset.
+// List{{.Name.Plural.Go}} lists one page of UserID's {{.Name.Plural.Words}}, newest first. Its Page's Validate refuses
+// a page out of bounds; what a list filters by goes here too.
 type List{{.Name.Plural.Go}} struct {
+	cqrs.Query[entity.List[entity.{{.Name.Go}}]]
+	entity.Page
+
 	UserID string
-	Limit  int
-	Offset int
 }
 
-// QueryName -.
-func (List{{.Name.Plural.Go}}) QueryName() string { return "List{{.Name.Plural.Go}}" }
-
-// List{{.Name.Plural.Go}}Handler handles List{{.Name.Plural.Go}}.
 type List{{.Name.Plural.Go}}Handler struct {
 	{{.Name.Plural.Go}} repo.{{.Name.Go}}ReadModel
 }
 
-// Handle is a stub: write it to read the page with h.{{.Name.Plural.Go}}.List, defaulting the page size
-// when Limit is 0 or less.
-func (List{{.Name.Plural.Go}}Handler) Handle(_ context.Context, _ List{{.Name.Plural.Go}}) ({{.Name.Go}}Page, error) {
-	return {{.Name.Go}}Page{}, fmt.Errorf("List{{.Name.Plural.Go}}: %w", entity.ErrNotImplemented)
+// Handle is a stub: write it to read the page with h.{{.Name.Plural.Go}}.List.
+func (List{{.Name.Plural.Go}}Handler) Handle(_ context.Context, _ List{{.Name.Plural.Go}}) (entity.List[entity.{{.Name.Go}}], error) {
+	return entity.List[entity.{{.Name.Go}}]{}, fmt.Errorf("List{{.Name.Plural.Go}}: %w", entity.ErrNotImplemented)
 }

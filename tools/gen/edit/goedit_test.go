@@ -3,6 +3,7 @@ package edit_test
 import (
 	"go/format"
 	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
@@ -29,81 +30,35 @@ func parseGo(t *testing.T, src string) *edit.Go {
 	return g
 }
 
-const errorsSrc = `package entity
+const aliasesSrc = `package graphql
 
-import "errors"
-
-var (
-	ErrTaskNotFound  = errors.New("task not found")
-	ErrTaskForbidden = errors.New("task does not belong to user")
-	// ErrReadModelBehind is a write that committed late.
-	ErrReadModelBehind = errors.New("write saved but not yet readable")
-)
-
-// After the block.
-func f() {}
-`
-
-func TestBeforeBlockEndAppendsToTheVarBlock(t *testing.T) {
-	t.Parallel()
-
-	ins, err := parseGo(t, errorsSrc).BeforeBlockEnd(token.VAR,
-		"ErrWidgetNotFound  = errors.New(\"widget not found\")\nErrWidgetForbidden = errors.New(\"widget does not belong to user\")")
-	require.NoError(t, err)
-
-	assert.Equal(t, `package entity
-
-import "errors"
-
-var (
-	ErrTaskNotFound  = errors.New("task not found")
-	ErrTaskForbidden = errors.New("task does not belong to user")
-	// ErrReadModelBehind is a write that committed late.
-	ErrReadModelBehind = errors.New("write saved but not yet readable")
-	ErrWidgetNotFound  = errors.New("widget not found")
-	ErrWidgetForbidden = errors.New("widget does not belong to user")
-)
-
-// After the block.
-func f() {}
-`, applyGo(t, errorsSrc, ins))
-}
-
-const contractsSrc = `package repo
-
-//go:generate mockgen -source ./contracts.go -package repomock
-
+// The aliases.
 type (
-	// TaskReadModel reads the tasks table.
-	TaskReadModel interface {
-		Get(id string) error
-	}
+	taskQuery    = task.Query
+	taskMutation = task.Mutation
 )
+
+type query struct{}
 `
 
 func TestBeforeBlockEndAppendsToTheTypeBlock(t *testing.T) {
 	t.Parallel()
 
-	ins, err := parseGo(t, contractsSrc).BeforeBlockEnd(token.TYPE,
-		"\n// WidgetReadModel reads the widgets table.\nWidgetReadModel interface {\n\tGet(id string) error\n}")
+	ins, err := parseGo(t, aliasesSrc).BeforeBlockEnd(token.TYPE, "widgetQuery = widget.Query\nwidgetMutation = widget.Mutation")
 	require.NoError(t, err)
 
-	assert.Equal(t, `package repo
+	assert.Equal(t, `package graphql
 
-//go:generate mockgen -source ./contracts.go -package repomock
-
+// The aliases.
 type (
-	// TaskReadModel reads the tasks table.
-	TaskReadModel interface {
-		Get(id string) error
-	}
-
-	// WidgetReadModel reads the widgets table.
-	WidgetReadModel interface {
-		Get(id string) error
-	}
+	taskQuery      = task.Query
+	taskMutation   = task.Mutation
+	widgetQuery    = widget.Query
+	widgetMutation = widget.Mutation
 )
-`, applyGo(t, contractsSrc, ins))
+
+type query struct{}
+`, applyGo(t, aliasesSrc, ins))
 }
 
 func TestBeforeBlockEndNeedsExactlyOneBlock(t *testing.T) {
@@ -189,35 +144,6 @@ func TestImportRefusesANameAnotherImportBinds(t *testing.T) {
 	}
 }
 
-// A test file imports the package under test under a name of its own choosing: task's gRPC test
-// as task, a generated domain's as grpcwidget. What a test appended to it calls must use that name.
-func TestImportNameIsTheNameTheFileBindsAPathTo(t *testing.T) {
-	t.Parallel()
-
-	for name, tc := range map[string]struct {
-		path, alias, want string
-		inserts           bool
-	}{
-		"imported plainly":     {"github.com/m7medvision/go-clean-template/internal/usecase/task", "uc", "task", false},
-		"imported as an alias": {"github.com/m7medvision/go-clean-template/internal/repo/persistent/task", "", "persistTaskRepo", false},
-		"not imported":         {"github.com/m7medvision/go-clean-template/docs/proto/v1", "pb", "pb", true},
-		"not imported, plain":  {"github.com/m7medvision/go-clean-template/internal/entity", "", "entity", true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			got, ins, err := parseGo(t, importsSrc).ImportName(tc.path, tc.alias)
-
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, got)
-			assert.Equal(t, tc.inserts, len(ins) == 1, "imports it only when the file does not")
-		})
-	}
-
-	_, _, err := parseGo(t, importsSrc).ImportName("github.com/m7medvision/go-clean-template/internal/usecase/fmt", "")
-	require.ErrorIs(t, err, edit.ErrAnchor, "a name another import binds")
-}
-
 func TestImportStartsTheNonStandardGroupAfterTheStandardOne(t *testing.T) {
 	t.Parallel()
 
@@ -260,68 +186,6 @@ func TestImportPutsAStandardPathInTheStandardGroup(t *testing.T) {
 	}
 }
 
-func TestConstFindsOneTopLevelConstantByPattern(t *testing.T) {
-	t.Parallel()
-
-	g := parseGo(t, "package p\n\nconst _tasksTag = \"tasks\"\n\nconst (\n\t_a, _bTag = 1, 2\n\tc = 3\n)\n\nvar _vTag = 4\n")
-
-	got, err := g.Const("_task*Tag")
-	require.NoError(t, err)
-	assert.Equal(t, "_tasksTag", got)
-
-	_, err = g.Const("_*Tag")
-	require.ErrorIs(t, err, edit.ErrAnchor, "_tasksTag and _bTag")
-	assert.Contains(t, err.Error(), "a constant _*Tag")
-
-	_, err = g.Const("_v*")
-	require.ErrorIs(t, err, edit.ErrAnchor, "a var is no constant")
-}
-
-func TestFieldOfTypeFindsOneFieldOfAStructByItsType(t *testing.T) {
-	t.Parallel()
-
-	g := parseGo(t, `package p
-
-type Deps struct {
-	Store         repo.EventStore
-	History       repo.ExchangeReadModel
-	Rates, Backup repo.ExchangeWebAPI
-	Now           func() time.Time
-}
-
-type Embeds struct {
-	repo.TaskReadModel
-}
-`)
-
-	for pattern, want := range map[string][2]string{
-		"repo.*ReadModel": {"History", "repo.ExchangeReadModel"},
-		"repo.EventStore": {"Store", "repo.EventStore"},
-	} {
-		field, typ, err := g.FieldOfType("Deps", pattern)
-		require.NoError(t, err, pattern)
-		assert.Equal(t, want, [2]string{field, typ}, pattern)
-	}
-
-	for pattern, why := range map[string]string{
-		"repo.*WebAPI":  "two fields share the type",
-		"repo.Missing":  "no field has the type",
-		"time.Duration": "no field has the type",
-	} {
-		_, _, err := g.FieldOfType("Deps", pattern)
-		require.ErrorIs(t, err, edit.ErrAnchor, why)
-		assert.Contains(t, err.Error(), "a field of Deps of type "+pattern, why)
-	}
-
-	field, typ, err := g.FieldOfType("Embeds", "repo.*ReadModel")
-	require.NoError(t, err)
-	assert.Equal(t, [2]string{"TaskReadModel", "repo.TaskReadModel"}, [2]string{field, typ}, "named after its type")
-
-	_, _, err = g.FieldOfType("Missing", "repo.EventStore")
-	require.ErrorIs(t, err, edit.ErrAnchor)
-	assert.Contains(t, err.Error(), "a struct type Missing")
-}
-
 func TestImportNeedsAnImportBlock(t *testing.T) {
 	t.Parallel()
 
@@ -329,15 +193,191 @@ func TestImportNeedsAnImportBlock(t *testing.T) {
 	require.ErrorIs(t, err, edit.ErrAnchor)
 }
 
-func TestFuncFindsOneTopLevelFunctionOrMethod(t *testing.T) {
+const eventTypesSrc = `package entity
+
+func EventTypes() []Event {
+	return slices.Concat(
+		taskEvents(),
+		userEvents(), // the users
+	)
+}
+`
+
+func TestAppendArgAddsAnArgumentToAMultiLineCall(t *testing.T) {
 	t.Parallel()
 
-	g := parseGo(t, "package p\n\nfunc a() {}\n\nfunc (r *c) problem() {}\n\nfunc (r *c) b() {}\n\nfunc (s s) b() {}\n")
+	ins, err := parseGo(t, eventTypesSrc).AppendArg("EventTypes", "slices.Concat", "widgetEvents()")
+	require.NoError(t, err)
 
-	require.NoError(t, g.RequireFunc("a"))
-	require.NoError(t, g.RequireFunc("problem"))
-	require.ErrorIs(t, g.RequireFunc("missing"), edit.ErrAnchor)
-	require.ErrorIs(t, g.RequireFunc("b"), edit.ErrAnchor)
+	assert.Equal(t, `package entity
+
+func EventTypes() []Event {
+	return slices.Concat(
+		taskEvents(),
+		userEvents(), // the users
+		widgetEvents(),
+	)
+}
+`, applyGo(t, eventTypesSrc, ins))
+}
+
+func TestAppendArgAddsAnArgumentToAOneLineCall(t *testing.T) {
+	t.Parallel()
+
+	const src = "package p\n\nfunc f() {\n\tg(a, b)\n}\n"
+
+	ins, err := parseGo(t, src).AppendArg("f", "g", "c")
+	require.NoError(t, err)
+
+	assert.Equal(t, "package p\n\nfunc f() {\n\tg(a, b, c)\n}\n", applyGo(t, src, ins))
+}
+
+func TestAppendArgNeedsExactlyOneCall(t *testing.T) {
+	t.Parallel()
+
+	g := parseGo(t, "package p\n\nfunc f() {\n\tg(a)\n\tg(b)\n}\n\nfunc h() {}\n")
+
+	for name, args := range map[string][2]string{
+		"no such func": {"missing", "g"},
+		"no such call": {"h", "g"},
+		"two calls":    {"f", "g"},
+	} {
+		_, err := g.AppendArg(args[0], args[1], "c")
+		require.ErrorIs(t, err, edit.ErrAnchor, name)
+	}
+}
+
+const registerSrc = `package app
+
+func registerHandlers(cmds *cqrs.Commands, qs *cqrs.Queries) error {
+	signIn, err := newSSO(cfg)
+	if err != nil {
+		return err
+	}
+
+	task.Register(cmds, qs, task.Deps{Store: store})
+	exchange.Register(cmds, qs, exchange.Deps{
+		Store: store,
+	})
+	mail.Register(cmds, mailDeps)
+
+	return nil
+}
+`
+
+func TestAfterLastStmtGoesAfterTheLastMatchingStatement(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, registerSrc).AfterLastStmt("registerHandlers", edit.Call("*.Register"),
+		"widget.Register(cmds, qs, widget.Deps{\n\tStore: store,\n})")
+	require.NoError(t, err)
+
+	assert.Equal(t, `package app
+
+func registerHandlers(cmds *cqrs.Commands, qs *cqrs.Queries) error {
+	signIn, err := newSSO(cfg)
+	if err != nil {
+		return err
+	}
+
+	task.Register(cmds, qs, task.Deps{Store: store})
+	exchange.Register(cmds, qs, exchange.Deps{
+		Store: store,
+	})
+	mail.Register(cmds, mailDeps)
+	widget.Register(cmds, qs, widget.Deps{
+		Store: store,
+	})
+
+	return nil
+}
+`, applyGo(t, registerSrc, ins))
+}
+
+func TestAfterLastStmtMatchesAnAssignedCall(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, registerSrc).AfterLastStmt("registerHandlers", edit.Call("newSSO"), "other := 1")
+	require.NoError(t, err)
+	assert.Contains(t, applyGo(t, registerSrc, ins), "signIn, err := newSSO(cfg)\n\tother := 1\n")
+
+	_, err = parseGo(t, registerSrc).AfterLastStmt("registerHandlers", edit.Call("*.Deregister"), "x")
+	require.ErrorIs(t, err, edit.ErrAnchor)
+}
+
+// The matching statements are the place only when they are one run: split in two, the new one
+// could go after either, so the place is found twice.
+func TestAfterLastStmtRefusesMatchesInTwoRuns(t *testing.T) {
+	t.Parallel()
+
+	split := strings.Replace(registerSrc, "\tmail.Register(cmds, mailDeps)\n", "\tlog()\n\tmail.Register(cmds, mailDeps)\n", 1)
+
+	_, err := parseGo(t, split).AfterLastStmt("registerHandlers", edit.Call("*.Register"), "x")
+
+	require.ErrorIs(t, err, edit.ErrAnchor)
+	assert.Contains(t, err.Error(), "found a run of statements in registerHandlers that are each a call to *.Register 2 times")
+}
+
+const resolverSrc = `package graphql
+
+type query struct {
+	taskQuery
+	exchangeQuery
+}
+
+func newResolver(b cqrs.Buses) *resolver {
+	r := &resolver{}
+	r.query.taskQuery, r.mutation.taskMutation = task.New(b)
+	r.query.exchangeQuery = exchange.New(b)
+
+	return r
+}
+`
+
+func TestAppendFieldAddsToANamedStruct(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, resolverSrc).AppendField("query", "widgetQuery")
+	require.NoError(t, err)
+	assert.Contains(t, applyGo(t, resolverSrc, ins), "type query struct {\n\ttaskQuery\n\texchangeQuery\n\twidgetQuery\n}\n")
+
+	_, err = parseGo(t, resolverSrc).AppendField("mutation", "widgetMutation")
+	require.ErrorIs(t, err, edit.ErrAnchor)
+}
+
+// Each statement in newResolver fills in one domain's resolvers: the new one goes after the last.
+func TestAfterLastStmtGoesAfterEveryAssignedCall(t *testing.T) {
+	t.Parallel()
+
+	ins, err := parseGo(t, resolverSrc).AfterLastStmt("newResolver", edit.Call("*.New"), "r.query.widgetQuery = widget.New(b)")
+	require.NoError(t, err)
+	assert.Contains(t, applyGo(t, resolverSrc, ins), "exchange.New(b)\n\tr.query.widgetQuery = widget.New(b)\n\n\treturn r\n")
+}
+
+func TestAppendElementAddsToTheOneLiteralOfItsType(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct{ src, want string }{
+		"a multi-line list": {
+			"package app\n\nfunc modules() []module {\n\treturn []module{\n\t\ttaskModule(),\n\t}\n}\n",
+			"\t\ttaskModule(),\n\t\twidgetModule(),\n\t}\n",
+		},
+		"a one-line list": {
+			"package app\n\nfunc modules() []module {\n\treturn []module{taskModule()}\n}\n",
+			"[]module{taskModule(), widgetModule()}",
+		},
+	} {
+		ins, err := parseGo(t, tc.src).AppendElement("modules", "[]module", "widgetModule()")
+		require.NoError(t, err, name)
+		assert.Contains(t, applyGo(t, tc.src, ins), tc.want, name)
+	}
+
+	twoLists := "package app\n\nfunc modules() []module {\n\t_ = []module{}\n\n\treturn []module{}\n}\n"
+	_, err := parseGo(t, twoLists).AppendElement("modules", "[]module", "widgetModule()")
+	require.ErrorIs(t, err, edit.ErrAnchor, "two literals")
+
+	_, err = parseGo(t, twoLists).AppendElement("missing", "[]module", "widgetModule()")
+	require.ErrorIs(t, err, edit.ErrAnchor, "no such func")
 }
 
 func TestApplyKeepsTheOrderOfInsertionsAtOneOffset(t *testing.T) {

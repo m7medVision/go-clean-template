@@ -134,35 +134,23 @@ func TestNewDomainRefusesANameWhoseProtoNamesAnotherFileDeclares(t *testing.T) {
 }
 
 // sharedRepo holds the shared files and nothing of task's own, so only what those files declare
-// for task, its sentinels in errors.go and, with GraphQL, its resolver aliases, tell new-domain
-// that task is taken.
+// for task, its resolver aliases, tell new-domain that task is taken.
 func TestNewDomainChecksTheIdentifiersBeforeWritingAnything(t *testing.T) {
 	t.Parallel()
 
-	for name, tc := range map[string]struct {
-		transports []string
-		clash      string
-	}{
-		"every transport": {rules.Transports(), "internal/controller/graphql/resolver.go would declare taskQuery twice"},
-		"no GraphQL":      {[]string{"rest", "grpc"}, "internal/entity/errors.go would declare ErrTaskNotFound twice"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
+	dir := sharedRepo(t)
+	before := fingerprint(t, dir)
 
-			dir := sharedRepo(t)
-			before := fingerprint(t, dir)
+	err := newDomain(t.Context(), &domainRequest{root: dir, name: "task", transports: rules.Transports()}, &bytes.Buffer{})
 
-			err := newDomain(t.Context(), &domainRequest{root: dir, name: "task", transports: tc.transports}, &bytes.Buffer{})
-
-			require.ErrorIs(t, err, names.ErrInvalid)
-			assert.Contains(t, err.Error(), tc.clash)
-			assert.Equal(t, before, fingerprint(t, dir))
-		})
-	}
+	require.ErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "internal/controller/graphql/resolver.go would declare taskQuery twice")
+	assert.Equal(t, before, fingerprint(t, dir))
 }
 
-// The files of the GraphQL schema share its Query and Mutation, so a name free of files can still
-// clash there: all-task would add the field allTasks to Query, which task.graphqls has.
+// Each GraphQL field has its own schema file, named after it, so a name free of every folder and
+// type can still give a field the schema has: all-task would add the field allTasks to Query in
+// all_tasks.graphqls, which is task's.
 func TestNewDomainRefusesANameWhoseGraphQLFieldsTheSchemaHas(t *testing.T) {
 	t.Parallel()
 
@@ -170,12 +158,14 @@ func TestNewDomainRefusesANameWhoseGraphQLFieldsTheSchemaHas(t *testing.T) {
 	n := parseName(t, "all-task")
 	require.NoError(t, rules.DomainFree(t.Context(), r, n), "no file, folder, service or type is called all-task")
 
-	err := rules.IdentifiersFree(r, n, planOf(t, r, n, []string{"graphql"}).plan)
+	pl := planOf(t, r, n, []string{"graphql"})
+	err := rules.Check(t.Context(), r, pl.plan, pl.errs)
 
-	require.ErrorIs(t, err, names.ErrInvalid)
-	assert.Contains(t, err.Error(), "internal/controller/graphql/schema/all_task.graphqls would declare Query.allTasks, "+
-		"which internal/controller/graphql/schema/task.graphqls declares already")
-	require.NoError(t, rules.IdentifiersFree(r, n, planOf(t, r, n, []string{"rest"}).plan))
+	require.ErrorIs(t, err, rules.ErrTargets)
+	assert.Contains(t, err.Error(), "internal/controller/graphql/schema/all_tasks.graphqls, a file to create, exists")
+
+	pl = planOf(t, r, n, []string{"rest"})
+	require.NoError(t, rules.Check(t.Context(), r, pl.plan, pl.errs))
 }
 
 func TestEveryCreatedFileMatchesItsGolden(t *testing.T) {
@@ -285,11 +275,11 @@ func readAsTheirFiles(t *testing.T, pl *planner) {
 	created := createdFiles(t, pl.plan)
 
 	for _, tmpl := range setTemplates(t, pl.set) {
-		if kind(pl.set, tmpl) != _createsAFile {
+		if kind(tmpl) != _createsAFile {
 			continue
 		}
 
-		f := renderFile(t, tmpl, pl.data)
+		f := renderFile(t, pl.tmpl, tmpl, pl.data)
 		if content, ok := created[f.Path]; ok {
 			assert.Equal(t, string(content), string(f.Content),
 				"%s does not render go/format-clean for %s: write it as the file gofmt would", tmpl, pl.plan.Title())
@@ -303,7 +293,7 @@ func TestEveryTemplateIsUsedByALayer(t *testing.T) {
 	used := usedTemplates(t, planWidget(t))
 
 	for _, tmpl := range setTemplates(t, _domainSet) {
-		assert.True(t, used[tmpl], "no layer of new-domain uses %s", tmpl)
+		assert.True(t, used[path.Join(_domainSet, tmpl)], "no layer of new-domain uses %s", tmpl)
 	}
 }
 
@@ -314,20 +304,20 @@ const (
 	_isTheChecklist
 )
 
-// kind is the kind of the template tmpl of set: one that creates a file, one that holds the text
-// of an insertion, or the checklist.
-func kind(set, tmpl string) int {
+// kind is the kind of the template tmpl, a path in its set: one that creates a file, one that holds
+// the text of an insertion, or the checklist.
+func kind(tmpl string) int {
 	switch {
-	case tmpl == path.Join(set, _nextTemplate):
+	case tmpl == _nextTemplate:
 		return _isTheChecklist
-	case strings.HasPrefix(tmpl, path.Join(set, _editsDir)+"/"):
+	case strings.HasPrefix(tmpl, _editsDir+"/"):
 		return _insertsText
 	default:
 		return _createsAFile
 	}
 }
 
-// setTemplates returns the path of every template of set.
+// setTemplates returns the path in set of every template of set.
 func setTemplates(t *testing.T, set string) []string {
 	t.Helper()
 
@@ -335,7 +325,7 @@ func setTemplates(t *testing.T, set string) []string {
 
 	require.NoError(t, fs.WalkDir(templates.FS(), set, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
-			all = append(all, p)
+			all = append(all, strings.TrimPrefix(p, set+"/"))
 		}
 
 		return err
@@ -344,11 +334,11 @@ func setTemplates(t *testing.T, set string) []string {
 	return all
 }
 
-// renderFile renders the template tmpl, which creates a file, with data.
-func renderFile(t *testing.T, tmpl string, data *templates.Data) templates.File {
+// renderFile renders the template tmpl of the set fsys, which creates a file, with data.
+func renderFile(t *testing.T, fsys fs.FS, tmpl string, data *templates.Data) templates.File {
 	t.Helper()
 
-	files, err := templates.Glob(templates.FS(), tmpl, data)
+	files, err := templates.Glob(fsys, tmpl, data)
 	require.NoError(t, err)
 	require.Len(t, files, 1, tmpl)
 
@@ -375,7 +365,8 @@ func usedTemplates(t *testing.T, plans ...*planner) map[string]bool {
 		}
 
 		for _, tmpl := range setTemplates(t, pl.set) {
-			used[tmpl] = used[tmpl] || usedBy(t, pl, tmpl, after)
+			key := path.Join(pl.set, tmpl)
+			used[key] = used[key] || usedBy(t, pl, tmpl, after)
 		}
 	}
 
@@ -387,14 +378,14 @@ func usedTemplates(t *testing.T, plans ...*planner) map[string]bool {
 func usedBy(t *testing.T, pl *planner, tmpl string, after map[string]string) bool {
 	t.Helper()
 
-	switch kind(pl.set, tmpl) {
+	switch kind(tmpl) {
 	case _isTheChecklist:
-		text, err := templates.Text(templates.FS(), tmpl, pl.data)
+		text, err := templates.Text(pl.tmpl, tmpl, pl.data)
 		require.NoError(t, err)
 
 		return pl.next == text+"\n"
 	case _insertsText:
-		text, err := templates.Text(templates.FS(), tmpl, pl.data)
+		text, err := templates.Text(pl.tmpl, tmpl, pl.data)
 		require.NoError(t, err)
 
 		edited, place := editedPlace(t, pl, tmpl)
@@ -405,7 +396,7 @@ func usedBy(t *testing.T, pl *planner, tmpl string, after map[string]string) boo
 				return strings.Contains(err.Error(), edited+":") && strings.Contains(err.Error(), place)
 			})
 	default:
-		_, ok := after[renderFile(t, tmpl, pl.data).Path]
+		_, ok := after[renderFile(t, pl.tmpl, tmpl, pl.data).Path]
 
 		return ok
 	}
@@ -418,7 +409,7 @@ func usedBy(t *testing.T, pl *planner, tmpl string, after map[string]string) boo
 func editedPlace(t *testing.T, pl *planner, tmpl string) (edited, place string) {
 	t.Helper()
 
-	name := strings.TrimSuffix(strings.TrimPrefix(tmpl, path.Join(pl.set, _editsDir)+"/"), ".tmpl")
+	name := strings.TrimSuffix(strings.TrimPrefix(tmpl, _editsDir+"/"), ".tmpl")
 
 	end := -1
 
@@ -458,7 +449,8 @@ func TestCreatedGoFilesAlignForALongerName(t *testing.T) {
 }
 
 // Each transport's layer creates the files under its controller folder, and any it has elsewhere,
-// and edits its shared files, such as its router; a domain without the transport gets none of them.
+// and edits its shared files, as GraphQL's root resolver; a domain without the transport gets none
+// of them.
 // The integration test, which every domain gets, tests the transport only when the domain has it.
 func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 	t.Parallel()
@@ -471,25 +463,26 @@ func TestATransportLayerRunsOnlyForItsTransport(t *testing.T) {
 		test           string
 	}{
 		{
-			transport: "rest", dir: "internal/controller/restapi/v1/widget/", files: 7,
-			edited: []string{"internal/controller/restapi/v1/router.go"},
-			test:   "func TestHTTPWidget",
+			transport: "rest", dir: "internal/controller/restapi/v1/widget/", files: 10,
+			test: "func TestHTTPWidget",
 		},
 		{
-			transport: "grpc", dir: "internal/controller/grpc/v1/widget/", files: 6,
+			transport: "grpc", dir: "internal/controller/grpc/v1/widget/", files: 8,
 			elsewhere: []string{"docs/proto/v1/widget.proto"},
-			edited:    []string{"internal/controller/grpc/v1/router.go"},
 			test:      "func TestGRPCWidget",
 		},
 		{
-			transport: "graphql", dir: "internal/controller/graphql/widget/", files: 6,
-			elsewhere: []string{"internal/controller/graphql/schema/widget.graphqls"},
-			edited: []string{
-				"internal/controller/graphql/resolver.go",
-				"internal/controller/graphql/gqlerr/gqlerr.go",
-				"internal/controller/graphql/gqlgen.yml",
+			transport: "graphql", dir: "internal/controller/graphql/widget/", files: 9,
+			elsewhere: []string{
+				"internal/controller/graphql/schema/widget_types.graphqls",
+				"internal/controller/graphql/schema/widget.graphqls",
+				"internal/controller/graphql/schema/widgets.graphqls",
+				"internal/controller/graphql/schema/create_widget.graphqls",
+				"internal/controller/graphql/schema/update_widget.graphqls",
+				"internal/controller/graphql/schema/delete_widget.graphqls",
 			},
-			test: "func TestGraphQLWidget",
+			edited: []string{"internal/controller/graphql/resolver.go"},
+			test:   "func TestGraphQLWidget",
 		},
 	} {
 		t.Run(tc.transport, func(t *testing.T) {
@@ -558,14 +551,14 @@ func TestSelectLayersRunsTheSharedLayersAndTheTransportsAskedFor(t *testing.T) {
 
 	mark := func(name string) func(*planner) { return func(*planner) { ran = append(ran, name) } }
 	all := []layer{
-		{plan: mark("entity")},
-		{transport: "rest", plan: mark("rest")},
-		{transport: "grpc", plan: mark("grpc")},
-		{plan: mark("integration")},
+		{edits: mark("entity")},
+		{transport: "rest", edits: mark("rest")},
+		{transport: "grpc", edits: mark("grpc")},
+		{edits: mark("integration")},
 	}
 
 	for _, l := range selectLayers(all, []string{"grpc"}) {
-		l.plan(nil)
+		l.edits(nil)
 	}
 
 	assert.Equal(t, []string{"entity", "grpc", "integration"}, ran)
@@ -621,8 +614,8 @@ func TestPlanningKeepsAMissingFileAndAMissingAnchorForTheRules(t *testing.T) {
 
 	pl := planOf(t, rules.Repo{FS: fsys}, parseName(t, "widget"), nil)
 
-	require.Len(t, pl.errs, 4, "event.go lacks the anchor; errors.go, contracts.go and buses.go are missing")
-	require.ErrorIs(t, errors.Join(pl.errs...), rules.ErrTargets, "errors.go is missing")
+	require.Len(t, pl.errs, 2, "event.go lacks the anchor; modules.go is missing")
+	require.ErrorIs(t, errors.Join(pl.errs...), rules.ErrTargets, "modules.go is missing")
 	assert.Contains(t, errors.Join(pl.errs...).Error(), "slices.Concat")
 	assert.NotEmpty(t, pl.plan.Created(), "the files to create are still planned, for the dry run")
 }
@@ -634,22 +627,15 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 
 	var out bytes.Buffer
 	require.NoError(t, newDomain(t.Context(), &domainRequest{root: dir, name: "invoice", transports: rules.Transports()}, &out))
-	assert.Contains(t, out.String(), "created 43, edited 9")
+	assert.Contains(t, out.String(), "created 57, edited 3")
 
 	events, err := os.ReadFile(filepath.Join(dir, "internal", "entity", "event.go"))
 	require.NoError(t, err)
-	assert.Contains(t, string(events), "\t\tinvoiceEvents(),\n\t)")
+	assert.Contains(t, string(events), "\t\tInvoiceEvents(),\n\t)")
 
-	router, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "restapi", "v1", "router.go"))
+	modules, err := os.ReadFile(filepath.Join(dir, "internal", "app", "modules.go"))
 	require.NoError(t, err)
-	assert.Contains(t, string(router), "\tinvoice.NewRoutes(api, b, l)\n}", "after the last NewRoutes call")
-	assert.Contains(t, string(router), "\t\"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/invoice\"\n")
-
-	grpcRouter, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "grpc", "v1", "router.go"))
-	require.NoError(t, err)
-	assert.Contains(t, string(grpcRouter), "\tv1.RegisterInvoiceServiceServer(app, invoice.New(b, l))\n}",
-		"after the last Register*ServiceServer call")
-	assert.Contains(t, string(grpcRouter), "\t\"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/invoice\"\n")
+	assert.Contains(t, string(modules), "\t\tinvoiceModule(),\n\t}\n", "the last of the modules")
 
 	resolver, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "graphql", "resolver.go"))
 	require.NoError(t, err)
@@ -658,25 +644,11 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 		"\tinvoiceQuery    = invoice.Query\n\tinvoiceMutation = invoice.Mutation\n)",
 		"\texchangeQuery\n\tinvoiceQuery\n}",
 		"\ttaskMutation\n\tinvoiceMutation\n}",
-		"\ttaskQ, taskM := task.New(b, l)\n\tinvoiceQ, invoiceM := invoice.New(b, l)\n",
-		"exchangeQuery: exchange.New(b, l), invoiceQuery: invoiceQ}",
-		"mutation{taskMutation: taskM, invoiceMutation: invoiceM}",
+		"exchange.New(b, l)\n\tr.query.invoiceQuery, r.mutation.invoiceMutation = invoice.New(b, l)\n",
 		"\t\"github.com/m7medvision/go-clean-template/internal/controller/graphql/invoice\"\n",
 	} {
 		assert.Contains(t, string(resolver), want)
 	}
-
-	gqlerr, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "graphql", "gqlerr", "gqlerr.go"))
-	require.NoError(t, err)
-	assert.Contains(t, string(gqlerr), "\t\t{entity.ErrInvoiceNotFound, _codeNotFound, \"invoice not found\"},\n"+
-		"\t\t{entity.ErrInvoiceForbidden, _codeForbidden, \"forbidden\"},\n\t\t// Any message can produce these three",
-		"ahead of the shared entries")
-
-	gqlgen, err := os.ReadFile(filepath.Join(dir, "internal", "controller", "graphql", "gqlgen.yml"))
-	require.NoError(t, err)
-	assert.Contains(t, string(gqlgen),
-		"\n  Invoice:\n    model: github.com/m7medvision/go-clean-template/internal/entity.Invoice\n",
-		"the last of the models")
 
 	before := fingerprint(t, dir)
 

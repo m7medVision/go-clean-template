@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"net"
 	"testing"
 	"time"
@@ -36,14 +36,6 @@ const (
 	_storedAt = "2026-01-02T03:04:05Z"
 )
 
-type noopLogger struct{}
-
-func (noopLogger) Debug(any, ...any)   {}
-func (noopLogger) Info(string, ...any) {}
-func (noopLogger) Warn(string, ...any) {}
-func (noopLogger) Error(any, ...any)   {}
-func (noopLogger) Fatal(any, ...any)   {}
-
 // stored is the {{.Name.Words}} the fake handlers answer with.
 func stored() entity.{{.Name.Go}} {
 	at := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
@@ -68,20 +60,20 @@ type fake{{.Name.Go}} struct {
 // buses registers the fake's handlers on real buses whose one step is keep.
 func (f *fake{{.Name.Go}}) buses() cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
-	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+	write := func(context.Context) (entity.Written, error) { return entity.Written{ID: f.stored.ID}, f.err }
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Create{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Update{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Create{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Update{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
 
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.Get{{.Name.Go}}, entity.{{.Name.Go}}](
 		func(context.Context, query.Get{{.Name.Go}}) (entity.{{.Name.Go}}, error) { return f.stored, f.err }))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, query.{{.Name.Go}}Page](
-		func(context.Context, query.List{{.Name.Plural.Go}}) (query.{{.Name.Go}}Page, error) {
-			return query.{{.Name.Go}}Page{ {{- .Name.Plural.Go}}: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, entity.List[entity.{{.Name.Go}}]](
+		func(context.Context, query.List{{.Name.Plural.Go}}) (entity.List[entity.{{.Name.Go}}], error) {
+			return entity.List[entity.{{.Name.Go}}]{Items: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}
@@ -101,8 +93,8 @@ func dial(t *testing.T, f *fake{{.Name.Go}}) (pb.{{.Name.Go}}ServiceClient, *jwt
 
 	manager := jwt.New("test-secret", time.Hour)
 	lis := bufconn.Listen(_bufSize)
-	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
-	pb.Register{{.Name.Go}}ServiceServer(srv, grpc{{.Name.Pkg}}.New(f.buses(), noopLogger{}))
+	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.Auth(manager)))
+	pb.Register{{.Name.Go}}ServiceServer(srv, grpc{{.Name.Pkg}}.New(f.buses(), slog.New(slog.DiscardHandler)))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -202,73 +194,21 @@ func TestEach{{.Name.Go}}RPCDecodesTheRequestAndEncodesTheAnswer(t *testing.T) {
 	}
 }
 
-func TestEach{{.Name.Go}}RPCNeedsTheCaller(t *testing.T) {
+// rpcerr's tests own which code each kind of failure gets; this checks that every RPC's failure
+// reaches the client. Until the handlers are written, each answers Unimplemented.
+func TestEach{{.Name.Go}}RPCAnswersAStubHandlerWithUnimplemented(t *testing.T) {
 	t.Parallel()
 
 	for name, c := range calls() {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			fake := &fake{{.Name.Go}}{stored: stored()}
-			client, _ := dial(t, fake)
-
-			_, err := c.do(t.Context(), client)
-
-			assert.Equal(t, codes.Unauthenticated, status.Code(err))
-			assert.Empty(t, fake.sent, "nothing is sent without a caller")
-		})
-	}
-}
-
-// Every RPC maps what a handler fails with the same way: first the failures any command can
-// produce, then the {{.Name.Words}} errors, then anything else. Until the handlers are written, every RPC
-// answers Unimplemented.
-func TestEach{{.Name.Go}}RPCMapsEachFailure(t *testing.T) {
-	t.Parallel()
-
-	for failure, tc := range map[string]struct {
-		err  error
-		code codes.Code
-	}{
-		"a stub handler":      {entity.ErrNotImplemented, codes.Unimplemented},
-		"a read model behind": {entity.ErrReadModelBehind, codes.Unavailable},
-		"a concurrent change": {entity.ErrConcurrencyConflict, codes.Aborted},
-		"another user's":      {entity.Err{{.Name.Go}}Forbidden, codes.PermissionDenied},
-		"none with the ID":    {entity.Err{{.Name.Go}}NotFound, codes.NotFound},
-		"anything else":       {io.ErrUnexpectedEOF, codes.Internal},
-	} {
-		for name, c := range calls() {
-			t.Run(name+"/"+failure, func(t *testing.T) {
-				t.Parallel()
-
-				fake := &fake{{.Name.Go}}{stored: stored(), err: fmt.Errorf("handler: %w", tc.err)}
-				client, manager := dial(t, fake)
-
-				_, err := c.do(signedIn(t, manager), client)
-
-				assert.Equal(t, tc.code, status.Code(err), err)
-			})
-		}
-	}
-}
-
-func TestList{{.Name.Plural.Go}}RefusesANegativePage(t *testing.T) {
-	t.Parallel()
-
-	for name, req := range map[string]*pb.List{{.Name.Plural.Go}}Request{
-		"limit":  {Limit: -1},
-		"offset": {Offset: -1},
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			fake := &fake{{.Name.Go}}{stored: stored()}
+			fake := &fake{{.Name.Go}}{stored: stored(), err: fmt.Errorf("handler: %w", entity.ErrNotImplemented)}
 			client, manager := dial(t, fake)
 
-			_, err := client.List{{.Name.Plural.Go}}(signedIn(t, manager), req)
+			_, err := c.do(signedIn(t, manager), client)
 
-			assert.Equal(t, codes.InvalidArgument, status.Code(err))
-			assert.Empty(t, fake.sent, "nothing is sent for a page that is not one")
+			assert.Equal(t, codes.Unimplemented, status.Code(err), err)
 		})
 	}
 }

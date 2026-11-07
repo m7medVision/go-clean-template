@@ -1,0 +1,13 @@
+# The {{.Name.Words}} types, which bind to the entity types of their names. Add a field to {{.Name.Go}} for each
+# one entity.{{.Name.Go}} gets. The mutations take only the ID until then, since GraphQL has no empty input
+# type: with the first field, give create{{.Name.Go}} and update{{.Name.Go}} an input type in their files, as
+# create_task.graphqls has.
+
+type {{.Name.Go}} {
+  id: ID!
+  userId: ID!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type {{.Name.Go}}List { {{.Name.Plural.Lower}}: [{{.Name.Go}}!]!  total: Int! }

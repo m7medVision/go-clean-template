@@ -1,0 +1,26 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+
+	"{{.Module}}/internal/controller/graphql/gqlerr"
+	"{{.Module}}/internal/controller/graphql/middleware"
+	"{{.Module}}/internal/entity"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+// Update{{.Name.Go}} takes only the ID until the {{.Name.Words}} has fields, as Create{{.Name.Go}} takes nothing.
+func (m Mutation) Update{{.Name.Go}}(ctx context.Context, id string) (*entity.{{.Name.Go}}, error) {
+	caller, err := middleware.Caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cqrs.SendCommand(ctx, m.cmds, command.Update{{.Name.Go}}{UserID: caller.UserID, {{.Name.Go}}ID: id})
+	if err != nil {
+		return nil, gqlerr.Map(ctx, m.l, err, "update{{.Name.Go}}")
+	}
+
+	return m.result(ctx, caller.UserID, id, "update{{.Name.Go}}")
+}

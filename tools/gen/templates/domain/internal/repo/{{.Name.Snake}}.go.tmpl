@@ -1,0 +1,17 @@
+package repo
+
+import (
+	"context"
+
+	"{{.Module}}/internal/entity"
+)
+
+//go:generate mockgen -source={{.Name.Snake}}.go -destination=repomock/{{.Name.Snake}}.go -package=repomock
+
+// {{.Name.Go}}ReadModel reads the {{.Name.Plural.Snake}} table, which only the {{.Name.Words}} projector writes. Get of
+// one missing {{.Name.Words}} is entity.Err{{.Name.Go}}NotFound, and of another user's entity.Err{{.Name.Go}}Forbidden.
+type {{.Name.Go}}ReadModel interface {
+	Get(ctx context.Context, userID, {{.Name.Lower}}ID string) (entity.{{.Name.Go}}, error)
+	// List is one page of the user's {{.Name.Plural.Words}}, newest first.
+	List(ctx context.Context, userID string, page entity.Page) (entity.List[entity.{{.Name.Go}}], error)
+}

@@ -5,7 +5,6 @@ import (
 
 	"{{.Module}}/internal/controller/graphql/graphqltest"
 	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/query"
-	"github.com/stretchr/testify/assert"
 )
 
 // queries are one request for each {{.Name.Words}} field of Query, keyed by the field.
@@ -37,28 +36,8 @@ func TestEach{{.Name.Go}}QueryNeedsTheCaller(t *testing.T) {
 }
 
 // Until the query handlers are written, each query answers NOT_IMPLEMENTED.
-func TestEach{{.Name.Go}}QueryMapsEachFailure(t *testing.T) {
+func TestEach{{.Name.Go}}QueryAnswersAStubHandlerWithNotImplemented(t *testing.T) {
 	t.Parallel()
 
-	checkFailures(t, queries())
-}
-
-func Test{{.Name.Plural.Go}}RefusesAPageThatIsNotOne(t *testing.T) {
-	t.Parallel()
-
-	for name, gql := range map[string]string{
-		"limit":  `query { {{.Name.Plural.Lower}}(limit: 0) { total } }`,
-		"offset": `query { {{.Name.Plural.Lower}}(offset: -1) { total } }`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			fake := &fake{{.Name.Go}}{stored: stored()}
-
-			resp := do(t, fake, true, gql)
-
-			assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
-			assert.Empty(t, fake.sent, "nothing is sent for a page that is not one")
-		})
-	}
+	checkStub(t, queries())
 }

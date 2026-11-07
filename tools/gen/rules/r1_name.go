@@ -17,16 +17,18 @@ import (
 )
 
 // DomainFree checks the rest of R1 for a new domain: nothing in the repository uses its name yet.
-// That means no use-case or read-model folder, no entity file, no table, no controller folder on
-// any transport, no proto service, no GraphQL type and no package (PackageNameFree). A controller
-// folder can be a package the domains share, such as the REST response package, which the domain's
-// controllers would join. The pattern and keyword checks are names.Parse's.
+// That means no use-case or read-model folder, no entity, contract or module file, no table, no
+// controller folder on any transport, no proto service, no GraphQL type and no package
+// (PackageNameFree). A controller folder can be a package the domains share, such as the REST
+// response package, which the domain's controllers would join. The pattern and keyword checks are names.Parse's.
 func DomainFree(ctx context.Context, r Repo, n *names.Name) error {
 	owned := []string{
 		"internal/usecase/" + n.Pkg,
 		"internal/repo/persistent/" + n.Pkg,
 		"internal/entity/" + n.Snake + ".go",
 		"internal/entity/" + n.Snake + "_aggregate.go",
+		"internal/repo/" + n.Snake + ".go",
+		"internal/app/" + n.Snake + ".go",
 		"internal/app/schema/" + n.Plural.Snake + ".hcl",
 	}
 
@@ -339,7 +341,9 @@ func topLevel(p string, src []byte) (pkg string, idents []string, err error) {
 	return file.Name.Name, idents, nil
 }
 
-// declNames are the identifiers one top-level declaration declares.
+// declNames are the identifiers one top-level declaration declares. A struct type's fields are its
+// identifiers too, as Type.Field like its methods, with which they share a namespace: a message
+// that would carry the caller's UserID and a record's ID named UserID declares one field twice.
 func declNames(d ast.Decl) []string {
 	var ids []string
 
@@ -355,6 +359,7 @@ func declNames(d ast.Decl) []string {
 			switch s := s.(type) {
 			case *ast.TypeSpec:
 				ids = append(ids, s.Name.Name)
+				ids = append(ids, fieldNames(s)...)
 			case *ast.ValueSpec:
 				for _, id := range s.Names {
 					ids = append(ids, id.Name)
@@ -366,7 +371,33 @@ func declNames(d ast.Decl) []string {
 	return ids
 }
 
-// receiverType is the name of a method's receiver type: T for T, *T, T[K] and *T[K].
+// fieldNames are the fields of the struct type s declares, each as Type.Field; an embedded field
+// is named after its type, and the blank field is left out.
+func fieldNames(s *ast.TypeSpec) []string {
+	st, ok := s.Type.(*ast.StructType)
+	if !ok {
+		return nil
+	}
+
+	var ids []string
+
+	for _, f := range st.Fields.List {
+		if len(f.Names) == 0 {
+			ids = append(ids, s.Name.Name+"."+receiverType(f.Type))
+		}
+
+		for _, id := range f.Names {
+			if id.Name != "_" {
+				ids = append(ids, s.Name.Name+"."+id.Name)
+			}
+		}
+	}
+
+	return ids
+}
+
+// receiverType is the name of a method's receiver type, or of an embedded field's: T for T, *T,
+// T[K], *T[K] and pkg.T.
 func receiverType(e ast.Expr) string {
 	switch t := e.(type) {
 	case *ast.StarExpr:
@@ -375,6 +406,8 @@ func receiverType(e ast.Expr) string {
 		return receiverType(t.X)
 	case *ast.IndexListExpr:
 		return receiverType(t.X)
+	case *ast.SelectorExpr:
+		return t.Sel.Name
 	case *ast.Ident:
 		return t.Name
 	default:

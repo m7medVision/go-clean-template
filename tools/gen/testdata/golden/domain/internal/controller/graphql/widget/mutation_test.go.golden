@@ -45,8 +45,8 @@ func TestEachWidgetMutationNeedsTheCaller(t *testing.T) {
 }
 
 // Until the command handlers are written, each mutation answers NOT_IMPLEMENTED.
-func TestEachWidgetMutationMapsEachFailure(t *testing.T) {
+func TestEachWidgetMutationAnswersAStubHandlerWithNotImplemented(t *testing.T) {
 	t.Parallel()
 
-	checkFailures(t, mutations())
+	checkStub(t, mutations())
 }

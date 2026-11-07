@@ -15,27 +15,29 @@ import (
 )
 
 // fixtureRoot is a repository with three domains: task on every transport, exchange on every
-// transport with its read model under another name, and user without GraphQL.
+// transport with no GraphQL mutations, and user without GraphQL. Each declares what the code
+// new-usecase generates uses: its Deps fields, its REST _tag and its GraphQL resolver types.
 func fixtureRoot() fstest.MapFS {
 	file := func(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
 
 	return fstest.MapFS{
 		"internal/entity/task.go":                             file("package entity\n"),
+		"internal/usecase/task/register.go":                   file("package task\n\ntype Deps struct {\n\tStore int\n\tTasks int\n}\n"),
 		"internal/usecase/task/command/create_task.go":        file("package command\n\ntype CreateTask struct{}\n"),
 		"internal/usecase/task/query/list_tasks.go":           file("package query\n\ntype ListTasks struct{}\n\ntype GetTask struct{}\n"),
-		"internal/usecase/exchange/register.go":               file("package exchange\n"),
-		"internal/usecase/user/register.go":                   file("package user\n"),
+		"internal/usecase/exchange/register.go":               file("package exchange\n\ntype Deps struct{ Store, Exchanges int }\n"),
+		"internal/usecase/user/register.go":                   file("package user\n\ntype Deps struct{ Store, Users int }\n"),
 		"internal/repo/persistent/conversion/conversion.go":   file("package conversion\n"),
 		"internal/app/schema/tasks.hcl":                       file("table \"tasks\" {}\n"),
 		"docs/proto/v1/task.proto":                            file("syntax = \"proto3\";\n\nservice TaskService {}\n"),
 		"internal/controller/graphql/schema/task.graphqls":    file("type Task { id: ID! }\n"),
-		"internal/controller/restapi/v1/task/controller.go":   file("package task\n"),
+		"internal/controller/restapi/v1/task/controller.go":   file("package task\n\nconst _tag = \"tasks\"\n"),
 		"internal/controller/grpc/v1/task/controller.go":      file("package task\n"),
-		"internal/controller/graphql/task/resolver.go":        file("package task\n"),
-		"internal/controller/restapi/v1/exchange/exchange.go": file("package exchange\n"),
+		"internal/controller/graphql/task/resolver.go":        file("package task\n\ntype Query struct{}\n\ntype Mutation struct{}\n"),
+		"internal/controller/restapi/v1/exchange/exchange.go": file("package exchange\n\nconst _tag = \"exchange\"\n"),
 		"internal/controller/grpc/v1/exchange/exchange.go":    file("package exchange\n"),
-		"internal/controller/graphql/exchange/query.go":       file("package exchange\n"),
-		"internal/controller/restapi/v1/user/controller.go":   file("package user\n"),
+		"internal/controller/graphql/exchange/resolver.go":    file("package exchange\n\ntype Query struct{}\n"),
+		"internal/controller/restapi/v1/user/controller.go":   file("package user\n\nconst _tag = \"users\"\n"),
 		"internal/controller/grpc/v1/user/controller.go":      file("package user\n"),
 	}
 }
@@ -204,42 +206,73 @@ func TestUsecaseTargetsCheckTheDomainTheMessageAndTheTransports(t *testing.T) {
 
 	r := repoOf(fixtureRoot())
 
-	require.NoError(t, rules.UsecaseTargets(r, "task", "command", name(t, "archive-task"), []string{"rest", "graphql"}))
+	require.NoError(t, rules.UsecaseTargets(r, name(t, "task"), "command", name(t, "archive-task"), []string{"rest", "graphql"}))
+	require.NoError(t, rules.UsecaseTargets(r, name(t, "exchange"), "query", name(t, "count-conversions"), rules.Transports()))
 
 	for what, args := range map[string]struct {
 		domain, kind, msg string
 		transports        []string
+		says              string
 	}{
-		"no such domain":           {"invoice", "command", "archive-invoice", []string{"rest"}},
-		"message taken":            {"task", "command", "create-task", []string{"rest"}},
-		"declared in another file": {"task", "query", "get-task", nil},
-		"transport it lacks":       {"user", "command", "lock-user", []string{"graphql"}},
+		"no such domain":           {"invoice", "command", "archive-invoice", []string{"rest"}, `there is no domain "invoice"`},
+		"message taken":            {"task", "command", "create-task", []string{"rest"}, "already declares CreateTask"},
+		"declared in another file": {"task", "query", "get-task", nil, "already declares GetTask"},
+		"transport it lacks":       {"user", "command", "lock-user", []string{"graphql"}, "user has no graphql controllers"},
+		"no resolver type":         {"exchange", "command", "cancel-conversion", []string{"graphql"}, "graphql/exchange declares no Mutation"},
 	} {
-		err := rules.UsecaseTargets(r, args.domain, args.kind, name(t, args.msg), args.transports)
+		err := rules.UsecaseTargets(r, name(t, args.domain), args.kind, name(t, args.msg), args.transports)
 		require.ErrorIs(t, err, rules.ErrTargets, what)
+		assert.Contains(t, err.Error(), args.says, what)
 	}
 
 	fsys := fixtureRoot()
 	fsys["internal/usecase/task/command/broken.go"] = &fstest.MapFile{Data: []byte("package command\n\nfunc {")}
 
-	err := rules.UsecaseTargets(repoOf(fsys), "task", "command", name(t, "archive-task"), nil)
+	err := rules.UsecaseTargets(repoOf(fsys), name(t, "task"), "command", name(t, "archive-task"), nil)
 	require.Error(t, err, "a message file that does not parse cannot say what it declares")
 	assert.Contains(t, err.Error(), "internal/usecase/task/command/broken.go")
 }
 
-// A command on a domain whose GraphQL schema has no Mutation, as exchange's has only Query, gets no
-// GraphQL field by default: the field would have no type to go on. Asked for, it fails R4.
+// The generated code uses what every domain declares, by the names every domain gives it; a domain
+// that does not is refused before anything is planned.
+func TestUsecaseTargetsNeedWhatTheGeneratedCodeUses(t *testing.T) {
+	t.Parallel()
+
+	for what, tc := range map[string]struct {
+		file, src, kind string
+		transports      []string
+		says            string
+	}{
+		"the event store": {
+			"internal/usecase/task/register.go", "package task\n\ntype Deps struct{ Tasks int }\n", "command", nil,
+			"internal/usecase/task declares no Deps.Store",
+		},
+		"the read model": {
+			"internal/usecase/task/register.go", "package task\n\ntype Deps struct{ Store, History int }\n", "query", nil,
+			"internal/usecase/task declares no Deps.Tasks",
+		},
+		"the REST tag": {
+			"internal/controller/restapi/v1/task/controller.go", "package task\n\nconst _tasksTag = \"tasks\"\n", "query",
+			[]string{"rest"},
+			"internal/controller/restapi/v1/task declares no _tag",
+		},
+	} {
+		fsys := fixtureRoot()
+		fsys[tc.file] = &fstest.MapFile{Data: []byte(tc.src)}
+
+		err := rules.UsecaseTargets(repoOf(fsys), name(t, "task"), tc.kind, name(t, "count-tasks"), tc.transports)
+		require.ErrorIs(t, err, rules.ErrTargets, what)
+		assert.Contains(t, err.Error(), tc.says, what)
+	}
+}
+
+// A command on a domain whose GraphQL resolvers have no Mutation, as exchange's have only Query,
+// gets no GraphQL field by default: the field's resolver would be a method of no type. Asked for,
+// it fails R2.
 func TestUsecaseTransportsLeaveOutGraphQLWithoutTheRootType(t *testing.T) {
 	t.Parallel()
 
-	fsys := fixtureRoot()
-	fsys["internal/controller/graphql/schema/task.graphqls"] = &fstest.MapFile{
-		Data: []byte("type Task { id: ID! }\n\ntype Query { task: Task }\n\ntype Mutation { deleteTask: Boolean }\n"),
-	}
-	fsys["internal/controller/graphql/schema/exchange.graphqls"] = &fstest.MapFile{
-		Data: []byte("type Conversion { rate: String! }\n\nextend type Query { exchangeHistory: [Conversion!]! }\n"),
-	}
-	r := repoOf(fsys)
+	r := repoOf(fixtureRoot())
 
 	for _, tc := range []struct {
 		domain, kind string
@@ -257,23 +290,32 @@ func TestUsecaseTransportsLeaveOutGraphQLWithoutTheRootType(t *testing.T) {
 	}
 }
 
-// A domain with GraphQL controllers needs its schema file to say which root types it has: without
-// one it fails R2, and one that does not parse fails too.
-func TestUsecaseTransportsNeedTheSchemaOfADomainWithGraphQL(t *testing.T) {
+// A GraphQL resolver file that does not parse cannot say which root types it resolves.
+func TestUsecaseTransportsNeedTheResolversToParse(t *testing.T) {
 	t.Parallel()
 
-	const schema = "internal/controller/graphql/schema/exchange.graphqls"
-
-	_, err := rules.UsecaseTransports(repoOf(fixtureRoot()), name(t, "exchange"), "query")
-	require.ErrorIs(t, err, rules.ErrTargets)
-	assert.Contains(t, err.Error(), schema)
+	const resolver = "internal/controller/graphql/exchange/resolver.go"
 
 	fsys := fixtureRoot()
-	fsys[schema] = &fstest.MapFile{Data: []byte("type Conversion {")}
+	fsys[resolver] = &fstest.MapFile{Data: []byte("package exchange\n\ntype Query struct {")}
 
-	_, err = rules.UsecaseTransports(repoOf(fsys), name(t, "exchange"), "query")
+	_, err := rules.UsecaseTransports(repoOf(fsys), name(t, "exchange"), "command")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), schema)
+	assert.Contains(t, err.Error(), resolver)
+}
+
+// Every domain's gRPC service is named after it, but user's: AuthService, a name its clients use.
+func TestGRPCServiceIsNamedAfterTheDomainButUsers(t *testing.T) {
+	t.Parallel()
+
+	for domain, want := range map[string][2]string{
+		"task":      {"TaskService", "docs/proto/v1/task.proto"},
+		"line-item": {"LineItemService", "docs/proto/v1/line_item.proto"},
+		"user":      {"AuthService", "docs/proto/v1/auth.proto"},
+	} {
+		service, file := rules.GRPCService(name(t, domain))
+		assert.Equal(t, want, [2]string{service, file}, domain)
+	}
 }
 
 // restOperations is an OpenAPI document with three operations, one of them on a path item that
@@ -339,17 +381,4 @@ func TestRouteFreeNeedsTheOpenAPIDocument(t *testing.T) {
 		assert.Contains(t, err.Error(), "docs/openapi/v1.json", what)
 		assert.Contains(t, err.Error(), "run make openapi", what)
 	}
-}
-
-// A message carries the caller as UserID and the record it acts on as <Domain>ID, so on user the
-// two would be one field.
-func TestRecordFieldFreeRefusesARecordIDNamedAsTheCallers(t *testing.T) {
-	t.Parallel()
-
-	err := rules.RecordFieldFree(name(t, "user"), "/v1/users/{id}/lock")
-	require.ErrorIs(t, err, rules.ErrTargets)
-	assert.Contains(t, err.Error(), "give it a path without {id}")
-
-	require.NoError(t, rules.RecordFieldFree(name(t, "user"), "/v1/user/lock"), "acts on no record")
-	require.NoError(t, rules.RecordFieldFree(name(t, "task"), "/v1/tasks/{id}/archive"), "carries TaskID")
 }

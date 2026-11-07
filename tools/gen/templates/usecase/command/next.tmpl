@@ -1,0 +1,13 @@
+Next:
+  - Write the handler, internal/usecase/{{.Name.Pkg}}/command/{{.Usecase.Name.Snake}}.go, which returns
+    entity.ErrNotImplemented until you do: change the {{.Name.Words}} through aggregate.Change. Its
+    test says so, and goes red once you have: replace it with tests of what the command records.
+  - Add the event it records to internal/entity/{{.Name.Snake}}_events.go and to {{.Name.Go}}Events() there;
+    the behavior method that records it, with its case in Apply, to
+    internal/entity/{{.Name.Snake}}_aggregate.go; and its case to the projector,
+    internal/repo/persistent/{{.Name.Pkg}}/projector.go.
+{{- if .Has "rest"}}
+  - Once the handler is written, drop http.StatusNotImplemented from the Errors of its REST
+    operation, internal/controller/restapi/v1/{{.Name.Pkg}}/{{.Usecase.Name.Snake}}.go.
+{{- end}}
+  - Add a row for {{.Usecase.Name.Kebab}} to the {{.Name.Words}} table in docs/api.md.

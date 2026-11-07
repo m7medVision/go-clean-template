@@ -1,0 +1,10 @@
+extend type Query {
+  "{{.Usecase.Summary}}."
+  {{.Usecase.Name.Lower}}{{if .Usecase.ByID}}(id: ID!){{end}}: {{.Usecase.Name.Go}}Result!
+}
+
+"What {{.Usecase.Name.Lower}} answers: the fields of query.{{.Usecase.Name.Go}}Result, once it has them."
+type {{.Usecase.Name.Go}}Result {
+  "A placeholder, always null, since a GraphQL type cannot be empty: replace it with the result's first field."
+  todo: Boolean
+}

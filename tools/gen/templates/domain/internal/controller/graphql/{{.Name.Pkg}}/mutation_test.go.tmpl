@@ -45,8 +45,8 @@ func TestEach{{.Name.Go}}MutationNeedsTheCaller(t *testing.T) {
 }
 
 // Until the command handlers are written, each mutation answers NOT_IMPLEMENTED.
-func TestEach{{.Name.Go}}MutationMapsEachFailure(t *testing.T) {
+func TestEach{{.Name.Go}}MutationAnswersAStubHandlerWithNotImplemented(t *testing.T) {
 	t.Parallel()
 
-	checkFailures(t, mutations())
+	checkStub(t, mutations())
 }

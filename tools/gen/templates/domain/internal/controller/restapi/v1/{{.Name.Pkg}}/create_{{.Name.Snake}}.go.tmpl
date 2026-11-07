@@ -1,0 +1,47 @@
+package {{.Name.Pkg}}
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"{{.Module}}/internal/controller/authn"
+	"{{.Module}}/internal/controller/restapi/v1/apidoc"
+	"{{.Module}}/internal/controller/restapi/v1/apierr"
+	"{{.Module}}/internal/usecase/{{.Name.Pkg}}/command"
+	"{{.Module}}/pkg/cqrs"
+)
+
+type create{{.Name.Go}}Input struct {
+	Body Create{{.Name.Go}}
+}
+
+// create{{.Name.Go}} sends Create{{.Name.Go}}, then reads the {{.Name.Words}} back. The fields of the request body
+// go into the command once they are added: name the input to read them.
+func (r *controller) create{{.Name.Go}}(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "create-{{.Name.Kebab}}",
+		Summary:       "Create {{.Name.Words}}",
+		Description:   "Create one {{.Name.Words}} for the current user",
+		Method:        http.MethodPost,
+		Path:          "/v1/{{.Name.Plural.Kebab}}",
+		Tags:          []string{_tag},
+		Security:      []map[string][]string{{"{{"}}apidoc.BearerAuthScheme: {}}},
+		DefaultStatus: http.StatusCreated,
+		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotImplemented),
+	}, func(ctx context.Context, _ *create{{.Name.Go}}Input) (*{{.Name.Lower}}Output, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.Create{{.Name.Go}}{UserID: userID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "create{{.Name.Go}}")
+		}
+
+		{{.Name.Lower}}, err := r.readBack(ctx, userID, written.ID)
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "create{{.Name.Go}}")
+		}
+
+		return &{{.Name.Lower}}Output{Body: {{.Name.Lower}}}, nil
+	})
+}

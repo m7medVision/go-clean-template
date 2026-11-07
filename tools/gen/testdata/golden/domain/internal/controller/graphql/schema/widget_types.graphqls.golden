@@ -1,0 +1,13 @@
+# The widget types, which bind to the entity types of their names. Add a field to Widget for each
+# one entity.Widget gets. The mutations take only the ID until then, since GraphQL has no empty input
+# type: with the first field, give createWidget and updateWidget an input type in their files, as
+# create_task.graphqls has.
+
+type Widget {
+  id: ID!
+  userId: ID!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type WidgetList { widgets: [Widget!]!  total: Int! }

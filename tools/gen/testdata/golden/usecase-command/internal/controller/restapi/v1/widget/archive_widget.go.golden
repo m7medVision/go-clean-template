@@ -1,0 +1,53 @@
+package widget
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
+	"github.com/m7medvision/go-clean-template/internal/usecase/widget/command"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+)
+
+type archiveWidgetInput struct {
+	ID string `path:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+// ArchiveWidgetResponse is what archive-widget answers: the ID of the widget it wrote.
+type ArchiveWidgetResponse struct {
+	ID string `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+type archiveWidgetOutput struct {
+	Body ArchiveWidgetResponse
+}
+
+// archiveWidget sends ArchiveWidget and answers with the ID it wrote. The fields of the command
+// come from the request once they are added: put them in archiveWidgetInput, as a Body or as
+// parameters. Its handler answers 501 until it is written: then drop http.StatusNotImplemented.
+func (r *controller) archiveWidget(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "archive-widget",
+		Summary:     "Archive widget",
+		Description: "Archive widget for the current user",
+		Method:      http.MethodPost,
+		Path:        "/v1/widgets/{id}/archive",
+		Tags:        []string{_tag},
+		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+		Errors: apierr.CommandErrors(
+			http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusNotImplemented,
+		),
+	}, func(ctx context.Context, input *archiveWidgetInput) (*archiveWidgetOutput, error) {
+		userID := authn.MustCaller(ctx).UserID
+
+		written, err := cqrs.SendCommand(ctx, r.cmds, command.ArchiveWidget{UserID: userID, WidgetID: input.ID})
+		if err != nil {
+			return nil, apierr.Problem(ctx, r.l, err, "archiveWidget")
+		}
+
+		return &archiveWidgetOutput{Body: ArchiveWidgetResponse{ID: written.ID}}, nil
+	})
+}

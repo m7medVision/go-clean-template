@@ -54,6 +54,21 @@ func TestIdentifiersFreeRejectsADeclarationThePackageHas(t *testing.T) {
 	}
 }
 
+// A struct's fields are names of their own, as Type.Field: a message that would carry the caller's
+// UserID and a record's ID named UserID declares one field twice.
+func TestIdentifiersFreeRejectsAFieldDeclaredTwice(t *testing.T) {
+	t.Parallel()
+
+	p := plan.New("x")
+	p.Create("internal/usecase/user/command/lock_user.go",
+		[]byte("package command\n\ntype LockUser struct {\n\tcqrs.Command[entity.Written]\n\n\tUserID string\n\tUserID string\n}\n"))
+
+	err := rules.IdentifiersFree(repoOf(fstest.MapFS{}), name(t, "lock-user"), p)
+
+	require.ErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "lock_user.go would declare LockUser.UserID twice")
+}
+
 func TestIdentifiersFreeLooksAtWhatAnEditAdds(t *testing.T) {
 	t.Parallel()
 
@@ -230,28 +245,6 @@ func TestIdentifiersFreeRejectsAGraphQLNameAnotherFileInTheSchemaHas(t *testing.
 	}
 }
 
-func TestIdentifiersFreeLooksAtWhatAGraphQLEditAdds(t *testing.T) {
-	t.Parallel()
-
-	const p = "internal/controller/graphql/schema/task.graphqls"
-
-	src := []byte(taskSchema)
-
-	q, err := edit.ParseGraphQL(p, src)
-	require.NoError(t, err)
-
-	ins, err := q.InType("Mutation", "deleteTask(id: ID!): Boolean!")
-	require.NoError(t, err)
-
-	pl := plan.New("x")
-	pl.Edit(p, src, ins)
-
-	err = rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "task"), pl)
-
-	require.ErrorIs(t, err, names.ErrInvalid)
-	assert.Contains(t, err.Error(), p+" would declare Mutation.deleteTask twice")
-}
-
 func TestIdentifiersFreeAcceptsGraphQLNamesThatAreNewToTheirSchema(t *testing.T) {
 	t.Parallel()
 
@@ -259,14 +252,8 @@ func TestIdentifiersFreeAcceptsGraphQLNamesThatAreNewToTheirSchema(t *testing.T)
 
 	src := []byte(taskSchema)
 
-	q, err := edit.ParseGraphQL(p, src)
-	require.NoError(t, err)
-
-	ins, err := q.InType("Mutation", "archiveTask(id: ID!): Task!")
-	require.NoError(t, err)
-
 	pl := plan.New("x")
-	pl.Edit(p, src, ins)
+	pl.Create("internal/controller/graphql/schema/archive_task.graphqls", []byte("extend type Mutation {\n  archiveTask(id: ID!): Task!\n}\n"))
 	pl.Create("internal/controller/graphql/schema/invoice.graphqls", []byte("type Invoice { id: ID! }\n\n"+
 		"type InvoiceList { total: Int! }\n\nextend type Query {\n  invoice(id: ID!): Invoice!\n}\n"))
 	pl.Create("internal/controller/v2/schema/task.graphqls", []byte(taskSchema))

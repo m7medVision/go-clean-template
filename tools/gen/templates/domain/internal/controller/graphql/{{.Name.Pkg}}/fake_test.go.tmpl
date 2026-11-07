@@ -3,7 +3,6 @@ package {{.Name.Pkg}}_test
 import (
 	"context"
 	"fmt"
-	"io"
 	"testing"
 	"time"
 
@@ -42,20 +41,20 @@ type fake{{.Name.Go}} struct {
 // buses registers the fake's handlers on real buses whose one step is keep.
 func (f *fake{{.Name.Go}}) buses() cqrs.Buses {
 	cmds, qs := cqrs.NewCommands(f.keep), cqrs.NewQueries(f.keep)
-	write := func(context.Context) (cqrs.Written, error) { return cqrs.Written{ID: f.stored.ID}, f.err }
+	write := func(context.Context) (entity.Written, error) { return entity.Written{ID: f.stored.ID}, f.err }
 
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Create{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Update{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
-	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, cqrs.Written](
-		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (cqrs.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Create{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Create{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Update{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Update{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.Delete{{.Name.Go}}, entity.Written](
+		func(ctx context.Context, _ command.Delete{{.Name.Go}}) (entity.Written, error) { return write(ctx) }))
 
 	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.Get{{.Name.Go}}, entity.{{.Name.Go}}](
 		func(context.Context, query.Get{{.Name.Go}}) (entity.{{.Name.Go}}, error) { return f.stored, f.err }))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, query.{{.Name.Go}}Page](
-		func(context.Context, query.List{{.Name.Plural.Go}}) (query.{{.Name.Go}}Page, error) {
-			return query.{{.Name.Go}}Page{ {{- .Name.Plural.Go}}: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.List{{.Name.Plural.Go}}, entity.List[entity.{{.Name.Go}}]](
+		func(context.Context, query.List{{.Name.Plural.Go}}) (entity.List[entity.{{.Name.Go}}], error) {
+			return entity.List[entity.{{.Name.Go}}]{Items: []entity.{{.Name.Go}}{f.stored}, Total: 1}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}
@@ -129,32 +128,21 @@ func checkCaller(t *testing.T, fields map[string]field) {
 	}
 }
 
-// checkFailures checks that each of fields maps what a handler fails with the same way: first the
-// failures any command can produce, then the {{.Name.Words}} errors, then anything else.
-func checkFailures(t *testing.T, fields map[string]field) {
+// checkStub checks that each of fields answers NOT_IMPLEMENTED while its handler is the stub. gqlerr's
+// tests own which code each kind of failure gets; this checks that the field's failure reaches the
+// response.
+func checkStub(t *testing.T, fields map[string]field) {
 	t.Helper()
 
-	for failure, tc := range map[string]struct {
-		err  error
-		code string
-	}{
-		"a stub handler":      {entity.ErrNotImplemented, "NOT_IMPLEMENTED"},
-		"a read model behind": {entity.ErrReadModelBehind, "UNAVAILABLE"},
-		"a concurrent change": {entity.ErrConcurrencyConflict, "CONFLICT"},
-		"another user's":      {entity.Err{{.Name.Go}}Forbidden, "FORBIDDEN"},
-		"none with the ID":    {entity.Err{{.Name.Go}}NotFound, "NOT_FOUND"},
-		"anything else":       {io.ErrUnexpectedEOF, "INTERNAL"},
-	} {
-		for name, f := range fields {
-			t.Run(name+"/"+failure, func(t *testing.T) {
-				t.Parallel()
+	for name, f := range fields {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 
-				fake := &fake{{.Name.Go}}{stored: stored(), err: fmt.Errorf("handler: %w", tc.err)}
+			fake := &fake{{.Name.Go}}{stored: stored(), err: fmt.Errorf("handler: %w", entity.ErrNotImplemented)}
 
-				resp := do(t, fake, true, f.gql)
+			resp := do(t, fake, true, f.gql)
 
-				assert.Equal(t, tc.code, resp.Code(t), resp.Body)
-			})
-		}
+			assert.Equal(t, "NOT_IMPLEMENTED", resp.Code(t), resp.Body)
+		})
 	}
 }

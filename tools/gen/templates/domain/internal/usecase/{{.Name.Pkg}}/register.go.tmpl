@@ -7,13 +7,11 @@ import (
 	"{{.Module}}/pkg/cqrs"
 )
 
-// Deps is what the {{.Name.Words}} handlers are built from.
 type Deps struct {
 	Store   repo.EventStore
 	{{.Name.Plural.Go}} repo.{{.Name.Go}}ReadModel
 }
 
-// Register registers every {{.Name.Words}} command and query handler, one line each.
 func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d Deps) {
 	cqrs.HandleCommand(cmds, command.Create{{.Name.Go}}Handler{Store: d.Store})
 	cqrs.HandleCommand(cmds, command.Update{{.Name.Go}}Handler{Store: d.Store})
