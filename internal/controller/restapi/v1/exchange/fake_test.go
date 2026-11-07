@@ -13,10 +13,9 @@ import (
 )
 
 // fakeExchange answers the exchange command and queries on real buses: ConvertCurrency writes
-// converted, which GetConversion reads back, and every message fails with err when it is set.
+// converted, which GetConversion reads back.
 type fakeExchange struct {
 	converted entity.Conversion
-	err       error
 
 	// gotLimit and gotOffset record what GetExchangeHistory was asked.
 	gotLimit, gotOffset int
@@ -27,15 +26,15 @@ func (f *fakeExchange) buses() cqrs.Buses {
 
 	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.ConvertCurrency, entity.Written](
 		func(context.Context, command.ConvertCurrency) (entity.Written, error) {
-			return entity.Written{ID: "c1"}, f.err
+			return entity.Written{ID: "c1"}, nil
 		}))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetConversion, entity.Conversion](
-		func(context.Context, query.GetConversion) (entity.Conversion, error) { return f.converted, f.err }))
+		func(context.Context, query.GetConversion) (entity.Conversion, error) { return f.converted, nil }))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetExchangeHistory, entity.List[entity.Conversion]](
 		func(_ context.Context, q query.GetExchangeHistory) (entity.List[entity.Conversion], error) {
 			f.gotLimit, f.gotOffset = q.Limit, q.Offset
 
-			return entity.List[entity.Conversion]{Items: []entity.Conversion{f.converted}, Total: 11}, f.err
+			return entity.List[entity.Conversion]{Items: []entity.Conversion{f.converted}, Total: 11}, nil
 		}))
 
 	return b

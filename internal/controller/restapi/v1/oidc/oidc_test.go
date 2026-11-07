@@ -3,7 +3,6 @@ package oidc_test
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -25,7 +24,6 @@ type fakeOIDC struct {
 	enabled  bool
 	authURL  string
 	token    string
-	err      error
 	gotCode  string
 	gotState string
 	gotToken string
@@ -38,13 +36,13 @@ func (f *fakeOIDC) buses() cqrs.Buses {
 		func(context.Context, query.GetOIDCStatus) (bool, error) { return f.enabled, nil }))
 	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.BeginOIDCLogin, query.Started](
 		func(context.Context, query.BeginOIDCLogin) (query.Started, error) {
-			return query.Started{AuthURL: f.authURL, Token: f.token}, f.err
+			return query.Started{AuthURL: f.authURL, Token: f.token}, nil
 		}))
 	cqrs.HandleCommand(b.Commands, cqrs.HandlerFunc[command.FinishOIDCLogin, entity.SignedIn](
 		func(_ context.Context, c command.FinishOIDCLogin) (entity.SignedIn, error) {
 			f.gotCode, f.gotState, f.gotToken = c.Code, c.State, c.Token
 
-			return entity.SignedIn{Token: f.token}, f.err
+			return entity.SignedIn{Token: f.token}, nil
 		}))
 
 	return b
@@ -122,37 +120,4 @@ func TestOIDCFinishRejectsEmptyFields(t *testing.T) {
 	resp := postFinish(t, handler, "/v1/auth/oidc/finish", `{"code":"","state":"s"}`)
 
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
-}
-
-func TestOIDCErrors(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		err  error
-		path string
-		want int
-	}{
-		{"begin while disabled", entity.ErrOIDCDisabled, "/v1/auth/oidc/begin", http.StatusNotFound},
-		{"begin while the provider is down", entity.ErrOIDCUnavailable, "/v1/auth/oidc/begin", http.StatusBadGateway},
-		{"begin failure", io.ErrUnexpectedEOF, "/v1/auth/oidc/begin", http.StatusInternalServerError},
-		{"finish while disabled", entity.ErrOIDCDisabled, "/v1/auth/oidc/finish", http.StatusNotFound},
-		{"finish with a bad ceremony", entity.ErrOIDCCeremonyInvalid, "/v1/auth/oidc/finish", http.StatusUnauthorized},
-		{"finish into a taken email", entity.ErrAccountConflict, "/v1/auth/oidc/finish", http.StatusConflict},
-		{"finish while the provider is down", entity.ErrOIDCUnavailable, "/v1/auth/oidc/finish", http.StatusBadGateway},
-		{"finish failure", io.ErrUnexpectedEOF, "/v1/auth/oidc/finish", http.StatusInternalServerError},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			handler := newRouterWithOIDC(&fakeOIDC{enabled: true, err: tt.err})
-
-			resp := postFinish(t, handler, tt.path, `{"code":"c","state":"s"}`)
-
-			assert.Equal(t, tt.want, resp.Code, resp.Body.String())
-			assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
-		})
-	}
 }

@@ -1,7 +1,6 @@
 package exchange_test
 
 import (
-	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -47,25 +46,6 @@ func TestConvertExchange(t *testing.T) {
 			`{"from":"EUR","to":"USD","amount":"1e3"}`)
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 	})
-
-	for _, tt := range []struct {
-		name string
-		err  error
-		code int
-	}{
-		{"invalid conversion maps to 400", entity.ErrInvalidConversion, http.StatusBadRequest},
-		{"unsupported currency maps to 400", entity.ErrUnsupportedCurrency, http.StatusBadRequest},
-		{"other failure maps to 500", io.EOF, http.StatusInternalServerError},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			handler := newRouter(&fakeExchange{err: tt.err})
-
-			resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/exchange/convert", token, body)
-			assert.Equal(t, tt.code, resp.Code)
-		})
-	}
 }
 
 func TestExchangeHistory(t *testing.T) {

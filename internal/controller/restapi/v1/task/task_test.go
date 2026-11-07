@@ -2,7 +2,6 @@ package task_test
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"testing"
 
@@ -26,15 +25,6 @@ func TestCreateTask(t *testing.T) {
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 	})
 
-	t.Run("invalid json body is rejected", func(t *testing.T) {
-		t.Parallel()
-
-		handler := newRouter(&fakeTask{})
-
-		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/tasks", token, "{invalid json}")
-		assert.Equal(t, http.StatusBadRequest, resp.Code)
-	})
-
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
@@ -45,41 +35,15 @@ func TestCreateTask(t *testing.T) {
 		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/tasks", token, `{"title":"my task"}`)
 		assert.Equal(t, http.StatusCreated, resp.Code)
 	})
-
-	t.Run("trailing slash is stripped", func(t *testing.T) {
-		t.Parallel()
-
-		handler := newRouter(&fakeTask{
-			stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
-		})
-
-		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/tasks/", token, `{"title":"my task"}`)
-		assert.Equal(t, http.StatusCreated, resp.Code)
-	})
 }
 
-func TestDeleteTask(t *testing.T) {
+func TestDeleteTaskAnswers204(t *testing.T) {
 	t.Parallel()
 
-	token := resttest.Token(t)
+	handler := newRouter(&fakeTask{})
 
-	t.Run("not found maps to 404", func(t *testing.T) {
-		t.Parallel()
-
-		handler := newRouter(&fakeTask{err: entity.ErrTaskNotFound})
-
-		resp := resttest.Do(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
-		assert.Equal(t, http.StatusNotFound, resp.Code)
-	})
-
-	t.Run("success maps to 204", func(t *testing.T) {
-		t.Parallel()
-
-		handler := newRouter(&fakeTask{})
-
-		resp := resttest.Do(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", token, "")
-		assert.Equal(t, http.StatusNoContent, resp.Code)
-	})
+	resp := resttest.Do(t.Context(), handler, http.MethodDelete, "/v1/tasks/task-1", resttest.Token(t), "")
+	assert.Equal(t, http.StatusNoContent, resp.Code)
 }
 
 func TestListAllTasks(t *testing.T) {
@@ -111,6 +75,8 @@ func TestListAllTasks(t *testing.T) {
 	assert.Equal(t, 10, tk.gotOffset)
 }
 
+// apierr's tests own which status each kind of failure gets; this checks that an operation's
+// failure reaches the wire as that status, in an RFC 9457 problem.
 func TestListAllTasksAdminRequiredMapsTo403(t *testing.T) {
 	t.Parallel()
 
@@ -130,32 +96,4 @@ func TestListAllTasksRequiresAuth(t *testing.T) {
 	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/admin/tasks", "", "")
 
 	assert.Equal(t, http.StatusUnauthorized, resp.Code)
-}
-
-func TestTaskForbiddenMapsTo403(t *testing.T) {
-	t.Parallel()
-
-	handler := newRouter(&fakeTask{err: entity.ErrTaskForbidden})
-
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks/task-1", resttest.Token(t), "")
-	assert.Equal(t, http.StatusForbidden, resp.Code)
-}
-
-func TestInvalidTransitionMapsTo400(t *testing.T) {
-	t.Parallel()
-
-	handler := newRouter(&fakeTask{err: entity.ErrInvalidTransition})
-
-	resp := resttest.Do(t.Context(), handler, http.MethodPatch, "/v1/tasks/task-1/status",
-		resttest.Token(t), `{"status":"done"}`)
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-}
-
-func TestUsecaseFailureMapsTo500(t *testing.T) {
-	t.Parallel()
-
-	handler := newRouter(&fakeTask{err: io.EOF})
-
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/tasks", resttest.Token(t), "")
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
 }

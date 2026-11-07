@@ -60,6 +60,15 @@ func TestApplianceRoutesArePublic(t *testing.T) {
 	}
 }
 
+func TestATrailingSlashIsStripped(t *testing.T) {
+	t.Parallel()
+
+	h, _ := newTestHandler(t, newTestBuses(), false)
+
+	assert.Equal(t, http.StatusOK, get(t, h, "/healthz/", "").Code)
+	assert.Equal(t, http.StatusUnauthorized, get(t, h, "/v1/tasks/", "").Code, "the operation answers, not a 404")
+}
+
 func TestDocsOffServesNoDocs(t *testing.T) {
 	t.Parallel()
 

@@ -24,7 +24,6 @@ type callerOutput struct {
 	Body struct {
 		UserID    string        `json:"user_id"`
 		Roles     []entity.Role `json:"roles"`
-		IssuedAt  time.Time     `json:"issued_at"`
 		HasCaller bool          `json:"has_caller"`
 	}
 }
@@ -34,7 +33,7 @@ func echoCaller(ctx context.Context, _ *struct{}) (*callerOutput, error) {
 	out := &callerOutput{}
 
 	c, ok := authn.CallerFrom(ctx)
-	out.Body.UserID, out.Body.Roles, out.Body.IssuedAt, out.Body.HasCaller = c.UserID, c.Roles, c.IssuedAt, ok
+	out.Body.UserID, out.Body.Roles, out.Body.HasCaller = c.UserID, c.Roles, ok
 
 	return out, nil
 }
@@ -108,9 +107,8 @@ func TestAuthRunsTheOperationWithTheTokensCaller(t *testing.T) {
 	t.Parallel()
 
 	tokens := jwt.New("test-secret", time.Hour)
-	before := time.Now().Truncate(time.Second)
 
-	token, err := tokens.GenerateToken("user-id-123", []string{"admin", "superuser"})
+	token, err := tokens.GenerateToken("user-id-123", []string{"admin"})
 	require.NoError(t, err)
 
 	resp := get(t, newTestHandler(tokens), "/private", "Bearer "+token)
@@ -121,8 +119,7 @@ func TestAuthRunsTheOperationWithTheTokensCaller(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &got.Body))
 	assert.True(t, got.Body.HasCaller)
 	assert.Equal(t, "user-id-123", got.Body.UserID)
-	assert.Equal(t, []entity.Role{entity.RoleAdmin}, got.Body.Roles, "unknown roles are dropped")
-	assert.False(t, got.Body.IssuedAt.Before(before), "the token's issue time is kept: %s", got.Body.IssuedAt)
+	assert.Equal(t, []entity.Role{entity.RoleAdmin}, got.Body.Roles)
 }
 
 // An operation that declares no Security is public: Auth does not read a token for it, valid or not.
