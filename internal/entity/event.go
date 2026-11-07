@@ -83,12 +83,16 @@ func MetadataFromContext(ctx context.Context) Metadata {
 type Written struct {
 	ID       string
 	Position int64
+	// Events are the types of the events the command appended, which say which projectors it
+	// waits for.
+	Events []string
 }
 
 // Write is a command result that carries a Written: a Written itself, or a result that embeds one,
 // such as a sign-in that also carries a token. The command bus's wait step waits for its position.
 type Write interface {
 	WrittenAt() int64
+	WrittenEvents() []string
 }
 
 var _ Write = Written{}
@@ -104,4 +108,9 @@ type SignedIn struct {
 // WrittenAt is the position of the write.
 func (w Written) WrittenAt() int64 {
 	return w.Position
+}
+
+// WrittenEvents are the types of the events the write appended.
+func (w Written) WrittenEvents() []string {
+	return w.Events
 }

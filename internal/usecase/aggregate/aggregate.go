@@ -29,12 +29,17 @@ type Loadable[T any] interface {
 
 // Save saves the events a recorded, new or loaded, with claims.
 func Save(ctx context.Context, store repo.EventStore, a Identified, claims ...entity.Claim) (entity.Written, error) {
+	types := make([]string, len(a.Pending()))
+	for i, e := range a.Pending() {
+		types[i] = e.EventType()
+	}
+
 	position, err := store.Save(ctx, a, claims...)
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("store.Save: %w", err)
 	}
 
-	return entity.Written{ID: a.ID(), Position: position}, nil
+	return entity.Written{ID: a.ID(), Position: position, Events: types}, nil
 }
 
 // Change loads the aggregate with id, runs change on it, and saves the events it recorded with

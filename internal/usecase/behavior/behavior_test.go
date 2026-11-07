@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
@@ -87,9 +88,35 @@ func sendWrite(t *testing.T, steps []cqrs.Step, h cqrs.HandlerFunc[WriteThing, e
 	return cqrs.SendCommand(context.Background(), cmds, cmd)
 }
 
+type thingWritten struct{}
+
+func (thingWritten) EventType() string  { return "ThingWritten" }
+func (thingWritten) SchemaVersion() int { return 1 }
+
+type otherWritten struct{}
+
+func (otherWritten) EventType() string  { return "OtherWritten" }
+func (otherWritten) SchemaVersion() int { return 1 }
+
+// projector is a subscriber the wait step can wait on, handling the given events.
+type projector struct {
+	name    string
+	handles []entity.Event
+}
+
+func (p projector) Name() string                                      { return p.name }
+func (p projector) Handles() []entity.Event                           { return p.handles }
+func (projector) Handle(context.Context, *entity.RecordedEvent) error { return nil }
+
+// task projects ThingWritten, as the task projector does the task events.
+func task() []repo.Subscriber {
+	return []repo.Subscriber{projector{name: "task", handles: []entity.Event{thingWritten{}}}}
+}
+
+// writes answers a write of one ThingWritten at position.
 func writes(position int64) cqrs.HandlerFunc[WriteThing, entity.Written] {
 	return func(context.Context, WriteThing) (entity.Written, error) {
-		return entity.Written{ID: "t1", Position: position}, nil
+		return entity.Written{ID: "t1", Position: position, Events: []string{thingWritten{}.EventType()}}, nil
 	}
 }
 
@@ -100,7 +127,7 @@ func TestWaitReturnsOnceTheProjectorsReachTheWrite(t *testing.T) {
 
 	time.AfterFunc(5*_tick, func() { cp.catchUp(7) })
 
-	written, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, []string{"task"}, time.Second, _tick)},
+	written, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, task(), time.Second, _tick)},
 		writes(7), WriteThing{Title: "a"})
 
 	require.NoError(t, err)
@@ -111,7 +138,7 @@ func TestWaitReturnsOnceTheProjectorsReachTheWrite(t *testing.T) {
 func TestWaitGivesUpWithErrReadModelBehind(t *testing.T) {
 	t.Parallel()
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(&fakeCheckpoints{}, []string{"task"}, _timeout, _tick)},
+	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(&fakeCheckpoints{}, task(), _timeout, _tick)},
 		writes(7), WriteThing{Title: "a"})
 
 	require.ErrorIs(t, err, entity.ErrReadModelBehind)
@@ -122,7 +149,7 @@ func TestWaitReturnsACheckpointFailure(t *testing.T) {
 
 	cp := &fakeCheckpoints{err: errCheckpoint}
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, []string{"task"}, _timeout, _tick)},
+	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, task(), _timeout, _tick)},
 		writes(7), WriteThing{Title: "a"})
 
 	require.ErrorIs(t, err, errCheckpoint)
@@ -133,7 +160,7 @@ func TestWaitSkipsWhatWroteNothingAndWhenNothingIsProjected(t *testing.T) {
 
 	cp := &fakeCheckpoints{}
 
-	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, []string{"task"}, _timeout, _tick)},
+	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, task(), _timeout, _tick)},
 		writes(0), WriteThing{Title: "a"})
 	require.NoError(t, err)
 
@@ -141,6 +168,26 @@ func TestWaitSkipsWhatWroteNothingAndWhenNothingIsProjected(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, cp.asked)
+}
+
+// A projector that handles none of the events a write appended is not waited for, so a stuck one
+// holds up only the writes it projects.
+func TestWaitWaitsOnlyForTheProjectorsOfWhatWasWritten(t *testing.T) {
+	t.Parallel()
+
+	cp := &fakeCheckpoints{}
+	projectors := []repo.Subscriber{
+		projector{name: "task", handles: []entity.Event{thingWritten{}}},
+		projector{name: "stuck", handles: []entity.Event{otherWritten{}}},
+	}
+
+	time.AfterFunc(5*_tick, func() { cp.catchUp(7) })
+
+	_, err := sendWrite(t, []cqrs.Step{behavior.Wait(cp, projectors, time.Second, _tick)},
+		writes(7), WriteThing{Title: "a"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"task"}, cp.asked[len(cp.asked)-1])
 }
 
 func TestRetryRunsTheHandlerAgainOnAConflict(t *testing.T) {
@@ -256,10 +303,10 @@ type signedIn struct {
 func TestWaitAlsoWaitsForAResultThatEmbedsWritten(t *testing.T) {
 	t.Parallel()
 
-	cmds := cqrs.NewCommands(behavior.Wait(&fakeCheckpoints{}, []string{"task"}, _timeout, _tick))
+	cmds := cqrs.NewCommands(behavior.Wait(&fakeCheckpoints{}, task(), _timeout, _tick))
 	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[SignInThing, signedIn](
 		func(context.Context, SignInThing) (signedIn, error) {
-			return signedIn{ID: "u1", Position: 7, Token: "t"}, nil
+			return signedIn{ID: "u1", Position: 7, Events: []string{thingWritten{}.EventType()}, Token: "t"}, nil
 		}))
 
 	_, err := cqrs.SendCommand(context.Background(), cmds, SignInThing{})

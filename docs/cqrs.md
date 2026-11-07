@@ -53,7 +53,7 @@ The steps, outermost first:
 | log | ✓ | ✓ | outcome and duration at debug |
 | metrics | ✓ | ✓ | `cqrs_messages_total{kind,name,outcome}`, `cqrs_message_duration_seconds` |
 | stamp | ✓ | ✓ | the actor (`ActorID()`) and the message name into the event metadata |
-| wait | ✓ | | after the handler: until every projector has passed the write's position, or `CQRS_CONSISTENCY_TIMEOUT` (then `entity.ErrReadModelBehind`) |
+| wait | ✓ | | after the handler: until the projectors that handle the events it wrote (`entity.Written.Events`) have passed its position, or `CQRS_CONSISTENCY_TIMEOUT` (then `entity.ErrReadModelBehind`) |
 | retry | ✓ | | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
 | authorize | ✓ | ✓ | an `AdminOnly()` message is refused with `entity.ErrAdminRequired` for a caller who is not an admin (`ListAllTasks`) |
 | validate | ✓ | ✓ | calls `Validate()` when the message has one |
@@ -186,8 +186,9 @@ repeat its side effects, such as sending every welcome email again.
 
 ### Reads after writes
 
-A command's response waits until every projector has passed its position, so a read sent right
-after a write sees it. The web client relies on this: it reloads its lists after every mutation.
+A command's response waits until the projectors that handle the events it wrote have passed its
+position, so a read sent right after a write sees it. A projector that handles none of them is not
+waited for, so one that is stuck holds up only the writes it projects. The web client relies on this: it reloads its lists after every mutation.
 
 If the projectors are still behind after `CQRS_CONSISTENCY_TIMEOUT`, the write is saved, but the
 answer is a 503 (gRPC `Unavailable`, GraphQL `UNAVAILABLE`): read again shortly, don't write again.

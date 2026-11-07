@@ -182,7 +182,7 @@ the pipeline from [`newBuses`](../internal/app/buses.go), outermost first:
 | log | `pkg/cqrs` | logs the outcome and duration at debug |
 | metrics | `pkg/cqrs` | counts it in `cqrs_messages_total` and times it in `cqrs_message_duration_seconds` |
 | stamp | `internal/usecase/behavior` | puts the caller's user ID and `command ConvertCurrency` in the context's event metadata |
-| wait | `internal/usecase/behavior` | after the handler: holds the result until every projector has passed `Written.Position` (step 8) |
+| wait | `internal/usecase/behavior` | after the handler: holds the result until the projectors of the events it wrote have passed `Written.Position` (step 8) |
 | retry | `internal/usecase/behavior` | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
 | authorize | `internal/usecase/behavior` | nothing here: `ConvertCurrency` needs no role |
 | validate | `internal/usecase/behavior` | nothing here: `ConvertCurrency` has no `Validate` |
@@ -297,8 +297,8 @@ The `NOTIFY` wakes the exchange projector's loop, which:
    the checkpoint commit together or not at all, so a crash between them can neither lose the row nor
    insert it twice.
 
-Meanwhile the app's wait step is polling `projection_checkpoints`. Once every projector is at or past
-the command's position, `SendCommand` returns. If they are still behind after
+Meanwhile the app's wait step is polling `projection_checkpoints`. Once the exchange projector, the
+one that handles `CurrencyConverted`, is at or past the command's position, `SendCommand` returns. If they are still behind after
 `CQRS_CONSISTENCY_TIMEOUT` (2s), it returns `entity.ErrReadModelBehind` and the client gets a 503:
 the conversion is saved, but a read could still miss it.
 

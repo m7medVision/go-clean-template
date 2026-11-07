@@ -139,7 +139,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 16. **Size:** L
 
 ### 18. Writes wait only on the projectors of what they wrote  (E)
-- [ ] `Written` carries the event types; `Wait` waits on the projectors handling them; the app gets
+- [x] `Written` carries the event types; `Wait` waits on the projectors handling them; the app gets
       projector names without building the notifier or the queue.
 
 **Verify:** G1. **Depends on:** 17. **Size:** M
@@ -159,7 +159,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 19. **Size:** L
 
 ### Checkpoint 4
-- [ ] G3 green.
+- [x] G3 green (on 31aa845, before task 18's small change; re-run at checkpoint 5).
 
 ## Phase 6: Composition, auth, worker
 

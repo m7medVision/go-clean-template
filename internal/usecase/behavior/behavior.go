@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -48,14 +49,15 @@ func Stamp() cqrs.Step {
 	}
 }
 
-// Wait holds a command's result until every projector in projectors has handled the event at its
-// position (entity.Written, alone or embedded), checking every tick, so a read sent straight after the
-// command sees the write.
+// Wait holds a command's result until the projectors that handle the events it wrote (an
+// entity.Write, alone or embedded) have handled the event at its position, checking every tick, so
+// a read sent straight after the command sees the write. A projector that handles none of them is
+// not waited for, so one that is stuck holds up only the writes it projects.
 // Past timeout it returns entity.ErrReadModelBehind: the write itself is committed.
-func Wait(checkpoints repo.ProjectionCheckpoints, projectors []string, timeout, tick time.Duration) cqrs.Step {
+func Wait(checkpoints repo.ProjectionCheckpoints, projectors []repo.Subscriber, timeout, tick time.Duration) cqrs.Step {
 	return func(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
 		out, err := next(ctx)
-		if err != nil || len(projectors) == 0 {
+		if err != nil {
 			return out, err
 		}
 
@@ -64,12 +66,30 @@ func Wait(checkpoints repo.ProjectionCheckpoints, projectors []string, timeout, 
 			return out, nil
 		}
 
-		if err = waitFor(ctx, checkpoints, projectors, written.WrittenAt(), timeout, tick); err != nil {
+		names := projecting(projectors, written.WrittenEvents())
+		if len(names) == 0 {
+			return out, nil
+		}
+
+		if err = waitFor(ctx, checkpoints, names, written.WrittenAt(), timeout, tick); err != nil {
 			return out, fmt.Errorf("behavior - Wait %s: %w", msg.Name, err)
 		}
 
 		return out, nil
 	}
+}
+
+// projecting names the projectors that handle any of the event types.
+func projecting(projectors []repo.Subscriber, types []string) []string {
+	var names []string
+
+	for _, p := range projectors {
+		if slices.ContainsFunc(p.Handles(), func(e entity.Event) bool { return slices.Contains(types, e.EventType()) }) {
+			names = append(names, p.Name())
+		}
+	}
+
+	return names
 }
 
 // waitFor polls the projectors' checkpoints every tick until all reach position, or timeout.

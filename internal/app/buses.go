@@ -45,7 +45,7 @@ const (
 // newBuses builds the command and query buses with their pipelines, outermost step first:
 // trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
 // concurrent write; then authorize and validate on both, right before the handler.
-func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []string, l *slog.Logger) (
+func newBuses(cfg *config.Config, pg *postgres.Postgres, projectors []repo.Subscriber, l *slog.Logger) (
 	*cqrs.Commands, *cqrs.Queries,
 ) {
 	outer := []cqrs.Step{
@@ -133,4 +133,14 @@ func eventHandlers(cfg *config.Config, pg *postgres.Postgres) []repo.Subscriber 
 // loginURL is the sign-in page the welcome email links to.
 func loginURL(cfg *config.Config) string {
 	return strings.TrimSuffix(cfg.App.BaseURL, "/") + "/login"
+}
+
+// subscribersOf is the projectors as the subscribers the wait step waits on.
+func subscribersOf(projectors []projection.Projector) []repo.Subscriber {
+	subs := make([]repo.Subscriber, len(projectors))
+	for i, p := range projectors {
+		subs[i] = p
+	}
+
+	return subs
 }

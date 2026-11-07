@@ -33,7 +33,7 @@ type useCases struct {
 func initUseCases(
 	cfg *config.Config, pg *postgres.Postgres, jwtManager *jwt.Manager, l *slog.Logger,
 ) (useCases, error) {
-	cmds, qs := newBuses(cfg, pg, projection.Names(projectors(pg)), l)
+	cmds, qs := newBuses(cfg, pg, subscribersOf(projectors(pg)), l)
 	if err := registerHandlers(cfg, cmds, qs, newEventStore(cfg, pg), pg, jwtManager); err != nil {
 		return useCases{}, err
 	}
