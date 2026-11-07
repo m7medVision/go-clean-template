@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/eventcodec"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
@@ -32,61 +33,113 @@ type countingImporter struct {
 
 func (c *countingImporter) Domain() string { return c.domain }
 
-func (c *countingImporter) Import(context.Context) error {
+func (c *countingImporter) Import(context.Context) ([]eventstore.Import, error) {
 	c.runs++
 	if c.fail {
-		return errImport
+		return nil, errImport
 	}
 
-	return nil
+	return nil, nil
+}
+
+// renamed runs an importer under a domain no marker names yet, so the backfill runs it again
+// although the app's own start has marked its domain imported.
+type renamed struct {
+	eventstore.Importer
+
+	domain string
+}
+
+func (r renamed) Domain() string { return r.domain }
+
+func newStore(pg *postgres.Postgres) repo.EventStore {
+	return eventstore.New(pg, eventcodec.New(entity.EventTypes()), 0)
+}
+
+func marked(ctx context.Context, t *testing.T, pg *postgres.Postgres, domain string) bool {
+	t.Helper()
+
+	done, err := queries.New(pg.Executor(ctx)).HasMarker(ctx, domain)
+	require.NoError(t, err)
+
+	return done
 }
 
 func TestBackfillRunsEachImporterOnce(t *testing.T) {
 	ctx := context.Background()
 	pg := newPostgres(t)
-	imp := &countingImporter{domain: "_test-" + uuid.NewString()}
+	imp := &countingImporter{domain: "test-" + uuid.NewString()}
 
-	require.NoError(t, eventstore.Backfill(ctx, pg, imp))
-	require.NoError(t, eventstore.Backfill(ctx, pg, imp))
+	require.NoError(t, eventstore.Backfill(ctx, pg, newStore(pg), imp))
+	require.NoError(t, eventstore.Backfill(ctx, pg, newStore(pg), imp))
 
 	assert.Equal(t, 1, imp.runs)
-
-	marked, err := queries.New(pg.Executor(ctx)).HasMarker(ctx, "_backfill/"+imp.domain)
-	require.NoError(t, err)
-	assert.True(t, marked)
+	assert.True(t, marked(ctx, t, pg, imp.domain))
 }
 
 func TestAFailedImportLeavesNoMarkerAndRunsAgain(t *testing.T) {
 	ctx := context.Background()
 	pg := newPostgres(t)
-	imp := &countingImporter{domain: "_test-" + uuid.NewString(), fail: true}
+	imp := &countingImporter{domain: "test-" + uuid.NewString(), fail: true}
 
-	require.ErrorIs(t, eventstore.Backfill(ctx, pg, imp), errImport)
-
-	marked, err := queries.New(pg.Executor(ctx)).HasMarker(ctx, "_backfill/"+imp.domain)
-	require.NoError(t, err)
-	assert.False(t, marked)
+	require.ErrorIs(t, eventstore.Backfill(ctx, pg, newStore(pg), imp), errImport)
+	assert.False(t, marked(ctx, t, pg, imp.domain))
 
 	imp.fail = false
-	require.NoError(t, eventstore.Backfill(ctx, pg, imp))
+	require.NoError(t, eventstore.Backfill(ctx, pg, newStore(pg), imp))
 	assert.Equal(t, 2, imp.runs)
 }
 
-// importAll runs every domain's importer against the live database, as the app's first start on
-// this code would, and waits for the projectors to pass what it appended.
+// A database upgraded from v0.3 kept its markers among the checkpoints: the backfill moves them to
+// their own table instead of importing again, and the checkpoints keep only checkpoints.
+func TestBackfillMovesTheMarkersV03KeptAmongTheCheckpoints(t *testing.T) {
+	ctx := context.Background()
+	pg := newPostgres(t)
+	imp := &countingImporter{domain: "test-" + uuid.NewString()}
+
+	require.NoError(t, queries.New(pg.Executor(ctx)).EnsureCheckpoint(ctx, "_backfill/"+imp.domain))
+
+	require.NoError(t, eventstore.Backfill(ctx, pg, newStore(pg), imp))
+
+	assert.Zero(t, imp.runs, "a domain v0.3 imported is not imported again")
+	assert.True(t, marked(ctx, t, pg, imp.domain))
+
+	var left bool
+
+	require.NoError(t, pg.Executor(ctx).QueryRow(ctx,
+		"SELECT EXISTS (SELECT 1 FROM projection_checkpoints WHERE name = $1)", "_backfill/"+imp.domain).Scan(&left))
+	assert.False(t, left)
+}
+
+// A rebuild empties the tables the importers read, so it waits until every import has run.
+func TestRebuildRefusesWhileAnImportIsPending(t *testing.T) {
+	ctx := context.Background()
+	pg := newPostgres(t)
+	pending := &countingImporter{domain: "test-" + uuid.NewString()}
+
+	err := projection.Rebuild(ctx, pg, "task",
+		[]projection.Projector{persistTaskRepo.NewProjector(pg)}, []eventstore.Importer{pending})
+
+	require.ErrorIs(t, err, eventstore.ErrImportPending)
+	assert.Contains(t, err.Error(), pending.domain)
+}
+
+// importAll runs every domain's importer against the live database through the backfill, as the
+// app's first start on this code would, and waits for the projectors to pass what it appended.
 func importAll(t *testing.T, pg *postgres.Postgres) {
 	t.Helper()
 
 	ctx := context.Background()
-	store := eventstore.New(pg, eventcodec.New(entity.EventTypes()), 0)
+	run := uuid.NewString()
 
 	for _, imp := range []eventstore.Importer{
-		persistTaskRepo.NewImporter(pg, store),
-		persistUserRepo.NewImporter(pg, store),
-		persistExchangeRepo.NewImporter(pg, store),
-		persistPasskeyRepo.NewImporter(pg, store),
+		persistTaskRepo.NewImporter(pg),
+		persistUserRepo.NewImporter(pg),
+		persistExchangeRepo.NewImporter(pg),
+		persistPasskeyRepo.NewImporter(pg),
 	} {
-		require.NoError(t, pg.InTx(ctx, imp.Import), imp.Domain())
+		again := renamed{Importer: imp, domain: "test-" + run + "/" + imp.Domain()}
+		require.NoError(t, eventstore.Backfill(ctx, pg, newStore(pg), again), imp.Domain())
 	}
 
 	last, err := queries.New(pg.Executor(ctx)).LastPosition(ctx)

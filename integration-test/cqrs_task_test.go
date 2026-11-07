@@ -187,7 +187,7 @@ func TestRebuildingTheTaskProjectionRestoresItsReads(t *testing.T) {
 	last, err := queries.New(pg.Executor(t.Context())).LastPosition(t.Context())
 	require.NoError(t, err)
 
-	require.NoError(t, projection.Rebuild(t.Context(), pg, "task", persistTaskRepo.NewProjector(pg)))
+	require.NoError(t, projection.Rebuild(t.Context(), pg, "task", []projection.Projector{persistTaskRepo.NewProjector(pg)}, nil))
 
 	checkpoints := projection.NewCheckpoints(pg)
 

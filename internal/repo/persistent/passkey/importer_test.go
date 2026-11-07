@@ -6,35 +6,54 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/passkey"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestImportPasskeysGivesEachRowItsStream(t *testing.T) {
+// rows is a webauthn_credentials table holding legacy rows; any other query panics on the nil
+// embedded interface.
+type rows struct {
+	queries.Querier
+
+	passkeys []queries.WebauthnCredential
+	err      error
+}
+
+func (r rows) ListEveryPasskey(context.Context) ([]queries.WebauthnCredential, error) {
+	return r.passkeys, r.err
+}
+
+func TestEachPasskeyRowBecomesAStreamHoldingPasskeyImported(t *testing.T) {
 	t.Parallel()
 
-	store := memstore.New(entity.EventTypes())
 	used := at().Add(time.Hour)
-	rows := []entity.Passkey{
+
+	imports, err := passkey.Imports(context.Background(), rows{passkeys: []queries.WebauthnCredential{
 		{ID: id(), UserID: "u1", Name: "Laptop", Credential: credential(), CreatedAt: at(), LastUsedAt: &used},
 		{ID: entity.PasskeyID{5}, UserID: "u1", Name: "Phone", Credential: credential(), CreatedAt: at()},
-	}
+	}})
+	require.NoError(t, err)
+	require.Len(t, imports, 2)
 
-	require.NoError(t, passkey.ImportPasskeys(context.Background(), store, rows))
-
+	assert.Equal(t, entity.PasskeyStreamID(id()), imports[0].Aggregate.StreamID())
 	assert.Equal(t, []entity.Event{entity.PasskeyImported{
 		PasskeyID: id(), UserID: "u1", Name: "Laptop", Credential: credential(), CreatedAt: at(), LastUsedAt: &used,
-	}}, store.Events(entity.PasskeyStreamID(id())))
-	assert.Len(t, store.Events(entity.PasskeyStreamID(entity.PasskeyID{5})), 1)
+	}}, imports[0].Aggregate.Pending())
+	assert.Equal(t, entity.PasskeyStreamID(entity.PasskeyID{5}), imports[1].Aggregate.StreamID())
+}
 
-	require.NoError(t, passkey.ImportPasskeys(context.Background(), store, rows), "an imported passkey is skipped")
-	assert.Len(t, store.Events(entity.PasskeyStreamID(id())), 1)
+func TestThePasskeyImporterReturnsAReadFailure(t *testing.T) {
+	t.Parallel()
+
+	_, err := passkey.Imports(context.Background(), rows{err: errWrite})
+
+	require.ErrorIs(t, err, errWrite)
 }
 
 func TestTheImporterIsThePasskeyDomains(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "passkey", passkey.NewImporter(nil, nil).Domain())
+	assert.Equal(t, "passkey", passkey.NewImporter(nil).Domain())
 }

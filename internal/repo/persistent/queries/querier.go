@@ -36,7 +36,10 @@ type Querier interface {
 	GetTask(ctx context.Context, id string) (Task, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
-	HasMarker(ctx context.Context, name string) (bool, error)
+	// HasMarker reports whether eventstore.Backfill has imported domain's rows.
+	HasMarker(ctx context.Context, domain string) (bool, error)
+	// ImportedDomains returns the domains among domains that have been imported.
+	ImportedDomains(ctx context.Context, domains []string) ([]string, error)
 	// InsertClaim reserves a value for owner_id. It affects no row when another owner holds the
 	// value, and one row when the value is new or owner_id holds it already.
 	InsertClaim(ctx context.Context, arg InsertClaimParams) (int64, error)
@@ -69,9 +72,13 @@ type Querier interface {
 	// order they are assigned and a reader that has passed a position never sees an earlier one
 	// commit later.
 	LockEventStore(ctx context.Context, key int64) error
+	// MoveLegacyMarkers moves the markers v0.3 kept among the checkpoints, named _backfill/<domain>,
+	// to backfill_markers, so a database upgraded from v0.3 does not import again. Once they have
+	// moved, it finds none.
+	MoveLegacyMarkers(ctx context.Context) error
 	// NotifyEvents wakes the projection runners; Postgres delivers it when the transaction commits.
 	NotifyEvents(ctx context.Context) error
-	PutMarker(ctx context.Context, name string) error
+	PutMarker(ctx context.Context, domain string) error
 	PutSnapshot(ctx context.Context, arg PutSnapshotParams) error
 	// ReadAll returns the events after a position, for the projection runner. Streams whose ID starts
 	// with an underscore are scratch streams (the store's own tests write them): only a reader that

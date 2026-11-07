@@ -28,8 +28,8 @@ const (
 	projectionTick = 20 * time.Millisecond
 )
 
-// runCounter counts how often it was handed each position of one run's scratch notes. Its name
-// starts with an underscore, so it shows in no lag metric and no wait.
+// runCounter counts how often it was handed each position of one run's scratch notes. No write
+// waits for it, and its test deletes its checkpoint when it ends, so it leaves no lag metric behind.
 type runCounter struct {
 	name   string
 	prefix string
@@ -40,7 +40,7 @@ type runCounter struct {
 
 func newRunCounter(run string) *runCounter {
 	return &runCounter{
-		name:   "_test-" + run,
+		name:   "test-" + run,
 		prefix: eventstoretest.NoteStreamID(run),
 		counts: map[int64]int{},
 	}
@@ -134,6 +134,12 @@ func TestTheRunnerDeliversEachEventOnceResumesAndRebuilds(t *testing.T) {
 	run := uuid.NewString()
 	c := newRunCounter(run)
 
+	t.Cleanup(func() {
+		_, err := pg.Executor(context.Background()).Exec(context.Background(),
+			"DELETE FROM projection_checkpoints WHERE name = $1", c.name)
+		assert.NoError(t, err)
+	})
+
 	stop := startRunner(t, pg, c)
 	want := saveNotes(ctx, t, pg, run, 0, 3)
 
@@ -154,7 +160,7 @@ func TestTheRunnerDeliversEachEventOnceResumesAndRebuilds(t *testing.T) {
 	}
 
 	// A rebuild resets the checkpoint, and the running runner replays from the first event.
-	require.NoError(t, projection.Rebuild(ctx, pg, c.name, c))
+	require.NoError(t, projection.Rebuild(ctx, pg, c.name, []projection.Projector{c}, nil))
 
 	require.Eventually(t, func() bool {
 		_, counts := c.handled()

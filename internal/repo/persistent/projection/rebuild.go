@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 )
@@ -26,14 +28,22 @@ type Projector interface {
 // Rebuild empties the tables of the projector called name and resets its checkpoint, in one
 // transaction, and wakes the worker running it, which then replays every event into them. Until it
 // catches up, reads from those tables are incomplete.
-func Rebuild(ctx context.Context, pg *postgres.Postgres, name string, projectors ...Projector) error {
-	for _, p := range projectors {
-		if p.Name() == name {
-			return rebuild(ctx, pg, p)
-		}
+//
+// It refuses with eventstore.ErrImportPending while any of importers has not run: they read the
+// read-model tables, so emptying one would lose the rows they have still to import.
+func Rebuild(
+	ctx context.Context, pg *postgres.Postgres, name string, projectors []Projector, importers []eventstore.Importer,
+) error {
+	i := slices.IndexFunc(projectors, func(p Projector) bool { return p.Name() == name })
+	if i < 0 {
+		return fmt.Errorf("%w: %q; known: %s", ErrUnknownProjector, name, strings.Join(Names(projectors), ", "))
 	}
 
-	return fmt.Errorf("%w: %q; known: %s", ErrUnknownProjector, name, strings.Join(Names(projectors), ", "))
+	if err := eventstore.RequireImported(ctx, pg, importers...); err != nil {
+		return fmt.Errorf("projection - Rebuild %s: %w", name, err)
+	}
+
+	return rebuild(ctx, pg, projectors[i])
 }
 
 func rebuild(ctx context.Context, pg *postgres.Postgres, p Projector) error {

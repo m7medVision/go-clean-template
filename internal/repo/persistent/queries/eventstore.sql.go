@@ -66,7 +66,6 @@ SELECT c.name, (
   (SELECT COALESCE(MAX(e.position), 0) FROM events AS e WHERE e.stream_id NOT LIKE '\_%') - c.position
 )::bigint AS lag
 FROM projection_checkpoints AS c
-WHERE c.name NOT LIKE '\_%'
 ORDER BY c.name
 `
 
@@ -176,17 +175,6 @@ func (q *Queries) GetSnapshot(ctx context.Context, streamID string) (GetSnapshot
 	return i, err
 }
 
-const hasMarker = `-- name: HasMarker :one
-SELECT EXISTS (SELECT 1 FROM projection_checkpoints WHERE name = $1)
-`
-
-func (q *Queries) HasMarker(ctx context.Context, name string) (bool, error) {
-	row := q.db.QueryRow(ctx, hasMarker, name)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const insertClaim = `-- name: InsertClaim :execrows
 INSERT INTO claims (scope, value, owner_id)
 VALUES ($1, $2, $3)
@@ -243,16 +231,6 @@ SELECT pg_notify('events', '')
 // NotifyEvents wakes the projection runners; Postgres delivers it when the transaction commits.
 func (q *Queries) NotifyEvents(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, notifyEvents)
-	return err
-}
-
-const putMarker = `-- name: PutMarker :exec
-INSERT INTO projection_checkpoints (name)
-VALUES ($1)
-`
-
-func (q *Queries) PutMarker(ctx context.Context, name string) error {
-	_, err := q.db.Exec(ctx, putMarker, name)
 	return err
 }
 

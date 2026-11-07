@@ -180,7 +180,8 @@ make projection-rebuild name=task
 
 This empties the projector's tables and resets its checkpoint to 0, in one transaction, then
 notifies the running worker, which replays every event into them. Until it catches up, reads from
-those tables are incomplete. Only projectors can be rebuilt: replaying an event handler would
+those tables are incomplete. It refuses while the backfill has not imported every domain: the
+importers read those tables, so emptying one would lose the rows they have still to import. Only projectors can be rebuilt: replaying an event handler would
 repeat its side effects, such as sending every welcome email again.
 
 ### Reads after writes
@@ -196,8 +197,13 @@ worker running.
 ### The backfill
 
 At start, the app runs each domain's importer once, under the store's lock, in one transaction with
-its marker (`_backfill/<domain>` in `projection_checkpoints`). An importer turns the rows the domain
-wrote before it stored events into `*Imported` events, one per row, and claims what they hold.
+its marker (the domain's row in `backfill_markers`). An importer reads the rows the domain wrote
+before it stored events and returns one new aggregate per row, holding its `*Imported` event, with
+the claims the row holds. `eventstore.Backfill` saves them in one loop for every domain, and skips a
+stream that exists already: its row came from its events. It checks before it saves, so a stream
+that exists never fails a statement inside the import's transaction. A database upgraded from
+v0.3, which kept its markers in `projection_checkpoints` as `_backfill/<domain>`, has them moved to
+`backfill_markers` at the next start instead of importing again.
 
 Projectors apply `*Imported` events as upserts, so the rows stay as they were and no checkpoint is
 ever moved by hand.

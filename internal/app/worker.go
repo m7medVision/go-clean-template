@@ -125,7 +125,7 @@ func RebuildProjection(cfg *config.Config, name string) error {
 	}
 	defer pg.Close()
 
-	if err = projection.Rebuild(context.Background(), pg, name, projectors(pg)...); err != nil {
+	if err = projection.Rebuild(context.Background(), pg, name, projectors(pg), importers(pg)); err != nil {
 		return fmt.Errorf("app - RebuildProjection: %w", err)
 	}
 

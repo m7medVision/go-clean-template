@@ -106,17 +106,9 @@ SELECT c.name, (
   (SELECT COALESCE(MAX(e.position), 0) FROM events AS e WHERE e.stream_id NOT LIKE '\_%') - c.position
 )::bigint AS lag
 FROM projection_checkpoints AS c
-WHERE c.name NOT LIKE '\_%'
 ORDER BY c.name;
 
 -- TryLockSubscriber takes a subscriber's lock until the transaction ends, so one runner at a time
 -- handles it; false when another runner holds it.
 -- name: TryLockSubscriber :one
 SELECT pg_try_advisory_xact_lock(hashtext(sqlc.arg('name')::text)::bigint);
-
--- name: HasMarker :one
-SELECT EXISTS (SELECT 1 FROM projection_checkpoints WHERE name = $1);
-
--- name: PutMarker :exec
-INSERT INTO projection_checkpoints (name)
-VALUES ($1);

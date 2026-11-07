@@ -347,13 +347,16 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   for. So the app and the integration tests need the worker running; `make dev` and the compose stack
   start it.
 - **The backfill** (`eventstore.Backfill`, `internal/app/backfill.go`) runs at app start, once per
-  domain, and turns rows written before event sourcing into `*Imported` events. Projectors apply
-  `*Imported` as upserts. A new domain needs no importer: it never had rows without events.
+  domain (its marker is a row in `backfill_markers`), and turns rows written before event sourcing
+  into `*Imported` events. An importer only returns one new aggregate per row; the backfill's one
+  loop saves them and skips a stream that exists. Projectors apply `*Imported` as upserts. A new
+  domain needs no importer: it never had rows without events.
 - **Scratch streams** start with `_` and are never delivered; the event store's integration tests use
-  only those, so they can share the database with a running worker. Subscriber names cannot start
-  with `_` either: `_backfill/<domain>` markers live in `projection_checkpoints`.
+  only those, so they can share the database with a running worker.
 - **Rebuild** a projector with `make projection-rebuild name=<projector>`, never by hand-editing a
-  checkpoint. Event handlers cannot be rebuilt: replaying them repeats their side effects.
+  checkpoint. It refuses while an import is pending (`eventstore.ErrImportPending`): the importers
+  read the tables it empties. Event handlers cannot be rebuilt: replaying them repeats their side
+  effects.
 
 ## Queue and worker
 
@@ -625,8 +628,8 @@ in `internal/repo/persistent/queries/*.sql`, compiled by [sqlc](https://sqlc.dev
 `internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The read models and projectors call the generated
 `*queries.Queries` (projectors through the `Querier` interface, so they can be tested with a fake)
 and convert its rows to `entity` types; there is no ORM and no query building at runtime. The event
-store's own tables (`events`, `snapshots`, `claims`, `projection_checkpoints`) are HCL files like
-any other. Generated row structs share the entities' field order, so `entity.Task(row)` is a
+store's own tables (`events`, `snapshots`, `claims`, `projection_checkpoints`, and the backfill's
+`backfill_markers`) are HCL files like any other. Generated row structs share the entities' field order, so `entity.Task(row)` is a
 plain conversion. A schema change that breaks that alignment fails to compile.
 
 ## Tests

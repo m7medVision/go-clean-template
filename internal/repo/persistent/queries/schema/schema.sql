@@ -4,6 +4,12 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 -- Set comment to schema: "public"
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+-- Create "backfill_markers" table
+CREATE TABLE "public"."backfill_markers" (
+  "domain" text NOT NULL,
+  "imported_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("domain")
+);
 -- Create "claims" table
 CREATE TABLE "public"."claims" (
   "scope" text NOT NULL,

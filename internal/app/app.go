@@ -106,7 +106,7 @@ func Run(cfg *config.Config) error {
 	}
 
 	// Rows written before a domain stored events become its first events, once.
-	if err = eventstore.Backfill(ctx, pg, importers(pg, newEventStore(cfg, pg))...); err != nil {
+	if err = eventstore.Backfill(ctx, pg, newEventStore(cfg, pg), importers(pg)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
 	}
 

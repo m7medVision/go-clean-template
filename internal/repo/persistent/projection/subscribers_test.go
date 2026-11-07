@@ -28,14 +28,6 @@ func TestCheckRefusesTwoSubscribersWithOneName(t *testing.T) {
 	require.ErrorIs(t, err, projection.ErrDuplicateSubscriber)
 }
 
-func TestCheckRefusesAMarkerName(t *testing.T) {
-	t.Parallel()
-
-	err := projection.Check(nil, []repo.Subscriber{&recorder{name: "_backfill/task"}}, nil)
-
-	require.ErrorIs(t, err, projection.ErrReservedSubscriber)
-}
-
 // An event only an event handler hears would reach no read model.
 func TestCheckRefusesAnEventNoProjectorHandles(t *testing.T) {
 	t.Parallel()

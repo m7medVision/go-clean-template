@@ -5,45 +5,52 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func row(id string) entity.Task {
-	return entity.Task{ID: id, UserID: "u1", Title: id, Status: entity.TaskStatusDone, CreatedAt: at(), UpdatedAt: at()}
+// rows is a tasks table holding legacy rows; any other query panics on the nil embedded interface.
+type rows struct {
+	queries.Querier
+
+	tasks []queries.Task
+	err   error
 }
 
-func TestImportTasksGivesEachRowItsStream(t *testing.T) {
+func (r rows) ListEveryTask(context.Context) ([]queries.Task, error) { return r.tasks, r.err }
+
+func row(id string) queries.Task {
+	return queries.Task{ID: id, UserID: "u1", Title: id, Status: entity.TaskStatusDone, CreatedAt: at(), UpdatedAt: at()}
+}
+
+func TestEachTaskRowBecomesAStreamHoldingTaskImported(t *testing.T) {
 	t.Parallel()
 
-	store := memstore.New(entity.EventTypes())
+	imports, err := task.Imports(context.Background(), rows{tasks: []queries.Task{row("t1"), row("t2")}})
+	require.NoError(t, err)
+	require.Len(t, imports, 2)
 
-	require.NoError(t, task.ImportTasks(context.Background(), store, []entity.Task{row("t1"), row("t2")}))
-
-	for _, id := range []string{"t1", "t2"} {
-		r := row(id)
+	for i, id := range []string{"t1", "t2"} {
+		assert.Equal(t, entity.TaskStreamID(id), imports[i].Aggregate.StreamID())
 		assert.Equal(t, []entity.Event{entity.TaskImported{
 			TaskID: id, UserID: "u1", Title: id, Status: entity.TaskStatusDone, CreatedAt: at(), UpdatedAt: at(),
-		}}, store.Events(entity.TaskStreamID(r.ID)))
+		}}, imports[i].Aggregate.Pending())
+		assert.Empty(t, imports[i].Claims)
 	}
 }
 
-func TestImportTasksSkipsATaskThatHasAStreamAlready(t *testing.T) {
+func TestTheTaskImporterReturnsAReadFailure(t *testing.T) {
 	t.Parallel()
 
-	store := memstore.New(entity.EventTypes())
-	_, err := store.Save(context.Background(), entity.NewTaskAggregate("t1", "u1", "new", "", at()))
-	require.NoError(t, err)
+	_, err := task.Imports(context.Background(), rows{err: errWrite})
 
-	require.NoError(t, task.ImportTasks(context.Background(), store, []entity.Task{row("t1")}))
-
-	assert.Len(t, store.Events(entity.TaskStreamID("t1")), 1, "the stream keeps its own first event")
+	require.ErrorIs(t, err, errWrite)
 }
 
 func TestTheImporterIsTheTaskDomains(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "task", task.NewImporter(nil, nil).Domain())
+	assert.Equal(t, "task", task.NewImporter(nil).Domain())
 }

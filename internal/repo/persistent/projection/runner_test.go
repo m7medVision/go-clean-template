@@ -383,7 +383,7 @@ func TestEventsASubscriberDoesNotHandlePassItBy(t *testing.T) {
 func TestRebuildRefusesAnUnknownName(t *testing.T) {
 	t.Parallel()
 
-	err := projection.Rebuild(context.Background(), nil, "missing", &projector{recorder{name: "r"}})
+	err := projection.Rebuild(context.Background(), nil, "missing", []projection.Projector{&projector{recorder{name: "r"}}}, nil)
 
 	require.ErrorIs(t, err, projection.ErrUnknownProjector)
 	assert.Contains(t, err.Error(), "r")

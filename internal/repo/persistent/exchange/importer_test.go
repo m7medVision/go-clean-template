@@ -5,57 +5,95 @@ import (
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func imported(id string) exchange.ImportedConversion {
-	return exchange.ImportedConversion{
-		ID: id, UserID: "u1", CreatedAt: at(),
-		Conversion: entity.Conversion{
-			From: "OMR", To: "CNY", Amount: decimal.RequireFromString("100"), Rate: decimal.RequireFromString("17.4"),
-			Result: decimal.RequireFromString("1740.00"), RateDate: rateDate(),
-		},
+// rows is an exchange_history table holding legacy rows, recording the conversion IDs the importer
+// gives them; any other query panics on the nil embedded interface.
+type rows struct {
+	queries.Querier
+
+	history []queries.ExchangeHistory
+	given   []queries.SetConversionIDParams
+	err     error
+}
+
+func (r *rows) ListEveryExchange(context.Context) ([]queries.ExchangeHistory, error) {
+	return r.history, r.err
+}
+
+func (r *rows) SetConversionID(_ context.Context, arg queries.SetConversionIDParams) error {
+	r.given = append(r.given, arg)
+
+	return nil
+}
+
+func legacy(id int64, conversionID *string) queries.ExchangeHistory {
+	return queries.ExchangeHistory{
+		ID: id, ConversionID: conversionID, UserID: "u1", FromCurrency: "OMR", ToCurrency: "CNY",
+		Amount: decimal.RequireFromString("100"), Rate: decimal.RequireFromString("17.4"),
+		Result: decimal.RequireFromString("1740.00"), RateDate: rateDate(), CreatedAt: at(),
 	}
 }
 
-func TestImportConversionsGivesEachRowItsStream(t *testing.T) {
-	t.Parallel()
+func imported(t *testing.T, a entity.Aggregate) entity.ConversionImported {
+	t.Helper()
 
-	store := memstore.New(entity.EventTypes())
+	require.Len(t, a.Pending(), 1)
 
-	require.NoError(t, exchange.ImportConversions(context.Background(), store,
-		[]exchange.ImportedConversion{imported("c1"), imported("c2")}))
+	e, ok := a.Pending()[0].(entity.ConversionImported)
+	require.True(t, ok)
 
-	for _, id := range []string{"c1", "c2"} {
-		events := store.Events(entity.ConversionStreamID(id))
-		require.Len(t, events, 1)
-
-		e, ok := events[0].(entity.ConversionImported)
-		require.True(t, ok)
-		assert.Equal(t, id, e.ConversionID)
-		assert.Equal(t, "u1", e.UserID)
-		assert.Equal(t, at(), e.CreatedAt)
-	}
+	return e
 }
 
-func TestImportConversionsSkipsAConversionThatHasAStreamAlready(t *testing.T) {
+func TestEachExchangeRowBecomesAStreamHoldingConversionImported(t *testing.T) {
 	t.Parallel()
 
-	store := memstore.New(entity.EventTypes())
-	c := imported("c1")
+	c1 := "c1"
+	q := &rows{history: []queries.ExchangeHistory{legacy(1, &c1)}}
 
-	require.NoError(t, exchange.ImportConversions(context.Background(), store, []exchange.ImportedConversion{c}))
-	require.NoError(t, exchange.ImportConversions(context.Background(), store, []exchange.ImportedConversion{c}))
+	imports, err := exchange.Imports(context.Background(), q)
+	require.NoError(t, err)
+	require.Len(t, imports, 1)
 
-	assert.Len(t, store.Events(entity.ConversionStreamID("c1")), 1)
+	assert.Equal(t, entity.ConversionStreamID("c1"), imports[0].Aggregate.StreamID())
+
+	e := imported(t, imports[0].Aggregate)
+	assert.Equal(t, "c1", e.ConversionID)
+	assert.Equal(t, "u1", e.UserID)
+	assert.Equal(t, at(), e.CreatedAt)
+	assert.True(t, decimal.RequireFromString("1740.00").Equal(e.Result))
+	assert.Empty(t, q.given, "a row that has its conversion ID keeps it")
+}
+
+func TestARowWithoutAConversionIDGetsOneItsStreamShares(t *testing.T) {
+	t.Parallel()
+
+	q := &rows{history: []queries.ExchangeHistory{legacy(7, nil)}}
+
+	imports, err := exchange.Imports(context.Background(), q)
+	require.NoError(t, err)
+	require.Len(t, q.given, 1)
+
+	assert.Equal(t, int64(7), q.given[0].ID)
+	assert.Equal(t, *q.given[0].ConversionID, imported(t, imports[0].Aggregate).ConversionID)
+}
+
+func TestTheExchangeImporterReturnsAReadFailure(t *testing.T) {
+	t.Parallel()
+
+	_, err := exchange.Imports(context.Background(), &rows{err: errWrite})
+
+	require.ErrorIs(t, err, errWrite)
 }
 
 func TestTheImporterIsTheExchangeDomains(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "exchange", exchange.NewImporter(nil, nil).Domain())
+	assert.Equal(t, "exchange", exchange.NewImporter(nil).Domain())
 }
