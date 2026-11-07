@@ -42,6 +42,8 @@ func TestTransitionTask(t *testing.T) {
 	require.Empty(t, resp.Errors)
 	assert.JSONEq(t, `{"id":"task-1","status":"IN_PROGRESS"}`, string(resp.Data["transitionTask"]))
 
+	// gqlerr's tests own which code each kind of failure gets; this checks that a resolver's failure
+	// reaches the response with its code and message.
 	resp = do(t, &fakeTask{err: entity.ErrInvalidTransition}, true, query, nil)
 
 	assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))

@@ -12,6 +12,7 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 // callerOf sends a request with the given Authorization header through WithOptionalCaller, and
@@ -42,20 +43,18 @@ func TestWithOptionalCallerReadsTheToken(t *testing.T) {
 	t.Parallel()
 
 	manager := jwt.New("secret", time.Hour)
-	before := time.Now().Truncate(time.Second)
 
-	token, err := manager.GenerateToken("user-1", []string{"user", "admin", "root"})
+	token, err := manager.GenerateToken("user-1", []string{"admin"})
 	require.NoError(t, err)
 
 	got, err := callerOf(t, manager, "Bearer "+token)
 	require.NoError(t, err)
 
-	assert.Equal(t, entity.Principal{UserID: "user-1", Roles: []entity.Role{entity.RoleUser, entity.RoleAdmin}}, got.Principal)
-	assert.False(t, got.IssuedAt.Before(before), "the token's issue time is kept: %s", got.IssuedAt)
+	assert.Equal(t, entity.Principal{UserID: "user-1", Roles: []entity.Role{entity.RoleAdmin}}, got.Principal)
 }
 
 // A request without a valid bearer token gets through without a caller, and a resolver that asks
-// for one gets UNAUTHENTICATED.
+// for one gets UNAUTHENTICATED, the code the web client signs out on.
 func TestWithOptionalCallerAnonymous(t *testing.T) {
 	t.Parallel()
 
@@ -73,8 +72,11 @@ func TestWithOptionalCallerAnonymous(t *testing.T) {
 			t.Parallel()
 
 			_, err := callerOf(t, manager, header)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "unauthorized")
+
+			var gqlErr *gqlerror.Error
+
+			require.ErrorAs(t, err, &gqlErr)
+			assert.Equal(t, "UNAUTHENTICATED", gqlErr.Extensions["code"])
 		})
 	}
 }

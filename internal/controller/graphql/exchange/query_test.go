@@ -33,26 +33,13 @@ func TestExchangeHistory(t *testing.T) {
 	assert.Equal(t, 10, ex.gotOffset)
 }
 
-func TestExchangeHistoryRejects(t *testing.T) {
+func TestExchangeHistoryUnauthenticated(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct {
-		name          string
-		authenticated bool
-		query         string
-		code          string
-	}{
-		{"no token", false, _exchangeHistory, "UNAUTHENTICATED"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+	ex := &fakeExchange{}
 
-			ex := &fakeExchange{}
+	resp := do(t, ex, false, _exchangeHistory)
 
-			resp := do(t, ex, tc.authenticated, tc.query)
-
-			assert.Equal(t, tc.code, resp.Code(t))
-			assert.False(t, ex.called)
-		})
-	}
+	assert.Equal(t, "UNAUTHENTICATED", resp.Code(t))
+	assert.False(t, ex.called)
 }

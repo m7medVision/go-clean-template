@@ -23,27 +23,6 @@ func TestUnauthenticated(t *testing.T) {
 	assert.False(t, tk.called)
 }
 
-func TestGetTaskErrors(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		err  error
-		code string
-	}{
-		{"not found", entity.ErrTaskNotFound, "NOT_FOUND"},
-		{"forbidden", entity.ErrTaskForbidden, "FORBIDDEN"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			resp := do(t, &fakeTask{err: tc.err}, true, _getTask, nil)
-
-			assert.Equal(t, tc.code, resp.Code(t))
-		})
-	}
-}
-
 func TestListTasks(t *testing.T) {
 	t.Parallel()
 
@@ -69,14 +48,6 @@ func TestAllTasks(t *testing.T) {
 	assert.Equal(t, entity.Principal{UserID: graphqltest.UserID, Roles: []entity.Role{entity.RoleAdmin}}, tk.listCaller)
 	require.NotNil(t, tk.listStatus)
 	assert.Equal(t, entity.TaskStatusDone, *tk.listStatus)
-}
-
-func TestAllTasksAdminRequired(t *testing.T) {
-	t.Parallel()
-
-	resp := doAs(t, &fakeTask{err: entity.ErrAdminRequired}, []string{"user"}, `query { allTasks { total } }`)
-
-	assert.Equal(t, "FORBIDDEN", resp.Code(t))
 }
 
 func TestAllTasksUnauthenticated(t *testing.T) {

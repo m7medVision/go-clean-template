@@ -13,7 +13,6 @@ import (
 // fakeExchange answers GetExchangeHistory on real buses, and keeps what it was asked.
 type fakeExchange struct {
 	history             entity.List[entity.Conversion]
-	err                 error
 	called              bool
 	gotLimit, gotOffset int
 }
@@ -25,7 +24,7 @@ func (f *fakeExchange) buses() cqrs.Buses {
 			f.called = true
 			f.gotLimit, f.gotOffset = q.Limit, q.Offset
 
-			return f.history, f.err
+			return f.history, nil
 		}))
 
 	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: qs}
