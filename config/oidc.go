@@ -10,6 +10,7 @@ type OIDC struct {
 	// realm_access.roles on Keycloak, roles on Entra ID, groups on Okta.
 	RolesClaim string `env:"OIDC_ROLES_CLAIM" envDefault:"realm_access.roles"`
 	// RoleMap maps provider role names to app roles (admin, user) as name:role pairs. A provider
-	// role not in the map grants nothing; a sign-in that maps to no role gets user.
+	// role not in the map grants nothing; a sign-in that maps to no role gets user. The SSO adapter
+	// refuses any other app role, which stops the app at startup.
 	RoleMap map[string]string `env:"OIDC_ROLE_MAP" envSeparator:"," envKeyValSeparator:":"`
 }

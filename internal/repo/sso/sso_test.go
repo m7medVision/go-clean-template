@@ -174,10 +174,11 @@ func TestVerifyMapsTheProvidersRoles(t *testing.T) {
 		},
 		{"a missing claim falls back to user", keycloak, nil, []entity.Role{entity.RoleUser}},
 		{"a claim of the wrong type falls back to user", keycloak, map[string]any{"realm_access": 42}, []entity.Role{entity.RoleUser}},
-		{"a map value that is no app role is dropped", func(c *config.OIDC) {
-			c.RolesClaim = "roles"
-			c.RoleMap = map[string]string{"root": "superuser"}
-		}, map[string]any{"roles": []string{"root"}}, []entity.Role{entity.RoleUser}},
+		{
+			"two names for one role grant it once", okta,
+			map[string]any{"groups": []string{"everyone", "task-admins", "everyone"}},
+			[]entity.Role{entity.RoleUser, entity.RoleAdmin},
+		},
 	}
 
 	for _, tt := range tests {
@@ -190,6 +191,20 @@ func TestVerifyMapsTheProvidersRoles(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, identity.Roles)
 		})
+	}
+}
+
+// A role map naming a role the app does not have would grant nothing on every sign-in, so it stops
+// the app at startup.
+func TestNewRefusesARoleTheAppDoesNotHave(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{"superuser", "Admin", ""} {
+		_, err := sso.New("test-secret", config.OIDC{
+			Issuer:  "https://idp.example",
+			RoleMap: map[string]string{"app-user": "user", "root": value},
+		}, ssotest.BaseURL)
+		require.ErrorIs(t, err, sso.ErrUnknownRole, "role %q", value)
 	}
 }
 

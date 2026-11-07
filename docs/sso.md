@@ -68,8 +68,9 @@ in [architecture.md](architecture.md#roles).
 
 - Every other sign-in grants only `user`. Admin comes only from the provider.
 - An SSO sign-in reads the provider's role names from the claim at `OIDC_ROLES_CLAIM` (a dotted path),
-  maps each through `OIDC_ROLE_MAP`, and drops names that do not map to an app role. A sign-in that
-  maps to nothing gets `user`.
+  maps each through `OIDC_ROLE_MAP`, and ignores names the map does not list. A sign-in that maps to
+  nothing gets `user`. Every role the map names must be `admin` or `user`: any other value stops the
+  app at startup (`sso.ErrUnknownRole`), rather than granting nothing on every sign-in.
 - Roles are fixed when the token is issued. Removing someone from the admin group takes effect at
   their next sign-in, at most `JWT_TOKEN_EXPIRY` (15 minutes by default) later.
 
@@ -127,4 +128,4 @@ variables ([configuration.md](configuration.md#oidc)):
 | Okta | `https://<org>.okta.com/oauth2/default` | `groups` | Add a `groups` claim to the authorization server, filtered to the groups you map. The org authorization server does not add it by default. |
 
 `OIDC_ROLE_MAP` maps the provider's names to `admin` or `user`, for example
-`OIDC_ROLE_MAP=Tasks.Admin:admin` on Entra ID.
+`OIDC_ROLE_MAP=Tasks.Admin:admin` on Entra ID. The app refuses to start on any other role.

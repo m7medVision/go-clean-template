@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/sso"
 	mailcommand "github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
 	oidcquery "github.com/m7medvision/go-clean-template/internal/usecase/oidc/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -77,6 +78,15 @@ func TestTheWorkerInstallsOnlyWhatItsQueuesSendTo(t *testing.T) {
 
 	_, err = cqrs.SendQuery(t.Context(), b.Queries, oidcquery.GetOIDCStatus{})
 	require.ErrorIs(t, err, cqrs.ErrNoHandler)
+}
+
+func TestABadRoleMapStopsTheApp(t *testing.T) {
+	t.Parallel()
+
+	d := testDeps(jwt.New("test-secret", time.Hour))
+	d.cfg.OIDC.RoleMap = map[string]string{"root": "superuser"}
+
+	require.ErrorIs(t, registerHandlers(d, newTestBuses()), sso.ErrUnknownRole)
 }
 
 func TestABadMailSenderStopsTheWorker(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -40,9 +41,14 @@ type ceremony struct {
 	Verifier string `json:"v"`
 }
 
+// ErrUnknownRole is an OIDC_ROLE_MAP pair whose app role the app does not have.
+var ErrUnknownRole = errors.New("sso: OIDC_ROLE_MAP names a role the app does not have")
+
 type SSO struct {
 	state *jwt.Scoped
 	cfg   config.OIDC
+	// roles is cfg.RoleMap with its values parsed: provider role name to app role.
+	roles map[string]entity.Role
 	// redirectURL is where the provider sends the browser back to.
 	redirectURL string
 
@@ -56,14 +62,38 @@ var _ repo.SSOProvider = (*SSO)(nil)
 
 // New returns the sign-in at cfg's provider, which redirects back to the app at baseURL. Its
 // state token is signed with a key derived from secret. The provider is discovered on the first
-// sign-in, so New never fails on it. An empty cfg.Issuer turns SSO off.
+// sign-in, so New never fails on it. An empty cfg.Issuer turns SSO off. A cfg.RoleMap value that is
+// no app role is ErrUnknownRole, so a typo stops the app at startup instead of granting nothing on
+// every sign-in.
 func New(secret string, cfg config.OIDC, baseURL string) (*SSO, error) {
+	roles, err := parseRoleMap(cfg.RoleMap)
+	if err != nil {
+		return nil, fmt.Errorf("sso - New: %w", err)
+	}
+
 	state, err := jwt.NewScoped(secret, _stateScope, _stateTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("sso - New - jwt.NewScoped: %w", err)
 	}
 
-	return &SSO{state: state, cfg: cfg, redirectURL: baseURL + _callbackPath}, nil
+	return &SSO{state: state, cfg: cfg, roles: roles, redirectURL: baseURL + _callbackPath}, nil
+}
+
+// parseRoleMap turns each provider-name:app-role pair into an app role, refusing a role the app does
+// not have.
+func parseRoleMap(pairs map[string]string) (map[string]entity.Role, error) {
+	roles := make(map[string]entity.Role, len(pairs))
+
+	for name, value := range pairs {
+		role := entity.Role(value)
+		if !role.Valid() {
+			return nil, fmt.Errorf("%w: %s:%s", ErrUnknownRole, name, value)
+		}
+
+		roles[name] = role
+	}
+
+	return roles, nil
 }
 
 // Enabled reports whether a provider is configured.
@@ -140,7 +170,7 @@ func (s *SSO) Verify(ctx context.Context, code, state, token string) (entity.SSO
 	}
 
 	return entity.SSOIdentity{
-		Issuer: idToken.Issuer, Subject: idToken.Subject, Email: email, Username: username, Roles: s.roles(claims),
+		Issuer: idToken.Issuer, Subject: idToken.Subject, Email: email, Username: username, Roles: s.rolesOf(claims),
 	}, nil
 }
 
@@ -220,18 +250,17 @@ func (s *SSO) exchange(ctx context.Context, provider *gooidc.Provider, code stri
 	return idToken, nil
 }
 
-// roles maps the provider role names at cfg.RolesClaim through cfg.RoleMap. A sign-in that maps to
-// no app role gets the local roles.
-func (s *SSO) roles(claims map[string]any) []entity.Role {
-	var names []string
+// rolesOf maps the provider role names at cfg.RolesClaim through the role map, in order and without
+// duplicates. A sign-in that maps to no app role gets the local roles.
+func (s *SSO) rolesOf(claims map[string]any) []entity.Role {
+	var roles []entity.Role
 
 	for _, name := range claimStrings(claims, s.cfg.RolesClaim) {
-		if role, ok := s.cfg.RoleMap[name]; ok {
-			names = append(names, role)
+		if role, ok := s.roles[name]; ok && !slices.Contains(roles, role) {
+			roles = append(roles, role)
 		}
 	}
 
-	roles := entity.ParseRoles(names)
 	if len(roles) == 0 {
 		return entity.LocalRoles()
 	}

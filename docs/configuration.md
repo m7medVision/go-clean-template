@@ -71,7 +71,7 @@ be a redirect URI of the client.
 | `OIDC_CLIENT_SECRET` | | that client's secret |
 | `OIDC_ROLES_CLAIM` | `realm_access.roles` | dotted path to the ID-token claim with the provider's role names: `roles` on Entra ID, `groups` on Okta |
 | `KEYCLOAK_PORT` | `8180` | the development Keycloak's port in compose; `.env.example` builds `OIDC_ISSUER` from it. The app does not read it |
-| `OIDC_ROLE_MAP` | empty | `provider-name:app-role` pairs, comma-separated, no spaces (`app-admin:admin,app-user:user`). Unmapped names grant nothing; a sign-in that maps to no role gets `user` |
+| `OIDC_ROLE_MAP` | empty | `provider-name:app-role` pairs, comma-separated, no spaces (`app-admin:admin,app-user:user`). Unmapped names grant nothing; a sign-in that maps to no role gets `user`. A pair naming any other app role stops the app at startup |
 
 The state token's signing key is derived from `JWT_SECRET`, so there is no extra secret to set.
 
