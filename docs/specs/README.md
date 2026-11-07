@@ -9,3 +9,6 @@ Two modules, built in this order. Each has its own spec and ships as its own PR.
 
 Build order: `cqrs` → `generator`. The generator's templates copy the shapes `cqrs` settles, so
 its spec is checked against the merged `cqrs` code before its plan is written.
+
+After both merged, a structural refactor of the Go service: [untangle.md](untangle.md) (decision
+log), [untangle-plan.md](untangle-plan.md), [untangle-todo.md](untangle-todo.md).
