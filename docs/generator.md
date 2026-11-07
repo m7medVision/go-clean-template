@@ -219,7 +219,7 @@ gen: R1 name: "task" is taken: internal/usecase/task exists
 | --- | --- |
 | R1 name | A name that does not match `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`. A Go keyword, a predeclared name, or the name of one of the app's packages, which a generated file importing it would find shadowed (`command`, `query`, `entity`, `repo`, `cqrs`, `jwt`, `v1`, …: whatever `go list ./...` names in the repository). A word, in the name or its plural, that gqlgen or revive writes as an initialism and the generator would not (`api-key`; `http2`, though `utf8` passes). A letter right after a digit (`mp3player`), which protoc-gen-go capitalizes, and a word of the plural that starts with a digit (`plural=items-2`). For a domain, a name in use: a use-case or read-model folder, a controller folder on any transport (including a shared package, such as REST's `response` or GraphQL's `paging`), an entity file, a proto service, a GraphQL type or a table. Any identifier the plan adds to a package that the package declares already: `record` would add `entity.Record`; `login` would add `LoginResponse`, which `auth.proto` declares; `all-task` would add `Query.allTasks`. |
 | R2 targets | A file to create that exists, or a file to edit that does not. For a use case: a domain that does not exist, a transport asked for that the domain lacks, a message of its kind with the name already (any top-level name of the `command` or `query` package), and a REST operation ID or method and path the app already registers (parameter names aside), with a hint to give `path=`: `count-tasks` and `count-done-tasks` both default to `GET /v1/tasks/count`. The operations are those `docs/openapi/v1.json` lists, so it sees an operation however the code builds it, and the document must be current: `make openapi` exports it, both targets run it after they write, and CI fails when it is stale. A path with `{id}` on `user`. |
-| R3 clean | Uncommitted changes anywhere in the working tree, untracked files included. The regenerators may change any file (`make format` formats every Go file), so after them every change git reports is this run's, and the [undo](#undo) restores them all. |
+| R3 clean | Uncommitted changes, staged or not, to any tracked file in the repository: the regenerators may change any file (`make format` formats every Go file), so after them every change to a tracked file is this run's, and the [undo](#undo) restores them all. Untracked files may be there, since the undo leaves each of them alone, but not where the plan writes: an untracked file it would edit, or an untracked folder it would create a file in. Also a `--root` that is not the top level of its git repository, since git reports paths from there. |
 | R4 one anchor | An edit whose place it finds zero times or twice. Places are found by parsing (`go/ast` for Go, `gqlparser` for `.graphqls`, `protocompile` for `.proto`, `yaml.v3` nodes for `gqlgen.yml`), never by markers, line numbers or regular expressions. A place after the last of several statements, as a router's registrations or a `Register`'s handlers, needs them in one run: split by another statement, they are two places. It also refuses an import whose name another import in the file binds, as a domain called `time` would in `buses.go`. |
 | R5 still valid | A created or edited file that does not parse afterwards. Every Go file goes through `go/format`, since gofmt aligns columns by the longest name in them; a template whose output for `widget` `go/format` would change fails the golden tests, as a wrong template. A created Go file that does not parse is planned as it was rendered, and R1's check of identifiers takes a file the plan leaves broken as declaring nothing, on purpose: R5 reports it in its turn, after R2 to R4, so a dry run still shows the plan, and an edit broken by a place R4 did not find is reported as R4. |
 | R6 all or nothing | A half-written tree. Each file is written to a temporary file and renamed into place; if any write fails, every edited file gets its old bytes back and every created file and folder is removed. |
@@ -239,15 +239,22 @@ After a write the generator prints how many files it created and edited, the und
 checklist:
 
 ```
-git checkout -- . && git clean -fd -- .
+git checkout -- . && git clean -fd -e /tasks/ -e '/my notes.md' -- .
 ```
 
 It takes the tree back to where it was, whatever the regenerators changed included, so run it if a
-regenerator or the build fails, or if you change your mind, before you change anything else. It is
-exact because of R3: the tree had no uncommitted change and no untracked file, so every change git
-reports is this run's. `git checkout` gives back every file that was there, and `git clean` removes
-every file the run added; files git ignores are left alone. The generator lists no path, so a new
-regenerator is one more target in the Makefile's `GEN_REGENERATE`, and nothing in the generator.
+regenerator or the build fails, or if you change your mind, before you change anything else.
+`git checkout` gives back every tracked file, and `git clean` removes every untracked file but
+those that were there before the run: the generator reads them from `git status` before it writes
+and excludes each by name with `-e`, anchored at the root (a folder git reports whole, such as
+`tasks/`, is one exclusion). Files git ignores are left alone too. It is exact because of R3: no
+tracked file had changes, and the run neither edited an untracked file nor created one in an
+untracked folder. The generator lists no regenerator's path, so a new regenerator is one more
+target in the Makefile's `GEN_REGENERATE`, and nothing in the generator.
+
+`make format`, the last regenerator, formats every Go file in the tree, untracked ones included. An
+untracked Go file of yours that was not formatted comes out formatted, and the undo leaves it that
+way: git has no copy of it to give back.
 
 ## After generating
 

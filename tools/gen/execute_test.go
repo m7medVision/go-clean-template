@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -142,24 +141,42 @@ func TestExecuteWritesAPlanThatPassesEveryRule(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dir, "internal", "app", "buses.go"))
 	require.NoError(t, err)
 	assert.Equal(t, "package app\n\n// widget\n", string(got))
-	assert.True(t, strings.HasSuffix(out.String(), "\n  "+_undo+"\n\nNext:\n  - write it\n"), "the checklist, after the undo: %s", out.String())
+	assert.True(t, strings.HasSuffix(out.String(), "\n  git checkout -- . && git clean -fd -- .\n\nNext:\n  - write it\n"),
+		"the checklist, after the undo: %s", out.String())
 }
 
 // The undo takes the tree back to where it was before the write, and before whatever the
-// regenerators changed after it, since R3 had the tree clean.
+// regenerators changed after it: R3 had no tracked file changed, and the untracked files that were
+// there, which the undo excludes by name, are there still.
 func TestTheUndoRestoresWhatTheWriteAndTheRegeneratorsChanged(t *testing.T) {
 	t.Parallel()
 
 	dir := gitRepo(t)
 
-	require.NoError(t, execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(), nil), false, io.Discard))
+	untracked := map[string]string{
+		filepath.Join("tasks", "todo.md"):                     "keep me\n",
+		filepath.Join("internal", "app", "notes [draft]*.md"): "and me\n",
+		"it's mine.txt": "me too\n",
+	}
+
+	for p, content := range untracked {
+		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, p), []byte(content), 0o600))
+	}
+
+	var stdout bytes.Buffer
+	require.NoError(t, execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(), nil), false, &stdout))
 
 	// What a regenerator might do: rewrite a file the plan did not touch, and add one.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "internal", "usecase", "task", "register.go"), []byte("package task // regenerated\n"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "docs", "openapi"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "docs", "openapi", "v1.json"), []byte("{}\n"), 0o600))
 
-	undo := exec.CommandContext(t.Context(), "sh", "-c", _undo)
+	_, after, ok := strings.Cut(stdout.String(), "what the regenerators do next:\n  ")
+	require.True(t, ok, stdout.String())
+
+	printed, _, _ := strings.Cut(after, "\n")
+	undo := exec.CommandContext(t.Context(), "sh", "-c", printed)
 	undo.Dir = dir
 	out, err := undo.CombinedOutput()
 	require.NoError(t, err, string(out))
@@ -168,6 +185,12 @@ func TestTheUndoRestoresWhatTheWriteAndTheRegeneratorsChanged(t *testing.T) {
 	require.NoError(t, rules.Check(t.Context(), rules.Open(dir), plan.New("x"), nil), "the undo left a change git reports")
 	assert.NoDirExists(t, filepath.Join(dir, "internal", "usecase", "widget"))
 	assert.NoDirExists(t, filepath.Join(dir, "docs"))
+
+	for p, content := range untracked {
+		got, err := os.ReadFile(filepath.Join(dir, p))
+		require.NoError(t, err, "%s was there before the run: the undo removed it (%s)", p, printed)
+		assert.Equal(t, content, string(got), p)
+	}
 }
 
 // planned is the planner that made p, running into errs, with a checklist of one line.

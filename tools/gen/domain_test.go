@@ -40,7 +40,7 @@ func someTransports() [][]string {
 // reads the working tree, and these tests must not depend on it.
 func thisRepo() rules.Repo {
 	r := rules.Open(filepath.Join("..", ".."))
-	r.Dirty = func(context.Context) ([]string, error) { return nil, nil }
+	r.Status = func(context.Context) (rules.Status, error) { return rules.Status{}, nil }
 
 	return r
 }

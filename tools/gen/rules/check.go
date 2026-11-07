@@ -28,7 +28,7 @@ func Check(ctx context.Context, r Repo, p *plan.Plan, planErrs []error) error {
 
 	for _, check := range []func() error{
 		func() error { return creatable(r, p.Created()) },
-		func() error { return clean(ctx, r) },
+		func() error { return clean(ctx, r, p) },
 		func() error { return anchors(planErrs) },
 		func() error { return valid(p) },
 	} {

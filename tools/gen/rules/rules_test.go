@@ -45,7 +45,7 @@ func fixtureRoot() fstest.MapFS {
 func repoOf(fsys fstest.MapFS) rules.Repo {
 	return rules.Repo{
 		FS:       fsys,
-		Dirty:    func(context.Context) ([]string, error) { return nil, nil },
+		Status:   func(context.Context) (rules.Status, error) { return rules.Status{}, nil },
 		Packages: func(context.Context) (map[string]string, error) { return appPackages(), nil },
 	}
 }

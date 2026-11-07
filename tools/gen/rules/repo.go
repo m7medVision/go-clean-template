@@ -22,24 +22,38 @@ var ErrTargets = errors.New("R2 targets")
 // errPorcelain is git status output that is not what --porcelain -z prints.
 var errPorcelain = errors.New("git status printed an entry it does not document")
 
-// Repo is the repository a plan is made against: its files, read-only, which of them have
-// uncommitted changes, and the names of the app's packages.
+// errNotTopLevel is a root that is not the top level of its git repository: git reports paths
+// from the top level, and the plan's are from the root.
+var errNotTopLevel = errors.New("is not the top level of its git repository: run the generator from there")
+
+// Repo is the repository a plan is made against: its files, read-only, what git says of them, and
+// the names of the app's packages.
 type Repo struct {
 	// FS is rooted at the repository root; paths are slash-separated and relative to it.
 	FS fs.FS
-	// Dirty returns the paths with uncommitted changes, untracked files included.
-	Dirty func(ctx context.Context) ([]string, error)
+	// Status returns what git status says of the working tree.
+	Status func(ctx context.Context) (Status, error)
 	// Packages returns the names of the app's packages, each with the import path of one package
 	// of that name.
 	Packages func(ctx context.Context) (map[string]string, error)
 }
 
-// Open returns the repository rooted at dir, with git telling which paths are dirty and go list
-// naming the packages.
+// Status is what git status says of the working tree. Paths are relative to the repository root.
+type Status struct {
+	// Changed are the tracked files with uncommitted changes, staged or not, both paths of a
+	// rename among them.
+	Changed []string
+	// Untracked are the paths git neither tracks nor ignores. A folder that holds nothing else is
+	// one path, ending in a slash.
+	Untracked []string
+}
+
+// Open returns the repository rooted at dir, with git saying what changed and go list naming the
+// packages.
 func Open(dir string) Repo {
 	return Repo{
 		FS:       os.DirFS(dir),
-		Dirty:    func(ctx context.Context) ([]string, error) { return gitDirty(ctx, dir) },
+		Status:   func(ctx context.Context) (Status, error) { return gitStatus(ctx, dir) },
 		Packages: func(ctx context.Context) (map[string]string, error) { return goPackages(ctx, dir) },
 	}
 }
@@ -76,49 +90,69 @@ func (r Repo) glob(pattern string) ([]string, error) {
 	return matches, nil
 }
 
-// gitDirty runs git status in dir and returns the paths it reports under dir.
-func gitDirty(ctx context.Context, dir string) ([]string, error) {
-	out, err := command(ctx, "git", "-C", dir, "status", "--porcelain", "-z", "--untracked-files=all", "--", ".")
+// gitStatus runs git status in dir, which must be the top level of its repository, since git
+// reports every path from there.
+func gitStatus(ctx context.Context, dir string) (Status, error) {
+	prefix, err := command(ctx, "git", "-C", dir, "rev-parse", "--show-prefix")
 	if err != nil {
-		return nil, err
+		return Status{}, err
+	}
+
+	if len(bytes.TrimSpace(prefix)) > 0 {
+		return Status{}, fmt.Errorf("%s %w", dir, errNotTopLevel)
+	}
+
+	out, err := command(ctx, "git", "-C", dir, "status", "--porcelain", "-z", "--untracked-files=normal")
+	if err != nil {
+		return Status{}, err
 	}
 
 	return porcelain(out)
 }
 
-// porcelain returns the paths in out, what git status --porcelain -z prints: one "XY path" entry
-// after another, each ended by a NUL, and after a rename or a copy, the path it came from as one
-// more NUL-ended field. Both paths of a rename count. -z prints every path as it is, never quoted.
-func porcelain(out []byte) ([]string, error) {
-	if len(out) == 0 {
-		return nil, nil
-	}
+// porcelain reads out, what git status --porcelain -z prints: one "XY path" entry after another,
+// each ended by a NUL, where XY is ?? for an untracked path, and after a rename or a copy, the path
+// it came from as one more NUL-ended field. Both paths of a rename are changed. -z prints every
+// path as it is, never quoted.
+func porcelain(out []byte) (Status, error) {
+	var st Status
 
-	var dirty []string
+	if len(out) == 0 {
+		return st, nil
+	}
 
 	fields := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
 
 	for i := 0; i < len(fields); i++ {
 		entry := fields[i]
 		if len(entry) <= len("XY ") {
-			return nil, fmt.Errorf("%w: %q", errPorcelain, entry)
+			return Status{}, fmt.Errorf("%w: %q", errPorcelain, entry)
 		}
 
-		dirty = append(dirty, entry[len("XY "):])
+		xy, p := entry[:len("XY")], entry[len("XY "):]
+		if xy == "??" {
+			st.Untracked = append(st.Untracked, p)
 
-		if strings.ContainsAny(entry[:len("XY")], "RC") {
+			continue
+		}
+
+		st.Changed = append(st.Changed, p)
+
+		if strings.ContainsAny(xy, "RC") {
 			i++
 			if i == len(fields) {
-				return nil, fmt.Errorf("%w: %q has no path it came from", errPorcelain, entry)
+				return Status{}, fmt.Errorf("%w: %q has no path it came from", errPorcelain, entry)
 			}
 
-			dirty = append(dirty, fields[i])
+			st.Changed = append(st.Changed, fields[i])
 		}
 	}
 
-	slices.Sort(dirty)
+	slices.Sort(st.Changed)
+	slices.Sort(st.Untracked)
+	st.Changed = slices.Compact(st.Changed)
 
-	return slices.Compact(dirty), nil
+	return st, nil
 }
 
 // goPackages runs go list in dir and returns the module's packages by name, each with the import

@@ -45,7 +45,14 @@ const _r3 = "R3 clean: "
 func checkTree(t *testing.T, dir string) error {
 	t.Helper()
 
-	return rules.Check(t.Context(), rules.Open(dir), plan.New("x"), nil)
+	return checkIn(t, dir, plan.New("x"))
+}
+
+// checkIn runs the rules on p, which must pass every rule but R3, in the repository at dir.
+func checkIn(t *testing.T, dir string, p *plan.Plan) error {
+	t.Helper()
+
+	return rules.Check(t.Context(), rules.Open(dir), p, nil)
 }
 
 // checkPlan runs the rules on p in an empty, clean repository: of them only R5 can fail.
@@ -69,10 +76,10 @@ func TestCleanPassesOnACleanTree(t *testing.T) {
 	require.NoError(t, checkTree(t, gitRepo(t)))
 }
 
-// R3 covers the whole tree, not only the files the plan edits: the regenerators may change any
-// of them, and the undo restores every change git reports. A rename names both of its paths, and
-// a path git would quote names itself as it is.
-func TestCleanRefusesAnyChangedOrUntrackedFile(t *testing.T) {
+// R3 covers every tracked file, not only those the plan edits: the regenerators may change any of
+// them, and the undo restores them all. A change counts staged or not. A rename names both of its
+// paths, and a path git would quote names itself as it is.
+func TestCleanRefusesAnyChangedTrackedFile(t *testing.T) {
 	t.Parallel()
 
 	for name, tc := range map[string]struct {
@@ -86,26 +93,20 @@ func TestCleanRefusesAnyChangedOrUntrackedFile(t *testing.T) {
 			},
 			"a.go",
 		},
-		"an untracked file": {
+		"a staged file": {
 			func(t *testing.T, dir string) {
 				t.Helper()
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "gen", "new.json"), nil, 0o600))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "gen", "out.json"), []byte("[]\n"), 0o600))
+				git(t, dir, "add", "gen/out.json")
 			},
-			"gen/new.json",
+			"gen/out.json",
 		},
-		"a renamed file": {
+		"a file renamed to a path git quotes": {
 			func(t *testing.T, dir string) {
 				t.Helper()
-				git(t, dir, "mv", "a.go", "b.go")
+				git(t, dir, "mv", "a.go", `naïve "name".go`)
 			},
-			"a.go, b.go",
-		},
-		"a path git quotes": {
-			func(t *testing.T, dir string) {
-				t.Helper()
-				require.NoError(t, os.WriteFile(filepath.Join(dir, "gen", `naïve "name".json`), nil, 0o600))
-			},
-			`gen/naïve "name".json`,
+			`a.go, naïve "name".go`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -119,6 +120,63 @@ func TestCleanRefusesAnyChangedOrUntrackedFile(t *testing.T) {
 			assert.True(t, strings.HasSuffix(err.Error(), ": "+tc.paths), "%s does not end in the paths %s", err, tc.paths)
 		})
 	}
+}
+
+// Untracked files may be there, since the undo leaves each of them alone; but not where the plan
+// writes: the undo could not take back an edit to an untracked file, nor tell a file the plan
+// created in an untracked folder from those already there.
+func TestCleanAcceptsUntrackedFilesTheUndoLeavesAlone(t *testing.T) {
+	t.Parallel()
+
+	dir := gitRepo(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tasks"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "tasks", "todo.md"), nil, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gen", "notes.md"), nil, 0o600))
+
+	require.NoError(t, checkTree(t, dir))
+
+	elsewhere := plan.New("x")
+	elsewhere.Create("gen/new.go", []byte("package gen\n"))
+	require.NoError(t, checkIn(t, dir, elsewhere))
+
+	editing := plan.New("x")
+	editing.Edit("gen/notes.md", nil)
+
+	err := checkIn(t, dir, editing)
+	require.ErrorContains(t, err, _r3)
+	assert.Contains(t, err.Error(), "gen/notes.md is untracked")
+
+	creating := plan.New("x")
+	creating.Create("tasks/new.go", []byte("package tasks\n"))
+
+	err = checkIn(t, dir, creating)
+	require.ErrorContains(t, err, _r3)
+	assert.Contains(t, err.Error(), "tasks/ is untracked, so the undo could not take tasks/new.go back")
+}
+
+// The undo excludes each untracked path by name, anchored at the root, its pattern characters
+// escaped and the whole quoted for the shell where it needs it.
+func TestUndoExcludesEveryUntrackedPath(t *testing.T) {
+	t.Parallel()
+
+	r := rules.Repo{Status: func(context.Context) (rules.Status, error) {
+		return rules.Status{Untracked: []string{"tasks/", "my notes [old].md", "it's.txt"}}, nil
+	}}
+
+	got, err := rules.Undo(t.Context(), r)
+
+	require.NoError(t, err)
+	assert.Equal(t, `git checkout -- . && git clean -fd -e /tasks/ -e '/my notes \[old].md' -e '/it'\''s.txt' -- .`, got)
+}
+
+// git reports paths from the top level, and the plan's are from the root, so the two must be one.
+func TestCleanRefusesARootBelowTheTopLevel(t *testing.T) {
+	t.Parallel()
+
+	err := checkTree(t, filepath.Join(gitRepo(t), "gen"))
+
+	require.ErrorContains(t, err, _r3)
+	assert.Contains(t, err.Error(), "is not the top level of its git repository")
 }
 
 func TestCleanRefusesADirectoryThatIsNotARepository(t *testing.T) {
@@ -166,10 +224,10 @@ func TestCheckReportsTheFirstRuleThatFails(t *testing.T) {
 	t.Parallel()
 
 	dirty := rules.Repo{
-		FS:    fstest.MapFS{"a.go": {Data: []byte("package a\n")}},
-		Dirty: func(context.Context) ([]string, error) { return []string{"a.go"}, nil },
+		FS:     fstest.MapFS{"a.go": {Data: []byte("package a\n")}},
+		Status: func(context.Context) (rules.Status, error) { return rules.Status{Changed: []string{"a.go"}}, nil },
 	}
-	clean := rules.Repo{FS: dirty.FS, Dirty: func(context.Context) ([]string, error) { return nil, nil }}
+	clean := rules.Repo{FS: dirty.FS, Status: func(context.Context) (rules.Status, error) { return rules.Status{}, nil }}
 
 	creatingA := plan.New("x")
 	creatingA.Create("a.go", []byte("package a\n"))
