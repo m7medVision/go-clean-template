@@ -36,6 +36,8 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	github.com/shopspring/decimal v1.6.0
 	github.com/stretchr/testify v1.12.1
+	github.com/valkey-io/valkey-go v1.0.79
+	github.com/valkey-io/valkey-go/valkeyotel v1.0.79
 	github.com/vektah/gqlparser/v2 v2.5.64
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
