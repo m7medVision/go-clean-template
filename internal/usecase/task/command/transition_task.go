@@ -24,6 +24,9 @@ type TransitionTask struct {
 // ActorID -.
 func (c TransitionTask) ActorID() string { return c.UserID }
 
+// Validate -.
+func (c TransitionTask) Validate() error { return entity.ValidateTaskStatus(c.Status) }
+
 // TransitionTaskHandler handles TransitionTask. Now is the clock (time.Now when nil).
 type TransitionTaskHandler struct {
 	Store repo.EventStore

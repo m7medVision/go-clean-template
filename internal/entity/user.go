@@ -1,6 +1,36 @@
 package entity
 
-import "time"
+import (
+	"net/mail"
+	"time"
+	"unicode/utf8"
+)
+
+const (
+	// MinUsernameLen and MaxUsernameLen bound a username a user signs up with, in characters.
+	MinUsernameLen = 3
+	MaxUsernameLen = 255
+	// MinPasswordLen is the shortest password a user may sign up with, in characters.
+	MinPasswordLen = 6
+)
+
+// ValidateSignUp refuses a username outside MinUsernameLen–MaxUsernameLen, an email that is not a
+// bare address, and a password shorter than MinPasswordLen.
+func ValidateSignUp(username, email, password string) error {
+	if n := utf8.RuneCountInString(username); n < MinUsernameLen || n > MaxUsernameLen {
+		return ErrInvalidUsername
+	}
+
+	if addr, err := mail.ParseAddress(email); err != nil || addr.Name != "" || addr.Address != email {
+		return ErrInvalidEmail
+	}
+
+	if utf8.RuneCountInString(password) < MinPasswordLen {
+		return ErrWeakPassword
+	}
+
+	return nil
+}
 
 // User -.
 type User struct {

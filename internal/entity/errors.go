@@ -74,11 +74,17 @@ func (k Kind) LogLevel() (slog.Level, bool) {
 }
 
 var (
-	ErrUserNotFound       = newError(KindNotFound, "user not found")
-	ErrUserAlreadyExists  = newError(KindExists, "user already exists")
-	ErrInvalidCredentials = newError(KindUnauthenticated, "invalid credentials")
-	ErrTaskNotFound       = newError(KindNotFound, "task not found")
-	ErrTaskForbidden      = newError(KindForbidden, "forbidden")
+	ErrUserNotFound           = newError(KindNotFound, "user not found")
+	ErrUserAlreadyExists      = newError(KindExists, "user already exists")
+	ErrInvalidCredentials     = newError(KindUnauthenticated, "invalid credentials")
+	ErrInvalidUsername        = newError(KindInvalid, "username must be 3–255 characters")
+	ErrInvalidEmail           = newError(KindInvalid, "email must be an address such as name@example.com")
+	ErrWeakPassword           = newError(KindInvalid, "password must be at least 6 characters")
+	ErrTaskNotFound           = newError(KindNotFound, "task not found")
+	ErrTaskForbidden          = newError(KindForbidden, "forbidden")
+	ErrInvalidTaskTitle       = newError(KindInvalid, "title must be 1–255 characters")
+	ErrInvalidTaskDescription = newError(KindInvalid, "description must be at most 1000 characters")
+	ErrInvalidTaskStatus      = newError(KindInvalid, "invalid task status")
 	// ErrAdminRequired is a request only a caller holding RoleAdmin may make.
 	ErrAdminRequired     = newError(KindForbidden, "admin role required")
 	ErrInvalidTransition = newError(KindInvalid, "invalid status transition")

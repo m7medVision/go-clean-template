@@ -64,9 +64,9 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2. **Depends on:** 4, 5. **Size:** L
 
 ### 8. Task and sign-up rules in the domain  (B)
-- [ ] `CreateTask`, `UpdateTask`, `TransitionTask`, `RegisterUser` implement `Validate()` with the
+- [x] `CreateTask`, `UpdateTask`, `TransitionTask`, `RegisterUser` implement `Validate()` with the
       rules the REST tags hold today; gRPC answers `InvalidArgument` for what REST answers 422.
-- [ ] Unused gRPC `*validator.Validate` fields gone; a test pins REST/GraphQL hints to the entity constants.
+- [x] Unused gRPC `*validator.Validate` fields gone; a test pins REST/GraphQL hints to the entity constants.
 
 **Verify:** G2. **Depends on:** 4. **Size:** L
 

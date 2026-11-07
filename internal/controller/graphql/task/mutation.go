@@ -18,10 +18,6 @@ func (m Mutation) CreateTask(ctx context.Context, input model.CreateTaskInput) (
 		return nil, err
 	}
 
-	if !validInput(input.Title, input.Description) {
-		return nil, gqlerr.InvalidInput()
-	}
-
 	written, err := cqrs.SendCommand(ctx, m.cmds, command.CreateTask{
 		UserID: caller.UserID, Title: input.Title, Description: deref(input.Description),
 	})
@@ -37,10 +33,6 @@ func (m Mutation) UpdateTask(ctx context.Context, id string, input model.UpdateT
 	caller, err := middleware.Caller(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	if !validInput(input.Title, input.Description) {
-		return nil, gqlerr.InvalidInput()
 	}
 
 	_, err = cqrs.SendCommand(ctx, m.cmds, command.UpdateTask{

@@ -2,6 +2,14 @@ package entity
 
 import (
 	"time"
+	"unicode/utf8"
+)
+
+const (
+	// MaxTaskTitleLen is the longest title a task may have, in characters; the shortest is 1.
+	MaxTaskTitleLen = 255
+	// MaxTaskDescriptionLen is the longest description a task may have, in characters.
+	MaxTaskDescriptionLen = 1000
 )
 
 // TaskStatus -.
@@ -33,6 +41,29 @@ func (s TaskStatus) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// ValidateTaskText refuses a title of no characters or more than MaxTaskTitleLen, and a description
+// longer than MaxTaskDescriptionLen.
+func ValidateTaskText(title, description string) error {
+	if n := utf8.RuneCountInString(title); n < 1 || n > MaxTaskTitleLen {
+		return ErrInvalidTaskTitle
+	}
+
+	if utf8.RuneCountInString(description) > MaxTaskDescriptionLen {
+		return ErrInvalidTaskDescription
+	}
+
+	return nil
+}
+
+// ValidateTaskStatus refuses a status that is not one of the three.
+func ValidateTaskStatus(s TaskStatus) error {
+	if !s.Valid() {
+		return ErrInvalidTaskStatus
+	}
+
+	return nil
 }
 
 // CanMoveTo reports whether a task in status s may move to status to.

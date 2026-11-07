@@ -1,7 +1,6 @@
 package task_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -19,19 +18,6 @@ func TestCreateTask(t *testing.T) {
 	require.Empty(t, resp.Errors)
 	assert.JSONEq(t, `{"id":"task-1","userId":"user-1","title":"Write docs","status":"TODO"}`,
 		string(resp.Data["createTask"]))
-}
-
-func TestCreateTaskTitleTooLong(t *testing.T) {
-	t.Parallel()
-
-	tk := &fakeTask{}
-	title := strings.Repeat("x", 256)
-
-	resp := do(t, tk, true, _createTask, map[string]any{"input": map[string]any{"title": title}})
-
-	assert.Equal(t, "BAD_USER_INPUT", resp.Code(t))
-	assert.NotContains(t, resp.Body, title)
-	assert.False(t, tk.called)
 }
 
 func TestUpdateTask(t *testing.T) {

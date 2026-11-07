@@ -26,6 +26,9 @@ func (ListAllTasks) AdminOnly() {}
 // Caller -.
 func (q ListAllTasks) Caller() entity.Principal { return q.Principal }
 
+// Validate -.
+func (q ListAllTasks) Validate() error { return validateList(q.Status, q.Page) }
+
 // ListAllTasksHandler handles ListAllTasks.
 type ListAllTasksHandler struct {
 	Tasks repo.TaskReadModel

@@ -18,6 +18,9 @@ type ListTasks struct {
 	Status *entity.TaskStatus
 }
 
+// Validate -.
+func (q ListTasks) Validate() error { return validateList(q.Status, q.Page) }
+
 // ListTasksHandler handles ListTasks.
 type ListTasksHandler struct {
 	Tasks repo.TaskReadModel
@@ -31,4 +34,15 @@ func (h ListTasksHandler) Handle(ctx context.Context, q ListTasks) (entity.List[
 	}
 
 	return tasks, nil
+}
+
+// validateList refuses an unknown status filter and a page entity.Page refuses.
+func validateList(status *entity.TaskStatus, page entity.Page) error {
+	if status != nil {
+		if err := entity.ValidateTaskStatus(*status); err != nil {
+			return err
+		}
+	}
+
+	return page.Validate()
 }

@@ -25,6 +25,9 @@ type CreateTask struct {
 // ActorID -.
 func (c CreateTask) ActorID() string { return c.UserID }
 
+// Validate -.
+func (c CreateTask) Validate() error { return entity.ValidateTaskText(c.Title, c.Description) }
+
 // CreateTaskHandler handles CreateTask. Now is the clock (time.Now when nil).
 type CreateTaskHandler struct {
 	Store repo.EventStore

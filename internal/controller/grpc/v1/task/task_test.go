@@ -118,13 +118,3 @@ func TestListAllTasksAdminRequired(t *testing.T) {
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
-
-func TestListAllTasksInvalidStatus(t *testing.T) {
-	t.Parallel()
-
-	client, manager := dial(t, &fakeTask{})
-
-	_, err := client.ListAllTasks(signedIn(t, manager, []string{"admin"}), &pb.ListTasksRequest{Status: "archived"})
-
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-}

@@ -207,12 +207,13 @@ shape from a neighbouring handler in the same transport.
 2. **Decode into a transport-local DTO** from the domain folder's `request.go`. On REST the DTO is
    the `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass
    a request DTO into a command or query.
-3. **Validate the DTO structurally through Huma's built-in validation** on the REST transport:
-   length, format, enum, and default constraints live on the input struct / request DTO tags, and
-   the REST v1 controller takes no `*validator.Validate`.
-   The gRPC controller validates its request DTOs with its own.
-   Domain validation — anything that needs to know the rules, like a status transition —
-   lives on the aggregate or in the handler and must not be duplicated in the controller.
+3. **Leave the rules to the domain.** Every input rule (lengths, formats, statuses, paging) is a
+   message's `Validate()`, built from an `entity` function or constant (`entity.ValidateTaskText`,
+   `entity.ValidateSignUp`, `entity.Page`), and the buses' validate step runs it for every
+   transport. REST still writes the same limits as Huma tags, because they are the API's
+   documentation and reject a bad request before it is decoded; `restapi/router_test.go` pins those
+   tags to the entity constants. gRPC and GraphQL check nothing of their own. A rule about the
+   record's state, like a status transition, lives on the aggregate.
 4. **Send the command or query** with the request context:
    `cqrs.SendCommand(ctx, r.cmds, command.CreateTask{...})` or
    `cqrs.SendQuery(ctx, r.qs, query.GetTask{...})` (the message's embedded `cqrs.Command[R]` or

@@ -24,6 +24,9 @@ type RegisterUser struct {
 	Password string
 }
 
+// Validate -.
+func (c RegisterUser) Validate() error { return entity.ValidateSignUp(c.Username, c.Email, c.Password) }
+
 // RegisterUserHandler handles RegisterUser. Now is the clock (time.Now when nil).
 type RegisterUserHandler struct {
 	Store repo.EventStore

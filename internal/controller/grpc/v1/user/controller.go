@@ -4,7 +4,6 @@ package user
 import (
 	"log/slog"
 
-	"github.com/go-playground/validator/v10"
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
@@ -16,10 +15,9 @@ type Controller struct {
 	cmds *cqrs.Commands
 	qs   *cqrs.Queries
 	l    *slog.Logger
-	v    *validator.Validate
 }
 
 // New -.
 func New(b cqrs.Buses, l *slog.Logger) v1.AuthServiceServer {
-	return &Controller{cmds: b.Commands, qs: b.Queries, l: l, v: validator.New(validator.WithRequiredStructEnabled())}
+	return &Controller{cmds: b.Commands, qs: b.Queries, l: l}
 }

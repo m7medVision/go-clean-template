@@ -58,13 +58,8 @@ func (c *Controller) ListTasks(ctx context.Context, req *v1.ListTasksRequest) (*
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	statusFilter, err := listStatus(req)
-	if err != nil {
-		return nil, err
-	}
-
 	return listPage(ctx, c, query.ListTasks{
-		UserID: userID, Status: statusFilter, Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
+		UserID: userID, Status: listStatus(req), Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
 	}, "ListTasks")
 }
 
@@ -75,13 +70,8 @@ func (c *Controller) ListAllTasks(ctx context.Context, req *v1.ListTasksRequest)
 		return nil, status.Error(codes.Unauthenticated, "unauthorized")
 	}
 
-	statusFilter, err := listStatus(req)
-	if err != nil {
-		return nil, err
-	}
-
 	return listPage(ctx, c, query.ListAllTasks{
-		Principal: caller, Status: statusFilter, Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
+		Principal: caller, Status: listStatus(req), Limit: int(req.GetLimit()), Offset: int(req.GetOffset()),
 	}, "ListAllTasks")
 }
 
