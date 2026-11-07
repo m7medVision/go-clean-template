@@ -185,7 +185,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G2. **Depends on:** 18, 21, 22. **Size:** L
 
 ### 24. One token reader; "public" declared once  (H)
-- [ ] One token→principal reader and context key for all transports, `issuedAt` everywhere; REST
+- [x] One token→principal reader and context key for all transports, `issuedAt` everywhere; REST
       enforces auth from each operation's `Security`; gRPC public methods by generated constants;
       dead caller checks gone; gRPC recovers panics and logs/measures requests.
 
