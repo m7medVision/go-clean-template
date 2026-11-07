@@ -1,4 +1,4 @@
-// Package resttest serves the real REST router for the tests of the restapi package and of each v1
+// Package resttest serves the real REST handler for the tests of the restapi package and of each v1
 // domain folder: it is to restapi what net/http/httptest is to net/http.
 package resttest
 
@@ -11,7 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/require"
@@ -20,12 +24,26 @@ import (
 // _signingKey signs the tokens Token and AdminToken return, and the router checks them with it.
 const _signingKey = "test-secret"
 
-// NewRouter serves the REST router over the given buses, plus each option's operations, with the
-// docs and metrics on. A bus the test never reaches may be nil.
-func NewRouter(b cqrs.Buses, opts ...restapi.Option) http.Handler {
-	s := restapi.Settings{Version: "1.0.0", Docs: true, Metrics: true}
+// Routes registers a domain folder's operations: its NewRoutes.
+type Routes func(api huma.API, b cqrs.Buses, l *slog.Logger)
 
-	return restapi.NewRouter(s, b, jwt.New(_signingKey, time.Hour), slog.New(slog.DiscardHandler), opts...)
+// NewRouter serves the REST handler with each routes' operations over the given buses, and its
+// docs, behind what the app puts in front of it: trailing slashes stripped and panics recovered. A
+// bus the test never reaches may be nil.
+func NewRouter(b cqrs.Buses, routes ...Routes) http.Handler {
+	l := slog.New(slog.DiscardHandler)
+
+	rest := restapi.NewHandler("1.0.0", true, jwt.New(_signingKey, time.Hour), l, func(api huma.API) {
+		for _, register := range routes {
+			register(api, b, l)
+		}
+	})
+
+	r := chi.NewRouter()
+	r.Use(chimw.StripSlashes, middleware.Recovery(l))
+	r.Mount("/", rest)
+
+	return r
 }
 
 // NewBuses returns empty command and query buses with no pipeline steps, for a test to register

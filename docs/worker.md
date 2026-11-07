@@ -11,8 +11,8 @@ The app needs the worker: a write waits for the projectors before it answers
 
 ## Projections
 
-The worker starts one loop per subscriber, the projectors in `projectors` and the event handlers in
-`eventHandlers` (`internal/app/buses.go`), next to
+The worker starts one loop per subscriber, every module's projector and event handlers
+(`internal/app/<domain>.go`), next to
 the queue consumer, and stops them on the same SIGTERM; it closes the pool once both have returned. How a loop reads, commits and wakes is in
 [cqrs.md](cqrs.md#projections-and-event-handlers-internalrepopersistentprojection); its settings
 (`PROJECTION_POLL_INTERVAL`, `PROJECTION_BATCH_SIZE`) are in
@@ -55,7 +55,8 @@ The settings are in [configuration.md](configuration.md#worker).
 ## Handlers
 
 Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker/v1), each with a
-function that registers it on the worker (`w.Handle(queue, handler)`), which `internal/app` calls. A
+function that registers it on the worker (`w.Handle(queue, handler)`), which its module's `queues`
+in `internal/app` calls. A
 queue message is an inbound request like an HTTP call, so a handler has the same shape: decode the
 body into a transport-local DTO, send a command on the command bus with the handler's `ctx`, and
 return its error. The one queue today is `mail` (below): `mail.go` delivers email from it.
@@ -63,7 +64,8 @@ return its error. The one queue today is `mail` (below): `mail.go` delivers emai
 ### Adding a queue
 
 1. Handler: `internal/controller/worker/v1/<name>.go`, with the function that registers it, called
-   by the worker in `internal/app`.
+   from the `queues` of a module in `internal/app`, which also registers the command handlers its
+   messages send to on the worker's buses.
 2. Producer: give the command or event handler a `repo.QueueRepo` and call `Send(ctx, "<name>", body)`.
    `Send` joins the transaction in `ctx`, so from an event handler the message commits with the
    handler's checkpoint, exactly once.

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/oidc"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/oidc/query"
@@ -51,7 +51,7 @@ func (f *fakeOIDC) buses() cqrs.Buses {
 }
 
 func newRouterWithOIDC(oc *fakeOIDC) http.Handler {
-	return resttest.NewRouter(oc.buses(), restapi.WithOIDC())
+	return resttest.NewRouter(oc.buses(), oidc.NewRoutes)
 }
 
 // postFinish posts body to path with a ceremony token, as the web client posts the callback.

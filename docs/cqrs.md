@@ -42,7 +42,7 @@ controller ─SendQuery──▶ query bus ─▶ steps ─▶ query handler ─
 - A second handler for one type panics at startup.
 - The two buses are separate types, so a query can never be sent where a command belongs.
 - There is no reflection-based discovery. Each domain registers its handlers in
-  `internal/usecase/<domain>/register.go`, and `internal/app/buses.go` calls every domain's
+  `internal/usecase/<domain>/register.go`, and each domain's module in `internal/app/<domain>.go` calls its
   `Register` once.
 
 The steps, outermost first:
@@ -224,7 +224,7 @@ database with a running worker.
 - **A projector.** Add `internal/repo/persistent/<domain>/projector.go`. It needs `Name`, `Tables`,
   `Handles` (its domain's event list, such as `entity.TaskEvents()`) and a `Project` function, with a
   `default` case answering `entity.ErrUnhandledEvent`, tested against a fake of sqlc's `Querier`.
-  Add it to `projectors` in `internal/app/buses.go`.
+  Return it from the `projector` of the domain's module (`internal/app/<domain>.go`).
 - **An event handler.** Add `internal/usecase/<domain>/event/<name>.go`, with a `Name`, the events it
   `Handles` and a `Handle` that does its work through repositories that join the context's
   transaction. Add it to `eventHandlers`.

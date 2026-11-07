@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -56,5 +57,5 @@ func (f *fakeTask) buses() cqrs.Buses {
 
 // newRouter serves the REST router over tk's buses; the use cases a task test never reaches are nil.
 func newRouter(tk *fakeTask) http.Handler {
-	return resttest.NewRouter(tk.buses())
+	return resttest.NewRouter(tk.buses(), task.NewRoutes)
 }

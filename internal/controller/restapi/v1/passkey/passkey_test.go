@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/passkey"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/query"
@@ -127,7 +127,7 @@ func doCeremonyRequest(
 func newPasskeyRouter(t *testing.T, pk *fakePasskey) http.Handler {
 	t.Helper()
 
-	return resttest.NewRouter(pk.buses(), restapi.WithPasskeys())
+	return resttest.NewRouter(pk.buses(), passkey.NewRoutes)
 }
 
 func TestPasskeyRoutesNeedAToken(t *testing.T) {

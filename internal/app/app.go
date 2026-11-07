@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -15,7 +14,8 @@ import (
 )
 
 // Run applies the schema, imports what predates event sourcing, and serves HTTP and gRPC until ctx
-// ends or a server fails. It returns once both have stopped and the pool is closed.
+// ends or a server fails. It returns once both have stopped and the pool is closed. It installs every
+// module's handlers but mail delivery's, which only the worker runs.
 func Run(ctx context.Context, cfg *config.Config) error {
 	b, err := newBootstrap(ctx, cfg, cfg.App.Name)
 	if err != nil {
@@ -27,14 +27,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("app - Run - syncSchema: %w", err)
 	}
 
+	d := &deps{cfg: cfg, pg: b.pg, store: b.store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)}
+
 	// Rows written before a domain stored events become its first events, once.
-	if err = eventstore.Backfill(ctx, b.pg, importers(b.pg, b.store)...); err != nil {
+	if err = eventstore.Backfill(ctx, b.pg, importers(d)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
 	}
 
-	jwtManager := jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)
-
-	if err = registerHandlers(cfg, b.buses, b.store, b.pg, jwtManager); err != nil {
+	if err = registerHandlers(d, b.buses); err != nil {
 		return fmt.Errorf("app - Run - registerHandlers: %w", err)
 	}
 
@@ -45,18 +45,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	router := restapi.NewRouter(
-		restapi.Settings{
-			Version: cfg.App.Version, Docs: cfg.Docs.Enabled, Tracing: cfg.Tracing.Enabled, Metrics: cfg.Metrics.Enabled,
-		},
-		b.buses, jwtManager, b.l,
-		restapi.WithPasskeys(),
-		restapi.WithOIDC(),
-	)
-	mountGraphQL(router, cfg.Docs.Enabled, b.buses, jwtManager, b.l)
-
-	httpServer := newHTTPServer(cfg.HTTP.Port, router, cfg.CQRS.ConsistencyTimeout)
-	grpcServer := newGRPCServer(b.buses, jwtManager, b.l)
+	httpServer := newHTTPServer(cfg.HTTP.Port, newHTTPHandler(cfg, b.buses, d.tokens, b.l), cfg.CQRS.ConsistencyTimeout)
+	grpcServer := newGRPCServer(b.buses, d.tokens, b.l)
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return serveHTTP(ctx, httpServer, b.l) })

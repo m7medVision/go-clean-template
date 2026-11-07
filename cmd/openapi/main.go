@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
+	"github.com/m7medvision/go-clean-template/internal/app"
 )
 
 var errNoVersion = errors.New("-version is required")
@@ -30,9 +30,9 @@ func run(version string) error {
 		return errNoVersion
 	}
 
-	doc, err := restapi.OpenAPI(version)
+	doc, err := app.OpenAPI(version)
 	if err != nil {
-		return fmt.Errorf("restapi.OpenAPI: %w", err)
+		return fmt.Errorf("app.OpenAPI: %w", err)
 	}
 
 	if _, err = os.Stdout.Write(append(doc, '\n')); err != nil {

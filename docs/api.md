@@ -190,24 +190,24 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 ## Versioning
 
 Each transport keeps its handlers under `v1/`, one folder per domain. A v2 is a sibling `v2/` with the
-same domain folders, registered next to v1; v1 stays untouched.
+same domain folders, registered next to v1 in the domain's module in `internal/app` (for tasks,
+[`internal/app/task.go`](../internal/app/task.go)); v1 stays untouched.
 
-REST, in [`internal/controller/restapi/router.go`](../internal/controller/restapi/router.go). The v2
-operations go on the same Huma API under `/v2/...` paths, so they share one OpenAPI document:
+REST: the v2 operations go on the same Huma API under `/v2/...` paths, so they share one OpenAPI
+document, which `make openapi` exports from the same registration:
 
 ```go
-api := humachi.New(r, apiConfig)
-
-v1.NewRoutes(api, b, l)
-v2.NewRoutes(api, b, l)
+rest: func(api huma.API, b cqrs.Buses, l *slog.Logger) {
+	resttask.NewRoutes(api, b, l)   // restapi/v1/task
+	resttaskv2.NewRoutes(api, b, l) // restapi/v2/task
+},
 ```
 
-gRPC, in [`internal/controller/grpc/router.go`](../internal/controller/grpc/router.go), with the new
-protos in `docs/proto/v2`:
+gRPC, with the new protos in `docs/proto/v2`:
 
 ```go
-v1.NewRoutes(app, b, l)
-v2.NewRoutes(app, b, l)
-
-reflection.Register(app)
+grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
+	pb.RegisterTaskServiceServer(s, grpctask.New(b, l))
+	pbv2.RegisterTaskServiceServer(s, grpctaskv2.New(b, l))
+},
 ```
