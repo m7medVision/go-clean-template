@@ -198,13 +198,13 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** 22, 23. **Size:** M
 
 ### 26. Transport response helpers  (N)
-- [ ] gRPC timestamps through one UTC RFC 3339 formatter; one int32 clamp; the conversion's decimal
+- [x] gRPC timestamps through one UTC RFC 3339 formatter; one int32 clamp; the conversion's decimal
       places come from `entity`; identical REST/gRPC output types merged.
 
 **Verify:** G2. **Depends on:** 4. **Size:** M
 
 ### 27. One file per operation per transport  (O)
-- [ ] REST ops, gRPC methods and GraphQL fields of every domain live one per file (GraphQL schema
+- [x] REST ops, gRPC methods and GraphQL fields of every domain live one per file (GraphQL schema
       fields per file via `extend type`); no behaviour or schema change.
 
 **Verify:** G2 (no diff in `docs/openapi/v1.json` or the GraphQL schema). **Depends on:** 24. **Size:** mechanical.

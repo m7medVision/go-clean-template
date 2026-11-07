@@ -40,6 +40,13 @@ change. Branch: `refactor/untangle`, one commit per task.
 - **G4:** G3, then `make gen-e2e`. Only from phase 8 on: until then the templates still mirror the
   old `task` domain and gen-e2e is expected to fail on this branch.
 
+Correction, recorded during the work: `make gen-check` runs some generator tests against this
+repository (they plan a domain or a use case on the live tree). Those went red at task 4 (09d0e1b),
+when the per-domain `problem`/`fail` functions and the `gqlerr` anchor the generator edits went away,
+and the gate's filtered output hid it until a parallel agent reported it. They come back with tasks
+29–30; until then G1 holds gen-check's lint, tidy and the generator tests that do not read the live
+tree.
+
 ## Risks and mitigations
 
 | Risk | Impact | Mitigation |
