@@ -250,10 +250,11 @@ implements `repo.ExchangeWebAPI` against the
   "unsupported-code"}` with status 200, so the client checks `result`, not only the status code.
   `unsupported-code`, or a target currency missing from `rates`, becomes
   `entity.ErrUnsupportedCurrency`, which the handler turns into a 400.
-- **An outage is the provider's, not the app's.** A provider that cannot be reached, times out or
-  answers 5xx is `entity.ErrRatesUnavailable`, an upstream failure: 502, as an unreachable SSO
-  provider is. A cancelled request is not an outage. Any other failure (another status, another
-  `error-type`, a body that does not decode) stays a wrapped error and becomes a 500.
+- **An outage is the provider's, not the app's.** Every other failure of the provider is
+  `entity.ErrRatesUnavailable`, an upstream failure: 502, as an unreachable SSO provider is. That is
+  a provider that cannot be reached or times out, a status other than 200, an `error-type` other
+  than `unsupported-code`, and a body that does not decode. A cancelled request is not an outage:
+  `unavailable` leaves the error unmarked when the request's `ctx` has ended.
 - **Rates never touch a float.** The response struct declares `Rates map[string]decimal.Decimal`, so
   `encoding/json` hands each number's text straight to `decimal`.
 - **The date is the provider's.** `time_last_update_unix` is truncated to a UTC date and returned with
@@ -348,8 +349,8 @@ correlation ID.
 | Amount ≤ 0 (or, on gRPC, not a decimal or too long) | `entity.NewConversion` → `ErrInvalidAmount` | 400 |
 | Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 |
 | Saved, but the projector didn't catch up in time | wait step → `ErrReadModelBehind` | 503 |
-| Provider unreachable, timed out or answering 5xx | webapi → `ErrRatesUnavailable`, logged by the handler | 502 |
-| Provider's other statuses and errors, bad JSON; database error | wrapped error, logged by the handler | 500 |
+| Provider unreachable or timed out, any status but 200, another `error-type`, bad JSON | webapi → `ErrRatesUnavailable`, logged by the handler | 502 |
+| Database error | wrapped error, logged by the handler | 500 |
 
 The caller sees a fixed message (`"unsupported currency"`, `"internal server error"`). The wrapped
 error with the layer path goes only to the log.

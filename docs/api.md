@@ -106,7 +106,8 @@ example of an outbound HTTP API behind a repository interface.
 - An unknown currency, or `from` equal to `to`, answers 400. The amount is a decimal string, positive,
   with at most 15 digits before the point and 8 after: `entity.NewConversion` parses and checks it for
   every transport (400), and REST's pattern says the same (422). A rate provider that cannot be
-  reached or answers 5xx is `502` (gRPC `Unavailable`). History pages with `limit`/`offset` and
+  reached, times out, or answers with an error or a body that does not decode is `502` (gRPC
+  `Unavailable`). History pages with `limit`/`offset` and
   returns a `total`.
 
 ## REST

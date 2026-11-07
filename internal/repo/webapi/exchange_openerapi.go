@@ -4,7 +4,6 @@ package webapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -26,16 +25,12 @@ const (
 	_unsupportedCode = "unsupported-code"
 )
 
-var (
-	errUnexpectedStatus = errors.New("unexpected status")
-	errProvider         = errors.New("rate provider error")
-)
-
 // ExchangeWebAPI reads daily rates from the open access ExchangeRate-API endpoint
 // (https://www.exchangerate-api.com/docs/free): keyless, about 160 currencies. Its terms ask
 // every page that shows the rates to link back to it. A currency the provider does not know is
-// entity.ErrUnsupportedCurrency; a provider that cannot be reached, times out or answers 5xx is
-// entity.ErrRatesUnavailable.
+// entity.ErrUnsupportedCurrency. Any other failure of the provider is entity.ErrRatesUnavailable:
+// one that cannot be reached or times out, answers a status other than 200, reports another error,
+// or sends a body that does not decode.
 type ExchangeWebAPI struct {
 	baseURL string
 	client  *http.Client
@@ -65,13 +60,15 @@ func (w *ExchangeWebAPI) Rate(ctx context.Context, from, to string) (decimal.Dec
 		return decimal.Decimal{}, time.Time{}, err
 	}
 
-	// The provider reports errors with HTTP 200 and result "error".
+	// The provider reports errors with HTTP 200 and result "error". Only unsupported-code is about
+	// the caller's input; any other is the provider failing.
 	if body.Result != _resultSuccess {
 		if body.ErrorType == _unsupportedCode {
 			return decimal.Decimal{}, time.Time{}, entity.ErrUnsupportedCurrency
 		}
 
-		return decimal.Decimal{}, time.Time{}, fmt.Errorf("ExchangeWebAPI - Rate - %w: %s", errProvider, body.ErrorType)
+		return decimal.Decimal{}, time.Time{},
+			fmt.Errorf("ExchangeWebAPI - Rate - %w: error-type %q", entity.ErrRatesUnavailable, body.ErrorType)
 	}
 
 	rate, ok := body.Rates[to]
@@ -95,27 +92,28 @@ func (w *ExchangeWebAPI) latest(ctx context.Context, base string) (latestRespons
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		// A caller that went away is not the provider's failure.
-		if ctx.Err() != nil {
-			return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - w.client.Do: %w", err)
-		}
-
-		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - w.client.Do: %w: %w", entity.ErrRatesUnavailable, err)
+		return latestResponse{}, unavailable(ctx, "ExchangeWebAPI - latest - w.client.Do", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= http.StatusInternalServerError {
-		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - %w: status %d", entity.ErrRatesUnavailable, resp.StatusCode)
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - %w: %d", errUnexpectedStatus, resp.StatusCode)
+		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - %w: status %d", entity.ErrRatesUnavailable, resp.StatusCode)
 	}
 
 	var body latestResponse
 	if err = json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - json.Decode: %w", err)
+		return latestResponse{}, unavailable(ctx, "ExchangeWebAPI - latest - json.Decode", err)
 	}
 
 	return body, nil
+}
+
+// unavailable is err, from op's exchange with the provider, as entity.ErrRatesUnavailable, unless
+// the caller went away first: a canceled request is not the provider's failure.
+func unavailable(ctx context.Context, op string, err error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	return fmt.Errorf("%s: %w: %w", op, entity.ErrRatesUnavailable, err)
 }
