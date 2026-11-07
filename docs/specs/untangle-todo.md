@@ -11,7 +11,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 1: Safety net and logging
 
 ### 1. Integration health check retries a refused connection  (N)
-- [ ] `integration-test/helpers_test.go` retries on a connection error as well as on a non-200.
+- [x] `integration-test/helpers_test.go` retries on a connection error as well as on a non-200.
 
 **Verify:** `go vet ./integration-test/...`. **Depends on:** none. **Size:** S
 
