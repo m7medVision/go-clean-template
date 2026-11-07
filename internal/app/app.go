@@ -10,12 +10,15 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/valkey"
 	"golang.org/x/sync/errgroup"
 )
 
 // ErrNoJWTSecret is a JWT_SECRET left unset. Only the app needs one: config does not require it, so
 // the worker starts without it, and Run refuses to start without it.
 var ErrNoJWTSecret = errors.New("app: JWT_SECRET is not set")
+
+var ErrNoValkeyURL = errors.New("app: VALKEY_URL is not set")
 
 // Run applies the schema, imports what predates event sourcing, and serves HTTP and gRPC until ctx
 // ends or a server fails. It returns once both have stopped and the pool is closed. It installs every
@@ -25,11 +28,21 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("app - Run: %w", ErrNoJWTSecret)
 	}
 
+	if cfg.Valkey.URL == "" {
+		return fmt.Errorf("app - Run: %w", ErrNoValkeyURL)
+	}
+
 	b, err := newBootstrap(ctx, cfg, cfg.App.Name)
 	if err != nil {
 		return fmt.Errorf("app - Run: %w", err)
 	}
 	defer b.close(ctx)
+
+	client, err := valkey.New(ctx, cfg.Valkey.URL)
+	if err != nil {
+		return fmt.Errorf("app - Run - valkey.New: %w", err)
+	}
+	defer client.Close()
 
 	if err = syncSchema(ctx, b.l, cfg.PG.URL); err != nil {
 		return fmt.Errorf("app - Run - syncSchema: %w", err)

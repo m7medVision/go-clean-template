@@ -33,11 +33,11 @@ comments in new code unless important. Sizes: S = 1–2 files, M = 3–5.
 **Depends on:** none. **Size:** M
 
 ### 3. The app requires Valkey
-- [ ] `config.Valkey{URL}` read from `VALKEY_URL`, no `required` tag.
-- [ ] `app.Run`: `ErrNoValkeyURL` before the bootstrap, beside `ErrNoJWTSecret`; `valkey.New` after
+- [x] `config.Valkey{URL}` read from `VALKEY_URL`, no `required` tag.
+- [x] `app.Run`: `ErrNoValkeyURL` before the bootstrap, beside `ErrNoJWTSecret`; `valkey.New` after
       it; the client closed when `Run` returns.
-- [ ] `internal/app/app_test.go`: an empty `VALKEY_URL` is `ErrNoValkeyURL`, before Postgres opens.
-- [ ] Commit body carries `BREAKING CHANGE: the app needs VALKEY_URL`.
+- [x] `internal/app/app_test.go`: an empty `VALKEY_URL` is `ErrNoValkeyURL`, before Postgres opens.
+- [x] Commit body carries `BREAKING CHANGE: the app needs VALKEY_URL`.
 
 **Files:** `config/config.go`, `internal/app/app.go`, `internal/app/app_test.go`.
 **Verify:** G1; G2: `make run` starts with Valkey up, and with Valkey stopped exits naming

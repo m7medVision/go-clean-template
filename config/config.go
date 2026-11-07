@@ -18,6 +18,7 @@ type (
 		PG       PG
 		GRPC     GRPC
 		JWT      JWT
+		Valkey   Valkey
 		Metrics  Metrics
 		Docs     Docs
 		Tracing  Tracing
@@ -56,6 +57,12 @@ type (
 	JWT struct {
 		Secret      string        `env:"JWT_SECRET"`
 		TokenExpiry time.Duration `env:"JWT_TOKEN_EXPIRY" envDefault:"15m"`
+	}
+
+	// Valkey has no required tag: the worker parses the same config and has no Valkey, so app.Run
+	// checks it.
+	Valkey struct {
+		URL string `env:"VALKEY_URL"`
 	}
 
 	Metrics struct {
