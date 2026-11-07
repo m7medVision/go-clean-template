@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -33,10 +33,7 @@ func (r *controller) finishPasskeyRegistration(api huma.API) {
 		Security:      []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:        apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict),
 	}, func(ctx context.Context, input *finishPasskeyRegistrationInput) (*passkeyOutput, error) {
-		userID, ok := middleware.UserID(ctx)
-		if !ok {
-			return nil, huma.Error401Unauthorized("unauthorized")
-		}
+		userID := authn.MustCaller(ctx).UserID
 
 		passkey, err := r.finishRegistration(ctx, userID, input.CeremonyToken, input.Name, input.Body)
 		if err != nil {

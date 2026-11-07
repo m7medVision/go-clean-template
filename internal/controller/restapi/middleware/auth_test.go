@@ -1,14 +1,18 @@
 package middleware_test
 
 import (
-	"fmt"
+	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -16,173 +20,124 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestHandler(jwtManager *jwt.Manager) http.Handler {
+type callerOutput struct {
+	Body struct {
+		UserID    string        `json:"user_id"`
+		Roles     []entity.Role `json:"roles"`
+		IssuedAt  time.Time     `json:"issued_at"`
+		HasCaller bool          `json:"has_caller"`
+	}
+}
+
+// echoCaller answers with the caller the request carries, if any.
+func echoCaller(ctx context.Context, _ *struct{}) (*callerOutput, error) {
+	out := &callerOutput{}
+
+	c, ok := authn.CallerFrom(ctx)
+	out.Body.UserID, out.Body.Roles, out.Body.IssuedAt, out.Body.HasCaller = c.UserID, c.Roles, c.IssuedAt, ok
+
+	return out, nil
+}
+
+// newTestHandler serves GET /private, which declares Security, and GET /public, which does not,
+// behind Auth.
+func newTestHandler(tokens *jwt.Manager) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Auth(jwtManager, slog.New(slog.DiscardHandler)))
-	r.Get("/v1/test", func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := middleware.UserID(r.Context())
-		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
+	api := humachi.New(r, huma.DefaultConfig("test", "1.0.0"))
+	api.UseMiddleware(middleware.Auth(tokens, slog.New(slog.DiscardHandler)))
 
-			return
-		}
-
-		fmt.Fprint(w, userID)
-	})
+	huma.Register(api, huma.Operation{
+		OperationID: "private", Method: http.MethodGet, Path: "/private",
+		Security: []map[string][]string{{"BearerAuth": {}}},
+	}, echoCaller)
+	huma.Register(api, huma.Operation{OperationID: "public", Method: http.MethodGet, Path: "/public"}, echoCaller)
 
 	return r
 }
 
-func TestAuthMiddleware(t *testing.T) {
+func get(t *testing.T, h http.Handler, target, authorization string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody)
+	if authorization != "" {
+		req.Header.Set("Authorization", authorization)
+	}
+
+	resp := httptest.NewRecorder()
+	h.ServeHTTP(resp, req)
+
+	return resp
+}
+
+func TestAuthRejectsAnOperationThatDeclaresSecurity(t *testing.T) {
 	t.Parallel()
 
-	jwtManager := jwt.New("test-secret", time.Hour)
-	handler := newTestHandler(jwtManager)
+	handler := newTestHandler(jwt.New("test-secret", time.Hour))
 
-	validToken, err := jwtManager.GenerateToken("user-id-123", nil)
+	otherKey, err := jwt.New("other-secret", time.Hour).GenerateToken("user-id-123", nil)
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		authHeader     string
-		expectedStatus int
-		expectedBody   string
+		name          string
+		authorization string
+		detail        string
 	}{
-		{
-			name:           "missing header",
-			authHeader:     "",
-			expectedStatus: http.StatusUnauthorized,
-		},
-		{
-			name:           "invalid format",
-			authHeader:     "Basic xxx",
-			expectedStatus: http.StatusUnauthorized,
-		},
-		{
-			name:           "invalid token",
-			authHeader:     "Bearer invalid",
-			expectedStatus: http.StatusUnauthorized,
-		},
-		{
-			name:           "valid token",
-			authHeader:     "Bearer " + validToken,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "user-id-123",
-		},
+		{"missing header", "", "missing authorization header"},
+		{"invalid format", "Basic xxx", "invalid authorization header format"},
+		{"bare token", otherKey, "invalid authorization header format"},
+		{"invalid token", "Bearer invalid", "invalid or expired token"},
+		{"another key's token", "Bearer " + otherKey, "invalid or expired token"},
 	}
 
 	for _, tc := range tests {
-		localTc := tc
-
-		t.Run(localTc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
-			if localTc.authHeader != "" {
-				req.Header.Set("Authorization", localTc.authHeader)
-			}
+			resp := get(t, handler, "/private", tc.authorization)
 
-			resp := httptest.NewRecorder()
-			handler.ServeHTTP(resp, req)
-
-			assert.Equal(t, localTc.expectedStatus, resp.Code)
-
-			if localTc.expectedBody != "" {
-				assert.Equal(t, localTc.expectedBody, resp.Body.String())
-			}
+			assert.Equal(t, http.StatusUnauthorized, resp.Code)
+			assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+			assert.JSONEq(t,
+				`{"type":"about:blank","title":"Unauthorized","status":401,"detail":"`+tc.detail+`"}`,
+				resp.Body.String())
 		})
 	}
 }
 
-func TestAuthMiddlewareAuthTime(t *testing.T) {
+func TestAuthRunsTheOperationWithTheTokensCaller(t *testing.T) {
 	t.Parallel()
 
-	jwtManager := jwt.New("test-secret", time.Hour)
-
-	var (
-		authTime time.Time
-		ok       bool
-	)
-
-	r := chi.NewRouter()
-	r.Use(middleware.Auth(jwtManager, slog.New(slog.DiscardHandler)))
-	r.Get("/v1/test", func(_ http.ResponseWriter, r *http.Request) {
-		authTime, ok = middleware.AuthTime(r.Context())
-	})
-
+	tokens := jwt.New("test-secret", time.Hour)
 	before := time.Now().Truncate(time.Second)
 
-	token, err := jwtManager.GenerateToken("user-id-123", nil)
+	token, err := tokens.GenerateToken("user-id-123", []string{"admin", "superuser"})
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer "+token)
+	resp := get(t, newTestHandler(tokens), "/private", "Bearer "+token)
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
 
-	resp := httptest.NewRecorder()
-	r.ServeHTTP(resp, req)
+	var got callerOutput
 
-	require.Equal(t, http.StatusOK, resp.Code)
-	require.True(t, ok)
-	assert.False(t, authTime.Before(before), "auth time %s, before %s", authTime, before)
-	assert.False(t, authTime.After(time.Now()), "auth time in the future: %s", authTime)
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &got.Body))
+	assert.True(t, got.Body.HasCaller)
+	assert.Equal(t, "user-id-123", got.Body.UserID)
+	assert.Equal(t, []entity.Role{entity.RoleAdmin}, got.Body.Roles, "unknown roles are dropped")
+	assert.False(t, got.Body.IssuedAt.Before(before), "the token's issue time is kept: %s", got.Body.IssuedAt)
 }
 
-func TestAuthTimeWithoutAuth(t *testing.T) {
+// An operation that declares no Security is public: Auth does not read a token for it, valid or not.
+func TestAuthLetsAPublicOperationThrough(t *testing.T) {
 	t.Parallel()
 
-	_, ok := middleware.AuthTime(t.Context())
-	assert.False(t, ok)
-}
+	handler := newTestHandler(jwt.New("test-secret", time.Hour))
 
-func TestAuthMiddlewarePrincipal(t *testing.T) {
-	t.Parallel()
+	for _, authorization := range []string{"", "Bearer invalid"} {
+		resp := get(t, handler, "/public", authorization)
+		require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
 
-	jwtManager := jwt.New("test-secret", time.Hour)
+		var got callerOutput
 
-	tests := []struct {
-		name      string
-		roles     []string
-		wantRoles []entity.Role
-	}{
-		{"admin token", []string{"admin", "user"}, []entity.Role{entity.RoleAdmin, entity.RoleUser}},
-		{"unknown roles are dropped", []string{"superuser", "user"}, []entity.Role{entity.RoleUser}},
-		{"no roles claim", nil, []entity.Role{}},
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &got.Body))
+		assert.False(t, got.Body.HasCaller, authorization)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var (
-				got entity.Principal
-				ok  bool
-			)
-
-			r := chi.NewRouter()
-			r.Use(middleware.Auth(jwtManager, slog.New(slog.DiscardHandler)))
-			r.Get("/v1/test", func(_ http.ResponseWriter, r *http.Request) {
-				got, ok = middleware.Principal(r.Context())
-			})
-
-			token, err := jwtManager.GenerateToken("user-id-123", tt.roles)
-			require.NoError(t, err)
-
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/test", http.NoBody)
-			req.Header.Set("Authorization", "Bearer "+token)
-
-			resp := httptest.NewRecorder()
-			r.ServeHTTP(resp, req)
-
-			require.Equal(t, http.StatusOK, resp.Code, "a token without a known role still authenticates")
-			require.True(t, ok)
-			assert.Equal(t, entity.Principal{UserID: "user-id-123", Roles: tt.wantRoles}, got)
-		})
-	}
-}
-
-func TestPrincipalWithoutAuth(t *testing.T) {
-	t.Parallel()
-
-	_, ok := middleware.Principal(t.Context())
-	assert.False(t, ok)
 }

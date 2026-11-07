@@ -21,3 +21,9 @@ type Controller struct {
 func New(b cqrs.Buses, l *slog.Logger) v1.AuthServiceServer {
 	return &Controller{cmds: b.Commands, qs: b.Queries, l: l}
 }
+
+// PublicMethods are the AuthService methods a caller reaches without a token: signing up and
+// signing in. Every other method of every service needs one.
+func PublicMethods() []string {
+	return []string{v1.AuthService_Register_FullMethodName, v1.AuthService_Login_FullMethodName}
+}

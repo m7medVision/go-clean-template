@@ -2,10 +2,13 @@ package restapi_test
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
+	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -101,11 +104,25 @@ func TestValidationErrorDoesNotEchoInput(t *testing.T) {
 	assert.NotContains(t, resp.Body.String(), "s3cr")
 }
 
-func TestAuthExemptionIsLimitedToAuthRoutes(t *testing.T) {
+// Whether an operation needs a token is its Security, whatever its path: a v2 operation is
+// protected as a v1 one is, and so is one under /v1/auth that declares it. A path no operation
+// serves is a 404, token or not.
+func TestAuthFollowsTheOperationNotItsPath(t *testing.T) {
 	t.Parallel()
 
-	handler := newRouter(taskBuses(&entity.Task{}))
+	handler := resttest.NewRouter(resttest.NewBuses(), func(api huma.API, _ cqrs.Buses, _ *slog.Logger) {
+		for _, path := range []string{"/v2/things", "/v1/auth/me"} {
+			huma.Register(api, huma.Operation{
+				OperationID: "get" + path, Method: http.MethodGet, Path: path,
+				Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
+			}, func(context.Context, *struct{}) (*struct{}, error) { return &struct{}{}, nil })
+		}
+	})
 
-	resp := resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "")
-	assert.Equal(t, http.StatusUnauthorized, resp.Code)
+	for _, target := range []string{"/v2/things", "/v1/auth/me"} {
+		assert.Equal(t, http.StatusUnauthorized, resttest.Do(t.Context(), handler, http.MethodGet, target, "", "").Code, target)
+		assert.Equal(t, http.StatusNoContent, resttest.Do(t.Context(), handler, http.MethodGet, target, resttest.Token(t), "").Code, target)
+	}
+
+	assert.Equal(t, http.StatusNotFound, resttest.Do(t.Context(), handler, http.MethodGet, "/v1/authors", "", "").Code)
 }

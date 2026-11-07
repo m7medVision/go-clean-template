@@ -10,7 +10,9 @@ The three domains and how each transport exposes them. Every transport sends the
 | gRPC | `127.0.0.1:8081` | `grpc.lvh.me:80` (h2c) |
 
 Every operation except register and the sign-ins needs `Authorization: Bearer <token>`, with the
-token from a sign-in.
+token from a sign-in. On REST that is what an operation's `security` in the OpenAPI document says,
+and the server enforces exactly that: one declaration, the operation's Huma `Security`, does both.
+A path no operation serves is a `404`, token or not.
 
 ## User authentication
 
@@ -183,7 +185,8 @@ reflection is on, so `grpcurl -plaintext 127.0.0.1:8081 list` works.
 | Exchange history | `ExchangeService/GetHistory` |
 
 - The token goes in the `authorization` metadata as it is, with no `Bearer` prefix; without a valid
-  one a call answers `Unauthenticated`.
+  one a call answers `Unauthenticated`. `Register` and `Login` are the methods called without one: a
+  domain's module lists them by their generated `FullMethodName` constants (`grpcPublic`).
 - Every call is logged and counted like an HTTP request, and a panic answers `Internal` instead of
   ending the process.
 - Errors map to status codes: invalid input (an unknown currency too) is `InvalidArgument`, a missing
@@ -199,7 +202,8 @@ same domain folders, registered next to v1 in the domain's module in `internal/a
 [`internal/app/task.go`](../internal/app/task.go)); v1 stays untouched.
 
 REST: the v2 operations go on the same Huma API under `/v2/...` paths, so they share one OpenAPI
-document, which `make openapi` exports from the same registration:
+document, which `make openapi` exports from the same registration. A v2 operation needs a token when
+it declares `Security`, as a v1 one does: nothing depends on the path.
 
 ```go
 rest: func(api huma.API, b cqrs.Buses, l *slog.Logger) {
@@ -216,3 +220,6 @@ grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 	pbv2.RegisterTaskServiceServer(s, grpctaskv2.New(b, l))
 },
 ```
+
+A v2 method needs a token unless the module lists it in `grpcPublic`, as the user module lists
+`AuthService` sign-up and sign-in.

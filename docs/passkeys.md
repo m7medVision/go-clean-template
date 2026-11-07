@@ -61,8 +61,8 @@ finishing the same registration twice is `entity.ErrPasskeyExists`, a `409`, and
 
 A passkey outlives the session that adds it: it keeps signing in after the JWT expires and after a
 password change. Without a check, anyone holding a stolen JWT could add their own passkey and keep
-the account. So `begin` requires that the caller signed in recently: the auth middleware
-(`middleware.AuthTime`) passes the token's `iat` into the query, and a token older than
+the account. So `begin` requires that the caller signed in recently: the handler passes the token's
+`iat` (`authn.Caller.IssuedAt`, which every transport's token check keeps) into the query, and a token older than
 `WEBAUTHN_REAUTH_MAX_AGE` (5 minutes by default), or one without an `iat`, is
 `entity.ErrPasskeyReauthRequired`. The rule lives in the query (`BeginPasskeyRegistration`), not the
 controller.

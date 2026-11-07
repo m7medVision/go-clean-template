@@ -126,8 +126,9 @@ http://127.0.0.1:16686.
   buses' trace step), then one per SQL statement (otelpgx) and per outbound HTTP call (otelhttp).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the
   instrumentation runs unconditionally with no overhead.
-- **Only the API is traced.** `/healthz`, `/metrics` and `/docs` are excluded; only the versioned
-  API groups are instrumented.
+- **The APIs are traced, whatever their version.** Every HTTP request but the health check
+  (`/healthz`) and the metrics scrape (`/metrics`) is traced: REST operations under any version,
+  GraphQL and the docs. So is every gRPC call.
 
 | Env var | Default | |
 | --- | --- | --- |

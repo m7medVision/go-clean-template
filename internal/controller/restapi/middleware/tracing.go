@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -16,27 +17,22 @@ const (
 	_mountPattern = "/*"
 )
 
-// Tracing returns a middleware that opens an OTel span for the versioned API
-// routes only, keeping the internal routes (health, metrics, docs) untraced.
-func Tracing() func(http.Handler) http.Handler {
+// Tracing returns a middleware that opens an OTel span for every request but those to the untraced
+// paths, such as the health check and the metrics scrape, which would only add noise. Every API is
+// traced, whatever its version: REST and GraphQL alike.
+func Tracing(untraced ...string) func(http.Handler) http.Handler {
+	traced := func(r *http.Request) bool {
+		return !slices.Contains(untraced, strings.TrimSuffix(r.URL.Path, "/"))
+	}
+
 	return func(next http.Handler) http.Handler {
-		traced := otelhttp.NewHandler(nameSpanByRoute(next), _tracerName)
-
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.HasPrefix(r.URL.Path, _apiPrefix) {
-				next.ServeHTTP(w, r)
-
-				return
-			}
-
-			traced.ServeHTTP(w, r)
-		})
+		return otelhttp.NewHandler(nameSpanByRoute(next), _tracerName, otelhttp.WithFilter(traced))
 	}
 }
 
 // nameSpanByRoute renames the span after routing. otelhttp reads the pattern
-// from its own *http.Request, which chi never sees once Auth swaps in a
-// request with the caller's context, so it cannot do this itself.
+// from its own *http.Request, and chi sets it on the copy it routes, so it
+// cannot do this itself.
 func nameSpanByRoute(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

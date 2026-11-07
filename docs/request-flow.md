@@ -80,18 +80,20 @@ got, which is what lets the unit tests hand it the in-memory store and mocks ins
 
 The app's HTTP mux, [`internal/app/http.go`](../internal/app/http.go), installs chi middleware in
 this order, and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
-which adds `Auth`, before any handler runs:
+whose Huma middleware `Auth` runs once the request has matched an operation, before any handler:
 
 | Middleware | What it does to this request |
 | --- | --- |
 | `StripSlashes` | `/v1/exchange/convert/` and `/v1/exchange/convert` are the same route |
 | `Logger` | logs client address, method, path, status and response size when the request ends |
-| `Tracing` (when `TRACING_ENABLED`) | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here |
+| `Tracing` (when `TRACING_ENABLED`) | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here. Every request is traced but `/healthz` and `/metrics` |
 | `Metrics` (when `METRICS_ENABLED`) | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern |
 | `Recovery` | turns a panic in any later layer into a 500 instead of a dropped connection |
-| `Auth` | every path under `/v1` except `/v1/auth/*` needs `Authorization: Bearer <token>`. It parses the JWT and stores the user ID in the request context, or answers 401 |
+| `Auth` | the operation declares `Security`, the same declaration the OpenAPI document shows, so it needs `Authorization: Bearer <token>`. `Auth` turns the token into the caller with `authn.ReadToken` and stores it in the request context, or answers 401. An operation that declares none is public |
 
-`Auth` is the only thing that knows about JWTs. Below this point the caller is just a `userID` string.
+`authn.ReadToken` ([`internal/controller/authn`](../internal/controller/authn/authn.go)) is the only
+thing that reads a JWT, for all three transports. Below this point the caller is an `authn.Caller`:
+a user ID, roles and when they signed in.
 
 ## 2. Decode and validate (Huma)
 
@@ -131,10 +133,7 @@ must never pass through a float.
 The handler body does the same steps in the same order as every handler on every transport:
 
 ```go
-userID, ok := middleware.UserID(ctx)          // 1. who is calling
-if !ok {
-	return nil, huma.Error401Unauthorized("unauthorized")
-}
+userID := authn.MustCaller(ctx).UserID  // 1. who is calling
 
 amount, err := decimal.NewFromString(input.Body.Amount)  // 2. DTO → domain value
 if err != nil {
@@ -157,6 +156,10 @@ if err != nil {
 return &convertOutput{Body: NewConversion(&conversion)}, nil  // 6. entity → response DTO
 ```
 
+- **The caller is always there.** The operation declares `Security`, so `Auth` has already
+  answered 401 to a request without a valid token. `authn.MustCaller` panics only when an operation
+  reads a caller without declaring that it needs one, a programming error that `Recovery` turns
+  into a logged 500 rather than a request served as nobody.
 - **A command returns only what identifies the write.** `entity.Written` holds the conversion's ID and
   the event store position of its event, never the conversion itself. The body comes from a query,
   so every response a client sees was read from the read model, just as its next request will be.
@@ -349,7 +352,7 @@ six steps with different types:
 
 | | REST | gRPC |
 | --- | --- | --- |
-| who is calling | the `Auth` middleware | `grpcmw.UserIDFromContext` |
+| who is calling | `authn.MustCaller`, after the `Auth` middleware | `authn.MustCaller`, after the `Auth` interceptor |
 | the request | a Huma DTO | the generated `v1.ConvertRequest` |
 | errors | 400 | `codes.InvalidArgument` |
 | the response | `NewConversion` | `NewConversionResponse` |
@@ -359,7 +362,8 @@ It sends the identical `ConvertCurrency` and `GetConversion`, so the two transpo
 about a rule.
 
 On gRPC:
-- the gRPC interceptor rejects a missing or expired token with `Unauthenticated`;
+- the `Auth` interceptor rejects a missing or expired token with `Unauthenticated`, on every method
+  no module lists as public (`grpcPublic`);
 - there are no Huma tags, so a malformed code falls through to the entity;
 - a bad amount, an invalid conversion and an unknown currency are all `InvalidArgument`;
 - a lagging read model is `Unavailable`;

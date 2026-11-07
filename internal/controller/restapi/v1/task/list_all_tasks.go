@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
@@ -22,13 +22,8 @@ func (r *controller) listAllTasks(api huma.API) {
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized, http.StatusForbidden),
 	}, func(ctx context.Context, input *listTasksInput) (*listTasksOutput, error) {
-		caller, ok := middleware.Principal(ctx)
-		if !ok {
-			return nil, huma.Error401Unauthorized("unauthorized")
-		}
-
 		return listPage(ctx, r, query.ListAllTasks{
-			Principal: caller, Status: input.status(), Limit: input.Limit, Offset: input.Offset,
+			Principal: authn.MustCaller(ctx).Principal, Status: input.status(), Limit: input.Limit, Offset: input.Offset,
 		}, "listAllTasks")
 	})
 }

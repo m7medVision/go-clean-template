@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -30,10 +30,7 @@ func (r *controller) listPasskeys(api huma.API) {
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:      apierr.QueryErrors(http.StatusUnauthorized),
 	}, func(ctx context.Context, _ *listPasskeysInput) (*listPasskeysOutput, error) {
-		userID, ok := middleware.UserID(ctx)
-		if !ok {
-			return nil, huma.Error401Unauthorized("unauthorized")
-		}
+		userID := authn.MustCaller(ctx).UserID
 
 		passkeys, err := r.list(ctx, userID)
 		if err != nil {

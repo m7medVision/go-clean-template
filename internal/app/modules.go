@@ -27,6 +27,9 @@ type module struct {
 	// rest registers its REST operations, grpc its gRPC services. A v2 registers next to v1.
 	rest func(api huma.API, b cqrs.Buses, l *slog.Logger)
 	grpc func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger)
+	// grpcPublic are the full names of its gRPC methods a caller reaches without a token. A REST
+	// operation says so itself, by declaring no Security.
+	grpcPublic []string
 
 	// The worker runs these; the app builds the projectors too, to wait for them after a write.
 

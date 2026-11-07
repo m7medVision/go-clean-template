@@ -16,5 +16,5 @@ func (q Query) AllTasks(ctx context.Context, status *entity.TaskStatus, limit, o
 		return nil, err
 	}
 
-	return page(ctx, q, query.ListAllTasks{Principal: caller, Status: status, Limit: limit, Offset: offset}, "allTasks")
+	return page(ctx, q, query.ListAllTasks{Principal: caller.Principal, Status: status, Limit: limit, Offset: offset}, "allTasks")
 }

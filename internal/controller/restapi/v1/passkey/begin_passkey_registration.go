@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -31,15 +31,10 @@ func (r *controller) beginPasskeyRegistration(api huma.API) {
 		Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}},
 		Errors:   apierr.QueryErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, _ *beginPasskeyRegistrationInput) (*ceremonyOutput, error) {
-		userID, ok := middleware.UserID(ctx)
-		if !ok {
-			return nil, huma.Error401Unauthorized("unauthorized")
-		}
+		// IssuedAt is when the caller last signed in: the use case asks a stale one to sign in again.
+		caller := authn.MustCaller(ctx)
 
-		// A missing auth time is zero, which the use case treats as a sign-in too old to add a passkey.
-		authTime, _ := middleware.AuthTime(ctx)
-
-		started, err := r.beginRegistration(ctx, userID, authTime)
+		started, err := r.beginRegistration(ctx, caller.UserID, caller.IssuedAt)
 		if err != nil {
 			return nil, apierr.Problem(ctx, r.l, err, "beginPasskeyRegistration")
 		}

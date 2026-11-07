@@ -16,10 +16,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// newHTTPHandler is the app's one HTTP mux. Every request is logged, counted, traced under /v1 and
-// recovered from a panic. It serves /healthz, /metrics when metrics are on, GraphQL at /graphql (and
-// GraphiQL when docs are on), and mounts the REST API, with its own token check and docs, on the
-// rest.
+const (
+	_healthzPath = "/healthz"
+	_metricsPath = "/metrics"
+)
+
+// newHTTPHandler is the app's one HTTP mux. Every request is logged, counted and recovered from a
+// panic, and traced unless it is the health check or the metrics scrape. It serves /healthz,
+// /metrics when metrics are on, GraphQL at /graphql (and GraphiQL when docs are on), and mounts the
+// REST API, whose operations check the token their Security asks for, and its docs, on the rest.
 func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, l *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
@@ -27,7 +32,7 @@ func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, l *sl
 	r.Use(middleware.Logger(l))
 
 	if cfg.Tracing.Enabled {
-		r.Use(middleware.Tracing())
+		r.Use(middleware.Tracing(_healthzPath, _metricsPath))
 	}
 
 	if cfg.Metrics.Enabled {
@@ -37,10 +42,10 @@ func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, l *sl
 	r.Use(middleware.Recovery(l))
 
 	if cfg.Metrics.Enabled {
-		r.Get("/metrics", promhttp.Handler().ServeHTTP)
+		r.Get(_metricsPath, promhttp.Handler().ServeHTTP)
 	}
 
-	r.Get("/healthz", healthz)
+	r.Get(_healthzPath, healthz)
 
 	r.Handle("/graphql", graphql.NewHandler(b, tokens, l))
 

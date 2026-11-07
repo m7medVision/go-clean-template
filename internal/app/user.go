@@ -36,7 +36,8 @@ func userModule() module {
 		grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 			pb.RegisterAuthServiceServer(s, grpcuser.New(b, l))
 		},
-		projector: func(pg *postgres.Postgres) projection.Projector { return persistUserRepo.NewProjector(pg) },
+		grpcPublic: grpcuser.PublicMethods(),
+		projector:  func(pg *postgres.Postgres) projection.Projector { return persistUserRepo.NewProjector(pg) },
 		eventHandlers: func(d *deps) []repo.Subscriber {
 			loginURL := d.cfg.App.BaseURL + "/login"
 

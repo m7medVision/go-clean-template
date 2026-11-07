@@ -110,7 +110,8 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
 - `internal/controller/<transport>/v1/<domain>/` — one folder per domain in each transport, holding
   that domain's handlers, DTOs and tests (GraphQL has no `v1/`). A controller takes `cqrs.Buses` and
   imports its domain's `command`/`query` packages only for the message types. Controllers never
-  import each other; see **Controller layout** below.
+  import each other, except `internal/controller/authn` (the caller of a request, read from its
+  token), which every transport imports and which imports none; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, tracing). Logging is
   `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
@@ -197,7 +198,15 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
 - **A domain folder never imports another domain folder.** What several domains share has its own
   package in that transport: REST `v1/response/` (`Token`) and `v1/apidoc/` (the `BearerAuth`
   scheme, the `auth` tag); gRPC `v1/response/` (timestamps and counts as proto fields); GraphQL
-  `middleware/` and `gqlerr/`.
+  `middleware/` and `gqlerr/`. What all three transports share is one package beside them,
+  `internal/controller/authn`: `ReadToken` turns a token into the caller (principal and issue time)
+  under one context key. Each transport reads only its own header.
+- **"Public" is declared once per operation.** A REST operation needs a token exactly when it
+  declares `Security` (`apidoc.BearerAuthScheme`): the `Auth` Huma middleware enforces what the
+  OpenAPI document states, whatever the path or version. A gRPC method needs one unless its
+  domain's module lists it in `grpcPublic` by its generated `FullMethodName` constant (today
+  `AuthService` `Register` and `Login`). GraphQL lets every request through and each resolver asks
+  for the caller.
 - No transport lists the domains (GraphQL's `resolver.go` aside): each domain's module in
   `internal/app/<domain>.go` registers its REST operations (`NewRoutes`) and gRPC services, passed
   the `cqrs.Buses`, and `docs/api.md`'s v2 examples register there too. `restapi.NewHandler` is the
@@ -206,10 +215,10 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
 - Tests go through the real server and real buses, with fake handlers registered for the domain's
   messages (`fake_test.go`), from the domain folder: REST with `restapi/resttest` (it sets no env:
   no controller reads config), GraphQL with `graphql/graphqltest`, gRPC over
-  `bufconn` in the test itself. REST-wide tests (docs, auth exemption) stay in
-  `restapi/router_test.go`; tests of the whole HTTP mux (public routes, panics, metrics, GraphQL
-  beside REST), of the gRPC server (panics) and of the exported OpenAPI document are in
-  `internal/app`.
+  `bufconn` in the test itself. REST-wide tests (docs, auth following each operation's `Security`)
+  stay in `restapi/router_test.go`; tests of the whole HTTP mux (public routes, panics, metrics,
+  GraphQL beside REST, the documented security enforced), of the gRPC server (public methods,
+  panics) and of the exported OpenAPI document are in `internal/app`.
 - **A REST DTO's Go type name is its OpenAPI schema name** (Huma names schemas after the type), so
   renaming one changes `docs/openapi/v1.json` and the web client's types. A name that repeats its
   folder (`task.TaskList`) carries a `//nolint:revive` saying so.
@@ -226,11 +235,13 @@ graphql/schema/        schema.graphqls (the Query and Mutation roots), <domain>_
 Every controller method, on every transport, does the same six things in the same order. Copy the
 shape from a neighbouring handler in the same transport.
 
-1. **Get the caller.** REST: `middleware.UserID(ctx)` (the chi `middleware.Auth` middleware stores
-   it in the request context).
-   gRPC: `grpcmw.UserIDFromContext(ctx)`.
-   GraphQL: `middleware.Caller(ctx)` (`graphql/middleware`).
-   A failure here is an auth error, not a 500.
+1. **Get the caller.** REST and gRPC: `authn.MustCaller(ctx)` (`.UserID`, `.Principal`,
+   `.IssuedAt`), with no check: the `Auth` Huma middleware (for an operation that declares
+   `Security`) and the `Auth` interceptor (for a method not in `grpcPublic`) have already answered
+   401 / `Unauthenticated` to a request without a valid token. It panics only on a programming
+   error, an operation that reads a caller without declaring it needs one, which the transport's
+   recovery turns into a logged 500 / `Internal`. A public operation reads no caller.
+   GraphQL: `middleware.Caller(ctx)` (`graphql/middleware`), which answers `UNAUTHENTICATED`.
 2. **Decode into a transport-local DTO** from the domain folder's `request.go`. On REST the DTO is
    the `Body` field of a small Huma input struct; never decode into an `entity` type, and never pass
    a request DTO into a command or query.
@@ -543,8 +554,9 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
    - REST: the op and its own Huma input/output structs in a new file named after its operation ID,
      `internal/controller/restapi/v1/<domain>/<operation>.go`, DTOs in that folder's
      `request.go`/`response.go`, the op registered in its `controller.go` (`NewRoutes`), the fake
-     handler in `fake_test.go` and the test beside it; then `make openapi`, and commit the
-     generated diff.
+     handler in `fake_test.go` and the test beside it. An op that needs a token declares
+     `Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}}`: that is both its docs and
+     its enforcement. Then `make openapi`, and commit the generated diff.
      Then `make web-api`, commit its diff too, and fix any `make web-check` errors in `web/`.
    - GraphQL (task and exchange today): a new `internal/controller/graphql/schema/<field>.graphqls`
      with `extend type Query` or `extend type Mutation` → `make graphql` → the build fails with
@@ -554,6 +566,7 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
      Then `make web-graphql` and fix any `make web-check` errors in `web/`.
    - gRPC: `.proto` change → `make proto-v1` → controller method in a new
      `internal/controller/grpc/v1/<domain>/<rpc>.go`, its mapping in that folder's `response.go`.
+     A method called without a token goes in its module's `grpcPublic`.
 
 Transports are independent by design; adding a method to only one is a legitimate choice, not an
 oversight — but say which ones you covered.
@@ -604,7 +617,8 @@ generated files copy — read it before writing. The steps are what the generate
    `register.go` with the domain's `Deps` and `Register`.
 6. **Wiring** — `internal/app/<domain>.go` returning the domain's `module`: `handlers` (a
    `<domain>.Register(...)` call), `importer` when it has rows from before event sourcing,
-   `projector`, any `eventHandlers`, and `rest` and `grpc` (step 7); then the module in `modules()`
+   `projector`, any `eventHandlers`, and `rest` and `grpc` (step 7), with `grpcPublic` only for a
+   gRPC method called without a token; then the module in `modules()`
    (`internal/app/modules.go`).
 7. **Transports** — for each one, a new domain folder (see **Controller layout**):
    `<transport>/v1/<domain>/` with its `controller.go`, one file per operation, `request.go`,

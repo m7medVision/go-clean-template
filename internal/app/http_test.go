@@ -103,19 +103,68 @@ func TestAPanicAnswers500AndIsCounted(t *testing.T) {
 	assert.Contains(t, metrics.Body.String(), `http_requests_total{code="500",method="GET",route="/v1/tasks/{id}"}`)
 }
 
-// REST is mounted on the mux, so a request no route matched reaches it, and its token check, too.
+// REST is mounted on the mux, so a request no route matched reaches it. With no operation, there is
+// no Security to enforce: it is a 404, token or not.
 func TestAnUnmatchedRequestIsCountedAsUnmatched(t *testing.T) {
 	t.Parallel()
 
 	h, _ := newTestHandler(t, newTestBuses(), false)
 
 	assert.Equal(t, http.StatusNotFound, get(t, h, "/no-such-page", "").Code)
-	assert.Equal(t, http.StatusUnauthorized, get(t, h, "/v1/no-such-operation", "").Code)
+	assert.Equal(t, http.StatusNotFound, get(t, h, "/v1/no-such-operation", "").Code)
 
 	metrics := get(t, h, "/metrics", "").Body.String()
 	assert.Contains(t, metrics, `http_requests_total{code="404",method="GET",route="unmatched"}`)
-	assert.Contains(t, metrics, `http_requests_total{code="401",method="GET",route="unmatched"}`)
 	assert.NotContains(t, metrics, `route="/*"`)
+}
+
+// What the OpenAPI document says needs a token is what the server enforces: every operation that
+// declares Security answers a request without a token with 401, and only the sign-in operations
+// declare none.
+func TestTheDocumentedSecurityIsEnforced(t *testing.T) {
+	t.Parallel()
+
+	doc, err := OpenAPI(_version)
+	require.NoError(t, err)
+
+	var spec struct {
+		Paths map[string]map[string]struct {
+			OperationID string                `json:"operationId"`
+			Security    []map[string][]string `json:"security"`
+		} `json:"paths"`
+	}
+
+	require.NoError(t, json.Unmarshal(doc, &spec))
+
+	h, _ := newTestHandler(t, newTestBuses(), false)
+
+	var public []string
+
+	for path, ops := range spec.Paths {
+		target := strings.NewReplacer("{id}", "id-1").Replace(path)
+
+		for method, op := range ops {
+			req := httptest.NewRequestWithContext(t.Context(), strings.ToUpper(method), target, http.NoBody)
+			resp := httptest.NewRecorder()
+			h.ServeHTTP(resp, req)
+
+			if len(op.Security) == 0 {
+				public = append(public, op.OperationID)
+
+				assert.NotContains(t, resp.Body.String(), "missing authorization header", op.OperationID)
+
+				continue
+			}
+
+			assert.Equal(t, http.StatusUnauthorized, resp.Code, op.OperationID)
+			assert.JSONEq(t, `{"type":"about:blank","title":"Unauthorized","status":401,"detail":"missing authorization header"}`,
+				resp.Body.String(), op.OperationID)
+		}
+	}
+
+	assert.ElementsMatch(t, []string{
+		"register", "login", "begin-passkey-login", "finish-passkey-login", "oidc-status", "begin-oidc", "finish-oidc",
+	}, public)
 }
 
 // cmd/openapi writes the document the app serves, from the same registration.

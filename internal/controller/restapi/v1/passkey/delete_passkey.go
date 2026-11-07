@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/m7medvision/go-clean-template/internal/controller/restapi/middleware"
+	"github.com/m7medvision/go-clean-template/internal/controller/authn"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apidoc"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/apierr"
 	"github.com/m7medvision/go-clean-template/internal/usecase/passkey/command"
@@ -33,10 +33,7 @@ func (r *controller) deletePasskey(api huma.API) {
 		DefaultStatus: http.StatusNoContent,
 		Errors:        apierr.CommandErrors(http.StatusUnauthorized, http.StatusNotFound),
 	}, func(ctx context.Context, input *passkeyPathInput) (*deletePasskeyOutput, error) {
-		userID, ok := middleware.UserID(ctx)
-		if !ok {
-			return nil, huma.Error401Unauthorized("unauthorized")
-		}
+		userID := authn.MustCaller(ctx).UserID
 
 		err := r.delete(ctx, userID, input.ID)
 		if err != nil {

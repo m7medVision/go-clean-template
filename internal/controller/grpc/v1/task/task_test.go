@@ -55,7 +55,7 @@ func dial(t *testing.T, tk *fakeTask) (pb.TaskServiceClient, *jwt.Manager) {
 
 	manager := jwt.New("test-secret", time.Hour)
 	lis := bufconn.Listen(_bufSize)
-	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.AuthInterceptor(manager)))
+	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcmw.Auth(manager)))
 	pb.RegisterTaskServiceServer(srv, task.New(tk.buses(), slog.New(slog.DiscardHandler)))
 
 	go func() {

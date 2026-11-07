@@ -51,8 +51,9 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
    repository implementation, and import no HTTP client, SQL driver or transport framework.
 4. **Controllers send messages, never call repositories.** No SQL, no `pkg/postgres`, no outbound
    HTTP in a controller: it sends a command or a query on the buses.
-5. **Transports are independent.** The packages under `internal/controller/` never import each other.
-   Logic two transports share belongs in a handler. Inside a transport, the domain folders
+5. **Transports are independent.** The packages under `internal/controller/` never import each other,
+   with one exception: `authn`, which turns a token into the caller for all three and imports none
+   of them. Logic two transports share belongs in a handler. Inside a transport, the domain folders
    (`restapi/v1/task`, `grpc/v1/task`, `graphql/task`, …) never import each other either; what
    several domains share has its own package in that transport (`restapi/v1/response`,
    `restapi/v1/apidoc`, `restapi/v1/apierr`, `grpc/v1/rpcerr`, `graphql/middleware`, `graphql/gqlerr`).
@@ -126,12 +127,17 @@ The app knows two roles, `entity.RoleAdmin` and `entity.RoleUser`. A sign-in wri
 roles into the app JWT (`roles` claim). A password sign-in always grants `user` (`entity.LocalRoles`).
 A passkey sign-in does too.
 An SSO sign-in grants the roles the provider's claims map to ([sso.md](sso.md#roles)).
-Each transport's auth turns the token into an `entity.Principal`, dropping role names it does not
-know:
+One function, `authn.ReadToken` (`internal/controller/authn`), turns the token into the caller for
+every transport: an `authn.Caller`, the `entity.Principal` (role names it does not know dropped) and
+when the token was issued. Each transport reads only its own header and stores the caller under the
+one context key:
 
-- REST: `middleware.Principal`
-- gRPC: `grpcmw.PrincipalFromContext`
-- GraphQL: `middleware.Principal` (in `graphql/middleware`)
+- REST: the `Auth` Huma middleware, for every operation that declares `Security`; handlers read the
+  caller with `authn.MustCaller`. An operation that declares none is public.
+- gRPC: the `Auth` interceptor, for every method no module lists in `grpcPublic`; methods read the
+  caller with `authn.MustCaller`.
+- GraphQL: `middleware.WithOptionalCaller` lets every request through, so resolvers ask
+  `middleware.Caller`, which answers `UNAUTHENTICATED` when there is none.
 
 A handler puts the
 principal in the messages that need a role, such as `ListAllTasks`: the buses' authorize step
@@ -148,8 +154,9 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`config`](../config) | Every setting, parsed from the environment into one exported section per concern (`config.WebAuthn`, `config.Worker`, …). The binaries pass each part only the sections or values it reads, and no controller imports it. Defaults are written only here; a `pkg/` type with the same fields as a section converts from it (`worker.Settings(cfg.Worker)`, `tracing.Config(cfg.Tracing)`). |
 | [`internal/app`](../internal/app) | Wiring. One file per domain (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) returns its `module`: its command and query handlers, importer, REST operations, gRPC services, projector, event handlers and queues. `modules.go` lists them, and each binary installs only the parts it runs: the app everything but mail delivery, the worker the projectors, event handlers and the mail queue, so the worker needs no WebAuthn, SSO or JWT settings and the app no SMTP. `buses.go` builds the command and query buses with their steps; `http.go` is the app's one chi mux, which mounts REST (`restapi.NewHandler`) and GraphQL side by side, and `OpenAPI`, which `cmd/openapi` prints from the same registration. `bootstrap.go` builds what both binaries start from (logger, tracing, pool, event store, buses) and closes it. `app.go` runs the backfill, then the HTTP and gRPC servers; `worker.go` the queue worker and the projection runner. Each part is a `Run(ctx) error` under one errgroup, and stops when the context `main` takes from `signal.NotifyContext` ends; the pool closes after all of them return. `servers.go` serves a plain `http.Server` and `grpc.Server` that way; the HTTP write deadline is `CQRS_CONSISTENCY_TIMEOUT` plus a margin, so a write that waits for its projections can still answer. See [Schema](#schema) for `migrate.go`. |
 | [`internal/controller`](../internal/controller) | One package per transport. Inside each, one folder per domain (`restapi/v1/task/`, `grpc/v1/task/`, `graphql/task/`) holds that domain's handlers, one file per operation (`create_task.go`), its request and response DTOs, and tests; the domain's module in `internal/app` registers it over the buses. Handlers decode, send a command or query, map `entity.Err*` sentinels to a transport status, and encode. |
-| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `v1/response/` (`Token`), `v1/apidoc/` (the security scheme and the `auth` tag) and `v1/apierr/` (an error's kind → its problem, for every domain) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with, over fake handlers on real buses. |
-| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which the domain's module in `internal/app` registers; `v1/rpcerr/` maps an error's kind to its status, for every service. `middleware/` holds the interceptors: request log, metrics, panic recovery and the token check. |
+| [`internal/controller/authn`](../internal/controller/authn) | The caller of a request, for every transport: `ReadToken` turns a token into an `authn.Caller` (principal and issue time), stored under one context key that handlers read with `MustCaller` (REST, gRPC) or through GraphQL's `middleware.Caller`. It imports no transport. |
+| [`internal/controller/restapi`](../internal/controller/restapi) | REST: [chi](https://github.com/go-chi/chi) routes wrapped by [Huma](https://github.com/danielgtaylor/huma), which builds the OpenAPI document. `middleware/` holds the HTTP middleware and `Auth`, the Huma middleware that enforces each operation's `Security`. `v1/response/` (`Token`), `v1/apidoc/` (the security scheme and the `auth` tag) and `v1/apierr/` (an error's kind → its problem, for every domain) are shared by several domains; `resttest/` is the test kit each domain's tests serve the router with, over fake handlers on real buses. |
+| [`internal/controller/grpc`](../internal/controller/grpc) | gRPC, from the `.proto` files in `docs/proto`. Each domain folder's `New` returns its generated service interface, which the domain's module in `internal/app` registers; `v1/rpcerr/` maps an error's kind to its status, for every service. `middleware/` holds the interceptors: request log, metrics, panic recovery and the token check, which skips the methods the modules list as public. |
 | [`internal/controller/graphql`](../internal/controller/graphql) | GraphQL: [gqlgen](https://github.com/99designs/gqlgen), mounted beside REST on the app's mux. One folder per domain (`task/`, `exchange/`) holds its resolvers, one file per field, and their tests; `resolver.go` joins them into the root `Query` and `Mutation`. `middleware/` (the caller) and `gqlerr/` (error codes) are shared, and `graphqltest/` is the test kit. gqlgen generates only `generated/` and `model/`. |
 | [`internal/controller/worker`](../internal/controller/worker) | The queue worker's message handlers; the mail handler sends `DeliverEmail`. |
 | [`internal/entity`](../internal/entity) | Domain types (the read shapes the API returns), the aggregates and their events, the claims, and sentinel errors. `EventTypes()` lists every event the store can decode. |

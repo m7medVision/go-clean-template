@@ -20,15 +20,17 @@ import (
 const _apiTitle = "Go Clean Template API"
 
 // NewHandler serves the REST API: the operations register adds to it, and, when docs is on, the
-// docs UI, the OpenAPI document stating version, and its schemas. Every request under /v1 outside
-// /v1/auth needs a token jwtManager signed.
+// docs UI, the OpenAPI document stating version, and its schemas. An operation that declares
+// Security needs a token jwtManager signed; one that declares none, and the docs, are public.
 func NewHandler(
 	version string, docs bool, jwtManager *jwt.Manager, l *slog.Logger, register func(api huma.API),
 ) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.Auth(jwtManager, l))
 
-	register(newAPI(r, version, docs))
+	api := newAPI(r, version, docs)
+	// Huma wraps an operation in the middleware registered before it, so this goes first.
+	api.UseMiddleware(middleware.Auth(jwtManager, l))
+	register(api)
 
 	return r
 }
