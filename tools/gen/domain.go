@@ -80,7 +80,7 @@ func editResolver(pl *planner) {
 			return one(g.AfterLastStmt("newResolver", edit.Call("*.New"), pl.text(resolver+".newResolver")))
 		},
 		func(g *edit.Go) ([]edit.Insertion, error) {
-			return g.Import(pl.data.Module+"/"+rules.ControllerDir("graphql", pl.data.Name.Pkg), "")
+			return g.Import(pl.data.Module + "/" + rules.ControllerDir("graphql", pl.data.Name.Pkg))
 		},
 	)
 }

@@ -91,10 +91,10 @@ func TestImportGoesInPathOrderInTheNonStandardGroup(t *testing.T) {
 
 	g := parseGo(t, importsSrc)
 
-	aliased, err := g.Import("github.com/m7medvision/go-clean-template/internal/repo/persistent/invoice", "persistInvoiceRepo")
+	queries, err := g.Import("github.com/m7medvision/go-clean-template/internal/repo/persistent/queries")
 	require.NoError(t, err)
 
-	plain, err := g.Import("github.com/m7medvision/go-clean-template/internal/usecase/invoice", "")
+	invoice, err := g.Import("github.com/m7medvision/go-clean-template/internal/usecase/invoice")
 	require.NoError(t, err)
 
 	assert.Equal(t, `package app
@@ -104,26 +104,26 @@ import (
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/internal/repo"
-	persistInvoiceRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/invoice"
+	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queries"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/invoice"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
 )
-`, applyGo(t, importsSrc, append(aliased, plain...)...))
+`, applyGo(t, importsSrc, append(queries, invoice...)...))
 }
 
 func TestImportAddsNothingWhenTheFileHasIt(t *testing.T) {
 	t.Parallel()
 
-	ins, err := parseGo(t, importsSrc).Import("fmt", "")
+	ins, err := parseGo(t, importsSrc).Import("fmt")
 	require.NoError(t, err)
 	assert.Empty(t, ins)
 }
 
-func TestImportRefusesTheSamePathUnderAnotherAlias(t *testing.T) {
+func TestImportRefusesAPathTheFileImportsUnderAnAlias(t *testing.T) {
 	t.Parallel()
 
-	_, err := parseGo(t, importsSrc).Import("github.com/m7medvision/go-clean-template/internal/usecase/task", "taskuc")
+	_, err := parseGo(t, importsSrc).Import("github.com/m7medvision/go-clean-template/internal/repo/persistent/task")
 	require.ErrorIs(t, err, edit.ErrAnchor)
 }
 
@@ -132,13 +132,12 @@ func TestImportRefusesTheSamePathUnderAnotherAlias(t *testing.T) {
 func TestImportRefusesANameAnotherImportBinds(t *testing.T) {
 	t.Parallel()
 
-	for _, tc := range []struct{ path, alias, bound string }{
-		{"github.com/m7medvision/go-clean-template/internal/usecase/fmt", "", "fmt"},
-		{"github.com/m7medvision/go-clean-template/internal/usecase/context", "", "context"},
-		{"github.com/m7medvision/go-clean-template/internal/repo/persistent/thing", "persistTaskRepo", "persistTaskRepo"},
-		{"github.com/m7medvision/go-clean-template/internal/repo/task/v2", "", "task"},
+	for _, tc := range []struct{ path, bound string }{
+		{"github.com/m7medvision/go-clean-template/internal/usecase/fmt", "fmt"},
+		{"github.com/m7medvision/go-clean-template/internal/usecase/context", "context"},
+		{"github.com/m7medvision/go-clean-template/internal/repo/task/v2", "task"},
 	} {
-		_, err := parseGo(t, importsSrc).Import(tc.path, tc.alias)
+		_, err := parseGo(t, importsSrc).Import(tc.path)
 		require.ErrorIs(t, err, edit.ErrAnchor, tc.path)
 		assert.Contains(t, err.Error(), tc.bound+" is imported already", tc.path)
 	}
@@ -149,7 +148,7 @@ func TestImportStartsTheNonStandardGroupAfterTheStandardOne(t *testing.T) {
 
 	const src = "package p\n\nimport (\n\t\"context\"\n)\n"
 
-	ins, err := parseGo(t, src).Import("github.com/x/y", "")
+	ins, err := parseGo(t, src).Import("github.com/x/y")
 	require.NoError(t, err)
 
 	assert.Equal(t, "package p\n\nimport (\n\t\"context\"\n\n\t\"github.com/x/y\"\n)\n", applyGo(t, src, ins...))
@@ -180,7 +179,7 @@ func TestImportPutsAStandardPathInTheStandardGroup(t *testing.T) {
 			want: "import (\n\t\"context\"\n)\n",
 		},
 	} {
-		ins, err := parseGo(t, tc.src).Import(tc.path, "")
+		ins, err := parseGo(t, tc.src).Import(tc.path)
 		require.NoError(t, err, name)
 		assert.Contains(t, applyGo(t, tc.src, ins...), tc.want, name)
 	}
@@ -189,7 +188,7 @@ func TestImportPutsAStandardPathInTheStandardGroup(t *testing.T) {
 func TestImportNeedsAnImportBlock(t *testing.T) {
 	t.Parallel()
 
-	_, err := parseGo(t, "package entity\n\nimport \"errors\"\n").Import("fmt", "")
+	_, err := parseGo(t, "package entity\n\nimport \"errors\"\n").Import("fmt")
 	require.ErrorIs(t, err, edit.ErrAnchor)
 }
 

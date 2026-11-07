@@ -187,7 +187,7 @@ func TestIdentifiersFreeLooksAtWhatAProtoEditAdds(t *testing.T) {
 		"an rpc":    {rpc, "  rpc Login (LogoutRequest) returns (LogoutResponse);\n", "AuthService.Login"},
 	} {
 		pl := plan.New("x")
-		pl.Edit(p, src, edit.Insertion{Path: p, Offset: tc.at, Text: tc.text})
+		pl.Edit(p, src, edit.Insertion{Offset: tc.at, Text: tc.text})
 
 		err := rules.IdentifiersFree(repoOf(fstest.MapFS{p: {Data: src}}), name(t, "login"), pl)
 
@@ -205,7 +205,7 @@ func TestIdentifiersFreeAcceptsProtoNamesThatAreNewToTheirFolder(t *testing.T) {
 	p := plan.New("x")
 	p.Create("docs/proto/v1/invoice.proto", []byte("syntax = \"proto3\";\n\npackage grpc.v1;\n\nservice InvoiceService {}\n\nmessage InvoiceResponse {}\n"))
 	p.Create("docs/proto/v2/login.proto", []byte("syntax = \"proto3\";\n\npackage grpc.v2;\n\nservice AuthService {}\n\nmessage LoginResponse {}\n"))
-	p.Edit("docs/proto/v1/auth.proto", src, edit.Insertion{Path: "docs/proto/v1/auth.proto", Offset: len(src), Text: "\nmessage LogoutRequest {}\n"})
+	p.Edit("docs/proto/v1/auth.proto", src, edit.Insertion{Offset: len(src), Text: "\nmessage LogoutRequest {}\n"})
 
 	require.NoError(t, rules.IdentifiersFree(repoOf(fsys), name(t, "invoice"), p),
 		"names new to docs/proto/v1 are free, and docs/proto/v2 is a package of its own")

@@ -48,11 +48,6 @@ const _suffix = ".tmpl"
 // errNoTemplates is a pattern no template matches: a layer that names the wrong files.
 var errNoTemplates = errors.New("no templates match")
 
-// FS returns the embedded templates, every set at its root.
-func FS() fs.FS {
-	return _templates
-}
-
 // Set returns the templates of the set at dir, such as domain or usecase/command, rooted there.
 func Set(dir string) (fs.FS, error) {
 	set, err := fs.Sub(_templates, dir)

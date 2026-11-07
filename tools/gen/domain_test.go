@@ -321,11 +321,14 @@ func kind(tmpl string) int {
 func setTemplates(t *testing.T, set string) []string {
 	t.Helper()
 
+	fsys, err := templates.Set(set)
+	require.NoError(t, err)
+
 	var all []string
 
-	require.NoError(t, fs.WalkDir(templates.FS(), set, func(p string, d fs.DirEntry, err error) error {
+	require.NoError(t, fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
-			all = append(all, strings.TrimPrefix(p, set+"/"))
+			all = append(all, p)
 		}
 
 		return err

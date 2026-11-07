@@ -38,7 +38,7 @@ func (g *Go) line(p token.Pos) int {
 }
 
 func (g *Go) at(offset int, text string) Insertion {
-	return Insertion{Path: g.path, Offset: offset, Text: text}
+	return Insertion{Offset: offset, Text: text}
 }
 
 // BeforeBlockEnd inserts text as the last lines of the file's one parenthesized block of tok, such
@@ -207,24 +207,20 @@ func (g *Go) body(fn string) (*ast.BlockStmt, error) {
 	return found[0].Body, nil
 }
 
-// Import returns the insertion that imports path, under alias when it is set, or none when the
-// file already does. It goes into its group, the standard library's or the other imports', in
+// Import returns the insertion that imports path, or none when the file already does. It goes into its group, the standard library's or the other imports', in
 // path order, the way gci sorts them. A file with no standard import starts that group ahead of
 // the others, and one with no other import starts theirs after it.
-func (g *Go) Import(path, alias string) ([]Insertion, error) {
+func (g *Go) Import(path string) ([]Insertion, error) {
 	block, err := g.importBlock()
 	if err != nil {
 		return nil, err
 	}
 
-	if present, err := g.imported(block, path, alias); err != nil || present {
+	if present, err := g.imported(block, path); err != nil || present {
 		return nil, err
 	}
 
 	spec := strconv.Quote(path)
-	if alias != "" {
-		spec = alias + " " + spec
-	}
 
 	before, last := importNeighbours(block, path)
 
@@ -261,8 +257,8 @@ func (g *Go) importBlock() (*ast.GenDecl, error) {
 // imported reports whether block imports path under alias. Importing it under another alias is
 // an error: the generated code would not compile against it. So is another import that binds the
 // name path would be imported as.
-func (g *Go) imported(block *ast.GenDecl, path, alias string) (bool, error) {
-	name := importName(path, alias)
+func (g *Go) imported(block *ast.GenDecl, path string) (bool, error) {
+	name := importName(path, "")
 
 	for _, s := range block.Specs {
 		is, ok := s.(*ast.ImportSpec)
@@ -279,11 +275,11 @@ func (g *Go) imported(block *ast.GenDecl, path, alias string) (bool, error) {
 			continue
 		}
 
-		if aliasOf(is) == alias {
+		if aliasOf(is) == "" {
 			return true, nil
 		}
 
-		return false, fmt.Errorf("%w: %s: imports %s under another alias than %q", ErrAnchor, g.path, path, alias)
+		return false, fmt.Errorf("%w: %s: imports %s under the alias %s", ErrAnchor, g.path, path, aliasOf(is))
 	}
 
 	return false, nil

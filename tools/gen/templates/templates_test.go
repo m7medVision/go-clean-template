@@ -110,7 +110,10 @@ func TestEveryEmbeddedFileIsATemplateOfASet(t *testing.T) {
 
 	sets := map[string]int{}
 
-	require.NoError(t, fs.WalkDir(templates.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+	all, err := templates.Set(".")
+	require.NoError(t, err)
+
+	require.NoError(t, fs.WalkDir(all, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
