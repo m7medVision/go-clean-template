@@ -23,12 +23,12 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 **Verify:** G1. **Depends on:** none. **Size:** mechanical sweep.
 
 ### Checkpoint 1
-- [ ] G3 green (integration suite proves the logging swap changed nothing else).
+- [x] G3 green (integration suite proves the logging swap changed nothing else).
 
 ## Phase 2: Errors and messages
 
 ### 3. Sentinels carry their kind  (A)
-- [ ] `entity.Error{Kind, Msg}`, `entity.KindOf(err)`; every `entity.Err*` has the kind its transports
+- [x] `entity.Error{Kind, Msg}`, `entity.KindOf(err)`; every `entity.Err*` has the kind its transports
       map it to today; `ErrRoleRequired` and its branch in `Authorize` gone.
 
 **Verify:** G1. **Depends on:** none. **Size:** M

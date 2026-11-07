@@ -45,7 +45,7 @@ type listEverything struct {
 }
 
 func (listEverything) QueryName() string          { return "ListEverything" }
-func (listEverything) RequiredRole() entity.Role  { return entity.RoleAdmin }
+func (listEverything) AdminOnly()                 {}
 func (q listEverything) Caller() entity.Principal { return q.By }
 
 // fakeCheckpoints reports the projectors as caught up once position reaches at.

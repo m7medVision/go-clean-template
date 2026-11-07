@@ -7,7 +7,9 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
+	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
+	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -93,9 +95,11 @@ func TestListAllTasksPagesEveryUsersTasks(t *testing.T) {
 func TestListAllTasksIsForAdmins(t *testing.T) {
 	t.Parallel()
 
-	admin := entity.Principal{UserID: "a1", Roles: []entity.Role{entity.RoleAdmin}}
-	q := query.ListAllTasks{Principal: admin}
+	qs := cqrs.NewQueries(behavior.Authorize())
+	cqrs.HandleQuery(qs, query.ListAllTasksHandler{})
 
-	assert.Equal(t, entity.RoleAdmin, q.RequiredRole())
-	assert.Equal(t, admin, q.Caller())
+	user := entity.Principal{UserID: "u1", Roles: []entity.Role{entity.RoleUser}}
+
+	_, err := cqrs.SendQuery[query.TaskPage](context.Background(), qs, query.ListAllTasks{Principal: user})
+	require.ErrorIs(t, err, entity.ErrAdminRequired)
 }

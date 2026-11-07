@@ -21,8 +21,8 @@ type ListAllTasks struct {
 // QueryName -.
 func (ListAllTasks) QueryName() string { return "ListAllTasks" }
 
-// RequiredRole -.
-func (ListAllTasks) RequiredRole() entity.Role { return entity.RoleAdmin }
+// AdminOnly -.
+func (ListAllTasks) AdminOnly() {}
 
 // Caller -.
 func (q ListAllTasks) Caller() entity.Principal { return q.Principal }

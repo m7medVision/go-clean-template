@@ -125,7 +125,7 @@ func TestADeletedPasskeyCannotSignIn(t *testing.T) {
 
 	_, err = f.login(t).handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
-	require.ErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
+	require.ErrorIs(t, err, entity.ErrPasskeyLoginInvalid)
 }
 
 func TestAnUnregisteredCredentialCannotSignIn(t *testing.T) {
@@ -136,7 +136,7 @@ func TestAnUnregisteredCredentialCannotSignIn(t *testing.T) {
 
 	_, err := f.login(t).handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
-	require.ErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid)
+	require.ErrorIs(t, err, entity.ErrPasskeyLoginInvalid)
 }
 
 func TestAGuardFailureIsNotABadCeremony(t *testing.T) {
@@ -156,7 +156,7 @@ func TestAGuardFailureIsNotABadCeremony(t *testing.T) {
 		_, err := l.handler.Handle(context.Background(), command.FinishPasskeyLogin{Token: token, Body: body})
 
 		require.ErrorIs(t, err, errGuard, name)
-		require.NotErrorIs(t, err, entity.ErrPasskeyCeremonyInvalid, name)
+		require.NotErrorIs(t, err, entity.ErrPasskeyLoginInvalid, name)
 		assert.Len(t, f.events(id), 1, name)
 	}
 }

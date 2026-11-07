@@ -20,9 +20,10 @@ type Actor interface {
 	ActorID() string
 }
 
-// Restricted is a message only a caller holding a role may send.
-type Restricted interface {
-	RequiredRole() entity.Role
+// AdminOnly is a message only a caller holding entity.RoleAdmin may send. Every caller holds
+// entity.RoleUser, so admin is the only role a message can require.
+type AdminOnly interface {
+	AdminOnly()
 	Caller() entity.Principal
 }
 
@@ -116,20 +117,14 @@ func Retry(attempts int) cqrs.Step {
 	}
 }
 
-// Authorize stops a Restricted message whose caller lacks its role: entity.ErrAdminRequired for
-// the admin role, entity.ErrRoleRequired for any other.
+// Authorize stops an AdminOnly message whose caller is not an admin with entity.ErrAdminRequired.
 func Authorize() cqrs.Step {
 	return func(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
-		r, ok := msg.Body.(Restricted)
-		if !ok || r.Caller().Has(r.RequiredRole()) {
-			return next(ctx)
-		}
-
-		if r.RequiredRole() == entity.RoleAdmin {
+		if a, ok := msg.Body.(AdminOnly); ok && !a.Caller().Has(entity.RoleAdmin) {
 			return nil, entity.ErrAdminRequired
 		}
 
-		return nil, fmt.Errorf("%w: %s", entity.ErrRoleRequired, r.RequiredRole())
+		return next(ctx)
 	}
 }
 
