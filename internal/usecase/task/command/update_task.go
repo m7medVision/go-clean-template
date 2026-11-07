@@ -36,10 +36,9 @@ type UpdateTaskHandler struct {
 
 // Handle -.
 func (h UpdateTaskHandler) Handle(ctx context.Context, cmd UpdateTask) (entity.Written, error) {
-	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, entity.TaskStreamID(cmd.TaskID), &entity.TaskAggregate{},
-		entity.ErrTaskNotFound, func(t *entity.TaskAggregate) error {
-			return t.Update(cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now))
-		})
+	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
+		return t.Update(cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now))
+	})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("UpdateTask: %w", err)
 	}

@@ -49,6 +49,21 @@ func (t *TaskAggregate) StreamID() string {
 	return TaskStreamID(t.task.ID)
 }
 
+// ID is the task's ID.
+func (t *TaskAggregate) ID() string {
+	return t.task.ID
+}
+
+// StreamOf names the stream of the task with id.
+func (*TaskAggregate) StreamOf(id string) string {
+	return TaskStreamID(id)
+}
+
+// NotFound is the error for a task ID with no stream.
+func (*TaskAggregate) NotFound() error {
+	return ErrTaskNotFound
+}
+
 // State is the task as its events add up.
 func (t *TaskAggregate) State() Task {
 	return t.task

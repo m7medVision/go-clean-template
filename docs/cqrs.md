@@ -71,8 +71,11 @@ sends a query after the command: REST `POST /v1/tasks` sends `CreateTask`, then 
 returned ID.
 
 The shared helpers in `internal/usecase/aggregate` do the store work:
-- `aggregate.Create` saves a new aggregate;
-- `aggregate.Change` loads one, runs the change and saves it;
+- `aggregate.Save` saves what an aggregate recorded, new or loaded, and answers `Written` with the
+  aggregate's own `ID()`;
+- `aggregate.Change(ctx, store, id, func(t *entity.TaskAggregate) error {...})` loads one, runs the
+  change and saves it. The aggregate type says the rest: `StreamOf(id)` names its stream and
+  `NotFound()` is its error for an ID with none;
 - `aggregate.Now` is the time in UTC, to the microsecond the read model keeps.
 
 ### Queries

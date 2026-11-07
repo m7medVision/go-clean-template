@@ -30,10 +30,9 @@ type DeleteTaskHandler struct {
 
 // Handle -.
 func (h DeleteTaskHandler) Handle(ctx context.Context, cmd DeleteTask) (entity.Written, error) {
-	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, entity.TaskStreamID(cmd.TaskID), &entity.TaskAggregate{},
-		entity.ErrTaskNotFound, func(t *entity.TaskAggregate) error {
-			return t.Delete(cmd.UserID, aggregate.Now(h.Now))
-		})
+	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
+		return t.Delete(cmd.UserID, aggregate.Now(h.Now))
+	})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("DeleteTask: %w", err)
 	}

@@ -1,5 +1,5 @@
-// Package aggregate is what every command handler does with the event store: create a new
-// aggregate, or load one, let the command change it, and save the events it recorded.
+// Package aggregate is what every command handler does with the event store: load an aggregate, let
+// the command change it, and save the events it recorded.
 package aggregate
 
 import (
@@ -12,28 +12,42 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 )
 
-// Create saves a, a new aggregate with the given id, with claims.
-func Create(ctx context.Context, store repo.EventStore, id string, a entity.Aggregate, claims ...entity.Claim) (
-	entity.Written, error,
-) {
+// Identified is an aggregate that knows its own ID, which a write answers with.
+type Identified interface {
+	entity.Aggregate
+	ID() string
+}
+
+// Loadable is a pointer to an aggregate type that can be found by ID: StreamOf names an ID's
+// stream, and NotFound is the domain's error for an ID with none.
+type Loadable[T any] interface {
+	*T
+	Identified
+	StreamOf(id string) string
+	NotFound() error
+}
+
+// Save saves the events a recorded, new or loaded, with claims.
+func Save(ctx context.Context, store repo.EventStore, a Identified, claims ...entity.Claim) (entity.Written, error) {
 	position, err := store.Save(ctx, a, claims...)
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("store.Save: %w", err)
 	}
 
-	return entity.Written{ID: id, Position: position}, nil
+	return entity.Written{ID: a.ID(), Position: position}, nil
 }
 
-// Change loads streamID into a, the aggregate with the given id, runs change on it, and saves the
-// events it recorded with claims. A stream with no events is notFound, the domain's own error;
-// an error from change is returned as it is, and nothing is saved.
-func Change[A entity.Aggregate](
-	ctx context.Context, store repo.EventStore, id, streamID string, a A, notFound error, change func(A) error,
-	claims ...entity.Claim,
+// Change loads the aggregate with id, runs change on it, and saves the events it recorded with
+// claims. An ID with no stream is the aggregate's NotFound error; an error from change is returned
+// as it is, and nothing is saved.
+func Change[T any, A Loadable[T]](
+	ctx context.Context, store repo.EventStore, id string, change func(A) error, claims ...entity.Claim,
 ) (entity.Written, error) {
-	if err := store.Load(ctx, streamID, a); err != nil {
+	a := A(new(T))
+
+	if err := store.Load(ctx, a.StreamOf(id), a); err != nil {
 		if errors.Is(err, entity.ErrStreamNotFound) {
-			return entity.Written{}, notFound
+			return entity.Written{}, a.NotFound()
 		}
 
 		return entity.Written{}, fmt.Errorf("store.Load: %w", err)
@@ -43,7 +57,7 @@ func Change[A entity.Aggregate](
 		return entity.Written{}, err
 	}
 
-	return Create(ctx, store, id, a, claims...)
+	return Save(ctx, store, a, claims...)
 }
 
 // Now is clock's time (time.Now when clock is nil) in UTC, to the microsecond: the precision the

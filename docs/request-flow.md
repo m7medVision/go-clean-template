@@ -209,10 +209,10 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
 
 	id := uuid.NewString()
 
-	written, err := aggregate.Create(ctx, h.Store, id,
+	written, err := aggregate.Save(ctx, h.Store,
 		entity.NewConversionAggregate(id, cmd.UserID, &conversion, aggregate.Now(h.Now)))
 	if err != nil {
-		return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Save: %w", err)
 	}
 
 	return written, nil
@@ -223,14 +223,15 @@ func (h ConvertCurrencyHandler) Handle(ctx context.Context, cmd ConvertCurrency)
 - The rules are the entity's ([`exchange.go`](../internal/entity/exchange.go)):
   - `NewConversion` uppercases `"omr"` to `"OMR"`, once, for every transport. gRPC requests carry no
     Huma tags, so this is the check that protects them. It refuses a code that isn't three letters,
-    `from` equal to `to`, and an amount that isn't positive.
+    `from` equal to `to`, and an amount that isn't positive or has more than 15 digits before the
+    point or 8 after it.
   - `ApplyRate` rounds half-to-even, the usual rule for money: `100 × 17.406483 = 1740.6483` →
     `1740.65`.
 - `NewConversionAggregate` ([`exchange_aggregate.go`](../internal/entity/exchange_aggregate.go))
   records the conversion as one event, `CurrencyConverted`. A conversion never changes, so its stream
   `conversion-<id>` holds that one event. Its amounts are `decimal.Decimal`, which encode to JSON as
   strings, so no amount passes through a float on its way to the store.
-- `aggregate.Create` saves the new aggregate and returns `Written`. `aggregate.Now` is the time to the
+- `aggregate.Save` saves the new aggregate and returns `Written`. `aggregate.Now` is the time to the
   microsecond in UTC, the precision of the read model's timestamp columns.
 
 ## 6. The outbound API

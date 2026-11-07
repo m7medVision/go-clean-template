@@ -32,15 +32,9 @@ type RenamePasskeyHandler struct {
 
 // Handle -.
 func (h RenamePasskeyHandler) Handle(ctx context.Context, cmd RenamePasskey) (entity.Written, error) {
-	var id entity.PasskeyID
-	if err := id.UnmarshalText([]byte(cmd.ID)); err != nil {
-		return entity.Written{}, fmt.Errorf("RenamePasskey: %w", err)
-	}
-
-	written, err := aggregate.Change(ctx, h.Store, id.String(), entity.PasskeyStreamID(id), &entity.PasskeyAggregate{},
-		entity.ErrPasskeyNotFound, func(p *entity.PasskeyAggregate) error {
-			return p.Rename(cmd.UserID, cmd.Name, aggregate.Now(h.Now))
-		})
+	written, err := aggregate.Change(ctx, h.Store, cmd.ID, func(p *entity.PasskeyAggregate) error {
+		return p.Rename(cmd.UserID, cmd.Name, aggregate.Now(h.Now))
+	})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("RenamePasskey: %w", err)
 	}

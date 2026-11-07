@@ -66,6 +66,26 @@ func (a *PasskeyAggregate) StreamID() string {
 	return PasskeyStreamID(a.passkey.ID)
 }
 
+// ID is the passkey's credential ID, unpadded base64url.
+func (a *PasskeyAggregate) ID() string {
+	return a.passkey.ID.String()
+}
+
+// StreamOf names the stream of the passkey whose ID is id, unpadded base64url.
+func (*PasskeyAggregate) StreamOf(id string) string {
+	var pid PasskeyID
+	if pid.UnmarshalText([]byte(id)) != nil {
+		return PasskeyStreamID(nil) // no passkey has the empty ID, so its stream has no events
+	}
+
+	return PasskeyStreamID(pid)
+}
+
+// NotFound is the error for a passkey ID with no stream.
+func (*PasskeyAggregate) NotFound() error {
+	return ErrPasskeyNotFound
+}
+
 // State is the passkey as its events add up.
 func (a *PasskeyAggregate) State() Passkey {
 	return a.passkey

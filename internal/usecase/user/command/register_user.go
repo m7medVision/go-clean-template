@@ -43,9 +43,9 @@ func (h RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUser) (enti
 	id := uuid.NewString()
 	user, claims := entity.NewUserAggregate(id, cmd.Username, cmd.Email, string(hash), aggregate.Now(h.Now))
 
-	written, err := aggregate.Create(ctx, h.Store, id, user, claims...)
+	written, err := aggregate.Save(ctx, h.Store, user, claims...)
 	if err != nil {
-		return entity.Written{}, fmt.Errorf("RegisterUser - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("RegisterUser - aggregate.Save: %w", err)
 	}
 
 	return written, nil

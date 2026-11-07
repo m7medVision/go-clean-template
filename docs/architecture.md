@@ -78,7 +78,7 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
     only a read model's projector writes its tables.
 11. **Only controllers know transport errors.** Lower layers return sentinels from
     `internal/entity/errors.go` or errors wrapped with their layer path
-    (`fmt.Errorf("CreateTask - aggregate.Create: %w", err)`).
+    (`fmt.Errorf("CreateTask - aggregate.Save: %w", err)`).
 12. **Cross-cutting concerns are steps, not decorators.** Tracing, logging, metrics, retries,
     authorization and validation wrap every message on the buses (`pkg/cqrs`,
     `internal/usecase/behavior`), so no handler carries them. Below the buses, every SQL statement

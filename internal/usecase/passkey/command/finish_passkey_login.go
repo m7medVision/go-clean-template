@@ -126,7 +126,7 @@ func (h *FinishPasskeyLoginHandler) record(ctx context.Context, login *ceremony.
 
 		var err error
 
-		written, err = aggregate.Create(ctx, h.Store, login.PasskeyID.String(), used)
+		written, err = aggregate.Save(ctx, h.Store, used)
 
 		return err
 	})

@@ -35,10 +35,9 @@ type TransitionTaskHandler struct {
 
 // Handle -.
 func (h TransitionTaskHandler) Handle(ctx context.Context, cmd TransitionTask) (entity.Written, error) {
-	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, entity.TaskStreamID(cmd.TaskID), &entity.TaskAggregate{},
-		entity.ErrTaskNotFound, func(t *entity.TaskAggregate) error {
-			return t.Transition(cmd.UserID, cmd.Status, aggregate.Now(h.Now))
-		})
+	written, err := aggregate.Change(ctx, h.Store, cmd.TaskID, func(t *entity.TaskAggregate) error {
+		return t.Transition(cmd.UserID, cmd.Status, aggregate.Now(h.Now))
+	})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("TransitionTask: %w", err)
 	}

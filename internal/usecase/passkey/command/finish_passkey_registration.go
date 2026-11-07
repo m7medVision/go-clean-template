@@ -55,9 +55,9 @@ func (h FinishPasskeyRegistrationHandler) Handle(ctx context.Context, cmd Finish
 		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration: %w", err)
 	}
 
-	written, err := aggregate.Create(ctx, h.Store, id.String(), passkey)
+	written, err := aggregate.Save(ctx, h.Store, passkey)
 	if err != nil {
-		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("FinishPasskeyRegistration - aggregate.Save: %w", err)
 	}
 
 	return written, nil

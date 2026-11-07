@@ -88,7 +88,7 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 ## Phase 4: Write model and ports
 
 ### 11. `aggregate.Change`/`Create` follow from the aggregate type  (C)
-- [ ] Generic over the aggregate; no stream-ID, zero-value or not-found arguments at call sites.
+- [x] Generic over the aggregate; no stream-ID, zero-value or not-found arguments at call sites.
 
 **Verify:** G1. **Depends on:** 6. **Size:** L (mechanical)
 

@@ -93,6 +93,11 @@ func (u *UserAggregate) StreamID() string {
 	return UserStreamID(u.user.ID)
 }
 
+// ID is the user's ID.
+func (u *UserAggregate) ID() string {
+	return u.user.ID
+}
+
 // State is the user as their events add up.
 func (u *UserAggregate) State() User {
 	return u.user

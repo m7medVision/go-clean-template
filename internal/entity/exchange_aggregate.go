@@ -43,6 +43,11 @@ func (a *ConversionAggregate) StreamID() string {
 	return ConversionStreamID(a.id)
 }
 
+// ID is the conversion's ID.
+func (a *ConversionAggregate) ID() string {
+	return a.id
+}
+
 // State is the conversion.
 func (a *ConversionAggregate) State() Conversion {
 	return a.conversion

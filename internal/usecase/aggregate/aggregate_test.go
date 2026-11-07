@@ -17,13 +17,13 @@ var errRule = errors.New("rule broken")
 
 func at() time.Time { return time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC) }
 
-func TestCreateSavesANewAggregate(t *testing.T) {
+func TestSaveSavesANewAggregate(t *testing.T) {
 	t.Parallel()
 
 	store := memstore.New(entity.EventTypes())
 	task := entity.NewTaskAggregate("t1", "u1", "a", "b", at())
 
-	written, err := aggregate.Create(context.Background(), store, "t1", task)
+	written, err := aggregate.Save(context.Background(), store, task)
 
 	require.NoError(t, err)
 	assert.Equal(t, "t1", written.ID)
@@ -35,11 +35,10 @@ func TestChangeLoadsChangesAndSaves(t *testing.T) {
 	t.Parallel()
 
 	store := memstore.New(entity.EventTypes())
-	_, err := aggregate.Create(context.Background(), store, "t1", entity.NewTaskAggregate("t1", "u1", "a", "b", at()))
+	_, err := aggregate.Save(context.Background(), store, entity.NewTaskAggregate("t1", "u1", "a", "b", at()))
 	require.NoError(t, err)
 
-	written, err := aggregate.Change(context.Background(), store, "t1", entity.TaskStreamID("t1"), &entity.TaskAggregate{},
-		entity.ErrTaskNotFound, func(t *entity.TaskAggregate) error { return t.Update("u1", "c", "d", at()) })
+	written, err := aggregate.Change(context.Background(), store, "t1", func(t *entity.TaskAggregate) error { return t.Update("u1", "c", "d", at()) })
 
 	require.NoError(t, err)
 	assert.Equal(t, "t1", written.ID)
@@ -49,8 +48,7 @@ func TestChangeLoadsChangesAndSaves(t *testing.T) {
 func TestChangeOfAMissingStreamIsTheNotFoundError(t *testing.T) {
 	t.Parallel()
 
-	_, err := aggregate.Change(context.Background(), memstore.New(entity.EventTypes()), "t1", entity.TaskStreamID("t1"),
-		&entity.TaskAggregate{}, entity.ErrTaskNotFound, func(*entity.TaskAggregate) error { return nil })
+	_, err := aggregate.Change(context.Background(), memstore.New(entity.EventTypes()), "t1", func(*entity.TaskAggregate) error { return nil })
 
 	require.ErrorIs(t, err, entity.ErrTaskNotFound)
 }
@@ -59,11 +57,10 @@ func TestARefusedChangeSavesNothing(t *testing.T) {
 	t.Parallel()
 
 	store := memstore.New(entity.EventTypes())
-	_, err := aggregate.Create(context.Background(), store, "t1", entity.NewTaskAggregate("t1", "u1", "a", "b", at()))
+	_, err := aggregate.Save(context.Background(), store, entity.NewTaskAggregate("t1", "u1", "a", "b", at()))
 	require.NoError(t, err)
 
-	_, err = aggregate.Change(context.Background(), store, "t1", entity.TaskStreamID("t1"), &entity.TaskAggregate{},
-		entity.ErrTaskNotFound, func(*entity.TaskAggregate) error { return errRule })
+	_, err = aggregate.Change(context.Background(), store, "t1", func(*entity.TaskAggregate) error { return errRule })
 
 	require.ErrorIs(t, err, errRule)
 	assert.Len(t, store.Events(entity.TaskStreamID("t1")), 1)

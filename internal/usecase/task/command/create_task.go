@@ -38,10 +38,9 @@ type CreateTaskHandler struct {
 func (h CreateTaskHandler) Handle(ctx context.Context, cmd CreateTask) (entity.Written, error) {
 	id := uuid.NewString()
 
-	written, err := aggregate.Create(ctx, h.Store, id,
-		entity.NewTaskAggregate(id, cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now)))
+	written, err := aggregate.Save(ctx, h.Store, entity.NewTaskAggregate(id, cmd.UserID, cmd.Title, cmd.Description, aggregate.Now(h.Now)))
 	if err != nil {
-		return entity.Written{}, fmt.Errorf("CreateTask - aggregate.Create: %w", err)
+		return entity.Written{}, fmt.Errorf("CreateTask - aggregate.Save: %w", err)
 	}
 
 	return written, nil

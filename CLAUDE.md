@@ -254,7 +254,7 @@ its `SchemaVersion()` and adding an `eventstore.Upcast` from the previous versio
 aggregate's `Apply`, and a case in the projector; an event the codec does not know fails to load.
 
 **Writes go through aggregates; read-model tables belong to their projector.** A command handler
-loads an aggregate, calls its behavior method and saves what it recorded (`aggregate.Create`,
+loads an aggregate, calls its behavior method and saves what it recorded (`aggregate.Save`,
 `aggregate.Change`). A query reads only a read model and never loads an aggregate. Only a projector
 writes its tables, so read-model tables have no foreign keys. Uniqueness across records (emails,
 usernames, SSO identities) is a claim saved with the events, not a unique index on a read model.
@@ -267,7 +267,7 @@ against `internal/repo/memstore`; projectors against a fake of sqlc's `Querier`.
 **Error style.** Domain failures are sentinel errors in `internal/entity/errors.go`
 (`ErrTaskNotFound`, `ErrTaskForbidden`, `ErrInvalidTransition`, …), each an `*entity.Error` built
 with its kind and the message callers see. Every other error is wrapped with the layer path:
-`fmt.Errorf("CreateTask - aggregate.Create: %w", err)`, and is internal: logged, never shown. The
+`fmt.Errorf("CreateTask - aggregate.Save: %w", err)`, and is internal: logged, never shown. The
 `err113` linter rejects `errors.New`/`fmt.Errorf` for new dynamic errors — add a sentinel to `entity`
 instead. Only the transports' one mapping function each turns a kind into a transport status.
 
@@ -487,7 +487,7 @@ generator. Its transport tests are self-contained, a fake on buses of their own,
      a case in its `Apply`. Test it in `internal/entity`.
    - Add `internal/usecase/<domain>/command/<name>.go`: the command type (embedding
      `cqrs.Command[entity.Written]`, with `ActorID()` when it acts for a user, `AdminOnly()` when only an admin may send it, `Validate()` for
-     domain checks) and its handler, which goes through `aggregate.Create` or `aggregate.Change` and
+     domain checks) and its handler, which goes through `aggregate.Save` or `aggregate.Change` and
      returns `entity.Written`. Test it beside it against `internal/repo/memstore`.
    - Handle the new event in the domain's projector (`internal/repo/persistent/<domain>/projector.go`),
      with any new SQL in `queries/<domain>.sql` and `make sqlc`; test it against the fake `Querier`.

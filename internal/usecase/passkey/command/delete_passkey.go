@@ -32,15 +32,9 @@ type DeletePasskeyHandler struct {
 
 // Handle -.
 func (h DeletePasskeyHandler) Handle(ctx context.Context, cmd DeletePasskey) (entity.Written, error) {
-	var id entity.PasskeyID
-	if err := id.UnmarshalText([]byte(cmd.ID)); err != nil {
-		return entity.Written{}, fmt.Errorf("DeletePasskey: %w", err)
-	}
-
-	written, err := aggregate.Change(ctx, h.Store, id.String(), entity.PasskeyStreamID(id), &entity.PasskeyAggregate{},
-		entity.ErrPasskeyNotFound, func(p *entity.PasskeyAggregate) error {
-			return p.Delete(cmd.UserID, aggregate.Now(h.Now))
-		})
+	written, err := aggregate.Change(ctx, h.Store, cmd.ID, func(p *entity.PasskeyAggregate) error {
+		return p.Delete(cmd.UserID, aggregate.Now(h.Now))
+	})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("DeletePasskey: %w", err)
 	}
