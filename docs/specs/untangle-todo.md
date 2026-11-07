@@ -268,7 +268,9 @@ Sizes: S = 1–2 files, M = 3–5, L = 6–8; a larger task is a compiler-driven
 - [x] Sweep 1: three reviewers, findings S1–S5 recorded in the decision log.
 - [x] S1–S5 fixed and merged.
 - [x] The generator's templates and goldens re-synced to S1–S5 (the first pass missed S3/S4: the generator was written on a tree from before them; gen-check and gen-e2e green at e2cba7f).
-- [ ] Sweep 2 reports nothing worth fixing.
+- [x] Sweep 2: three reviewers, findings U1–U5 recorded in the decision log, fixed and merged
+      (what was kept, and why, is listed there).
+- [ ] Sweep 3 reports nothing worth fixing.
 - [ ] Fresh reviewers report no remaining special case, hidden link, needless link or surplus worth
       fixing; whatever they found is fixed.
 

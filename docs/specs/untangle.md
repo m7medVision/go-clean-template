@@ -401,13 +401,29 @@ From the test review: about 130 of 554 functions, plus about 110 subtests.
 
 ## Behaviour that changes (bugs the refactor fixes)
 
-- gRPC rejects invalid sign-up and task input with `InvalidArgument`. gRPC list paging is capped at 100, as REST exchange and GraphQL already are.
-- REST task list is capped at 100 (today it has no max).
-- OpenAPI lists 503/409/501 on every command operation, so `docs/openapi/v1.json` and the web types change.
-- gRPC recovers from panics, and logs and measures requests.
-- A stuck projector blocks only the writes whose events it handles.
-- Log lines change shape if K is approved (slog field names).
-- Spans: the per-repo spans are gone. The message, SQL and HTTP spans remain. No email in spans.
+Everything else a caller or an operator sees stays as it was. As merged:
+
+API
+- gRPC checks task and sign-up input in the domain, as REST does, and answers `InvalidArgument`.
+- Every list pages by one rule (`entity.Page`): limit 0–100, 0 meaning 10. The REST task list, which had no maximum, and gRPC lists are capped at 100.
+- The OpenAPI document lists 409, 503 and 501 on every command, oidc-status's errors, and 502 on convert-currency; `docs/openapi/v1.json` and the web types changed with it.
+- Any failure of the rate provider (unreachable, timed out, non-2xx, an error result, an unreadable body) answers 502, as an SSO outage does; it was 500 for most of them.
+- An amount is parsed once, in the domain: gRPC's message for an unparsable amount is the entity's.
+- A read of an ID other than a lowercase UUID, as the app writes them, answers not found instead of 500, as a write to it already did.
+- Task lists page in one order when two tasks share a timestamp.
+- A sign-in whose user read fails answers 500 and is logged, instead of 401.
+- REST paths no operation serves answer 404 instead of 401: each operation declares whether it needs a token.
+- Only HS256 tokens are accepted.
+- With `DOCS_ENABLED=false`, GraphQL refuses introspection and gRPC serves no reflection, as REST serves no document.
+
+Operation
+- gRPC recovers from panics, and logs and measures every call; GraphQL logs a panic with its stack.
+- A stuck projector holds up only the writes whose events it handles.
+- Logs are `log/slog` JSON on stdout, the line saying why a binary stopped included. Spans: the per-repository spans are gone; the message, SQL and HTTP spans remain, with no email in them. The REST correlation ID is stored even with tracing off, as gRPC's was.
+- Metrics count whatever `METRICS_ENABLED` says; only `/metrics` reads it.
+- At startup the database is waited for until the binary is told to stop. The worker starts without `HTTP_PORT` or `JWT_SECRET`, and `HTTP_PORT` defaults to 8080 as `GRPC_PORT` does to 8081. An `OIDC_ROLE_MAP` role the app does not have stops the app at startup.
+- On SIGTERM each server gets 3 s to drain, then drops what is left with a warning and stops cleanly: gRPC could wait forever on an open stream, and a slow HTTP request made the exit code 1.
+- A queue handler is stopped at its visibility timeout, and one registered after `Run` is refused; the demo queue is gone.
 
 ## Order of work (each step ends green: `make format`, `make linter-golangci`, `make test`; `make gen-check` + `make gen-e2e` whenever a mirrored file changes; docs updated in the same step)
 
@@ -490,3 +506,51 @@ decides, keeping today's answers.
 Kept after the sweep: `internal/repo` adapters importing `config` for their sections (config is plain
 structs; mirror structs were the problem G removed). Tests: adding handler tests for gRPC exchange/user
 is out of the user's chosen "Tests" extra (remove/fix), except where a fix above needs one.
+
+## Sweep 2 (task 35): what fresh reviewers found after S1–S5
+
+Three read-only reviewers (domain and data; transports and wiring; generator and docs) at 3c3d795.
+
+### U1. The generator still copied the task domain from before S3 and S4
+It was written on a tree from before them, and the first re-sync looked only at what changed after
+it was merged. A generated domain decided read access in its read model, built its projector by
+hand, and had a `StreamOf` that `aggregate.Change` no longer accepts, which gen-e2e could not see
+because the stub handlers never call it. Fix: the templates copy the task files again, and the
+generated `command_test.go` names `aggregate.Change`, so gen-e2e fails when the aggregate stops
+fitting it.
+
+### U2. Reads and writes answer the same about an ID
+A read of an ID that is not a UUID answered 500 (Postgres refuses it for a `uuid` column), and one
+in another form (upper case, `urn:uuid:`) found a task that a write of the same ID answered 404 for.
+Reads by ID now accept only a lowercase UUID, as the write side's stream names do. Also: task lists
+page with an `id` tiebreaker; a failed user read at sign-in is an error, not 401; any rate-provider
+failure is `ErrRatesUnavailable`.
+
+### U3. Lifecycle
+gRPC's drain had no bound and an HTTP drain that ran out made the exit code 1: both are bounded,
+then forced, and a signalled stop is clean. The stop line was text on stderr. The worker built an
+event store it never used. `projection.Runner.Add` kept "before Run" as a comment: the runner takes
+its subscribers in `New`.
+
+### U4. One switch per API reference
+`DOCS_ENABLED` hid REST's document and GraphiQL but not GraphQL introspection or gRPC reflection.
+
+### U5. Hidden links and surplus
+- Each transport mapped kinds through an array indexed by `entity.Kind`, which a new kind would
+  overrun at run time: switches, so `exhaustive` fails the lint instead.
+- Named empty input types, `readBack`, `input.go`, a stale `_tracerName`, `ErrNoHTTPPort`,
+  `CeremonyPurpose`, `Message.Queue`, `PasskeyLogin.PasskeyID`; `TxFrom` and `projection.Names`
+  exported for nobody; a mailer test that asserted nothing it recorded.
+- Generator: R5's format check no created file could reach, `Import`'s alias, `Insertion.Path` and
+  `templates.FS`, which only tests used.
+- Docs that named code that changed (`architecture.md`'s read example and controller exceptions,
+  CLAUDE.md's file lists and names).
+
+Kept after sweep 2:
+- `planner.set` in the generator: the planner's tests key templates by set across several plans.
+- The worker's metrics registry, which nothing serves: a worker `/metrics` endpoint is a feature.
+- A provider answer that succeeds with no rates is `ErrUnsupportedCurrency` (400).
+- GraphQL's refused introspection carries no `extensions.code`: gqlgen's own presenter answers it.
+- Sign-in timing: an unknown email answers before the password hash is compared, so response time
+  can tell which emails exist. It predates the refactor and is a security change, not an untangling
+  one: reported to the user rather than changed here.
