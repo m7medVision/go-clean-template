@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/m7medvision/go-clean-template/config"
 	workerctl "github.com/m7medvision/go-clean-template/internal/controller/worker"
@@ -16,81 +13,49 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
-	"github.com/m7medvision/go-clean-template/pkg/tracing"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
+	"golang.org/x/sync/errgroup"
 )
 
-// RunWorker runs the queue worker: it consumes the queues registered in internal/controller/worker
-// until SIGINT/SIGTERM. It does not apply the schema; the app does.
-func RunWorker(cfg *config.Config) error {
-	l := newLogger(cfg.Log.Level)
-
-	ctx := context.Background()
-
-	// Tracing
-	shutdownTracing, err := tracing.New(ctx, cfg.App.Name+"-worker", cfg.App.Version, tracing.Config(cfg.Tracing))
+// RunWorker runs the projections and consumes the queues registered in internal/controller/worker
+// until ctx ends. It returns once both have stopped and the pool is closed. It does not apply the
+// schema; the app does.
+func RunWorker(ctx context.Context, cfg *config.Config) error {
+	b, err := newBootstrap(ctx, cfg, cfg.App.Name+"-worker")
 	if err != nil {
-		return fmt.Errorf("app - RunWorker - tracing.New: %w", err)
+		return fmt.Errorf("app - RunWorker: %w", err)
 	}
-	defer func() {
-		if err := shutdownTracing(ctx); err != nil {
-			l.Error("app - RunWorker - shutdownTracing", "error", err)
-		}
-	}()
-
-	// Repository
-	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
-	if err != nil {
-		return fmt.Errorf("app - RunWorker - postgres.New: %w", err)
-	}
-	defer pg.Close()
+	defer b.close(ctx)
 
 	// Use cases, built as the app builds them; the worker's handlers use only some
-	uc, err := initUseCases(cfg, pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), l)
-	if err != nil {
-		return fmt.Errorf("app - RunWorker - initUseCases: %w", err)
+	if err = registerHandlers(cfg, b.buses, b.store, b.pg, jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)); err != nil {
+		return fmt.Errorf("app - RunWorker - registerHandlers: %w", err)
 	}
 
-	// Projections and event handlers
-	runner, store, err := newRunner(pg, &cfg.CQRS, loginURL(cfg.App.BaseURL), l)
+	runner, err := newRunner(b.pg, &cfg.CQRS, loginURL(cfg.App.BaseURL), b.l)
 	if err != nil {
 		return fmt.Errorf("app - RunWorker - newRunner: %w", err)
 	}
 
-	// Worker
-	w := worker.New(l, queue.New(pg), worker.Settings(cfg.Worker))
-	workerctl.NewRouter(
-		w, l,
-		workerctl.WithMail(uc.buses.Commands),
-	)
+	w := worker.New(b.l, queue.New(b.pg), worker.Settings(cfg.Worker))
+	workerctl.NewRouter(w, b.l, workerctl.WithMail(b.buses.Commands))
 
-	w.Start()
-	runner.Start()
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return w.Run(ctx) })
+	g.Go(func() error { return runner.Run(ctx) })
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-
-	sig := <-interrupt
-	l.Info("app - RunWorker - signal", "signal", sig.String())
-
-	if err = w.Shutdown(); err != nil {
-		l.Error("app - RunWorker - worker.Shutdown", "error", err)
+	if err = g.Wait(); err != nil {
+		return fmt.Errorf("app - RunWorker: %w", err)
 	}
-
-	runner.Shutdown()
-	store.Close()
 
 	return nil
 }
 
-// newRunner returns the runner of every subscriber, and the store it reads, which must be closed
-// after the runner shuts down. The welcome email links to loginURL.
-func newRunner(pg *postgres.Postgres, s *config.CQRS, loginURL string, l *slog.Logger) (
-	*projection.Runner, *projection.PostgresStore, error,
-) {
+// newRunner returns the runner of every subscriber. The welcome email links to loginURL.
+func newRunner(pg *postgres.Postgres, s *config.CQRS, loginURL string, l *slog.Logger) (*projection.Runner, error) {
 	ps, handlers := projectors(pg), eventHandlers(pg, loginURL)
 	if err := projection.Check(ps, handlers, entity.EventTypes()); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	store := projection.NewStore(pg, eventstore.NewReader(pg, newCodec()), l)
@@ -104,19 +69,19 @@ func newRunner(pg *postgres.Postgres, s *config.CQRS, loginURL string, l *slog.L
 		runner.Add(h)
 	}
 
-	return runner, store, nil
+	return runner, nil
 }
 
 // RebuildProjection empties the read model of the projector called name and resets its checkpoint,
 // for the worker that runs it to replay every event into it (make projection-rebuild).
-func RebuildProjection(cfg *config.Config, name string) error {
+func RebuildProjection(ctx context.Context, cfg *config.Config, name string) error {
 	pg, err := postgres.New(cfg.PG.URL, postgres.MaxPoolSize(cfg.PG.PoolMax))
 	if err != nil {
 		return fmt.Errorf("app - RebuildProjection - postgres.New: %w", err)
 	}
 	defer pg.Close()
 
-	if err = projection.Rebuild(context.Background(), pg, name, projectors(pg)...); err != nil {
+	if err = projection.Rebuild(ctx, pg, name, projectors(pg)...); err != nil {
 		return fmt.Errorf("app - RebuildProjection: %w", err)
 	}
 

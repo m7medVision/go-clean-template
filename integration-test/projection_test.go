@@ -106,11 +106,15 @@ func startRunner(t *testing.T, pg *postgres.Postgres, c *runCounter) func() {
 	// An hour between polls: only the LISTEN notification can wake the runner in time.
 	runner := projection.New(l, store, time.Hour, projectionBatchSize)
 	runner.Add(c)
-	runner.Start()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+
+	go func() { done <- runner.Run(ctx) }()
 
 	return func() {
-		runner.Shutdown()
-		store.Close()
+		cancel()
+		require.NoError(t, <-done)
 	}
 }
 

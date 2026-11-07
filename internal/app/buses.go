@@ -79,11 +79,13 @@ func newEventStore(pg *postgres.Postgres, snapshotEvery int) repo.EventStore {
 	return eventstore.New(pg, newCodec(), snapshotEvery)
 }
 
-// registerHandlers registers every domain's command and query handlers on the buses.
+// registerHandlers registers every domain's command and query handlers on b. It fails when a
+// handler cannot be built from its settings, such as a broken email template.
 func registerHandlers(
-	cfg *config.Config, cmds *cqrs.Commands, qs *cqrs.Queries, store repo.EventStore, pg *postgres.Postgres,
-	tokens *jwt.Manager,
+	cfg *config.Config, b cqrs.Buses, store repo.EventStore, pg *postgres.Postgres, tokens *jwt.Manager,
 ) error {
+	cmds, qs := b.Commands, b.Queries
+
 	// Invalid WebAuthn settings fail here. SSO never fails on the provider: it is discovered on the
 	// first sign-in, so the app starts while it is down.
 	passkeyCeremony, err := ceremony.New(cfg.JWT.Secret, cfg.WebAuthn, time.Now)

@@ -92,7 +92,7 @@ required. See [cqrs.md](cqrs.md) for how they behave.
 
 | Env var | Default | |
 | --- | --- | --- |
-| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly) |
+| `CQRS_CONSISTENCY_TIMEOUT` | `2s` | how long a write waits for its projections; past it the write answers 503 (saved, read again shortly). The HTTP write deadline follows it (3s more) |
 | `EVENTSTORE_SNAPSHOT_EVERY` | `100` | snapshot a stream each time it crosses a multiple of this many events; `0` never snapshots |
 | `PROJECTION_POLL_INTERVAL` | `1s` | how often an idle projection reads the store when no notification arrives |
 | `PROJECTION_BATCH_SIZE` | `100` | events a projection reads at once |

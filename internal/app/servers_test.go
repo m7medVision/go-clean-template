@@ -1,96 +1,127 @@
 package app
 
 import (
-	"errors"
+	"context"
 	"log/slog"
-	"os"
-	"sync"
-	"syscall"
+	"net"
+	"net/http"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-var errListen = errors.New("listen failed")
+const _stopWait = 5 * time.Second
 
-type fakeServer struct {
-	mu       sync.Mutex
-	notify   chan error
-	started  bool
-	shutdown bool
-}
+// serveUntilCanceled runs serve on a context it cancels once the server answers, and returns what
+// serve returned.
+func serveUntilCanceled(t *testing.T, serve func(ctx context.Context) error, ready func() bool) error {
+	t.Helper()
 
-func newFakeServer() *fakeServer {
-	return &fakeServer{notify: make(chan error, 1)}
-}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
 
-func (f *fakeServer) Start() {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	go func() { done <- serve(ctx) }()
 
-	f.started = true
-}
+	require.Eventually(t, ready, _stopWait, 10*time.Millisecond)
+	cancel()
 
-func (f *fakeServer) Notify() <-chan error { return f.notify }
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(_stopWait):
+		t.Fatal("the server did not stop")
 
-func (f *fakeServer) Shutdown() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	f.shutdown = true
-
-	return nil
-}
-
-func (f *fakeServer) state() (started, shutdown bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	return f.started, f.shutdown
-}
-
-func TestServersStartStartsEveryServer(t *testing.T) {
-	t.Parallel()
-
-	a, b := newFakeServer(), newFakeServer()
-	s := servers{{name: "a", server: a}, {name: "b", server: b}}
-
-	s.start()
-
-	for name, f := range map[string]*fakeServer{"a": a, "b": b} {
-		if started, _ := f.state(); !started {
-			t.Errorf("server %s was not started", name)
-		}
+		return nil
 	}
 }
 
-func TestServersWaitShutsAllDownWhenOneFails(t *testing.T) {
-	t.Parallel()
+// freePort returns a port nothing listens on, for a server under test to take.
+func freePort(t *testing.T) string {
+	t.Helper()
 
-	a, b := newFakeServer(), newFakeServer()
-	s := servers{{name: "a", server: a}, {name: "b", server: b}}
+	var lc net.ListenConfig
 
-	b.notify <- errListen
+	ln, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
 
-	s.waitForShutdown(make(chan os.Signal), slog.New(slog.DiscardHandler))
+	_, port, err := net.SplitHostPort(ln.Addr().String())
+	require.NoError(t, err)
+	require.NoError(t, ln.Close())
 
-	for name, f := range map[string]*fakeServer{"a": a, "b": b} {
-		if _, shutdown := f.state(); !shutdown {
-			t.Errorf("server %s was not shut down", name)
+	return port
+}
+
+func dials(port string) func() bool {
+	return func() bool {
+		var d net.Dialer
+
+		conn, err := d.DialContext(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", port))
+		if err != nil {
+			return false
 		}
+
+		_ = conn.Close()
+
+		return true
 	}
 }
 
-func TestServersWaitShutsAllDownOnSignal(t *testing.T) {
+func TestServeHTTPStopsCleanlyWhenTheContextEnds(t *testing.T) {
 	t.Parallel()
 
-	a := newFakeServer()
-	s := servers{{name: "a", server: a}}
+	port := freePort(t)
+	srv := newHTTPServer(port, http.NotFoundHandler(), time.Second)
 
-	interrupt := make(chan os.Signal, 1)
-	interrupt <- syscall.SIGTERM
+	err := serveUntilCanceled(t, func(ctx context.Context) error {
+		return serveHTTP(ctx, srv, slog.New(slog.DiscardHandler))
+	}, dials(port))
 
-	s.waitForShutdown(interrupt, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+}
 
-	if _, shutdown := a.state(); !shutdown {
-		t.Error("server was not shut down")
+func TestServeGRPCStopsCleanlyWhenTheContextEnds(t *testing.T) {
+	t.Parallel()
+
+	port := freePort(t)
+
+	err := serveUntilCanceled(t, func(ctx context.Context) error {
+		return serveGRPC(ctx, grpc.NewServer(), port, slog.New(slog.DiscardHandler))
+	}, dials(port))
+
+	require.NoError(t, err)
+}
+
+// A server that cannot listen fails at once, without waiting for the context to end, so the
+// errgroup stops the other servers.
+func TestServeFailsWhenItCannotListen(t *testing.T) {
+	t.Parallel()
+
+	var lc net.ListenConfig
+
+	taken, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = taken.Close() })
+
+	_, port, err := net.SplitHostPort(taken.Addr().String())
+	require.NoError(t, err)
+
+	srv := newHTTPServer(port, http.NotFoundHandler(), time.Second)
+	srv.Addr = taken.Addr().String()
+
+	require.Error(t, serveHTTP(t.Context(), srv, slog.New(slog.DiscardHandler)))
+	require.Error(t, serveGRPC(t.Context(), grpc.NewServer(), port, slog.New(slog.DiscardHandler)))
+}
+
+// A write waits up to the consistency timeout for its projections, so its answer must still fit in
+// the write deadline.
+func TestTheWriteDeadlineOutlastsTheConsistencyTimeout(t *testing.T) {
+	t.Parallel()
+
+	for _, timeout := range []time.Duration{time.Second, 2 * time.Second, time.Minute} {
+		srv := newHTTPServer("0", http.NotFoundHandler(), timeout)
+		assert.Greater(t, srv.WriteTimeout, timeout)
 	}
 }

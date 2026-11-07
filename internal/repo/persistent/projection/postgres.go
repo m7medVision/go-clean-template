@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,18 +25,13 @@ type PostgresStore struct {
 	pg     *postgres.Postgres
 	reader Reader
 	logger *slog.Logger
-
-	once   sync.Once
-	notify chan struct{}
-	stop   context.CancelFunc
-	done   chan struct{}
 }
 
 var _ Store = (*PostgresStore)(nil)
 
 // NewStore returns the runner's store on pg, reading events through reader.
 func NewStore(pg *postgres.Postgres, reader Reader, l *slog.Logger) *PostgresStore {
-	return &PostgresStore{pg: pg, reader: reader, logger: l, notify: make(chan struct{}, 1), done: make(chan struct{})}
+	return &PostgresStore{pg: pg, reader: reader, logger: l}
 }
 
 // ReadAll reads the store after a position.
@@ -74,33 +68,21 @@ func (s *PostgresStore) AdvanceCheckpoint(ctx context.Context, name string, from
 	return n == 1, err
 }
 
-// Notifications starts listening on first use and receives a value after each append commits.
-func (s *PostgresStore) Notifications() <-chan struct{} {
-	s.once.Do(func() {
-		ctx, stop := context.WithCancel(context.Background())
-		s.stop = stop
+// Notifications listens until ctx ends, and receives a value after each append commits. It is
+// closed once the listening connection is.
+func (s *PostgresStore) Notifications(ctx context.Context) <-chan struct{} {
+	notify := make(chan struct{}, 1)
 
-		go s.listen(ctx)
-	})
+	go s.listen(ctx, notify)
 
-	return s.notify
+	return notify
 }
 
-// Close stops listening.
-func (s *PostgresStore) Close() {
-	if s.stop == nil {
-		return
-	}
-
-	s.stop()
-	<-s.done
-}
-
-func (s *PostgresStore) listen(ctx context.Context) {
-	defer close(s.done)
+func (s *PostgresStore) listen(ctx context.Context, notify chan<- struct{}) {
+	defer close(notify)
 
 	for ctx.Err() == nil {
-		if err := s.listenOnce(ctx); err != nil && ctx.Err() == nil {
+		if err := s.listenOnce(ctx, notify); err != nil && ctx.Err() == nil {
 			s.logger.Warn("projection - listen failed; polling until it reconnects", "error", err)
 
 			select {
@@ -112,7 +94,7 @@ func (s *PostgresStore) listen(ctx context.Context) {
 }
 
 // listenOnce holds one LISTEN connection until it fails or ctx ends.
-func (s *PostgresStore) listenOnce(ctx context.Context) error {
+func (s *PostgresStore) listenOnce(ctx context.Context, notify chan<- struct{}) error {
 	conn, err := pgx.ConnectConfig(ctx, s.pg.Pool.Config().ConnConfig.Copy())
 	if err != nil {
 		return fmt.Errorf("pgx.ConnectConfig: %w", err)
@@ -134,7 +116,7 @@ func (s *PostgresStore) listenOnce(ctx context.Context) error {
 		}
 
 		select {
-		case s.notify <- struct{}{}:
+		case notify <- struct{}{}:
 		default:
 		}
 	}

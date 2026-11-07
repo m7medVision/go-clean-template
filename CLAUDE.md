@@ -117,8 +117,11 @@ internal/usecase/<domain> → internal/repo/contracts.go (interfaces) → intern
   include it, so `make gen-check` is what lints and tests it. See `docs/generator.md`.
 
 Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: `buses.go`
-(`newBuses`, `registerHandlers`, `projectors`, `eventHandlers`), `backfill.go` (`importers`) and `app.go`
-(`initUseCases`, `initServers`).
+(`newBuses`, `registerHandlers`, `projectors`, `eventHandlers`), `backfill.go` (`importers`),
+`bootstrap.go` (what both binaries start from) and `app.go` / `worker.go` (`Run`, `RunWorker`).
+Every long-running part (the HTTP and gRPC servers, the queue worker, the projection runner) is a
+`Run(ctx) error` under one errgroup, on the context `signal.NotifyContext` gives each `main`;
+nothing calls `Fatal` or `os.Exit` below `main`.
 
 ## Where code goes
 
@@ -359,7 +362,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   to reappear after `WORKER_VISIBILITY_TIMEOUT`. Handlers must be idempotent; a body that can never
   decode should be logged and acknowledged (`return nil`), or it redelivers forever.
 - The worker is wired in `internal/app/worker.go` (`RunWorker`): the projection runner and the queue
-  consumer. Queue handlers send commands on the buses from `initUseCases`, like the servers. The
+  consumer. Queue handlers send commands on the buses `registerHandlers` fills, like the servers. The
   Dockerfile builds `/app` and `/worker` into one image; the compose `worker` service runs
   `/worker`. Only the app applies the schema.
 - A command or event handler enqueues by taking `repo.QueueRepo` and calling `Send`, which joins the
@@ -371,8 +374,8 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
   `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
   handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
   It sends the `DeliverEmail` command (`internal/usecase/mail`), whose handler renders with
-  `internal/repo/mailtmpl` and sends through `pkg/smtp`; only the worker sends it. `initUseCases`
-  registers it for both binaries, and fails if a template is broken.
+  `internal/repo/mailtmpl` and sends through `pkg/smtp`; only the worker sends it.
+  `registerHandlers` registers it for both binaries, and fails if a template is broken.
 - Mailpit (compose service `mailpit`, UI and API on :8025) catches email in development and in the
   integration stack.
   `integration-test/mail_test.go` asserts on what reaches it.
@@ -569,7 +572,7 @@ generated files copy — read it before writing. The steps are what the generate
    `register.go` with the domain's `Deps` and `Register`.
 6. **Wiring** — in `internal/app/buses.go`: a `<domain>.Register(...)` call in `registerHandlers`,
    the projector in `projectors` (and any event handler in `eventHandlers`). The transports already receive the
-   buses through `initServers`.
+   buses in `Run`.
 7. **Transports** — for each one, a new domain folder (see **Controller layout**):
    `<transport>/v1/<domain>/` with its `controller.go`, handlers, `request.go`, `response.go` and
    tests (with a `fake_test.go` registering fake handlers), plus one call in that transport's
