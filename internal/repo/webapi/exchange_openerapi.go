@@ -33,7 +33,9 @@ var (
 
 // ExchangeWebAPI reads daily rates from the open access ExchangeRate-API endpoint
 // (https://www.exchangerate-api.com/docs/free): keyless, about 160 currencies. Its terms ask
-// every page that shows the rates to link back to it.
+// every page that shows the rates to link back to it. A currency the provider does not know is
+// entity.ErrUnsupportedCurrency; a provider that cannot be reached, times out or answers 5xx is
+// entity.ErrRatesUnavailable.
 type ExchangeWebAPI struct {
 	baseURL string
 	client  *http.Client
@@ -93,9 +95,18 @@ func (w *ExchangeWebAPI) latest(ctx context.Context, base string) (latestRespons
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - w.client.Do: %w", err)
+		// A caller that went away is not the provider's failure.
+		if ctx.Err() != nil {
+			return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - w.client.Do: %w", err)
+		}
+
+		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - w.client.Do: %w: %w", entity.ErrRatesUnavailable, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusInternalServerError {
+		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - %w: status %d", entity.ErrRatesUnavailable, resp.StatusCode)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return latestResponse{}, fmt.Errorf("ExchangeWebAPI - latest - %w: %d", errUnexpectedStatus, resp.StatusCode)

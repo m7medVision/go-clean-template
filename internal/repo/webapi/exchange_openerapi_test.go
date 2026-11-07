@@ -60,18 +60,40 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 		assert.Equal(t, time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC), date)
 	})
 
-	t.Run("a server error is an error, not an unsupported currency", func(t *testing.T) {
+	t.Run("a server error is the provider being unavailable", func(t *testing.T) {
 		t.Parallel()
 
 		srv := newServer(t, http.StatusInternalServerError, nil)
 
 		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
 
-		require.Error(t, err)
+		require.ErrorIs(t, err, entity.ErrRatesUnavailable)
 		assert.NotErrorIs(t, err, entity.ErrUnsupportedCurrency)
 	})
 
-	t.Run("a canceled context stops the call", func(t *testing.T) {
+	t.Run("an unreachable provider is unavailable", func(t *testing.T) {
+		t.Parallel()
+
+		srv := newServer(t, http.StatusOK, fixture)
+		srv.Close()
+
+		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
+
+		require.ErrorIs(t, err, entity.ErrRatesUnavailable)
+	})
+
+	t.Run("any other status is an error of the app's", func(t *testing.T) {
+		t.Parallel()
+
+		srv := newServer(t, http.StatusNotFound, nil)
+
+		_, _, err := webapi.New(srv.URL).Rate(t.Context(), "OMR", "CNY")
+
+		require.Error(t, err)
+		assert.Equal(t, entity.KindInternal, entity.KindOf(err))
+	})
+
+	t.Run("a canceled context stops the call, and is not the provider's failure", func(t *testing.T) {
 		t.Parallel()
 
 		srv := newServer(t, http.StatusOK, fixture)
@@ -82,6 +104,7 @@ func TestExchangeWebAPI_Rate(t *testing.T) {
 		_, _, err := webapi.New(srv.URL).Rate(ctx, "OMR", "CNY")
 
 		require.ErrorIs(t, err, context.Canceled)
+		assert.NotErrorIs(t, err, entity.ErrRatesUnavailable)
 	})
 }
 

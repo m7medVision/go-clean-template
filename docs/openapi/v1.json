@@ -1275,6 +1275,16 @@
             },
             "description": "Internal Server Error"
           },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
           "503": {
             "content": {
               "application/problem+json": {

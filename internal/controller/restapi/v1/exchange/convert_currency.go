@@ -30,7 +30,7 @@ func (r *controller) convert(api huma.API) {
 		Path:        "/v1/exchange/convert",
 		Tags:        []string{_tag},
 		Security:    []map[string][]string{{apidoc.BearerAuthScheme: {}}},
-		Errors:      apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized),
+		Errors:      apierr.CommandErrors(http.StatusBadRequest, http.StatusUnauthorized, http.StatusBadGateway),
 	}, func(ctx context.Context, input *convertInput) (*convertOutput, error) {
 		userID := authn.MustCaller(ctx).UserID
 

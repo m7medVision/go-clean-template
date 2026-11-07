@@ -21,7 +21,8 @@ type (
 	}
 
 	// ExchangeWebAPI fetches the reference rate from one currency to another, and the date it
-	// was published. An unknown currency is entity.ErrUnsupportedCurrency.
+	// was published. An unknown currency is entity.ErrUnsupportedCurrency, and a provider that
+	// cannot be reached or fails entity.ErrRatesUnavailable.
 	ExchangeWebAPI interface {
 		Rate(ctx context.Context, from, to string) (decimal.Decimal, time.Time, error)
 	}

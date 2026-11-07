@@ -15,8 +15,9 @@ import (
 
 // ConvertCurrency converts Amount, a decimal string, from one currency to another at today's
 // reference rate and records it in UserID's history. An invalid pair of codes is
-// entity.ErrInvalidConversion, an amount that does not parse or fit entity.ErrInvalidAmount, and a
-// currency the rate provider does not know entity.ErrUnsupportedCurrency.
+// entity.ErrInvalidConversion, an amount that does not parse or fit entity.ErrInvalidAmount, a
+// currency the rate provider does not know entity.ErrUnsupportedCurrency, and a provider that cannot
+// be reached entity.ErrRatesUnavailable.
 type ConvertCurrency struct {
 	cqrs.Command[entity.Written]
 

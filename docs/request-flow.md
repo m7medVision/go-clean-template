@@ -164,7 +164,7 @@ return &convertOutput{Body: NewConversion(&conversion)}, nil  // 5. entity → r
   store's transaction below.
 - **[`apierr.Problem`](../internal/controller/restapi/v1/apierr/apierr.go) maps errors, for every
   domain.** Each `entity.Err*` carries its kind: `ErrInvalidConversion`, `ErrInvalidAmount` and
-  `ErrUnsupportedCurrency` are invalid (400), `ErrReadModelBehind` is unavailable (503), `ErrConcurrencyConflict` a conflict
+  `ErrUnsupportedCurrency` are invalid (400), `ErrRatesUnavailable` is upstream (502), `ErrReadModelBehind` is unavailable (503), `ErrConcurrencyConflict` a conflict
   (409), and a [generated](generator.md) stub's `ErrNotImplemented` 501. Anything that is not an
   `*entity.Error` is logged and becomes a 500.
 - **The DTO and the entity never cross the boundary.** The handler never passes the `Convert` DTO to
@@ -247,8 +247,11 @@ implements `repo.ExchangeWebAPI` against the
 - **Errors arrive as HTTP 200.** The provider answers `{"result": "error", "error-type":
   "unsupported-code"}` with status 200, so the client checks `result`, not only the status code.
   `unsupported-code`, or a target currency missing from `rates`, becomes
-  `entity.ErrUnsupportedCurrency`, which the handler turns into a 400. Any other failure stays a
-  wrapped error and becomes a 500.
+  `entity.ErrUnsupportedCurrency`, which the handler turns into a 400.
+- **An outage is the provider's, not the app's.** A provider that cannot be reached, times out or
+  answers 5xx is `entity.ErrRatesUnavailable`, an upstream failure: 502, as an unreachable SSO
+  provider is. A cancelled request is not an outage. Any other failure (another status, another
+  `error-type`, a body that does not decode) stays a wrapped error and becomes a 500.
 - **Rates never touch a float.** The response struct declares `Rates map[string]decimal.Decimal`, so
   `encoding/json` hands each number's text straight to `decimal`.
 - **The date is the provider's.** `time_last_update_unix` is truncated to a UTC date and returned with
@@ -340,7 +343,8 @@ carries the trace ID as its correlation ID.
 | Amount ≤ 0 (or, on gRPC, not a decimal or too long) | `entity.NewConversion` → `ErrInvalidAmount` | 400 |
 | Currency the provider doesn't know | webapi → `ErrUnsupportedCurrency` | 400 |
 | Saved, but the projector didn't catch up in time | wait step → `ErrReadModelBehind` | 503 |
-| Provider down, non-200, bad JSON; database error | wrapped error, logged by the handler | 500 |
+| Provider unreachable, timed out or answering 5xx | webapi → `ErrRatesUnavailable`, logged by the handler | 502 |
+| Provider's other statuses and errors, bad JSON; database error | wrapped error, logged by the handler | 500 |
 
 The caller sees a fixed message (`"unsupported currency"`, `"internal server error"`). The wrapped
 error with the layer path goes only to the log.
@@ -366,7 +370,7 @@ On gRPC:
   no module lists as public (`grpcPublic`);
 - there are no Huma tags, so a malformed code or amount falls through to the entity;
 - a bad amount, an invalid conversion and an unknown currency are all `InvalidArgument`;
-- a lagging read model is `Unavailable`;
+- a lagging read model and an unavailable rate provider are `Unavailable`;
 - the 500 cases are `Internal`, and so is a panic, which the `Recovery` interceptor logs; the
   `Logger` and `Metrics` interceptors log and count the call as the HTTP middleware does.
 

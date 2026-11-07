@@ -12,7 +12,9 @@ var (
 	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
 	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
 	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")
-	ErrInvalidAmount       = newError(KindInvalid, fmt.Sprintf(
+	// ErrRatesUnavailable is a conversion while the rate provider cannot be reached or fails.
+	ErrRatesUnavailable = newError(KindUpstream, "exchange rate provider unavailable")
+	ErrInvalidAmount    = newError(KindInvalid, fmt.Sprintf(
 		"amount must be positive, with at most %d digits before the point and %d after it", MaxAmountDigits, MaxAmountScale))
 )
 
