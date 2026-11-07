@@ -213,9 +213,16 @@ mock: ### run mockgen: one mock file per contract file, from its go:generate dir
 	go generate ./internal/repo
 .PHONY: mock
 
+# Atlas asks for TLS unless the URL says otherwise, so a URL without sslmode gets sslmode=disable, as
+# the app's startup apply does (internal/app/migrate.go).
 schema-apply: ### apply desired schema to the database (Atlas)
-	atlas schema apply -u '$(PG_URL)?sslmode=disable' \
-		--to file://internal/app/schema
+	url='$(PG_URL)'; \
+	case "$$url" in \
+		*sslmode=*) ;; \
+		*\?*) url="$$url&sslmode=disable" ;; \
+		*) url="$$url?sslmode=disable" ;; \
+	esac; \
+	atlas schema apply -u "$$url" --to file://internal/app/schema
 .PHONY: schema-apply
 
 schema-roundtrip: ### apply the schema up from master, down to it and up again, in a throwaway Postgres container
