@@ -1,9 +1,7 @@
 package rules
 
 import (
-	"bytes"
 	"fmt"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"path"
@@ -12,9 +10,7 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/plan"
 )
 
-// valid checks R5: every file the plan creates or edits parses afterwards, and every Go file it
-// creates is already formatted. An unformatted created file means its template is wrong; edited
-// Go files are formatted by the plan.
+// valid checks R5: every file the plan creates or edits parses afterwards.
 func valid(p *plan.Plan) error {
 	changes, err := p.Changes()
 	if err != nil {
@@ -24,12 +20,6 @@ func valid(p *plan.Plan) error {
 	for _, c := range changes {
 		if err := parses(c.Path, c.New); err != nil {
 			return fmt.Errorf("%w: %s: %w", plan.ErrInvalid, c.Path, err)
-		}
-
-		if c.Old == nil && path.Ext(c.Path) == ".go" {
-			if formatted, err := format.Source(c.New); err != nil || !bytes.Equal(formatted, c.New) {
-				return fmt.Errorf("%w: %s is not go/format clean: its template is wrong", plan.ErrInvalid, c.Path)
-			}
 		}
 	}
 

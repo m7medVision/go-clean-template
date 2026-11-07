@@ -14,8 +14,7 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
 )
 
-// ErrInvalid is a planned file that no longer parses, or a created Go file that go/format would
-// change (rule R5).
+// ErrInvalid is a planned file that no longer parses (rule R5).
 var ErrInvalid = errors.New("R5 still valid")
 
 // Plan is what one command will create and edit. Paths are relative to the repository root and

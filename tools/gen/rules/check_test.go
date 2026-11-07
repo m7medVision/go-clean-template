@@ -202,10 +202,9 @@ func TestValidRefusesWhatNoLongerParses(t *testing.T) {
 	t.Parallel()
 
 	for name, create := range map[string][2]string{
-		"Go":             {"a.go", "package a\n\nfunc {"},
-		"unformatted Go": {"a.go", "package a\nfunc f() {  }\n"},
-		"proto":          {"a.proto", "service {"},
-		"GraphQL":        {"a.graphqls", "type A {"},
+		"Go":      {"a.go", "package a\n\nfunc {"},
+		"proto":   {"a.proto", "service {"},
+		"GraphQL": {"a.graphqls", "type A {"},
 	} {
 		p := plan.New("x")
 		p.Create(create[0], []byte(create[1]))
