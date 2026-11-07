@@ -7,17 +7,17 @@ import (
 )
 
 // planOperation plans the use case's REST operation, for the rest transport, in the domain's
-// folder internal/controller/restapi/v1/<pkg>: the operation and its input and output structs at
-// the end of <name>.go, its registration after the last one in NewRoutes, and its test at the end
-// of <name>_test.go. The operation maps errors with the folder's problem method, and is tagged
-// with the constant its other operations are, read from controller.go, since a hand-written
-// domain names it as it likes (exchange's is _exchangeTag). The test is self-contained: it builds
-// buses holding only a fake handler for the use case's message and serves them with resttest, so
-// it needs nothing from the folder's own test helpers, which every domain names its own way.
+// folder in the REST controllers: the operation and its input and output structs at the end of
+// <name>.go, its registration after the last one in NewRoutes, and its test at the end of
+// <name>_test.go. The operation maps errors with the folder's problem method, and is tagged with
+// the constant its other operations are, read from controller.go, since a hand-written domain
+// names it as it likes (exchange's is _exchangeTag). The test is self-contained: it builds buses
+// holding only a fake handler for the use case's message and serves them with resttest, so it
+// needs nothing from the folder's own test helpers, which every domain names its own way.
 func planOperation(pl *planner) {
 	u := pl.data.Usecase
-	dir := "internal/controller/restapi/v1/" + pl.data.Name.Pkg + "/"
-	edits := "internal/controller/restapi/v1/{{.Name.Pkg}}/"
+	dir, edits := pl.controllers("rest")
+	dir, edits = dir+"/", edits+"/"
 	messages := pl.data.Module + "/internal/usecase/" + pl.data.Name.Pkg + "/" + u.Kind
 
 	editFile(pl, dir+"controller.go", edit.ParseGo,

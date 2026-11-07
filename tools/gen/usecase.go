@@ -39,7 +39,7 @@ func usecaseLayers() []layer {
 func newUsecase(ctx context.Context, req *usecaseRequest, stdout io.Writer) error {
 	r := rules.Open(req.root)
 
-	pl, err := planUsecase(r, templates.FS(), req)
+	pl, err := planUsecase(ctx, r, templates.FS(), req)
 	if err != nil {
 		return err
 	}
@@ -54,15 +54,19 @@ func newUsecase(ctx context.Context, req *usecaseRequest, stdout io.Writer) erro
 }
 
 // planUsecase plans the use case req asks for on the repository r, rendering the templates in
-// tmpl. Planning needs the names and the domain, so it checks first R1 on both names, then R2 for
-// a use case: the domain exists, it has each transport the use case gets (unless req names them,
-// those rules.UsecaseTransports gives it), and the message is free. Then it checks R1 on the
-// identifiers the plan adds, and last R2 on the message's fields and the REST operation's route
-// and ID, which must be free too. What planning runs into is in the planner's errs, for the rules
-// execute runs.
-func planUsecase(r rules.Repo, tmpl fs.FS, req *usecaseRequest) (*planner, error) {
+// tmpl. Planning needs the names and the domain, so it checks first R1 on both names, the use
+// case's against the app's packages too, then R2 for a use case: the domain exists, it has each
+// transport the use case gets (unless req names them, those rules.UsecaseTransports gives it), and
+// the message is free. Then it checks R1 on the identifiers the plan adds, and last R2 on the
+// message's fields and the REST operation's route and ID, which must be free too. What planning
+// runs into is in the planner's errs, for the rules execute runs.
+func planUsecase(ctx context.Context, r rules.Repo, tmpl fs.FS, req *usecaseRequest) (*planner, error) {
 	n, err := names.Parse(req.name, "")
 	if err != nil {
+		return nil, err
+	}
+
+	if err := rules.PackageNameFree(ctx, r, &n); err != nil {
 		return nil, err
 	}
 

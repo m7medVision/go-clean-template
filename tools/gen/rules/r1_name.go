@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -17,10 +18,10 @@ import (
 
 // DomainFree checks the rest of R1 for a new domain: nothing in the repository uses its name yet.
 // That means no use-case or read-model folder, no entity file, no table, no controller folder on
-// any transport, no proto service and no GraphQL type. A controller folder can be a package the
-// domains share, such as the REST response package, which the domain's controllers would join.
-// The pattern and keyword checks are names.Parse's.
-func DomainFree(r Repo, n *names.Name) error {
+// any transport, no proto service, no GraphQL type and no package (PackageNameFree). A controller
+// folder can be a package the domains share, such as the REST response package, which the domain's
+// controllers would join. The pattern and keyword checks are names.Parse's.
+func DomainFree(ctx context.Context, r Repo, n *names.Name) error {
 	owned := []string{
 		"internal/usecase/" + n.Pkg,
 		"internal/repo/persistent/" + n.Pkg,
@@ -30,7 +31,7 @@ func DomainFree(r Repo, n *names.Name) error {
 	}
 
 	for _, t := range Transports() {
-		owned = append(owned, transportDir(t, n.Pkg))
+		owned = append(owned, ControllerDir(t, n.Pkg))
 	}
 
 	for _, p := range owned {
@@ -39,23 +40,43 @@ func DomainFree(r Repo, n *names.Name) error {
 		}
 	}
 
-	for _, p := range r.glob("docs/proto/v1/*.proto") {
+	for _, p := range r.glob(ProtoDir + "/*.proto") {
 		if pf, err := parsed(r, p, edit.ParseProto); err == nil && slices.Contains(pf.Services(), n.Go+"Service") {
 			return taken(n, p+" declares service "+n.Go+"Service")
 		}
 	}
 
-	for _, p := range r.glob("internal/controller/graphql/schema/*.graphqls") {
+	for _, p := range r.glob(SchemaDir() + "/*.graphqls") {
 		if q, err := parsed(r, p, edit.ParseGraphQL); err == nil && slices.Contains(q.Types(), n.Go) {
 			return taken(n, p+" declares type "+n.Go)
 		}
 	}
 
-	return nil
+	return PackageNameFree(ctx, r, n)
 }
 
 func taken(n *names.Name, why string) error {
 	return fmt.Errorf("%w: %q is taken: %s", names.ErrInvalid, n.Kebab, why)
+}
+
+// PackageNameFree checks R1 on the name n against the app's packages, as go list names them: no
+// form of n or of its plural that Go code uses as an identifier, the package form or the lower
+// one, is the name of a package. A generated file that imports that package, as a domain's
+// controllers import command and query, would find it shadowed.
+func PackageNameFree(ctx context.Context, r Repo, n *names.Name) error {
+	pkgs, err := r.Packages(ctx)
+	if err != nil {
+		return fmt.Errorf("list the app's packages: %w", err)
+	}
+
+	for _, ident := range []string{n.Pkg, n.Lower, n.Plural.Pkg, n.Plural.Lower} {
+		if importPath, ok := pkgs[ident]; ok {
+			return fmt.Errorf("%w: %q gives %q, the name of the package %s, which generated files would shadow",
+				names.ErrInvalid, n.Kebab, ident, importPath)
+		}
+	}
+
+	return nil
 }
 
 // parsed reads the file at p and parses it with parse.

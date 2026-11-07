@@ -13,23 +13,6 @@ import (
 	"github.com/m7medvision/go-clean-template/tools/gen/names"
 )
 
-// Transports are the transports a domain can have, in the order the generator lists them.
-func Transports() []string {
-	return []string{"rest", "grpc", "graphql"}
-}
-
-// transportDir is the folder a domain's controllers live in on transport t.
-func transportDir(t, domain string) string {
-	switch t {
-	case "rest":
-		return "internal/controller/restapi/v1/" + domain
-	case "grpc":
-		return "internal/controller/grpc/v1/" + domain
-	default:
-		return "internal/controller/graphql/" + domain
-	}
-}
-
 // Creatable checks the first half of R2: none of the files a plan creates exists yet.
 func Creatable(r Repo, paths []string) error {
 	for _, p := range paths {
@@ -47,7 +30,7 @@ func DomainTransports(r Repo, domain string) []string {
 	var have []string
 
 	for _, t := range Transports() {
-		if r.exists(transportDir(t, domain)) {
+		if r.exists(ControllerDir(t, domain)) {
 			have = append(have, t)
 		}
 	}
@@ -68,7 +51,7 @@ func UsecaseTransports(r Repo, domain *names.Name, kind string) []string {
 		root = "Mutation"
 	}
 
-	schema, err := parsed(r, "internal/controller/graphql/schema/"+domain.Snake+".graphqls", edit.ParseGraphQL)
+	schema, err := parsed(r, SchemaDir()+"/"+domain.Snake+".graphqls", edit.ParseGraphQL)
 	if err != nil || schema.Declares(root) {
 		return have // a schema file that is missing or broken fails the rules once the plan reads it
 	}
@@ -101,7 +84,7 @@ func UsecaseTargets(r Repo, domain, kind string, n *names.Name, transports []str
 	have := DomainTransports(r, domain)
 	for _, t := range transports {
 		if !slices.Contains(have, t) {
-			return fmt.Errorf("%w: %s has no %s controllers: %s does not exist", ErrTargets, domain, t, transportDir(t, domain))
+			return fmt.Errorf("%w: %s has no %s controllers: %s does not exist", ErrTargets, domain, t, ControllerDir(t, domain))
 		}
 	}
 

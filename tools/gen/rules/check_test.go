@@ -43,24 +43,36 @@ func TestCleanPassesOnACleanTree(t *testing.T) {
 
 	dir := gitRepo(t)
 
-	require.NoError(t, rules.Clean(t.Context(), rules.Open(dir), []string{"a.go", "gen", "missing/later.go"}))
+	require.NoError(t, rules.Clean(t.Context(), rules.Open(dir)))
 }
 
-func TestCleanRefusesChangedAndUntrackedFiles(t *testing.T) {
+// R3 covers the whole tree, not only the files the plan edits: the regenerators may change any
+// of them, and the undo restores every change git reports.
+func TestCleanRefusesAnyChangedOrUntrackedFile(t *testing.T) {
 	t.Parallel()
 
-	for name, change := range map[string]func(dir string) error{
-		"edited file":            func(dir string) error { return os.WriteFile(filepath.Join(dir, "a.go"), []byte("package b\n"), 0o600) },
-		"untracked in an output": func(dir string) error { return os.WriteFile(filepath.Join(dir, "gen", "new.json"), nil, 0o600) },
+	for name, tc := range map[string]struct {
+		change func(dir string) error
+		path   string
+	}{
+		"an edited file": {
+			func(dir string) error { return os.WriteFile(filepath.Join(dir, "a.go"), []byte("package b\n"), 0o600) },
+			"a.go",
+		},
+		"an untracked file": {
+			func(dir string) error { return os.WriteFile(filepath.Join(dir, "gen", "new.json"), nil, 0o600) },
+			"gen/new.json",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			dir := gitRepo(t)
-			require.NoError(t, change(dir))
+			require.NoError(t, tc.change(dir))
 
-			err := rules.Clean(t.Context(), rules.Open(dir), []string{"a.go", "gen"})
+			err := rules.Clean(t.Context(), rules.Open(dir))
 			require.ErrorIs(t, err, rules.ErrClean)
+			assert.Contains(t, err.Error(), tc.path)
 		})
 	}
 }
@@ -68,7 +80,7 @@ func TestCleanRefusesChangedAndUntrackedFiles(t *testing.T) {
 func TestCleanRefusesADirectoryThatIsNotARepository(t *testing.T) {
 	t.Parallel()
 
-	err := rules.Clean(t.Context(), rules.Open(t.TempDir()), []string{"a.go"})
+	err := rules.Clean(t.Context(), rules.Open(t.TempDir()))
 	require.ErrorIs(t, err, rules.ErrClean)
 }
 
@@ -112,9 +124,9 @@ func TestCheckReportsTheFirstRuleThatFails(t *testing.T) {
 
 	dirty := rules.Repo{
 		FS:    fstest.MapFS{"a.go": {Data: []byte("package a\n")}},
-		Dirty: func(context.Context, []string) ([]string, error) { return []string{"a.go"}, nil },
+		Dirty: func(context.Context) ([]string, error) { return []string{"a.go"}, nil },
 	}
-	clean := rules.Repo{FS: dirty.FS, Dirty: func(context.Context, []string) ([]string, error) { return nil, nil }}
+	clean := rules.Repo{FS: dirty.FS, Dirty: func(context.Context) ([]string, error) { return nil, nil }}
 
 	creatingA := plan.New("x")
 	creatingA.Create("a.go", []byte("package a\n"))
@@ -141,7 +153,7 @@ func TestCheckReportsTheFirstRuleThatFails(t *testing.T) {
 		"R5 last":              {clean, brokenEdit, nil, plan.ErrInvalid},
 		"everything passes":    {clean, editingA, nil, nil},
 	} {
-		err := rules.Check(t.Context(), tc.r, tc.p, nil, tc.planErrs)
+		err := rules.Check(t.Context(), tc.r, tc.p, tc.planErrs)
 		if tc.want == nil {
 			require.NoError(t, err, name)
 
@@ -163,6 +175,6 @@ func TestCheckReturnsAnUnexpectedErrorFirst(t *testing.T) {
 
 	broken := errors.New("disk on fire") //nolint:err113 // a one-off error is the point
 
-	err := rules.Check(t.Context(), repoOf(fixtureRoot()), plan.New("x"), nil, []error{edit.ErrAnchor, broken})
+	err := rules.Check(t.Context(), repoOf(fixtureRoot()), plan.New("x"), []error{edit.ErrAnchor, broken})
 	require.ErrorIs(t, err, broken)
 }

@@ -7,17 +7,15 @@ import (
 	"strings"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
+	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 )
-
-// _protoDir holds the .proto files, which are one proto package, grpc.v1.
-const _protoDir = "docs/proto/v1"
 
 // planRPC plans the use case's gRPC method, for the grpc transport: the rpc in the service the
 // domain's controller serves, with its request and response messages at the end of the .proto file
-// that declares the service; the method at the end of internal/controller/grpc/v1/<pkg>/<name>.go;
-// and its test at the end of <name>_test.go there. The method maps errors with the controller's
-// fail, as its other methods do. A hand-written domain's service need not be named after it
-// (user's controller serves AuthService, from auth.proto), so the service is read from the
+// that declares the service; the method at the end of <name>.go in the domain's folder in the gRPC
+// controllers; and its test at the end of <name>_test.go there. The method maps errors with the
+// controller's fail, as its other methods do. A hand-written domain's service need not be named
+// after it (user's controller serves AuthService, from auth.proto), so the service is read from the
 // Unimplemented<Service>Server its Controller embeds, and the .proto file is the one in
 // docs/proto/v1 that declares it. The test is self-contained, as the REST one is: it serves the
 // controller over bufconn, on buses holding only a fake handler for the use case's message, so it
@@ -25,8 +23,8 @@ const _protoDir = "docs/proto/v1"
 // exchange are, gets one.
 func planRPC(pl *planner) {
 	u := pl.data.Usecase
-	dir := "internal/controller/grpc/v1/" + pl.data.Name.Pkg + "/"
-	edits := "internal/controller/grpc/v1/{{.Name.Pkg}}/"
+	dir, edits := pl.controllers("grpc")
+	dir, edits = dir+"/", edits+"/"
 	m := pl.data.Module
 	messages := m + "/internal/usecase/" + pl.data.Name.Pkg + "/" + u.Kind
 
@@ -59,11 +57,11 @@ func planRPC(pl *planner) {
 // response messages at the end of the one .proto file in docs/proto/v1 that declares the service.
 func planProto(pl *planner) {
 	u := pl.data.Usecase
-	edits := "docs/proto/v1/{{.Name.Snake}}.proto."
+	edits := rules.ProtoDir + "/{{.Name.Snake}}.proto."
 
 	files := protoFilesDeclaring(pl, u.GRPCService)
 	if len(files) != 1 {
-		pl.fail(fmt.Errorf("%w: %s/*.proto: found service %s %d times, want once", edit.ErrAnchor, _protoDir, u.GRPCService, len(files)))
+		pl.fail(fmt.Errorf("%w: %s/*.proto: found service %s %d times, want once", edit.ErrAnchor, rules.ProtoDir, u.GRPCService, len(files)))
 
 		return
 	}
@@ -85,7 +83,7 @@ func planProto(pl *planner) {
 func protoFilesDeclaring(pl *planner, name string) []string {
 	var found []string
 
-	files, err := fs.Glob(pl.repo.FS, _protoDir+"/*.proto")
+	files, err := fs.Glob(pl.repo.FS, rules.ProtoDir+"/*.proto")
 	if err != nil {
 		return nil
 	}
@@ -111,8 +109,9 @@ func protoFilesDeclaring(pl *planner, name string) []string {
 func planRPCTest(pl *planner, p, messages string) {
 	u := pl.data.Usecase
 	m := pl.data.Module
-	proto, controller := m+"/docs/proto/v1", m+"/internal/controller/grpc/v1/"+pl.data.Name.Pkg
-	text := "internal/controller/grpc/v1/{{.Name.Pkg}}/{{.Name.Snake}}_test.go.end." + u.Kind
+	dir, tmpl := pl.controllers("grpc")
+	proto, controller := pl.importPath(rules.ProtoDir), pl.importPath(dir)
+	text := tmpl + "/{{.Name.Snake}}_test.go.end." + u.Kind
 	specs := []string{
 		"context", "errors", "net", "testing", "time",
 		"grpcmw " + m + "/internal/controller/grpc/middleware", m + "/internal/entity", messages,

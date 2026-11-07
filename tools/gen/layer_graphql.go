@@ -4,27 +4,26 @@ import (
 	"go/token"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
+	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 )
 
 // planGraphQL plans the domain's GraphQL fields, for the graphql transport: the schema file
-// internal/controller/graphql/schema/<name>.graphqls, which extends Query with a get and a list and
-// Mutation with create, update and delete; the folder internal/controller/graphql/<pkg>, which
-// resolves them, with its tests through fake handlers; and the shared files that join the domain
-// in. The root resolver gets the domain's Query and Mutation aliases, their embeds and the New call
-// that fills them, and the import; gqlerr.Map gets the domain's two sentinels, ahead of the
-// entries any message shares; and gqlgen.yml binds the schema's type to the entity. make graphql,
-// which make new-domain runs after the write, generates the rest.
+// schema/<name>.graphqls, which extends Query with a get and a list and Mutation with create,
+// update and delete; the domain's folder in the GraphQL controllers, which resolves them, with its
+// tests through fake handlers; and the shared files that join the domain in. The root resolver
+// gets the domain's Query and Mutation aliases, their embeds and the New call that fills them, and
+// the import; gqlerr.Map gets the domain's two sentinels, ahead of the entries any message shares;
+// and gqlgen.yml binds the schema's type to the entity. make graphql, which make new-domain runs
+// after the write, generates the rest.
 func planGraphQL(pl *planner) {
-	pl.create("internal/controller/graphql/schema/*.tmpl")
-	pl.create("internal/controller/graphql/{{.Name.Pkg}}/*.tmpl")
+	dir, tmpl := pl.controllers("graphql")
 
-	const (
-		resolver = "internal/controller/graphql/resolver.go"
-		gqlerr   = "internal/controller/graphql/gqlerr/gqlerr.go"
-		gqlgen   = "internal/controller/graphql/gqlgen.yml"
-	)
+	pl.create(rules.SchemaDir() + "/*.tmpl")
+	pl.create(tmpl + "/*.tmpl")
 
-	resolverPath := pl.data.Module + "/internal/controller/graphql/" + pl.data.Name.Pkg
+	root := rules.ControllerRoot("graphql")
+	resolver, gqlerr, gqlgen := root+"/resolver.go", root+"/gqlerr/gqlerr.go", root+"/gqlgen.yml"
+	resolverPath := pl.importPath(dir)
 
 	editFile(pl, resolver, edit.ParseGo,
 		func(g *edit.Go) ([]edit.Insertion, error) {

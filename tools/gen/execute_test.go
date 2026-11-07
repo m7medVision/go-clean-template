@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -142,9 +143,32 @@ func TestExecuteWritesAPlanThatPassesEveryRule(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dir, "internal", "app", "buses.go"))
 	require.NoError(t, err)
 	assert.Equal(t, "package app\n\n// widget\n", string(got))
-	assert.Contains(t, out.String(), "git checkout -- internal/app/buses.go docs/openapi/v1.json")
-	assert.Contains(t, out.String(), "git clean -fd -- internal/usecase/widget docs/openapi/v1.json")
-	assert.True(t, strings.HasSuffix(out.String(), "web/src/graphql\n\nNext:\n  - write it\n"), "the checklist, after the undo: %s", out.String())
+	assert.True(t, strings.HasSuffix(out.String(), "\n  "+_undo+"\n\nNext:\n  - write it\n"), "the checklist, after the undo: %s", out.String())
+}
+
+// The undo takes the tree back to where it was before the write, and before whatever the
+// regenerators changed after it, since R3 had the tree clean.
+func TestTheUndoRestoresWhatTheWriteAndTheRegeneratorsChanged(t *testing.T) {
+	t.Parallel()
+
+	dir := gitRepo(t)
+
+	require.NoError(t, execute(t.Context(), rules.Open(dir), openRoot(t, dir), planned(widgetPlan(), nil), false, io.Discard))
+
+	// What a regenerator might do: rewrite a file the plan did not touch, and add one.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "internal", "usecase", "task", "register.go"), []byte("package task // regenerated\n"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "docs", "openapi"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "docs", "openapi", "v1.json"), []byte("{}\n"), 0o600))
+
+	undo := exec.CommandContext(t.Context(), "sh", "-c", _undo)
+	undo.Dir = dir
+	out, err := undo.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	// git keeps no file mode but the executable bit, so the tree is compared with what is committed.
+	require.NoError(t, rules.Clean(t.Context(), rules.Open(dir)), "the undo left a change git reports")
+	assert.NoDirExists(t, filepath.Join(dir, "internal", "usecase", "widget"))
+	assert.NoDirExists(t, filepath.Join(dir, "docs"))
 }
 
 // planned is the planner that made p, running into errs, with a checklist of one line.

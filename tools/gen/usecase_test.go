@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"os"
@@ -60,7 +61,7 @@ func planOnWidget(t *testing.T, dir string, req *usecaseRequest) *planner {
 
 	req.root = dir
 
-	pl, err := planUsecase(rules.Open(dir), templates.FS(), req)
+	pl, err := planUsecase(t.Context(), rules.Open(dir), templates.FS(), req)
 	require.NoError(t, err)
 	require.Empty(t, pl.errs)
 
@@ -161,11 +162,11 @@ func TestPlanningAUsecaseOnEachDomainOfThisRepositoryPassesEveryRule(t *testing.
 
 			r := thisRepo()
 
-			pl, err := planUsecase(r, templates.FS(), &req)
+			pl, err := planUsecase(t.Context(), r, templates.FS(), &req)
 			require.NoError(t, err)
 
 			require.Empty(t, pl.errs)
-			require.NoError(t, rules.Check(t.Context(), r, pl.plan, regenerated(), pl.errs))
+			require.NoError(t, rules.Check(t.Context(), r, pl.plan, pl.errs))
 		})
 	}
 }
@@ -182,7 +183,7 @@ func TestPlanningAUsecaseReadsTheHandlersDependencyFromDeps(t *testing.T) {
 		{usecaseRequest{domain: "task", name: "count-tasks", kind: "query"}, "Tasks", "TaskReadModel", "ListAllTasksHandler"},
 		{usecaseRequest{domain: "exchange", name: "count-conversions", kind: "query"}, "History", "ExchangeReadModel", "GetConversionHandler"},
 	} {
-		pl, err := planUsecase(thisRepo(), templates.FS(), &tc.req)
+		pl, err := planUsecase(t.Context(), thisRepo(), templates.FS(), &tc.req)
 		require.NoError(t, err)
 
 		u := pl.data.Usecase
@@ -251,11 +252,15 @@ func refusals() map[string]refusal {
 		"a route the domain serves": {
 			usecaseRequest{domain: "task", name: "get-task-status", kind: "query", path: "/v1/tasks/{id}"},
 			rules.ErrTargets, "GET /v1/tasks/{id} is served already, by the operation get-task in " +
-				"internal/controller/restapi/v1/task/task.go: give the use case its own path=",
+				"docs/openapi/v1.json: give the use case its own path=",
 		},
 		"an operation ID the API has": {
 			usecaseRequest{domain: "task", name: "register", kind: "command", transports: []string{"rest"}},
-			rules.ErrTargets, "internal/controller/restapi/v1/user/user.go registers the operation ID register already",
+			rules.ErrTargets, "docs/openapi/v1.json lists the operation ID register already, for POST /v1/auth/register",
+		},
+		"a name a package of the app has": {
+			usecaseRequest{domain: "task", name: "command", kind: "command"},
+			names.ErrInvalid, `"command" gives "command", the name of the package`,
 		},
 		"a record ID named as the caller's": {
 			usecaseRequest{domain: "user", name: "lock-user", kind: "command"},
@@ -269,6 +274,8 @@ func refusals() map[string]refusal {
 	}
 }
 
+// Each refusal comes from planning, or from the rules the plan then meets, against this repository
+// with its working tree taken as clean: R3 reads the tree, and these tests must not depend on it.
 func TestNewUsecaseRefusesWhatARuleForbidsBeforePlanning(t *testing.T) {
 	t.Parallel()
 
@@ -276,11 +283,12 @@ func TestNewUsecaseRefusesWhatARuleForbidsBeforePlanning(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			req := tc.req
-			req.root = filepath.Join("..", "..")
-			req.dryRun = true // a test of a rule that wrongly passed must still write nothing here
+			r, req := thisRepo(), tc.req
 
-			err := newUsecase(t.Context(), &req, io.Discard)
+			pl, err := planUsecase(t.Context(), r, templates.FS(), &req)
+			if err == nil {
+				err = rules.Check(t.Context(), r, pl.plan, pl.errs)
+			}
 
 			require.ErrorIs(t, err, tc.rule)
 			assert.Contains(t, err.Error(), tc.says)
@@ -448,7 +456,7 @@ func TestAUsecaseActsOnARecordWhenItsPathNamesOne(t *testing.T) {
 		},
 	} {
 		pl := planOnWidget(t, dir, &tc.req)
-		require.NoError(t, rules.Check(t.Context(), rules.Open(dir), pl.plan, regenerated(), pl.errs))
+		require.NoError(t, rules.Check(t.Context(), rules.Open(dir), pl.plan, pl.errs))
 
 		changes, err := pl.plan.Changes()
 		require.NoError(t, err)
@@ -538,7 +546,7 @@ func TestAUsecaseEditsTheDomainsFilesOnEachOfItsTransports(t *testing.T) {
 			creates: []string{"internal/controller/grpc/v1/exchange/exchange_test.go"},
 		},
 	} {
-		pl, err := planUsecase(thisRepo(), templates.FS(), &tc.req)
+		pl, err := planUsecase(t.Context(), thisRepo(), templates.FS(), &tc.req)
 		require.NoError(t, err)
 		require.Empty(t, pl.errs, tc.req.name)
 
@@ -554,13 +562,15 @@ func TestAUsecaseEditsTheDomainsFilesOnEachOfItsTransports(t *testing.T) {
 }
 
 // Two use cases whose names start with one word get one default path: count-widgets and
-// count-done-widgets are both GET /v1/widgets/count. The second fails R2 before anything is
-// written, naming the operation that serves the route, and passes with a path of its own.
+// count-done-widgets are both GET /v1/widgets/count. Once make openapi has exported the first, the
+// second fails R2 before anything is written, naming the operation that serves the route, and
+// passes with a path of its own.
 func TestNewUsecaseOnARouteTheDomainServesFailsR2AndWritesNothing(t *testing.T) {
 	t.Parallel()
 
 	dir := widgetRepo(t)
 	require.NoError(t, newUsecase(t.Context(), &usecaseRequest{root: dir, domain: "widget", name: "count-widgets", kind: "query"}, io.Discard))
+	exportOperation(t, dir, "/v1/widgets/count", "get", "count-widgets")
 	commitAll(t, dir, "new-usecase count-widgets")
 
 	before := fingerprint(t, dir)
@@ -569,12 +579,42 @@ func TestNewUsecaseOnARouteTheDomainServesFailsR2AndWritesNothing(t *testing.T) 
 
 	require.ErrorIs(t, err, rules.ErrTargets)
 	assert.Contains(t, err.Error(), "GET /v1/widgets/count is served already, by the operation count-widgets in "+
-		"internal/controller/restapi/v1/widget/widget.go: give the use case its own path=")
+		"docs/openapi/v1.json: give the use case its own path=")
 	assert.Equal(t, before, fingerprint(t, dir))
 
 	require.NoError(t, newUsecase(t.Context(), &usecaseRequest{
 		root: dir, domain: "widget", name: "count-done-widgets", kind: "query", path: "/v1/widgets/done-count", dryRun: true,
 	}, io.Discard))
+}
+
+// exportOperation adds the operation id, served on method and route, to the OpenAPI document of
+// the repository dir, as make openapi does once the operation is registered.
+func exportOperation(t *testing.T, dir, route, method, id string) {
+	t.Helper()
+
+	p := filepath.Join(dir, "docs", "openapi", "v1.json")
+
+	src, err := os.ReadFile(p)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(src, &doc))
+
+	paths, ok := doc["paths"].(map[string]any)
+	require.True(t, ok, "the document has paths")
+
+	if paths[route] == nil {
+		paths[route] = map[string]any{}
+	}
+
+	item, ok := paths[route].(map[string]any)
+	require.True(t, ok, "%s is a path item", route)
+
+	item[method] = map[string]any{"operationId": id}
+
+	out, err := json.MarshalIndent(doc, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(p, out, 0o600))
 }
 
 // A query's GraphQL result type, <Name>Result, is a name the schema must not have yet.
@@ -605,7 +645,7 @@ func TestTheChecklistNamesFilesThatExist(t *testing.T) {
 		{domain: "task", name: "count-tasks", kind: "query"},
 		{domain: "exchange", name: "count-conversions", kind: "query"},
 	} {
-		pl, err := planUsecase(r, templates.FS(), &req)
+		pl, err := planUsecase(t.Context(), r, templates.FS(), &req)
 		require.NoError(t, err)
 
 		checkNamedFiles(t, r, pl)

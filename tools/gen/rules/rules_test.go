@@ -2,6 +2,8 @@ package rules_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 
@@ -37,14 +39,35 @@ func fixtureRoot() fstest.MapFS {
 	}
 }
 
+// repoOf is the repository with the files fsys, all clean, whose app has the packages
+// appPackages lists.
 func repoOf(fsys fstest.MapFS) rules.Repo {
-	return rules.Repo{FS: fsys, Dirty: func(context.Context, []string) ([]string, error) { return nil, nil }}
+	return rules.Repo{
+		FS:       fsys,
+		Dirty:    func(context.Context) ([]string, error) { return nil, nil },
+		Packages: func(context.Context) (map[string]string, error) { return appPackages(), nil },
+	}
+}
+
+// appPackages are some packages of an app, by name, as go list names them.
+func appPackages() map[string]string {
+	return map[string]string{
+		"command": "example.com/app/internal/usecase/task/command",
+		"jwt":     "example.com/app/pkg/jwt",
+		"v1":      "example.com/app/docs/proto/v1",
+	}
 }
 
 func name(t *testing.T, kebab string) *names.Name {
 	t.Helper()
 
-	n, err := names.Parse(kebab, "")
+	return named(t, kebab, "")
+}
+
+func named(t *testing.T, kebab, plural string) *names.Name {
+	t.Helper()
+
+	n, err := names.Parse(kebab, plural)
 	require.NoError(t, err)
 
 	return &n
@@ -53,7 +76,39 @@ func name(t *testing.T, kebab string) *names.Name {
 func TestDomainFreeAcceptsANewName(t *testing.T) {
 	t.Parallel()
 
-	require.NoError(t, rules.DomainFree(repoOf(fixtureRoot()), name(t, "invoice")))
+	require.NoError(t, rules.DomainFree(t.Context(), repoOf(fixtureRoot()), name(t, "invoice")))
+}
+
+// A name the app's packages have would shadow the package in a generated file that imports it,
+// whether the name or its plural gives it.
+func TestPackageNameFreeRefusesAPackageOfTheApp(t *testing.T) {
+	t.Parallel()
+
+	r := repoOf(fixtureRoot())
+
+	for _, n := range []*names.Name{name(t, "jwt"), name(t, "command"), named(t, "version", "v1")} {
+		err := rules.PackageNameFree(t.Context(), r, n)
+		require.ErrorIs(t, err, names.ErrInvalid, n.Kebab)
+		assert.Contains(t, err.Error(), "the name of the package example.com/app/", n.Kebab)
+
+		require.ErrorIs(t, rules.DomainFree(t.Context(), r, n), names.ErrInvalid, "%s: a domain", n.Kebab)
+	}
+}
+
+// Open asks go list for the packages: those of the module rooted at the repository.
+func TestOpenListsThePackagesOfTheModule(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "pkg", "jwt"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/app\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pkg", "jwt", "jwt.go"), []byte("package jwt\n"), 0o600))
+
+	err := rules.PackageNameFree(t.Context(), rules.Open(dir), name(t, "jwt"))
+
+	require.ErrorIs(t, err, names.ErrInvalid)
+	assert.Contains(t, err.Error(), "the name of the package example.com/app/pkg/jwt")
+	require.NoError(t, rules.PackageNameFree(t.Context(), rules.Open(dir), name(t, "invoice")))
 }
 
 func TestDomainFreeRejectsAnythingAnExistingDomainOwns(t *testing.T) {
@@ -65,7 +120,7 @@ func TestDomainFreeRejectsAnythingAnExistingDomainOwns(t *testing.T) {
 		"conversion": "internal/repo/persistent/conversion",
 		"exchange":   "internal/usecase/exchange",
 	} {
-		err := rules.DomainFree(repoOf(fixtureRoot()), name(t, kebab))
+		err := rules.DomainFree(t.Context(), repoOf(fixtureRoot()), name(t, kebab))
 		require.ErrorIs(t, err, names.ErrInvalid, kebab)
 		assert.Contains(t, err.Error(), owner, kebab)
 	}
@@ -93,7 +148,7 @@ func TestDomainFreeLooksAtTablesProtoServicesGraphQLTypesAndControllerFolders(t 
 		"health":   "internal/controller/grpc/v1/health exists",
 		"paging":   "internal/controller/graphql/paging exists",
 	} {
-		err := rules.DomainFree(repoOf(fsys), name(t, kebab))
+		err := rules.DomainFree(t.Context(), repoOf(fsys), name(t, kebab))
 		require.ErrorIs(t, err, names.ErrInvalid, kebab)
 		assert.Contains(t, err.Error(), owner, kebab)
 	}
@@ -177,21 +232,18 @@ func TestUsecaseTransportsLeaveOutGraphQLWithoutTheRootType(t *testing.T) {
 	}
 }
 
-// restOperations is a REST package with two operations, registered the way every domain does, and
-// a test file whose operations the router never serves.
+// restOperations is an OpenAPI document with three operations, one of them on a path item that
+// has fields besides its operations.
 func restOperations() fstest.MapFS {
-	file := func(s string) *fstest.MapFile { return &fstest.MapFile{Data: []byte(s)} }
-	op := func(id, method, path string) string {
-		return "\thuma.Register(api, huma.Operation{\n\t\tOperationID: \"" + id + "\",\n\t\tMethod: " + method +
-			",\n\t\tPath: \"" + path + "\",\n\t}, nil)\n"
-	}
-
-	return fstest.MapFS{
-		"internal/controller/restapi/v1/task/task.go": file("package task\n\nfunc ops(api huma.API) {\n" +
-			op("count-tasks", "http.MethodGet", "/v1/tasks/count") + op("get-task", `"GET"`, "/v1/tasks/{id}") + "}\n"),
-		"internal/controller/restapi/v1/user/user.go":      file("package user\n\nfunc ops(api huma.API) {\n" + op("register", "http.MethodPost", "/v1/auth/register") + "}\n"),
-		"internal/controller/restapi/v1/task/task_test.go": file("package task_test\n\nfunc ops(api huma.API) {\n" + op("seed-tasks", "http.MethodPost", "/v1/tasks/seed") + "}\n"),
-	}
+	return fstest.MapFS{"docs/openapi/v1.json": {Data: []byte(`{
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/tasks/count": {"get": {"operationId": "count-tasks"}},
+    "/v1/tasks/{id}": {"summary": "One task", "parameters": [], "get": {"operationId": "get-task"}},
+    "/v1/auth/register": {"post": {"operationId": "register"}}
+  }
+}
+`)}}
 }
 
 func TestRouteFreeRefusesARouteOrAnOperationIDTheAPIHas(t *testing.T) {
@@ -205,13 +257,13 @@ func TestRouteFreeRefusesARouteOrAnOperationIDTheAPIHas(t *testing.T) {
 	}{
 		"the same route": {
 			"GET", "/v1/tasks/count", "count-done-tasks",
-			"GET /v1/tasks/count is served already, by the operation count-tasks in internal/controller/restapi/v1/task/task.go: " +
-				"give the use case its own path=",
+			"GET /v1/tasks/count is served already, by the operation count-tasks in docs/openapi/v1.json: " +
+				"give the use case its own path= (if the document is stale, run make openapi first)",
 		},
 		"a parameter named otherwise": {"GET", "/v1/tasks/{taskId}", "get-task-status", "by the operation get-task"},
 		"the same operation ID": {
 			"POST", "/v1/tasks/{id}/register", "register",
-			"internal/controller/restapi/v1/user/user.go registers the operation ID register already",
+			"docs/openapi/v1.json lists the operation ID register already, for POST /v1/auth/register",
 		},
 	} {
 		err := rules.RouteFree(r, tc.method, tc.path, tc.id)
@@ -221,11 +273,27 @@ func TestRouteFreeRefusesARouteOrAnOperationIDTheAPIHas(t *testing.T) {
 	}
 
 	for what, tc := range map[string]struct{ method, path, id string }{
-		"another method":         {"POST", "/v1/tasks/count", "recount-tasks"},
-		"another path":           {"GET", "/v1/tasks/stats", "count-done-tasks"},
-		"a route only tests use": {"POST", "/v1/tasks/seed", "seed-many-tasks"},
+		"another method": {"POST", "/v1/tasks/count", "recount-tasks"},
+		"another path":   {"GET", "/v1/tasks/stats", "count-done-tasks"},
 	} {
 		require.NoError(t, rules.RouteFree(r, tc.method, tc.path, tc.id), what)
+	}
+}
+
+// The routes come from the OpenAPI document, so without one, or with one that is not JSON, the
+// check cannot run: the error says to export it.
+func TestRouteFreeNeedsTheOpenAPIDocument(t *testing.T) {
+	t.Parallel()
+
+	for what, fsys := range map[string]fstest.MapFS{
+		"missing": {},
+		"broken":  {"docs/openapi/v1.json": {Data: []byte(`{"paths": {"/v1/tasks": {"get": [`)}},
+	} {
+		err := rules.RouteFree(repoOf(fsys), "GET", "/v1/tasks/count", "count-tasks")
+
+		require.Error(t, err, what)
+		assert.Contains(t, err.Error(), "docs/openapi/v1.json", what)
+		assert.Contains(t, err.Error(), "run make openapi", what)
 	}
 }
 

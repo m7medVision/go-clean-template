@@ -36,7 +36,7 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 	}
 
 	r := rules.Open(req.root)
-	if err := rules.DomainFree(r, &n); err != nil {
+	if err := rules.DomainFree(ctx, r, &n); err != nil {
 		return err
 	}
 

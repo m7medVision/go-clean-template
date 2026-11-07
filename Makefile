@@ -141,9 +141,10 @@ projection-rebuild: ### rebuild one projection's read model from the event store
 GEN = go -C tools/gen run .
 GEN_OPTS = $(if $(transports),--transports '$(transports)') $(if $(dry-run),--dry-run)
 # After the generator writes, the regenerators its output needs, then a build; a dry run runs none.
-# The first failure stops them. The undo the generator printed restores the tree, regenerated
-# paths included: rule R3 had them clean before the write. Their output scrolls the generator's
-# checklist and undo out of view, so the last line points back to them.
+# This is the one list of them: the generator names none. The first failure stops them. The undo
+# the generator printed restores the tree, whatever they changed included: rule R3 had the whole
+# tree clean before the write. Their output scrolls the generator's checklist and undo out of view,
+# so the last line points back to them.
 GEN_REGENERATE = $(if $(dry-run),,$(MAKE) proto-v1 graphql sqlc mock openapi web-api web-graphql format && go build ./... \
 	|| { echo 'gen: a regenerator or the build failed: run the undo printed above to restore the tree' >&2; exit 1; }; \
 	echo 'gen: done. The next steps and the undo are printed above the output of the regenerators.')

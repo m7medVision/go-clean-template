@@ -23,18 +23,6 @@ var letterAfterDigit = regexp.MustCompile(`\d[a-z]`)
 // _choosePlural is what to do about a plural that breaks R1.
 const _choosePlural = "choose another plural with plural="
 
-// reserved reports whether ident names a package that generated files import or are generated
-// into. A domain named after one would shadow it.
-func reserved(ident string) bool {
-	switch ident {
-	case "aggregate", "apidoc", "apierr", "behavior", "command", "cqrs", "entity", "event", "generated",
-		"gqlerr", "middleware", "model", "postgres", "queries", "query", "repo", "repomock", "rpcerr", "v1", "v2":
-		return true
-	default:
-		return false
-	}
-}
-
 // Forms are the ways one name is written.
 type Forms struct {
 	Kebab string // line-item: REST paths, operation IDs
@@ -118,8 +106,6 @@ func forms(kebab string) (Forms, error) {
 			return Forms{}, fmt.Errorf("%w: %q gives %q, a Go keyword", ErrInvalid, kebab, ident)
 		case types.Universe.Lookup(ident) != nil:
 			return Forms{}, fmt.Errorf("%w: %q gives %q, a predeclared Go name", ErrInvalid, kebab, ident)
-		case reserved(ident):
-			return Forms{}, fmt.Errorf("%w: %q gives %q, a package generated files import", ErrInvalid, kebab, ident)
 		}
 	}
 

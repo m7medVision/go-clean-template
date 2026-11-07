@@ -29,29 +29,22 @@ type FS interface {
 	RemoveAll(name string) error
 }
 
-// Written is what a write did. Edited are the files it changed, in the order given. Removable are
-// the files and folders it created, sorted, with a new folder standing for everything in it.
-type Written struct {
-	Edited    []string
-	Removable []string
-}
-
 // Write writes changes into root. Each file is written to a temporary file beside it first, and
 // only once every one is written are they renamed into place. If any step fails, everything done
 // is undone: edited files get their old content back, and created files and the folders made for
 // them are removed.
-func Write(root FS, changes []Change) (Written, error) {
+func Write(root FS, changes []Change) error {
 	w := &writer{root: root, pending: map[string]bool{}}
 
 	if err := w.write(changes); err != nil {
 		if undoErr := w.undo(); undoErr != nil {
-			return Written{}, fmt.Errorf("%w: %w; undoing it failed too, so the tree is half written: %w", ErrWrite, err, undoErr)
+			return fmt.Errorf("%w: %w; undoing it failed too, so the tree is half written: %w", ErrWrite, err, undoErr)
 		}
 
-		return Written{}, fmt.Errorf("%w: %w; everything it wrote was undone", ErrWrite, err)
+		return fmt.Errorf("%w: %w; everything it wrote was undone", ErrWrite, err)
 	}
 
-	return w.written(changes), nil
+	return nil
 }
 
 type writer struct {
@@ -164,31 +157,4 @@ func (w *writer) undo() error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func (w *writer) written(changes []Change) Written {
-	var out Written
-
-	for _, c := range changes {
-		if c.Old != nil {
-			out.Edited = append(out.Edited, c.Path)
-		} else if !w.inNewDir(c.Path) {
-			out.Removable = append(out.Removable, c.Path)
-		}
-	}
-
-	for _, d := range w.dirs {
-		if !w.inNewDir(d) {
-			out.Removable = append(out.Removable, d)
-		}
-	}
-
-	slices.Sort(out.Removable)
-
-	return out
-}
-
-// inNewDir reports whether p is inside a folder this write made.
-func (w *writer) inNewDir(p string) bool {
-	return slices.ContainsFunc(w.dirs, func(d string) bool { return strings.HasPrefix(p, d+"/") })
 }

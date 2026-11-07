@@ -126,6 +126,18 @@ func (pl *planner) text(name string) string {
 	return text
 }
 
+// controllers returns the folder of the domain's controllers on transport t twice: as the
+// repository has it, as in internal/controller/restapi/v1/widget, and as the templates name it, as
+// in internal/controller/restapi/v1/{{.Name.Pkg}}.
+func (pl *planner) controllers(t string) (dir, tmpl string) {
+	return rules.ControllerDir(t, pl.data.Name.Pkg), rules.ControllerDir(t, "{{.Name.Pkg}}")
+}
+
+// importPath is the import path of the app's package in the folder dir.
+func (pl *planner) importPath(dir string) string {
+	return pl.data.Module + "/" + dir
+}
+
 // exists reports whether the repository has a file or folder at p.
 func (pl *planner) exists(p string) bool {
 	_, err := fs.Stat(pl.repo.FS, p)

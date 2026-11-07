@@ -102,13 +102,3 @@ func (p *Plan) Changes() ([]Change, error) {
 
 	return changes, nil
 }
-
-// Undo is the command that takes the repository back to before a write: it restores the edited
-// files and the regenerators' outputs, and removes the created files and folders and whatever the
-// regenerators added. It is exact only because rule R3 held: none of those had changes.
-func Undo(edited, regenerated, created []string) string {
-	restore := slices.Concat(edited, regenerated)
-	remove := slices.Concat(created, regenerated)
-
-	return "git checkout -- " + strings.Join(restore, " ") + " && git clean -fd -- " + strings.Join(remove, " ")
-}

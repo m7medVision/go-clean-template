@@ -62,20 +62,18 @@ func TestParseRejectsABadName(t *testing.T) {
 	t.Parallel()
 
 	for name, in := range map[string][2]string{
-		"empty":                {"", ""},
-		"upper case":           {"Invoice", ""},
-		"snake case":           {"line_item", ""},
-		"leading digit":        {"2fa", ""},
-		"trailing hyphen":      {"invoice-", ""},
-		"double hyphen":        {"line--item", ""},
-		"go keyword":           {"type", ""},
-		"predeclared":          {"string", ""},
-		"keyword as camel":     {"go-to", ""},
-		"imported package":     {"query", ""},
-		"plural same as name":  {"sheep", "sheep"},
-		"bad plural":           {"person", "People"},
-		"plural is a keyword":  {"rang", "range"},
-		"generated api prefix": {"v1", ""},
+		"empty":               {"", ""},
+		"upper case":          {"Invoice", ""},
+		"snake case":          {"line_item", ""},
+		"leading digit":       {"2fa", ""},
+		"trailing hyphen":     {"invoice-", ""},
+		"double hyphen":       {"line--item", ""},
+		"go keyword":          {"type", ""},
+		"predeclared":         {"string", ""},
+		"keyword as camel":    {"go-to", ""},
+		"plural same as name": {"sheep", "sheep"},
+		"bad plural":          {"person", "People"},
+		"plural is a keyword": {"rang", "range"},
 	} {
 		_, err := names.Parse(in[0], in[1])
 		require.ErrorIs(t, err, names.ErrInvalid, name)

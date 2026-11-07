@@ -2,25 +2,27 @@ package main
 
 import (
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
+	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 )
 
 // planField plans the use case's GraphQL field, for the graphql transport: the field on the root
 // type of the domain's schema file, schema/<name>.graphqls, Mutation for a command and Query for a
 // query, written there as type or extend type; for a query, its result type, <Name>Result, at the
 // end of that file, with one placeholder field, todo, since a GraphQL type cannot be empty; the
-// resolver at the end of mutation.go or query.go in internal/controller/graphql/<pkg>; and its test
-// at the end of mutation_test.go or query_test.go there. A command's field answers the ID it
-// wrote. The resolver maps errors with gqlerr.Map, as every resolver does. The test is
-// self-contained, as the REST one is: it sends the field to the GraphQL handler with graphqltest,
-// over buses holding only a fake handler for the use case's message. A domain without the test
-// file gets one.
+// resolver at the end of mutation.go or query.go in the domain's folder in the GraphQL
+// controllers; and its test at the end of mutation_test.go or query_test.go there. A command's
+// field answers the ID it wrote. The resolver maps errors with gqlerr.Map, as every resolver does.
+// The test is self-contained, as the REST one is: it sends the field to the GraphQL handler with
+// graphqltest, over buses holding only a fake handler for the use case's message. A domain without
+// the test file gets one.
 //
 // A schema file without the root type fails R4, naming it, and nothing more is planned for the
 // field: the domain has no resolver of that root type either, as exchange has no Mutation and no
 // mutation.go, and the missing files would fail R2 first and hide why.
 func planField(pl *planner) {
 	u := pl.data.Usecase
-	schema := "internal/controller/graphql/schema/" + pl.data.Name.Snake + ".graphqls"
+	schema := rules.SchemaDir() + "/" + pl.data.Name.Snake + ".graphqls"
+	tmpl := rules.SchemaDir() + "/{{.Name.Snake}}.graphqls"
 
 	query := u.Kind == _kindQuery
 
@@ -32,7 +34,7 @@ func planField(pl *planner) {
 	found := false
 	fields := []func(*edit.GraphQL) ([]edit.Insertion, error){
 		func(q *edit.GraphQL) ([]edit.Insertion, error) {
-			ins, err := q.InType(root, pl.text("internal/controller/graphql/schema/{{.Name.Snake}}.graphqls."+root))
+			ins, err := q.InType(root, pl.text(tmpl+"."+root))
 			found = err == nil
 
 			return one(ins, err)
@@ -41,7 +43,7 @@ func planField(pl *planner) {
 
 	if query {
 		fields = append(fields, func(q *edit.GraphQL) ([]edit.Insertion, error) {
-			return []edit.Insertion{q.AtEnd(pl.text("internal/controller/graphql/schema/{{.Name.Snake}}.graphqls.end.query"))}, nil
+			return []edit.Insertion{q.AtEnd(pl.text(tmpl + ".end.query"))}, nil
 		})
 	}
 
@@ -53,12 +55,12 @@ func planField(pl *planner) {
 }
 
 // planResolver plans the field's resolver at the end of file.go, mutation.go or query.go, in the
-// domain's folder internal/controller/graphql/<pkg>, with the imports it needs, and its test at the
-// end of file_test.go there.
+// domain's folder in the GraphQL controllers, with the imports it needs, and its test at the end of
+// file_test.go there.
 func planResolver(pl *planner, file string) {
 	m := pl.data.Module
-	dir := "internal/controller/graphql/" + pl.data.Name.Pkg + "/"
-	edits := "internal/controller/graphql/{{.Name.Pkg}}/"
+	dir, edits := pl.controllers("graphql")
+	dir, edits = dir+"/", edits+"/"
 	messages := m + "/internal/usecase/" + pl.data.Name.Pkg + "/" + pl.data.Usecase.Kind
 
 	resolverImports := []string{

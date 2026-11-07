@@ -39,7 +39,7 @@ func someTransports() [][]string {
 // reads the working tree, and these tests must not depend on it.
 func thisRepo() rules.Repo {
 	r := rules.Open(filepath.Join("..", ".."))
-	r.Dirty = func(context.Context, []string) ([]string, error) { return nil, nil }
+	r.Dirty = func(context.Context) ([]string, error) { return nil, nil }
 
 	return r
 }
@@ -81,13 +81,13 @@ func TestPlanningWidgetAgainstThisRepositoryPassesEveryRule(t *testing.T) {
 	t.Parallel()
 
 	r := thisRepo()
-	require.NoError(t, rules.DomainFree(r, parseName(t, "widget")))
+	require.NoError(t, rules.DomainFree(t.Context(), r, parseName(t, "widget")))
 
 	pl := planWidget(t)
 
 	require.Empty(t, pl.errs)
 	require.NoError(t, rules.IdentifiersFree(r, parseName(t, "widget"), pl.plan))
-	require.NoError(t, rules.Check(t.Context(), r, pl.plan, regenerated(), pl.errs))
+	require.NoError(t, rules.Check(t.Context(), r, pl.plan, pl.errs))
 }
 
 // A name can own no file and still clash with what a package declares: record would declare the
@@ -97,7 +97,7 @@ func TestNewDomainRefusesANameWhoseIdentifiersAPackageHas(t *testing.T) {
 
 	r := thisRepo()
 	n := parseName(t, "record")
-	require.NoError(t, rules.DomainFree(r, n), "no file or folder is called record")
+	require.NoError(t, rules.DomainFree(t.Context(), r, n), "no file or folder is called record")
 
 	err := rules.IdentifiersFree(r, n, planDomain(r, templates.FS(), n, rules.Transports()).plan)
 
@@ -113,7 +113,7 @@ func TestNewDomainRefusesANameWhoseProtoNamesAnotherFileDeclares(t *testing.T) {
 
 	r := thisRepo()
 	n := parseName(t, "login")
-	require.NoError(t, rules.DomainFree(r, n), "no file, folder or service is called login")
+	require.NoError(t, rules.DomainFree(t.Context(), r, n), "no file, folder or service is called login")
 
 	err := rules.IdentifiersFree(r, n, planDomain(r, templates.FS(), n, rules.Transports()).plan)
 
@@ -157,7 +157,7 @@ func TestNewDomainRefusesANameWhoseGraphQLFieldsTheSchemaHas(t *testing.T) {
 
 	r := thisRepo()
 	n := parseName(t, "all-task")
-	require.NoError(t, rules.DomainFree(r, n), "no file, folder, service or type is called all-task")
+	require.NoError(t, rules.DomainFree(t.Context(), r, n), "no file, folder, service or type is called all-task")
 
 	err := rules.IdentifiersFree(r, n, planDomain(r, templates.FS(), n, []string{"graphql"}).plan)
 
@@ -520,14 +520,15 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 	assert.Equal(t, before, fingerprint(t, dir))
 }
 
-// sharedRepo is a committed repository holding this repository's go.mod and every shared file
-// new-domain edits, copied as they are on disk, so a write against it meets the real anchors.
+// sharedRepo is a committed repository holding this repository's go.mod, its OpenAPI document and
+// every shared file new-domain edits, copied as they are on disk, so a write against it meets the
+// real anchors, and a use case on it the real REST operations.
 func sharedRepo(t *testing.T) string {
 	t.Helper()
 
 	files := map[string]string{}
 
-	for _, p := range append(planWidget(t).plan.Edited(), "go.mod") {
+	for _, p := range append(planWidget(t).plan.Edited(), "go.mod", "docs/openapi/v1.json") {
 		b, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(p)))
 		require.NoError(t, err)
 

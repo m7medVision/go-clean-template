@@ -104,19 +104,6 @@ func TestDryRunMatchesItsGolden(t *testing.T) {
 	golden(t, filepath.Join("testdata", "dryrun.golden"), out.Bytes())
 }
 
-func TestUndoRestoresEditsAndRemovesWhatWasAdded(t *testing.T) {
-	t.Parallel()
-
-	got := plan.Undo(
-		[]string{"internal/app/buses.go", "internal/entity/event.go"},
-		[]string{"docs/openapi/v1.json", "internal/repo/repomock"},
-		[]string{"internal/usecase/widget", "internal/entity/widget.go"},
-	)
-
-	assert.Equal(t, "git checkout -- internal/app/buses.go internal/entity/event.go docs/openapi/v1.json internal/repo/repomock && "+
-		"git clean -fd -- internal/usecase/widget internal/entity/widget.go docs/openapi/v1.json internal/repo/repomock", got)
-}
-
 // golden compares got with the file at path; UPDATE_GOLDEN=1 rewrites the file instead.
 func golden(t *testing.T, path string, got []byte) {
 	t.Helper()
