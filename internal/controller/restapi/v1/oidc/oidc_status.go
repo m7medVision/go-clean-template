@@ -23,6 +23,7 @@ func (r *controller) oidcStatus(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/v1/auth/oidc",
 		Tags:        []string{apidoc.AuthTag},
+		Errors:      apierr.QueryErrors(),
 	}, func(ctx context.Context, _ *struct{}) (*oidcStatusOutput, error) {
 		enabled, err := cqrs.SendQuery(ctx, r.qs, query.GetOIDCStatus{})
 		if err != nil {

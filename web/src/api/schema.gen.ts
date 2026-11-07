@@ -751,8 +751,8 @@ export interface operations {
                     "application/json": components["schemas"]["OIDCStatus"];
                 };
             };
-            /** @description Error */
-            default: {
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
