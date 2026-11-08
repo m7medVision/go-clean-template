@@ -6,4 +6,4 @@
 - [x] Remove `pkg/worker`, the queue repo and SQL; drop migration; `make sqlc`.
 - [x] Compose, Makefile, `.env.example`, CI.
 - [x] Integration tests; docs; the poison TODO in `pkg/broker`.
-- [ ] CI green on the PR.
+- [x] CI green on PR #56.
