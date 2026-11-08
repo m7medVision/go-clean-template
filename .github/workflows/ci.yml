@@ -290,7 +290,7 @@ jobs:
             -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=mongoPa55w0rd \
             mongo:8.3.13
           for _ in $(seq 30); do
-            docker exec mongo mongosh --quiet -u user -p mongoPa55w0rd --eval 'db.runCommand({ping: 1}).ok' 2>/dev/null | grep -q 1 && exit 0
+            docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' 2>/dev/null | grep -q 1 && exit 0
             sleep 2
           done
           echo "MongoDB did not answer ping" >&2
@@ -387,7 +387,7 @@ jobs:
             -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=mongoPa55w0rd \
             mongo:8.3.13
           for _ in $(seq 30); do
-            docker exec mongo mongosh --quiet -u user -p mongoPa55w0rd --eval 'db.runCommand({ping: 1}).ok' 2>/dev/null | grep -q 1 && exit 0
+            docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' 2>/dev/null | grep -q 1 && exit 0
             sleep 2
           done
           echo "MongoDB did not answer ping" >&2
