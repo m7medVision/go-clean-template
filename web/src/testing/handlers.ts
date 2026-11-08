@@ -20,21 +20,29 @@ type JsonBody<Operation> = Operation extends {
 const route = (path: string) => path.replaceAll(/\{(\w+)\}/g, ":$1");
 
 // onRest answers one REST operation of the OpenAPI document. The path, the method and the body's
-// type come from the generated schema, so an API change breaks the handler at compile time.
+// type come from the generated schema, so an API change breaks the handler at compile time. It
+// returns the JSON bodies it was sent, so a test can assert what the app actually requested.
 export function onRest<Path extends keyof paths, Verb extends Method & keyof paths[Path]>(
   method: Verb,
   path: Path,
   body: JsonBody<paths[Path][Verb]> | ((request: Request) => JsonBody<paths[Path][Verb]>),
   status = 200,
 ) {
+  const sent: unknown[] = [];
+
   server.use(
-    http[method](route(path), ({ request }) =>
-      HttpResponse.json(
+    http[method](route(path), async ({ request }) => {
+      const text = await request.clone().text();
+      sent.push(text ? JSON.parse(text) : undefined);
+
+      return HttpResponse.json(
         (typeof body === "function" ? body(request) : body) as Record<string, unknown>,
         { status },
-      ),
-    ),
+      );
+    }),
   );
+
+  return { sent };
 }
 
 // onProblem answers a REST operation with an RFC 9457 problem.
@@ -73,6 +81,18 @@ export function onOperation<Result, Variables = Record<string, never>>(
           : result;
 
       return HttpResponse.json({ data });
+    }),
+  );
+}
+
+// onOperationFails answers a GraphQL operation with an HTTP error, as an API that is down would.
+export function onOperationFails(name: string, status = 500) {
+  server.use(
+    http.post("/graphql", async ({ request }) => {
+      const body = (await request.clone().json()) as { query: string };
+      if (operationName.exec(body.query)?.[1] !== name) return undefined;
+
+      return HttpResponse.json({ errors: [{ message: "boom" }] }, { status });
     }),
   );
 }

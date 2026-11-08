@@ -37,7 +37,7 @@ describe("the exchange screen", () => {
     onOperation<ExchangeHistoryQuery>("ExchangeHistory", () => ({
       exchangeHistory: { total: history.length, conversions: [...history] },
     }));
-    onRest("post", "/v1/exchange/convert", () => {
+    const convert = onRest("post", "/v1/exchange/convert", () => {
       history.push(conversion);
 
       return {
@@ -56,6 +56,7 @@ describe("the exchange screen", () => {
 
     await screen.findAllByText(/1,?842\.5/);
     expect(screen.queryByText(/No conversions yet/)).toBeNull();
+    expect(convert.sent).toEqual([{ amount: "100", from: "OMR", to: "CNY" }]);
   });
 
   it("shows why a conversion was refused", async () => {

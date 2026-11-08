@@ -21,7 +21,7 @@ describe("the sign-in screen", () => {
   beforeEach(() => onRest("get", "/v1/auth/oidc", { enabled: false }));
 
   it("signs in and lands on the tasks", async () => {
-    onRest("post", "/v1/auth/login", { token });
+    const login = onRest("post", "/v1/auth/login", { token });
     onRest("get", "/v1/user/profile", {
       id: "550e8400-e29b-41d4-a716-446655440000",
       email: "jane@example.com",
@@ -36,6 +36,7 @@ describe("the sign-in screen", () => {
 
     expect(await screen.findByRole("heading", { name: "Tasks" })).toBeTruthy();
     expect(auth.token()).toBe(token);
+    expect(login.sent).toEqual([{ email: "jane@example.com", password: "correct horse battery" }]);
   });
 
   it("shows the server's refusal for a wrong password and stays signed out", async () => {

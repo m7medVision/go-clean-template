@@ -108,7 +108,10 @@ real clients run; `onRest(method, path, body)` takes its path and body type from
 OpenAPI types and `onOperation<Result>(name, result)` its result from the generated GraphQL types,
 so a contract change fails type checking in the handler. `onProblem` answers a REST problem. A
 request with no handler fails the test. `renderRoute` builds its router with the same error and
-not-found defaults as the app (`web/src/router-defaults.ts`). Assert on roles and text a user sees, not on snapshots.
+not-found defaults as the app (`web/src/router-defaults.ts`). `onRest` returns the JSON bodies it was
+sent (`.sent`): assert them, or a form that sends the wrong fields still passes. Assert on roles and text a
+user sees, not on snapshots. `src/boundaries.test.ts` lints real files that break the import layers, so a
+rule that stops working fails a test.
 Flows covered: sign-in (success, wrong password, rate limit), tasks (list, add, move, delete),
 exchange (history, convert, refusal).
 
