@@ -1,7 +1,7 @@
 import type { ErrorEvent } from "@sentry/react";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import { reportError, scrubEvent } from "./error-tracking";
+import { initErrorTracking, reportError, scrubEvent } from "./error-tracking";
 
 const event = (extra: Partial<ErrorEvent>): ErrorEvent => ({ type: undefined, ...extra });
 
@@ -67,8 +67,33 @@ describe("scrubEvent", () => {
   });
 });
 
+const captured: unknown[] = [];
+
+vi.mock("@sentry/react", () => ({
+  init: vi.fn(),
+  withScope: (callback: (scope: { setUser: () => void }) => void) =>
+    callback({ setUser: () => {} }),
+  captureException: (error: unknown) => captured.push(error),
+}));
+
 describe("reportError", () => {
   it("does nothing before the SDK is started", () => {
     expect(() => reportError(new Error("boom"))).not.toThrow();
+    expect(captured).toHaveLength(0);
+  });
+
+  it("sends an error reported while the SDK is still loading, once, and skips expected ones", async () => {
+    vi.stubEnv("VITE_SENTRY_DSN", "http://key@localhost:9/1");
+    const started = initErrorTracking();
+    const crash = new Error("early");
+
+    reportError(crash);
+    reportError(crash);
+    reportError({ status: 401 });
+    await started;
+    await Promise.resolve();
+
+    expect(captured).toEqual([crash]);
+    vi.unstubAllEnvs();
   });
 });

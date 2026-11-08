@@ -7,6 +7,7 @@ import { auth } from "#/auth/token";
 type Sentry = typeof import("@sentry/react");
 
 let sentry: Sentry | undefined;
+let starting: Promise<void> | undefined;
 const _reported = new WeakSet<object>();
 
 const withoutQuery = (url: string) => url.split("?")[0] ?? url;
@@ -47,33 +48,42 @@ export function scrubEvent(event: ErrorEvent, hint?: EventHint): ErrorEvent | nu
 }
 
 // initErrorTracking starts the SDK when a DSN was built in; without one it loads nothing and sends
-// nothing.
-export async function initErrorTracking(): Promise<void> {
+// nothing. An error reported while it loads is sent once it has.
+export function initErrorTracking(): Promise<void> {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
-  if (!dsn) return;
+  if (!dsn) return Promise.resolve();
 
-  const loaded = await import("@sentry/react");
-  loaded.init({
-    dsn,
-    release: import.meta.env.VITE_RELEASE || undefined,
-    environment: import.meta.env.MODE,
-    beforeSend: scrubEvent,
+  starting = import("@sentry/react").then((loaded) => {
+    loaded.init({
+      dsn,
+      release: import.meta.env.VITE_RELEASE || undefined,
+      environment: import.meta.env.MODE,
+      beforeSend: scrubEvent,
+    });
+    sentry = loaded;
   });
-  sentry = loaded;
+
+  return starting;
 }
 
-// reportError sends an unexpected failure once, with the signed-in user's id and nothing else.
-export function reportError(error: unknown): void {
-  if (!sentry || !shouldReport(error)) return;
+function send(error: unknown): void {
+  const client = sentry;
+  if (!client) return;
   if (typeof error === "object" && error !== null) {
     if (_reported.has(error)) return;
     _reported.add(error);
   }
 
-  const client = sentry;
   client.withScope((scope) => {
     const id = tokenSubject(auth.token());
     if (id) scope.setUser({ id });
     client.captureException(error);
   });
+}
+
+// reportError sends an unexpected failure once, with the signed-in user's id and nothing else.
+export function reportError(error: unknown): void {
+  if (!shouldReport(error)) return;
+  if (sentry) send(error);
+  else void starting?.then(() => send(error));
 }
