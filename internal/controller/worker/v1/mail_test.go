@@ -58,7 +58,7 @@ func TestMailController_Handle(t *testing.T) {
 			wantDelivered: 0,
 		},
 		{
-			name:          "an email without a template is dropped",
+			name:          "a delivery that reports an unknown email is dropped",
 			body:          welcomeBody,
 			deliverErr:    fmt.Errorf("render: %w", entity.ErrUnknownEmail),
 			wantDelivered: 1,

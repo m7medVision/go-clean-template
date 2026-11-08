@@ -175,7 +175,9 @@ Two more features of the store:
 - **Versioning.** Every event has its own `SchemaVersion`. When a shape changes, raise that event's
   version and add
   an `entity.Upcast` from the version before to `entity.Upcasts()`, beside the events. Stored events are never
-  rewritten; old ones are upcast one version at a time as they load.
+  rewritten; old ones are upcast one version at a time as they load. `internal/repo/eventcodec/testdata/events/`
+  holds one frozen sample per event type and version, and the codec tests fail when an event's stored shape
+  no longer matches its sample or an old sample no longer decodes.
 - **Write-side guards.** Claims (`claims` table) keep emails, usernames and SSO identities unique.
   `webauthn_used_challenges` keeps a passkey login from completing twice. A command writes both in
   its own transaction, so they are consistent at once. They are not projections.
@@ -267,7 +269,9 @@ database with a running worker.
 - **An event.** Add the type to `internal/entity/<domain>_events.go` with `EventType()` and
   `SchemaVersion()`, add it to the domain's list in `EventTypes()`, and handle it in the aggregate's
   `Apply` and in the projector.
-- **A changed event.** Raise its `SchemaVersion` and add the upcast from the previous version.
+- **A changed event.** Raise its `SchemaVersion`, add the upcast from the previous version, and keep the old
+  sample in `internal/repo/eventcodec/testdata/events/`. A new event, or a new version, gets its sample from
+  `UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/`; review the new file.
 - **A projector.** Add `internal/repo/persistent/<domain>/projector.go`: a `NewProjector(pg)` that
   returns `projection.NewProjector(name, tables, handles, pg, project)`, with its name, the tables a
   rebuild empties, the events it `Handles` (its domain's event list, such as `entity.TaskEvents()`)

@@ -270,6 +270,9 @@ The generator prints what is left to write, from
   tests of what the handler does.
 - **The REST operations' `Errors`**, which list 501 while their handlers are stubs: drop
   `http.StatusNotImplemented` from each once its handler is written.
+- **The event samples**: `make test` fails on the new events until each has a frozen sample. Write them
+  with `UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/`, and again after
+  you change an event's fields (see [cqrs.md](cqrs.md)).
 - **The docs**: the domain's section in [api.md](api.md), its bullet in `What you get` in the
   README, and its aggregate and projector rows in [cqrs.md](cqrs.md).
 - **This domain, before you generate another** ([Known limitations](#known-limitations)).
