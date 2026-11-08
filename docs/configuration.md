@@ -132,7 +132,8 @@ http://127.0.0.1:16686.
   The outbound calls, to the exchange-rate API and to the SSO provider, use an `otelhttp` transport,
   so they join the same trace (all but the SSO key fetch, which go-oidc runs in the background).
 - **Every layer has spans.** A trace shows the request, then a span per command or query (the
-  buses' trace step), then one per SQL statement (otelpgx) and per outbound HTTP call (otelhttp).
+  buses' trace step), then one per SQL statement (otelpgx), per outbound HTTP call (otelhttp) and per Valkey command
+  (valkeyotel).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the
   instrumentation, HTTP's included, runs unconditionally with no overhead. An incoming `traceparent`
   still propagates, so every transport records the caller's trace ID as its events' correlation ID.

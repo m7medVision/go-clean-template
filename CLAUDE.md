@@ -102,11 +102,12 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   (`EventStore`, `Subscriber`, `ProjectionCheckpoints`, `SessionIssuer`), and one file per domain
   (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) holds its read model and
   outbound ports. A port only infrastructure uses lives with its consumer (`notify.Queue`,
-  `eventstore.Importer`, `worker.Queue`). Implemented by
+  `eventstore.Importer`, `worker.Queue`, `webapi.Cache`). Implemented by
   `internal/repo/persistent/eventstore` (the event store), `persistent/projection` (the runner the
   worker runs), `persistent/<domain>/` (each domain's read model, projector and importer), and
-  `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
-  unit-tested against the recorded response in `testdata/` that the integration stub also serves).
+  `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`, its
+  rates cached in Valkey until the provider's next update, unit-tested against the recorded
+  response in `testdata/` that the integration stub also serves).
   `internal/repo/memstore` is the in-memory event store command-handler tests use; it and the
   Postgres store share `internal/repo/eventcodec` (codec, snapshot rule, claims, metadata).
 - `internal/controller/<transport>/v1/<domain>/` — one folder per domain in each transport, holding
@@ -293,8 +294,9 @@ shape from a neighbouring handler in the same transport.
 and retry (on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`AdminOnly()`)
 and validate (`Validate()`). A handler carries none of these. A message type with no registered
 handler is `cqrs.ErrNoHandler` at the first send, so a new message needs its line in `register.go`.
-Below the buses, otelpgx traces every SQL statement and otelhttp every outbound call, so
-repositories carry no tracing code: a span per message, then one per statement or request.
+Below the buses, otelpgx traces every SQL statement, otelhttp every outbound call and valkeyotel
+every Valkey command, so repositories carry no tracing code: a span per message, then one per
+statement, request or command.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
 its `SchemaVersion()` and adding an `entity.Upcast` from the previous version to

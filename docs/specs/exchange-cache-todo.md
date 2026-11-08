@@ -72,15 +72,15 @@ by one line each)
 **Verify:** G1, `go vet ./integration-test/...`; G3. **Depends on:** 1, 2. **Size:** S
 
 ### 4. Docs
-- [ ] `docs/request-flow.md`:
-  - [ ] the diagram gains Valkey (a hit, and the provider on a miss);
-  - [ ] the wiring quote is the new `webapi.New(…, valkey.NewCache(d.valkey))`;
-  - [ ] "6. The outbound API" gains the cache: the key, what is stored, the expiry, failing open,
+- [x] `docs/request-flow.md`:
+  - [x] the diagram gains Valkey (a hit, and the provider on a miss);
+  - [x] the wiring quote is the new `webapi.New(…, valkey.NewCache(d.valkey))`;
+  - [x] "6. The outbound API" gains the cache: the key, what is stored, the expiry, failing open,
         the one deadline;
-  - [ ] the test table lists the fake cache and the seeded integration test.
-- [ ] `docs/architecture.md`: the `pkg/valkey` row adds `Cache`; the `internal/repo/webapi` row
+  - [x] the test table lists the fake cache and the seeded integration test.
+- [x] `docs/architecture.md`: the `pkg/valkey` row adds `Cache`; the `internal/repo/webapi` row
       says rates are cached until the provider's next update.
-- [ ] `CLAUDE.md`: the `internal/repo/webapi/` line says the rates are cached in Valkey.
+- [x] `CLAUDE.md`: the `internal/repo/webapi/` line says the rates are cached in Valkey.
 
 **Files:** the three above. **Verify:** each page read through; the quotes match the code; links
 resolve. **Depends on:** 2, 3. **Size:** M
