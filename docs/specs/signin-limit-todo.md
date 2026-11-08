@@ -9,18 +9,18 @@ L = 6–8.
 ---
 
 ### 1. The rule, in `pkg/clientip`
-- [ ] `Resolve(peer netip.Addr, forwardedFor []string, proxy netip.Addr) netip.Addr`, as in the
+- [x] `Resolve(peer netip.Addr, forwardedFor []string, proxy netip.Addr) netip.Addr`, as in the
       spec: the peer unless it is the proxy; from the proxy, the rightmost `X-Forwarded-For` entry
       that parses, else the peer; IPv4-mapped addresses unmapped, zones dropped.
-- [ ] Table-driven tests:
-  - [ ] no proxy configured;
-  - [ ] a direct client with and without a header;
-  - [ ] a forged header from a non-proxy;
-  - [ ] through the proxy;
-  - [ ] several header lines and comma lists (the rightmost wins);
-  - [ ] an unparsable rightmost entry;
-  - [ ] IPv4-mapped IPv6;
-  - [ ] an IPv6 client.
+- [x] Table-driven tests:
+  - [x] no proxy configured;
+  - [x] a direct client with and without a header;
+  - [x] a forged header from a non-proxy;
+  - [x] through the proxy;
+  - [x] several header lines and comma lists (the rightmost wins);
+  - [x] an unparsable rightmost entry;
+  - [x] IPv4-mapped IPv6;
+  - [x] an IPv6 client.
 
 **Files:** `pkg/clientip/clientip.go`, `clientip_test.go`. **Verify:** G1. **Depends on:** none.
 **Size:** S
