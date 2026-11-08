@@ -66,6 +66,7 @@ const config = defineConfig({
   },
   resolve: { tsconfigPaths: true },
   test: {
+    include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/testing/setup.ts"],
     environmentOptions: { happyDOM: { url: "http://localhost:3000" } },
   },

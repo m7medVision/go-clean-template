@@ -33,6 +33,7 @@
   "devDependencies": {
     "@graphql-codegen/cli": "^7.4.6",
     "@graphql-codegen/client-preset": "^6.2.3",
+    "@playwright/test": "^1.65.0",
     "@tanstack/devtools-vite": "0.8.6",
     "@tanstack/router-plugin": "1.168.48",
     "@testing-library/dom": "^10.4.2",
