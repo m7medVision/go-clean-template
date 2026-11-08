@@ -72,7 +72,8 @@ comments in new code unless important. Sizes: S = 1–2 files, M = 3–5.
   3. The integration stack (compose with the integration overrides) and `make run` against
      `db` and `valkey` reach Valkey; `make dev` and `make compose-up-all` start the same
      services from the same definitions and were not launched themselves.
-  4. **Open:** CI runs at G4, after the push.
+  4. CI green on PR #52 at `c812c6f`, the integration job included
+     ([run 42457198942](https://github.com/m7medVision/go-clean-template/actions/runs/42457198942)).
   5. The worker starts and runs with `VALKEY_URL` empty.
   6. G1 passed at every commit; the docs say what changed.
 - [ ] Then the `exchange-cache` spec.
