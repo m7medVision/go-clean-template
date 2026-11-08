@@ -7,4 +7,4 @@
 - [x] Generator: migration template, `Data.Version`, rule R1, goldens.
 - [x] Docs: CLAUDE.md, README, architecture, configuration, development, generator, passkeys,
       request-flow, sso, worker.
-- [ ] `make gen-e2e`; CI green on the PR.
+- [x] `make gen-e2e`; CI green on PR #55 (run 42519384581).
