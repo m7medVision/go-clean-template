@@ -107,7 +107,8 @@ await user.click(await screen.findByRole("button", { name: "Add task" }));
 real clients run; `onRest(method, path, body)` takes its path and body type from the generated
 OpenAPI types and `onOperation<Result>(name, result)` its result from the generated GraphQL types,
 so a contract change fails type checking in the handler. `onProblem` answers a REST problem. A
-request with no handler fails the test. Assert on roles and text a user sees, not on snapshots.
+request with no handler fails the test. `renderRoute` builds its router with the same error and
+not-found defaults as the app (`web/src/router-defaults.ts`). Assert on roles and text a user sees, not on snapshots.
 Flows covered: sign-in (success, wrong password, rate limit), tasks (list, add, move, delete),
 exchange (history, convert, refusal).
 
