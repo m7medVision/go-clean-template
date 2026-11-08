@@ -86,7 +86,25 @@ by one line each)
 resolve. **Depends on:** 2, 3. **Size:** M
 
 ### Checkpoint
-- [ ] G3 green on the branch head.
-- [ ] Spec success criteria 1–6 checked one by one; criterion 1's Jaeger check by hand, once.
-- [ ] Push; G4 green on PR #52; PR body's module table updated.
+- [x] G3 green on the branch head: 41 of 41 integration tests in an isolated compose project at
+      `0b5c6f5`, `TestHTTPConvertV1ReadsTheCachedRates` and `TestValkeyCacheKeepsBytesUntilTheirExpiry`
+      among them.
+- [x] Spec success criteria checked one by one:
+  1. `TestExchangeWebAPI_RateMissStores` makes one request for two conversions. By hand in Jaeger,
+     the first conversion from OMR has a Valkey `GET`, `HTTP GET open.er-api.com` and a Valkey
+     `SET`; the second has only the Valkey `GET`.
+  2. The hit cases return the cached rate and date, and a missing target is
+     `ErrUnsupportedCurrency`; the integration suite's existing exchange tests pass unchanged.
+  3. `TestExchangeWebAPI_RateFailingCache` covers a failing and a hanging cache. By hand, with
+     `valkey` stopped, conversions answered 200 at the provider's rate. Once it restarted empty,
+     the next conversion refilled the key.
+  4. `TestExchangeWebAPI_RateNeverStores` covers error bodies, other statuses, undecodable and
+     oversized bodies, and the expired fixture.
+  5. The seeded integration test gets 7.123456, not the stub's 17.406483. CI: green at `1122b56` ([run 42474403323](https://github.com/m7medVision/go-clean-template/actions/runs/42474403323)),
+     which includes this module's commits. The push of `0b5c6f5` alone hit a GitHub
+     release-download outage in the hadolint step, unrelated to this module.
+  6. Nothing under `internal/usecase`, `internal/controller`, `internal/repo/exchange.go` or
+     `internal/app/servers.go` changed in this module. G1 passed at every commit. By hand,
+     `PEXPIRETIME exchange:latest:OMR` equalled the body's `time_next_update_unix` × 1000.
+- [x] Pushed; G4 green on PR #52; the PR body's module table and proof updated.
 - [ ] Then the `signin-limit` spec.

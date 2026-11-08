@@ -62,7 +62,7 @@ L = 6–8.
   - [x] `caddy` gets `ipv4_address: 172.30.0.10`;
   - [x] the backend environment gets `TRUSTED_PROXY: "172.30.0.10"`.
 - [x] `docker compose config` renders.
-- [ ] The scratchpad's `isolate.py` learns to rewrite the subnet, the address and `TRUSTED_PROXY`
+- [x] The scratchpad's `isolate.py` learns to rewrite the subnet, the address and `TRUSTED_PROXY`
       for G3.
 
 **Files:** `docker-compose.yml`. **Verify:** G1; `docker compose -f docker-compose.yml -f
@@ -167,6 +167,27 @@ docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:*
 **Size:** M
 
 ### Checkpoint
-- [ ] G3 green on the branch head, plus the forged-header check through Caddy.
-- [ ] Spec success criteria 1–6 checked one by one.
-- [ ] Push; G4 green on PR #52; the PR body gains the module; the PR is ready for review.
+- [x] G3 green on the branch head (`1122b56`): 45 of 45 integration tests in an isolated compose
+      project (subnet moved to `172.31.250.0/24`), the four new limit tests among them. Through
+      Caddy, a request with a forged `X-Forwarded-For: 1.2.3.4` was logged by the app with the
+      prober's real address, not Caddy's and not the forged one. Sent straight to the app, a
+      forged `5.6.7.8` was ignored the same way.
+- [x] Spec success criteria checked one by one:
+  1. `TestHTTPLoginRefusesTheAccountAfterItsFailureBudget`: 5 wrong passwords, then 429 with
+     `Retry-After`. By hand (G2), the 6th attempt answered 429 with `Retry-After: 900`. gRPC
+     `ResourceExhausted` with `RetryInfo` is covered by `rpcerr`'s tests.
+  2. `TestHTTPLoginSuccessClearsTheAccountFailures` passes.
+  3. By hand, the 21st sign-in from one client answered 429 (`Retry-After: 899`). The forged
+     header is ignored from anywhere but `TRUSTED_PROXY` (`pkg/clientip`, the middleware and
+     interceptor tests, and the Caddy probe above).
+  4. By hand, with `valkey` stopped, three sign-ins answered 200 and logged exactly three
+     `sign-in limit unavailable` warnings; after the restart, sign-in worked and counting
+     started over.
+  5. The request logs show the resolved client: the probe above, and the `httpmw` and gRPC
+     logger tests.
+  6. The worker builds its buses without the step (`TestTheWorkersBusesLimitNothing`) and starts
+     without Valkey. G1 passed at every commit; `make web-check` passed at task 5. The 429 body
+     says only `too many attempts`, and Valkey's keys hold no `@`. CI: green at `1122b56`, every job
+     ([run 42474403323](https://github.com/m7medVision/go-clean-template/actions/runs/42474403323)).
+- [x] Pushed; the PR body gains the module.
+- [x] G4 green on PR #52, then the PR is ready for review.
