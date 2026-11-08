@@ -107,19 +107,19 @@ docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:*
 **Depends on:** 5. **Size:** L
 
 ### 7. The step
-- [ ] `behavior.Limited` (`LimitScope() string`, `LimitAccount() string`) and
+- [x] `behavior.Limited` (`LimitScope() string`, `LimitAccount() string`) and
       `behavior.Limit(limiter repo.Limiter, l *slog.Logger) cqrs.Step`, as in the spec's five
       steps. Its two comments: the check-then-count race, and why a limiter error lets the attempt
       through.
-- [ ] `LogIn` returns `"sign-in"` and its email; `RegisterUser` returns `"sign-up"` and `""`.
-- [ ] Tests against `repomock.MockLimiter`:
-  - [ ] a spent client budget refuses before the handler runs;
-  - [ ] a spent account budget refuses;
-  - [ ] `ErrInvalidCredentials` counts a failure;
-  - [ ] success clears the account;
-  - [ ] no client in the context skips the client budget;
-  - [ ] a message that isn't `Limited` passes;
-  - [ ] a limiter error lets it through and logs one warning.
+- [x] `LogIn` returns `"sign-in"` and its email; `RegisterUser` returns `"sign-up"` and `""`.
+- [x] Tests against `repomock.MockLimiter`:
+  - [x] a spent client budget refuses before the handler runs;
+  - [x] a spent account budget refuses;
+  - [x] `ErrInvalidCredentials` counts a failure;
+  - [x] success clears the account;
+  - [x] no client in the context skips the client budget;
+  - [x] a message that isn't `Limited` passes;
+  - [x] a limiter error lets it through and logs one warning.
 
 **Files:** `internal/usecase/behavior/behavior.go`, `behavior_test.go`,
 `internal/usecase/user/query/log_in.go`, `internal/usecase/user/command/register_user.go`.

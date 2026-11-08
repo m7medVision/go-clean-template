@@ -22,6 +22,10 @@ type LogIn struct {
 	Password string
 }
 
+func (LogIn) LimitScope() string { return entity.LimitSignIn }
+
+func (q LogIn) LimitAccount() string { return q.Email }
+
 type LogInHandler struct {
 	Users    repo.UserReadModel
 	Sessions repo.SessionIssuer

@@ -2,6 +2,11 @@ package entity
 
 import "time"
 
+const (
+	LimitSignIn = "sign-in"
+	LimitSignUp = "sign-up"
+)
+
 var ErrTooManyAttempts = newError(KindRateLimited, "too many attempts")
 
 type RetryAfterError struct {

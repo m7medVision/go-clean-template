@@ -25,6 +25,10 @@ type RegisterUser struct {
 
 func (c RegisterUser) Validate() error { return entity.ValidateSignUp(c.Username, c.Email, c.Password) }
 
+func (RegisterUser) LimitScope() string { return entity.LimitSignUp }
+
+func (RegisterUser) LimitAccount() string { return "" }
+
 // RegisterUserHandler's Now is the clock (time.Now when nil).
 type RegisterUserHandler struct {
 	Store repo.EventStore
