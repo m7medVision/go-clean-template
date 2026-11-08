@@ -100,8 +100,10 @@ render crashes; never a 4xx problem, `UNAUTHENTICATED` or `BAD_USER_INPUT`. The 
 caches and the route error view call `reportError`, which sends each error once with the signed-in
 user's id (the token's `sub`) and nothing else. `scrubEvent` removes query strings, request headers,
 cookies and bodies, console breadcrumbs and any user field but the id, and drops an event whose
-cause `shouldReport` rejects. Not done yet: uploading source maps to GlitchTip, so stacks are minified
-until the backend's GlitchTip rollout adds a release step.
+cause `shouldReport` rejects. Source maps: with `SENTRY_AUTH_TOKEN` set, `make web-build` builds hidden maps, uploads them to
+GlitchTip with `@sentry/vite-plugin` (debug IDs, so no release lookup is needed) and deletes them from
+`dist/`; without it no maps are built, so none are ever served. A reported frame then reads
+`src/api/graphql.ts`, `request`, line 43, not `graphql-bXhJ624U.js:1`.
 
 ## Passkeys
 
