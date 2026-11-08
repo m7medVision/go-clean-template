@@ -1,12 +1,16 @@
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
 import { Link, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { problemMessage } from "#/api/problem";
 import { Button } from "#/components/ui/button";
+import { reportError } from "#/lib/error-tracking";
 
 export function RouteError({ error, reset }: Pick<ErrorComponentProps, "error" | "reset">) {
   const router = useRouter({ warn: false });
   const queries = useQueryErrorResetBoundary();
+
+  useEffect(() => reportError(error), [error]);
 
   const retry = () => {
     queries.reset();

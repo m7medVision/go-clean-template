@@ -25,3 +25,14 @@ export function tokenRoles(token: string | null): string[] {
 
   return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === "string") : [];
 }
+
+export function tokenSubject(token: string | null): string | undefined {
+  if (!token) return undefined;
+
+  const claims = payload(token);
+  if (typeof claims !== "object" || claims === null) return undefined;
+
+  const { sub } = claims as { sub?: unknown };
+
+  return typeof sub === "string" ? sub : undefined;
+}

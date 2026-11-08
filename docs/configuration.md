@@ -21,6 +21,9 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `APP_BASE_URL` | `http://localhost` | the public origin users reach the app at, and the base of the links the app builds; a trailing slash is dropped. The web client's routes those links name (`/login`, `/sso/callback`) are built in one place, `config.App` |
 | `HTTP_PORT` | `8080` | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
+| `VITE_SENTRY_DSN` | empty | the web client, at build time (`make web-dev`, `make web-build`): where it sends unexpected errors; empty starts no SDK and sends nothing. The Go binaries do not read it |
+| `VITE_RELEASE` | empty | the web client, at build time: the release name on reported errors, and the release the source maps belong to |
+| `SENTRY_URL`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | empty | `make web-build` only: with `SENTRY_AUTH_TOKEN` set, the build emits source maps, uploads them to this GlitchTip organization and project, and deletes them from `dist/`; without it no maps are built. The DSN's public key is the 32-character hex form GlitchTip shows, not a dashed UUID |
 | `GRPC_PORT` | `8081` | the gRPC transport |
 | `TRUSTED_PROXY` | empty (no proxy) | the one address whose `X-Forwarded-For` the app reads, on HTTP and gRPC: Caddy's. An address that doesn't parse stops the app at startup. See [The client address](#the-client-address) |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |

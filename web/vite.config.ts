@@ -5,6 +5,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 // The Go app. `make web-dev` exports HTTP_PORT from .env / .env.example.
 const api = `http://127.0.0.1:${process.env.HTTP_PORT ?? "8080"}`;
@@ -53,6 +54,10 @@ const layers = [
   ),
 ];
 
+// Source maps are built only when they can be uploaded to GlitchTip (a Sentry-compatible server)
+// and are deleted from dist/ afterwards, so they are never served.
+const uploadMaps = Boolean(process.env.SENTRY_AUTH_TOKEN);
+
 const config = defineConfig({
   fmt: {
     ignorePatterns: ["dist/**", ...generated],
@@ -70,6 +75,7 @@ const config = defineConfig({
     setupFiles: ["./src/testing/setup.ts"],
     environmentOptions: { happyDOM: { url: "http://localhost:3000" } },
   },
+  build: { sourcemap: uploadMaps ? "hidden" : false },
   server: {
     // `make dev` and `make web-dev` export WEB_PORT from .env / .env.example.
     port: Number(process.env.WEB_PORT ?? "3000"),
@@ -81,6 +87,19 @@ const config = defineConfig({
     tailwindcss(),
     tanstackRouter({ target: "react", autoCodeSplitting: true }),
     viteReact(),
+    ...(uploadMaps
+      ? [
+          sentryVitePlugin({
+            url: process.env.SENTRY_URL,
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT,
+            release: { name: process.env.VITE_RELEASE },
+            sourcemaps: { filesToDeleteAfterUpload: ["dist/**/*.map"] },
+            telemetry: false,
+          }),
+        ]
+      : []),
   ]),
 });
 

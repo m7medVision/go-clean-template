@@ -125,6 +125,21 @@ page with a link to `/tasks`. A rejected token is handled apart from all of this
 signs the user out on a REST 401 and on GraphQL's `UNAUTHENTICATED`. A mutation's failure is never
 thrown into rendering; the form or dialog shows it with `FormError`.
 
+## Error tracking
+
+With `VITE_SENTRY_DSN` set at build time, `initErrorTracking` (`web/src/lib/error-tracking.ts`) loads
+`@sentry/react` and reports to that DSN (GlitchTip speaks the Sentry protocol). Without it nothing is
+loaded and nothing is sent. What is reported is decided by `shouldReport` (`web/src/api/report.ts`):
+server faults (a 5xx problem, GraphQL `INTERNAL`, an empty GraphQL response), network failures and
+render crashes; never a 4xx problem, `UNAUTHENTICATED` or `BAD_USER_INPUT`. The query and mutation
+caches and the route error view call `reportError`, which sends each error once with the signed-in
+user's id (the token's `sub`) and nothing else. `scrubEvent` removes query strings, request headers,
+cookies and bodies, console breadcrumbs and any user field but the id, and drops an event whose
+cause `shouldReport` rejects. Source maps: with `SENTRY_AUTH_TOKEN` set, `make web-build` builds hidden maps, uploads them to
+GlitchTip with `@sentry/vite-plugin` (debug IDs, so no release lookup is needed) and deletes them from
+`dist/`; without it no maps are built, so none are ever served. A reported frame then reads
+`src/api/graphql.ts`, `request`, line 43, not `graphql-bXhJ624U.js:1`.
+
 ## Passkeys
 
 The browser half of a WebAuthn ceremony is in `web/src/passkey/webauthn.ts`, on the browser's own
