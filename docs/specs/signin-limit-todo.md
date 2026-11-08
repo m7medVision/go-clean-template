@@ -69,17 +69,17 @@ L = 6–8.
 docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:** S
 
 ### 5. The rate-limited kind on every transport
-- [ ] `entity.KindRateLimited`; `ErrTooManyAttempts` (`"too many attempts"`); `RetryAfterError`
+- [x] `entity.KindRateLimited`; `ErrTooManyAttempts` (`"too many attempts"`); `RetryAfterError`
       (wraps `ErrTooManyAttempts`, carries `RetryAfter time.Duration`) and its constructor;
       `Allowance{Allowed bool; RetryAfter time.Duration}`; `Limits` (the client rule and the
       account rule: a count and a window each).
-- [ ] `apierr.Problem`: 429 through `huma.ErrorWithHeaders`, `Retry-After` in whole seconds,
+- [x] `apierr.Problem`: 429 through `huma.ErrorWithHeaders`, `Retry-After` in whole seconds,
       rounded up, never below 1.
-- [ ] `rpcerr.Status`: `codes.ResourceExhausted` with an `errdetails.RetryInfo`.
-- [ ] `gqlerr.Map`: `RATE_LIMITED`.
-- [ ] The REST `register` and `login` operations list 429; `make openapi`, `make web-api`,
+- [x] `rpcerr.Status`: `codes.ResourceExhausted` with an `errdetails.RetryInfo`.
+- [x] `gqlerr.Map`: `RATE_LIMITED`.
+- [x] The REST `register` and `login` operations list 429; `make openapi`, `make web-api`,
       `make web-check`, and commit their diffs.
-- [ ] Tests for each mapper, and for `RetryAfterError` with `errors.Is` and `errors.As`.
+- [x] Tests for each mapper, and for `RetryAfterError` with `errors.Is` and `errors.As`.
 
 **Files:** `internal/entity/errors.go`, `internal/entity/limit.go` (+ test), the three mappers
 (+ tests), `internal/controller/restapi/v1/user/register.go`, `login.go`, `docs/openapi/v1.json`,

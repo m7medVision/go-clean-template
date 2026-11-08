@@ -17,6 +17,7 @@ const (
 	_codeUnavailable     = "UNAVAILABLE"
 	_codeConflict        = "CONFLICT"
 	_codeNotImplemented  = "NOT_IMPLEMENTED"
+	_codeRateLimited     = "RATE_LIMITED"
 	_codeInternal        = "INTERNAL"
 )
 
@@ -59,6 +60,8 @@ func code(k entity.Kind) string {
 		return _codeUnavailable
 	case entity.KindNotImplemented:
 		return _codeNotImplemented
+	case entity.KindRateLimited:
+		return _codeRateLimited
 	case entity.KindInternal:
 	}
 

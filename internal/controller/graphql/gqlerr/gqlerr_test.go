@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -32,6 +33,7 @@ func TestMapAnswersEachKindWithItsCodeAndMessage(t *testing.T) {
 		{entity.ErrReadModelBehind, "UNAVAILABLE", entity.ErrReadModelBehind.Error()},
 		{entity.ErrOIDCUnavailable, "UNAVAILABLE", "sso provider unavailable"},
 		{entity.ErrNotImplemented, "NOT_IMPLEMENTED", "not implemented"},
+		{entity.TooManyAttempts(time.Minute), "RATE_LIMITED", "too many attempts"},
 		{errors.New("db down"), "INTERNAL", "internal server error"}, //nolint:err113 // a one-off error is the point
 	} {
 		var gqlErr *gqlerror.Error

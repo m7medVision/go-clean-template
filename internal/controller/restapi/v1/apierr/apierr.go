@@ -4,9 +4,13 @@ package apierr
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"slices"
+	"strconv"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -19,12 +23,21 @@ func Problem(ctx context.Context, l *slog.Logger, err error, op string) error {
 		l.Log(ctx, level, "restapi - "+op, "error", err)
 	}
 
-	return huma.NewError(status(kind), entity.Message(err))
+	problem := huma.NewError(status(kind), entity.Message(err))
+	if retry, ok := errors.AsType[*entity.RetryAfterError](err); ok {
+		return huma.ErrorWithHeaders(problem, http.Header{"Retry-After": {retryAfterSeconds(retry.RetryAfter)}})
+	}
+
+	return problem
+}
+
+func retryAfterSeconds(d time.Duration) string {
+	return strconv.Itoa(max(1, int(math.Ceil(d.Seconds()))))
 }
 
 // status is the HTTP status of a kind. A switch, so that exhaustive fails the lint on a kind it
 // does not name.
-func status(k entity.Kind) int {
+func status(k entity.Kind) int { //nolint:gocyclo,cyclop // exhaustive needs every kind named, and each status is a case of its own
 	switch k {
 	case entity.KindInvalid:
 		return http.StatusBadRequest
@@ -42,6 +55,8 @@ func status(k entity.Kind) int {
 		return http.StatusBadGateway
 	case entity.KindNotImplemented:
 		return http.StatusNotImplemented
+	case entity.KindRateLimited:
+		return http.StatusTooManyRequests
 	case entity.KindInternal:
 	}
 

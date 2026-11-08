@@ -25,7 +25,7 @@ func (r *controller) register(api huma.API) {
 		Path:          "/v1/auth/register",
 		Tags:          []string{apidoc.AuthTag},
 		DefaultStatus: http.StatusCreated,
-		Errors:        apierr.CommandErrors(http.StatusConflict),
+		Errors:        apierr.CommandErrors(http.StatusConflict, http.StatusTooManyRequests),
 	}, func(ctx context.Context, input *registerInput) (*userOutput, error) {
 		written, err := cqrs.SendCommand(ctx, r.cmds, command.RegisterUser{
 			Username: input.Body.Username, Email: input.Body.Email, Password: input.Body.Password,

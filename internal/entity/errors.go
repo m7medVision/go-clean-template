@@ -22,6 +22,7 @@ const (
 	KindUnavailable
 	KindUpstream
 	KindNotImplemented
+	KindRateLimited
 )
 
 // Error is a failure the caller may be told about: its message is safe to show.
@@ -63,7 +64,7 @@ func Message(err error) string {
 // and the app's own faults, its dependencies' included, as errors.
 func (k Kind) LogLevel() (slog.Level, bool) {
 	switch k {
-	case KindInvalid, KindUnauthenticated, KindForbidden, KindNotFound, KindExists:
+	case KindInvalid, KindUnauthenticated, KindForbidden, KindNotFound, KindExists, KindRateLimited:
 		return 0, false
 	case KindConflict, KindUnavailable, KindNotImplemented:
 		return slog.LevelWarn, true
