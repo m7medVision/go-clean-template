@@ -141,10 +141,10 @@ docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:*
 **Verify:** G1; G2. **Depends on:** 7. **Size:** L
 
 ### 9. The end-to-end proof
-- [ ] `integration-test/limit_test.go`:
-  - [ ] register, 5 wrong passwords (401 each), then the right one answers 429 with a
+- [x] `integration-test/limit_test.go`:
+  - [x] register, 5 wrong passwords (401 each), then the right one answers 429 with a
         `Retry-After` header;
-  - [ ] register, 4 wrong, the right one (200), then 5 wrong are all 401.
+  - [x] register, 4 wrong, the right one (200), then 5 wrong are all 401.
 
 **Files:** `integration-test/limit_test.go`. **Verify:** G1, `go vet ./integration-test/...`; G3.
 **Depends on:** 8. **Size:** S
