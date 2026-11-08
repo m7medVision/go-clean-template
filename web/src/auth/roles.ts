@@ -25,5 +25,3 @@ export function tokenRoles(token: string | null): string[] {
 
   return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === "string") : [];
 }
-
-export const isAdmin = (token: string | null) => tokenRoles(token).includes("admin");
