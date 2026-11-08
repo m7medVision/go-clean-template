@@ -1,7 +1,7 @@
 // Package behavior holds the application's own steps of the command and query pipelines: they
 // know the domain (roles, metadata, the read model's consistency), which pkg/cqrs must not.
 //
-// The buses run them in this order, outermost first: Stamp, Wait, Retry, Authorize, Validate.
+// The buses run them outermost first: Stamp, Limit, Wait, Retry, Authorize, Validate.
 package behavior
 
 import (

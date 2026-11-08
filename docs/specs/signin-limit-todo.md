@@ -126,14 +126,14 @@ docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:*
 **Verify:** G1. **Depends on:** 5, 6. **Size:** M
 
 ### 8. Turn it on
-- [ ] `config.AuthLimit`: `AUTH_LIMIT_CLIENT_ATTEMPTS` (20), `AUTH_LIMIT_ACCOUNT_FAILURES` (5),
+- [x] `config.AuthLimit`: `AUTH_LIMIT_CLIENT_ATTEMPTS` (20), `AUTH_LIMIT_ACCOUNT_FAILURES` (5),
       `AUTH_LIMIT_WINDOW` (15m); the same in `.env.example`.
-- [ ] `newBootstrap` no longer builds the buses. `newBuses` takes extra steps and puts them after
+- [x] `newBootstrap` no longer builds the buses. `newBuses` takes extra steps and puts them after
       `Stamp`. `Run` builds the app's buses after `valkey.New`, with
       `behavior.Limit(limiter.New(client, limits), l)`; `RunWorker` builds the worker's without it.
-- [ ] `internal/app` tests: the app's buses carry the step and the worker's don't, and both start
+- [x] `internal/app` tests: the app's buses carry the step and the worker's don't, and both start
       as before.
-- [ ] `docker-compose-integration-test.yml` and the CI integration job set
+- [x] `docker-compose-integration-test.yml` and the CI integration job set
       `AUTH_LIMIT_CLIENT_ATTEMPTS=1000`.
 
 **Files:** `config/config.go`, `.env.example`, `internal/app/bootstrap.go`, `buses.go`, `app.go`,

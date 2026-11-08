@@ -13,6 +13,7 @@ services:
   app:
     environment:
       EXCHANGE_SERVICE_URL: "http://exchange:8090"
+      AUTH_LIMIT_CLIENT_ATTEMPTS: "1000"
     depends_on:
       - exchange
 

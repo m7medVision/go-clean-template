@@ -12,22 +12,23 @@ type (
 	// Config is every setting, one section per concern. The binaries pass each part only the
 	// sections it reads.
 	Config struct {
-		App      App
-		HTTP     HTTP
-		Log      Log
-		PG       PG
-		GRPC     GRPC
-		JWT      JWT
-		Valkey   Valkey
-		Metrics  Metrics
-		Docs     Docs
-		Tracing  Tracing
-		Worker   Worker
-		CQRS     CQRS
-		Mail     Mail
-		Exchange Exchange
-		WebAuthn WebAuthn
-		OIDC     OIDC
+		App       App
+		HTTP      HTTP
+		Log       Log
+		PG        PG
+		GRPC      GRPC
+		JWT       JWT
+		Valkey    Valkey
+		AuthLimit AuthLimit
+		Metrics   Metrics
+		Docs      Docs
+		Tracing   Tracing
+		Worker    Worker
+		CQRS      CQRS
+		Mail      Mail
+		Exchange  Exchange
+		WebAuthn  WebAuthn
+		OIDC      OIDC
 	}
 
 	App struct {
@@ -64,6 +65,12 @@ type (
 	// checks it.
 	Valkey struct {
 		URL string `env:"VALKEY_URL"`
+	}
+
+	AuthLimit struct {
+		ClientAttempts  int           `env:"AUTH_LIMIT_CLIENT_ATTEMPTS" envDefault:"20"`
+		AccountFailures int           `env:"AUTH_LIMIT_ACCOUNT_FAILURES" envDefault:"5"`
+		Window          time.Duration `env:"AUTH_LIMIT_WINDOW" envDefault:"15m"`
 	}
 
 	Metrics struct {

@@ -7,19 +7,17 @@ import (
 	"os"
 
 	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/tracing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
-// bootstrap is what both binaries start from: the logger, tracing, the metrics registry, the
-// database and the buses, with no handler registered yet.
+// bootstrap is what both binaries start from: the logger, tracing, the metrics registry and the
+// database. Each binary builds its own buses on them (newBuses), with the steps only it runs.
 type bootstrap struct {
 	l           *slog.Logger
 	pg          *postgres.Postgres
-	buses       cqrs.Buses
 	metrics     *prometheus.Registry
 	stopTracing tracing.ShutdownFunc
 }
@@ -42,14 +40,10 @@ func newBootstrap(ctx context.Context, cfg *config.Config, service string) (*boo
 		return nil, err
 	}
 
-	metrics := newMetrics()
-	cmds, qs := newBuses(pg, projectors(pg), cfg.CQRS.ConsistencyTimeout, metrics, l)
-
 	return &bootstrap{
 		l:           l,
 		pg:          pg,
-		buses:       cqrs.Buses{Commands: cmds, Queries: qs},
-		metrics:     metrics,
+		metrics:     newMetrics(),
 		stopTracing: stopTracing,
 	}, nil
 }

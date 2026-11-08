@@ -32,8 +32,10 @@ func RunWorker(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("app - RunWorker - newRunner: %w", err)
 	}
 
+	buses := newBuses(b.pg, projectors(b.pg), cfg.CQRS.ConsistencyTimeout, b.metrics, b.l)
+
 	w := worker.New(b.l, queue.New(b.pg), worker.Settings(cfg.Worker))
-	if err = registerQueues(d, b.buses, w); err != nil {
+	if err = registerQueues(d, buses, w); err != nil {
 		return fmt.Errorf("app - RunWorker - registerQueues: %w", err)
 	}
 

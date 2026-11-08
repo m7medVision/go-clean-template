@@ -297,6 +297,7 @@ jobs:
           set -a && . ./.env.example && set +a
           export TRACING_ENABLED=false
           export EXCHANGE_SERVICE_URL=http://localhost:8090
+          export AUTH_LIMIT_CLIENT_ATTEMPTS=1000
           nohup "$RUNNER_TEMP/app" > "$RUNNER_TEMP/app.log" 2>&1 &
       - name: Build and start the worker
         run: |
