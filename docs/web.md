@@ -21,7 +21,8 @@ So does `/sso/callback`.
 
 `/admin/tasks` ("All tasks") is a read-only data table of every user's tasks over GraphQL `allTasks`.
 The sidebar shows its link when the token's `roles` claim includes `admin` (`web/src/auth/roles.ts`
-reads the claim without verifying it: a UI hint only, since the server checks the role). A user who
+reads the claim without verifying it: a UI hint only, since the server checks the role). The link is rendered inside `<Authorization allowedRoles={["admin"]}>`
+(`web/src/components/authorization.tsx`), the one place the UI gates something by role. A user who
 opens the URL anyway gets the server's `admin role required` in the route's error view.
 
 `/exchange` converts an amount (Omani Rial to Chinese Yuan by default) with a REST form and lists the
@@ -29,6 +30,32 @@ history in a data table. It links to the rate provider, as the provider's terms 
 
 The UI is built from [shadcn/ui](https://ui.shadcn.com/) components (`web/components.json`; generated
 into `web/src/components/ui/`). Add one with `vp dlx shadcn@latest add <component>` from `web/`.
+
+## Folder map and import layers
+
+```
+web/src/
+  routes/       file-based routes; the only place that composes domains
+  tasks/ exchange/ passkey/ sso/
+                domains: a domain's api.ts, schema.ts, columns.tsx, dialogs, hooks and tests
+  api/          REST and GraphQL clients, problem messages, generated types
+  auth/         the token, roles, re-authentication, redirect, and the signed-in user's profile query
+  components/   shadcn primitives (ui/), data-table/, form/, and shell pieces
+  hooks/ lib/   small shared helpers
+```
+
+Imports run one way, and `make web-check` fails on a violation (`no-restricted-imports` overrides in
+`web/vite.config.ts`):
+
+| Layer | Folders | May import |
+| --- | --- | --- |
+| shared | `api`, `auth`, `components`, `hooks`, `lib` | shared code only |
+| domain | `tasks`, `exchange`, `passkey`, `sso` | shared code and its own folder |
+| routes | `routes` | everything |
+
+A domain never imports another domain; when two need the same code, it moves to a shared folder (the
+profile query is `web/src/auth/profile.ts` for that reason). Nothing imports `routes/`. A new domain
+folder goes in the `domains` list in `web/vite.config.ts`, and a new shared folder in the shared rule.
 
 ## Talking to the API
 
@@ -52,6 +79,70 @@ options in `web/src/<domain>/api.ts`.
   [TanStack Form](https://tanstack.com/form) with shadcn `Field` components and a
   [Zod](https://zod.dev/) schema per domain (`web/src/components/form/`). A currency picker is
   `field.SelectField`.
+
+### Errors
+
+A failed route load or a render crash shows `RouteError` (`web/src/components/route-error.tsx`) in
+that route's area: the sidebar and breadcrumb stay, the message is `problemMessage` (the server's
+text, never an error's own message or stack), and "Try again" resets the failed queries and reloads
+the route. It is the router's `defaultErrorComponent`; a route can still set its own (`AllTasksError`
+on `/admin/tasks`, whose 403 does not heal on retry). An unknown URL shows `RouteNotFound`, a full
+page with a link to `/tasks`. A rejected token is handled apart from all of this: `rejectSession`
+signs the user out on a REST 401 and on GraphQL's `UNAUTHENTICATED`. A mutation's failure is never
+thrown into rendering; the form or dialog shows it with `FormError`.
+
+## Testing
+
+Pure logic is tested in `*.test.ts` beside the code. A screen is tested in `*.test.tsx` that starts
+with `// @vitest-environment happy-dom` and renders the real route tree:
+
+```tsx
+signInAs();                                   // a token, and the profile the sidebar reads
+onOperation<TasksQuery>("Tasks", { tasks: { total: 0, tasks: [] } });
+const { user } = renderRoute("/tasks");       // fresh QueryClient, memory history
+await user.click(await screen.findByRole("button", { name: "Add task" }));
+```
+
+`web/src/testing/` holds the helpers. [MSW](https://mswjs.io/) answers at the `fetch` level, so the
+real clients run; `onRest(method, path, body)` takes its path and body type from the generated
+OpenAPI types and `onOperation<Result>(name, result)` its result from the generated GraphQL types,
+so a contract change fails type checking in the handler. `onProblem` answers a REST problem. A
+request with no handler fails the test. `renderRoute` builds its router with the same error and
+not-found defaults as the app (`web/src/router-defaults.ts`). `onRest` returns the JSON bodies it was
+sent (`.sent`): assert them, or a form that sends the wrong fields still passes. Assert on roles and text a
+user sees, not on snapshots. `src/boundaries.test.ts` lints real files that break the import layers, so a
+rule that stops working fails a test.
+Flows covered: sign-in (success, wrong password, rate limit), tasks (list, add, move, delete),
+exchange (history, convert, refusal).
+
+### End-to-end test
+
+`web/e2e/tasks.spec.ts` drives Chromium through the real app and worker: sign up as a fresh user,
+sign in, add a task, move it, sign out. It is the only test that talks to the Go service, and it
+leaves nothing to clean up (a new user every run).
+
+```sh
+make dev        # or: make compose-up, then make run and make run-worker (SSO off: unset OIDC_ISSUER)
+make web-e2e    # Playwright against WEB_PORT, starting `vp dev` if nothing answers there
+```
+
+`make web-e2e` stops with a message when the app does not answer on `HTTP_PORT`. The first run needs
+the browser: `vp -C web exec playwright install chromium`. CI runs it in its own job, `runner / web /
+e2e`, which keeps the trace of a failure as an artifact and does not block merging.
+## Error tracking
+
+With `VITE_SENTRY_DSN` set at build time, `initErrorTracking` (`web/src/lib/error-tracking.ts`) loads
+`@sentry/react` and reports to that DSN (GlitchTip speaks the Sentry protocol). Without it nothing is
+loaded and nothing is sent. What is reported is decided by `shouldReport` (`web/src/api/report.ts`):
+server faults (a 5xx problem, GraphQL `INTERNAL`, an empty GraphQL response), network failures and
+render crashes; never a 4xx problem, `UNAUTHENTICATED` or `BAD_USER_INPUT`. The query and mutation
+caches and the route error view call `reportError`, which sends each error once with the signed-in
+user's id (the token's `sub`) and nothing else. `scrubEvent` removes query strings, request headers,
+cookies and bodies, console breadcrumbs and any user field but the id, and drops an event whose
+cause `shouldReport` rejects. Source maps: with `SENTRY_AUTH_TOKEN` set, `make web-build` builds hidden maps, uploads them to
+GlitchTip with `@sentry/vite-plugin` (debug IDs, so no release lookup is needed) and deletes them from
+`dist/`; without it no maps are built, so none are ever served. A reported frame then reads
+`src/api/graphql.ts`, `request`, line 43, not `graphql-bXhJ624U.js:1`.
 
 ## Passkeys
 

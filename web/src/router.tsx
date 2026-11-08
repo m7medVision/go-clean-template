@@ -1,11 +1,15 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 
 import { onUnauthorized } from "#/api/client";
 import { auth } from "#/auth/token";
+import { reportError } from "#/lib/error-tracking";
+import { routerDefaults } from "./router-defaults";
 import { routeTree } from "./routeTree.gen";
 
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: reportError }),
+  mutationCache: new MutationCache({ onError: reportError }),
   defaultOptions: { queries: { staleTime: 30_000 } },
 });
 
@@ -16,6 +20,7 @@ export const router = createRouter({
   // TanStack Query owns freshness, so the router always asks it.
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,
+  ...routerDefaults,
 });
 
 onUnauthorized(() => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isAdmin, tokenRoles } from "./roles";
+import { tokenRoles, tokenSubject } from "./roles";
 
 // A JWT with the given payload; the signature is irrelevant here, the server checks it.
 const jwt = (payload: unknown) =>
@@ -30,10 +30,17 @@ describe("tokenRoles", () => {
   });
 });
 
-describe("isAdmin", () => {
-  it("is true only with the admin role", () => {
-    expect(isAdmin(jwt({ roles: ["user", "admin"] }))).toBe(true);
-    expect(isAdmin(jwt({ roles: ["user"] }))).toBe(false);
-    expect(isAdmin(null)).toBe(false);
+describe("tokenSubject", () => {
+  it("reads the sub claim", () => {
+    expect(tokenSubject(jwt({ sub: "u1", roles: ["admin"] }))).toBe("u1");
+  });
+
+  it.each([
+    ["no token", null],
+    ["no sub claim", jwt({ roles: [] })],
+    ["a non-string sub", jwt({ sub: 7 })],
+    ["a malformed token", "not-a-token"],
+  ])("is undefined for %s", (_name, token) => {
+    expect(tokenSubject(token)).toBeUndefined();
   });
 });
