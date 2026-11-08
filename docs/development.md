@@ -12,6 +12,9 @@ in `DEV_SERVICES` (see the `Makefile`) run in docker:
 - `db`: Postgres.
 - `valkey`: [Valkey](https://valkey.io/), which the app needs to start. It keeps no data on disk, so
   a restart empties it.
+- `mongo`: [MongoDB](https://www.mongodb.com/), which the app needs to start. Its data is in the
+  `mongo_data` volume; compose creates the root user `user` / `mongoPa55w0rd`, which `MONGO_URL`
+  carries.
 - `mailpit`: [Mailpit](https://mailpit.axllent.org/), which catches email.
 - `keycloak`: the SSO provider.
 
@@ -78,6 +81,7 @@ answers `503` after `CQRS_CONSISTENCY_TIMEOUT` ([cqrs.md](cqrs.md#reads-after-wr
 | gRPC | `127.0.0.1:8081` |
 | Postgres | `127.0.0.1:${PG_PORT}`; credentials in `PG_URL` in [`.env.example`](../.env.example) |
 | Valkey | `127.0.0.1:${VALKEY_PORT}`, and `valkey:6379` (alias `valkey.lvh.me`) inside the compose network; no UI |
+| MongoDB | `127.0.0.1:${MONGO_PORT}`, and `mongo:27017` (alias `mongo.lvh.me`) inside the compose network; no UI (`docker compose exec mongo mongosh -u user -p mongoPa55w0rd`) |
 | Mailpit | http://127.0.0.1:8025 (inbox and API), SMTP on `127.0.0.1:1025` |
 | Keycloak | http://keycloak.lvh.me:8180 (realm `app`; admin console `admin` / `admin`); see [sso.md](sso.md#keycloak-in-development) |
 | Jaeger | http://127.0.0.1:16686 (full stack only) |

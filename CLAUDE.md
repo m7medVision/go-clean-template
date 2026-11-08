@@ -12,7 +12,8 @@ transports:
 A second binary, `cmd/worker`, runs the projections that keep the read models up to date and
 consumes a minimal Postgres queue (the `queue_messages` table); see **CQRS and event sourcing** and
 **Queue and worker** below. The app needs it running: every write waits for the projections.
-The app also needs Valkey (`VALKEY_URL`) and refuses to start without one.
+The app also needs Valkey (`VALKEY_URL`) and MongoDB (`MONGO_URL`), and refuses to start without
+either.
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -42,7 +43,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
-| Start dependencies (Postgres, Valkey) | `make compose-up` | `docker compose up` |
+| Start dependencies (Postgres, Valkey, MongoDB) | `make compose-up` | `docker compose up` |
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
@@ -119,7 +120,7 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   (the middleware around every HTTP request: client address, log, tracing, metrics, recovery),
   which REST's `Auth` borrows its problem writer from; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, migrate, valkey,
-  tracing, clientip).
+  mongo, tracing, clientip).
   Logging is `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
@@ -299,7 +300,8 @@ buses; then, on the app's buses only, limit (the sign-in limit, for a `behavior.
 (`Validate()`). The worker's buses have no limit step. A handler carries none of these. A message
 type with no registered handler is `cqrs.ErrNoHandler` at the first send, so a new message needs
 its line in `register.go`. Below the buses, otelpgx traces every SQL statement, otelhttp every
-outbound call and valkeyotel every Valkey command, so repositories carry no tracing code: a span
+outbound call, valkeyotel every Valkey command and `pkg/mongo`'s command monitor every Mongo
+command, so repositories carry no tracing code: a span
 per message, then one per statement, request or command.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
@@ -344,7 +346,7 @@ reads, never `*config.Config`; no controller imports `config`. Defaults are writ
 from it, as `worker.Settings(cfg.Worker)`). A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
-startup. A setting only the app needs (`JWT_SECRET`, `VALKEY_URL`) carries no `required` tag,
+startup. A setting only the app needs (`JWT_SECRET`, `VALKEY_URL`, `MONGO_URL`) carries no `required` tag,
 because the worker parses the same config: `app.Run` checks it instead. `.env.example` is read
 both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so values there must not
 need quoting: no spaces.

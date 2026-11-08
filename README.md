@@ -31,7 +31,8 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 - **Postgres for everything durable.** Typed queries with [sqlc](https://sqlc.dev/) and a declarative
   [goose](https://github.com/pressly/goose) migrations applied at startup.
   The event store and the job queue are ordinary tables too.
-  [Valkey](https://valkey.io/) runs beside it, for state a restart may lose.
+  [Valkey](https://valkey.io/) runs beside it, for state a restart may lose, and
+  [MongoDB](https://www.mongodb.com/) for data kept as documents instead of rows.
 - **A worker binary.** It runs the projections, and consumes that queue.
   It sends email from templates embedded in the binary.
 - **A React client.** TanStack Router, Query, Table and Form, typed from the OpenAPI document and the
@@ -76,7 +77,7 @@ Then open:
 - <http://127.0.0.1:8025>: Mailpit, which catches the email the app sends
 
 If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` first.
-If something else holds 6379, set `VALKEY_PORT=6380` the same way.
+If something else holds 6379, set `VALKEY_PORT=6380` the same way; 27017, `MONGO_PORT=27018`.
 
 ## Docs
 

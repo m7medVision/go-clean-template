@@ -87,7 +87,8 @@ are rules, not guidelines. When a rule gets in the way, the design is what has t
 12. **Cross-cutting concerns are steps, not decorators.** Tracing, logging, metrics, retries,
     authorization and validation wrap every message on the buses (`pkg/cqrs`,
     `internal/usecase/behavior`), so no handler carries them. Below the buses, every SQL statement
-    (otelpgx), outbound HTTP call (otelhttp) and Valkey command (valkeyotel) gets its own span, so
+    (otelpgx), outbound HTTP call (otelhttp), Valkey command (valkeyotel) and MongoDB command
+    (`pkg/mongo`) gets its own span, so
     repositories carry no tracing code either.
 
 ### Where code goes
@@ -188,6 +189,7 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`pkg/migrate`](../pkg/migrate) | goose on a Postgres URL: up, down to a version, status, under goose's advisory lock. `cmd/migrate` and the app's startup apply call it. |
 | [`pkg/postgres`](../pkg/postgres) | The pool (unexported): `New` waits for an unreachable database, trying again every second until its context ends, and fails at once on a login the database refuses. `InTx` and `Executor` carry a transaction in the context, which every repository and the event store join; `Connect` opens a connection outside the pool for a `LISTEN`. |
 | [`pkg/valkey`](../pkg/valkey) | The Valkey client: `New` parses the URL, builds a client that traces every command ([valkeyotel](https://pkg.go.dev/github.com/valkey-io/valkey-go/valkeyotel)), and pings it, failing at once when the server does not answer. The app opens one in `app.go` after the bootstrap and closes it when it stops; the worker has none. `Cache` (`NewCache`) gets and sets bytes by key, each with an absolute expiry (`SET … PXAT`); a missing key is a miss, not an error. |
+| [`pkg/mongo`](../pkg/mongo) | The MongoDB client: `New` parses the URL, refuses one without a database, connects with a command monitor that gives every command a span on the global tracer provider, pings, and returns the URL's database and a disconnect. The app opens it in `app.go` after Valkey; the worker has none. |
 | [`pkg/clientip`](../pkg/clientip) | `Resolve`, the one rule for a request's client: the connection's address, unless it comes from the trusted proxy, then the rightmost `X-Forwarded-For` entry. See [configuration.md](configuration.md#the-client-address). |
 | [`pkg/jwt`](../pkg/jwt) | `Manager` signs and parses the auth JWT. `Scoped` signs short-lived payloads for one purpose, with a key derived from the same secret by HKDF and the purpose as audience, so neither token passes for the other; a sign-in flow that spans two requests keeps its state in one. The auth JWT carries a `roles` claim ([Roles](#roles)). |
 | [`pkg/tracing`](../pkg/tracing) | OpenTelemetry setup; a no-op provider when tracing is off. See [configuration.md](configuration.md#tracing). |
