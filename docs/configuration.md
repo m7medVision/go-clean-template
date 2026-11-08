@@ -22,6 +22,7 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `HTTP_PORT` | `8080` | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `GRPC_PORT` | `8081` | the gRPC transport |
+| `TRUSTED_PROXY` | empty (no proxy) | the one address whose `X-Forwarded-For` the app reads, on HTTP and gRPC: Caddy's. An address that doesn't parse stops the app at startup. See [The client address](#the-client-address) |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |
 | `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
 | `PG_POOL_MAX` | required | |
@@ -36,6 +37,41 @@ Two variables are read by tooling, not by the app:
   `.env.example` is built from it. Set it when something else on the host already uses 5432.
 - `ATLAS_DEV_URL` is read only by `make sqlc`, which renders the HCL schema in a throwaway
   `docker://` Postgres container.
+
+### The client address
+
+The request logs of both servers and the [sign-in limit](#sign-in-limit) use the client's
+address. [`clientip.Resolve`](../pkg/clientip/clientip.go) holds the rule:
+
+- With `TRUSTED_PROXY` empty, the client is the address of the connection.
+- On a connection from `TRUSTED_PROXY`, the client is the rightmost entry of `X-Forwarded-For` (on
+  gRPC, the `x-forwarded-for` metadata): the one the proxy wrote. Anything to its left came from the
+  client. If that entry doesn't parse, the client is the proxy's own address.
+- On a connection from any other address, the header is ignored, and the connection's address is
+  the client.
+
+Only Caddy is supported as the proxy, as one address. Stock Caddy (no `trusted_proxies`) discards the
+`X-Forwarded-For` a client sends and writes the address it received the connection from, so the app
+gets one honest value. `X-Real-IP`, `Forwarded`, CDN headers and chi's `RealIP` are not used.
+
+In compose, `app_network` is pinned to `172.30.0.0/24`, with the containers' own addresses taken
+from `172.30.0.128/25`. Caddy is `172.30.0.10`, and the app's `TRUSTED_PROXY` is that address. Only
+that one address is trusted, not the subnet: the app's ports are also published on the host, and a
+connection from the host can arrive from the network's gateway, inside the subnet. If the subnet
+collides with another Docker network on the host, change it in
+[docker-compose.yml](../docker-compose.yml), and Caddy's `ipv4_address` and `TRUSTED_PROXY` with it.
+
+## Sign-in limit
+
+Read only by the app. Password sign-in and sign-up have a budget per client address and per account,
+counted in Valkey ([api.md](api.md#user-authentication), [cqrs.md](cqrs.md#the-sign-in-limit)).
+None can be turned off: a value of zero or less stops the app at startup.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `AUTH_LIMIT_CLIENT_ATTEMPTS` | `20` | attempts per client address per window, counted separately for sign-in and sign-up. Every attempt counts, a malformed one too. The integration stack and CI set `1000`, because the suite signs up and in many times from one address |
+| `AUTH_LIMIT_ACCOUNT_FAILURES` | `5` | wrong passwords per account per window. Once they are spent, the next sign-in is refused even with the right password; a successful sign-in clears the count |
+| `AUTH_LIMIT_WINDOW` | `15m` | the window both budgets use: a fixed window, starting with the first attempt |
 
 ## Valkey
 

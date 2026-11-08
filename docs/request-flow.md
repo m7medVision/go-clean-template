@@ -38,7 +38,7 @@ sequenceDiagram
   participant QB as query bus
   participant Q as GetConversion handler
   H->>CB: SendCommand(ConvertCurrency)
-  CB->>C: trace, log, metrics, stamp, wait, retry, authorize, validate
+  CB->>C: trace, log, metrics, stamp, limit, wait, retry, authorize, validate
   C->>C: entity.NewConversion: normalise and validate
   C->>W: Rate(ctx, "OMR", "CNY")
   W->>V: GET exchange:latest:OMR
@@ -93,15 +93,16 @@ got, which is what lets the unit tests hand it the in-memory store and mocks ins
 ## 1. Middleware
 
 The app's HTTP mux, [`internal/app/http.go`](../internal/app/http.go), installs chi middleware in
-this order (chi's `StripSlashes`, then the rest from
+this order (chi's `StripSlashes` second, every other one from
 [`internal/controller/httpmw`](../internal/controller/httpmw), which wraps GraphQL, the docs and
 `/healthz` as it wraps REST), and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
 whose Huma middleware `Auth` runs once the request has matched an operation, before any handler:
 
 | Middleware | What it does to this request |
 | --- | --- |
+| `ClientAddress` | resolves the client's address with [`clientip.Resolve`](../pkg/clientip/clientip.go) and stores it with `entity.ContextWithClient`: the connection's address, or, on a connection from `TRUSTED_PROXY` (Caddy), the rightmost `X-Forwarded-For` entry ([configuration.md](configuration.md#the-client-address)) |
 | `StripSlashes` | `/v1/exchange/convert/` and `/v1/exchange/convert` are the same route |
-| `Logger` | logs client address, method, path, status and response size when the request ends |
+| `Logger` | logs the client address `ClientAddress` resolved, method, path, status and response size when the request ends |
 | `Tracing` | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here. Every request is traced but `/healthz` and `/metrics`; with `TRACING_ENABLED` off the span goes nowhere, but the trace ID still reaches the events' correlation ID |
 | `Metrics` | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern, on the registry `/metrics` serves when `METRICS_ENABLED` |
 | `Recovery` | turns a panic in any later layer into a 500 instead of a dropped connection |
@@ -199,6 +200,7 @@ the pipeline from [`newBuses`](../internal/app/buses.go), outermost first:
 | log | `pkg/cqrs` | logs the outcome and duration at debug |
 | metrics | `pkg/cqrs` | counts it in `cqrs_messages_total` and times it in `cqrs_message_duration_seconds` |
 | stamp | `internal/usecase/behavior` | puts the caller's user ID and `command ConvertCurrency` in the context's event metadata |
+| limit | `internal/usecase/behavior` | nothing here: `ConvertCurrency` is not `behavior.Limited`; only sign-up and password sign-in are ([cqrs.md](cqrs.md#the-sign-in-limit)) |
 | wait | `internal/usecase/behavior` | after the handler: holds the result until the projectors of the events it wrote have passed `Written.Position` (step 8) |
 | retry | `internal/usecase/behavior` | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
 | authorize | `internal/usecase/behavior` | nothing here: `ConvertCurrency` needs no role |
@@ -351,7 +353,7 @@ the conversion is saved, but a read could still miss it.
 
 ## 9. The query
 
-`SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp,
+`SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp, limit,
 authorize, validate) to
 [`query/get_conversion.go`](../internal/usecase/exchange/query/get_conversion.go), which reads
 the row by its ID from `repo.ExchangeReadModel` and only from it, then asks the conversion's

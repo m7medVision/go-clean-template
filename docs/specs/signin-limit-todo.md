@@ -150,16 +150,18 @@ docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:*
 **Depends on:** 8. **Size:** S
 
 ### 10. Docs
-- [ ] `docs/configuration.md`: `TRUSTED_PROXY` (the one-proxy rule, Caddy's fixed address in
+- [x] `docs/configuration.md`: `TRUSTED_PROXY` (the one-proxy rule, Caddy's fixed address in
       compose) and the three `AUTH_LIMIT_*` settings.
-- [ ] `docs/api.md`: 429 on register and login, with `Retry-After`; `ResourceExhausted` on gRPC.
-- [ ] `docs/cqrs.md`: the Limit step in the pipeline.
-- [ ] `docs/architecture.md`: `pkg/clientip`, `internal/repo/limiter`, the client middleware.
-- [ ] `CLAUDE.md`:
-  - [ ] the pipeline steps paragraph;
-  - [ ] the error kinds in the handler contract;
-  - [ ] the buses built per binary;
-  - [ ] `pkg/` lists `clientip`.
+- [x] `docs/api.md`: 429 on register and login, with `Retry-After`; `ResourceExhausted` on gRPC.
+- [x] `docs/cqrs.md`: the Limit step in the pipeline.
+- [x] `docs/architecture.md`: `pkg/clientip`, `internal/repo/limiter`, the client middleware.
+- [x] `docs/request-flow.md`: the `limit` row in §4's pipeline table, the step lists, and
+      `ClientAddress` in §1's middleware table.
+- [x] `CLAUDE.md`:
+  - [x] the pipeline steps paragraph;
+  - [x] the error kinds in the handler contract;
+  - [x] the buses built per binary;
+  - [x] `pkg/` lists `clientip`.
 
 **Files:** the five above. **Verify:** each page read through; links resolve. **Depends on:** 8, 9.
 **Size:** M

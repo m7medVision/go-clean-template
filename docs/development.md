@@ -156,6 +156,9 @@ there is no CORS.
 - [Souin](https://github.com/darkweak/souin) caches the public documents (`/docs`, `/openapi.*`,
   `/schemas/*`) in memory and reports a `Cache-Status` header. API responses are per caller and are
   never cached.
+- Compose pins `app_network` to `172.30.0.0/24` and gives Caddy `172.30.0.10`, the app's
+  `TRUSTED_PROXY`, so the app sees the client behind Caddy
+  ([configuration.md](configuration.md#the-client-address)).
 
 | Service | URL |
 | --- | --- |

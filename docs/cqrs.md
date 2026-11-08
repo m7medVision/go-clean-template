@@ -45,7 +45,8 @@ controller ─SendQuery──▶ query bus ─▶ steps ─▶ query handler ─
   `internal/usecase/<domain>/register.go`, and each domain's module in `internal/app/<domain>.go` calls its
   `Register` once.
 
-The steps, outermost first:
+`newBuses` (`internal/app/buses.go`) builds the buses with their steps. Each binary calls it once:
+the app with the limit step, the worker without it. The steps, outermost first:
 
 | Step | Commands | Queries | Does |
 | --- | --- | --- | --- |
@@ -53,10 +54,45 @@ The steps, outermost first:
 | log | ✓ | ✓ | outcome and duration at debug |
 | metrics | ✓ | ✓ | `cqrs_messages_total{kind,name,outcome}`, `cqrs_message_duration_seconds` |
 | stamp | ✓ | ✓ | the actor (`ActorID()`) and the message name into the event metadata |
+| limit | ✓ | ✓ | the app's buses only, for a `behavior.Limited` message (`RegisterUser`, `LogIn`): the [sign-in limit](#the-sign-in-limit) |
 | wait | ✓ | | after the handler: until the projectors that handle the events it wrote (`entity.Written.Events`) have passed its position, or `CQRS_CONSISTENCY_TIMEOUT` (then `entity.ErrReadModelBehind`) |
 | retry | ✓ | | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
 | authorize | ✓ | ✓ | an `AdminOnly()` message is refused with `entity.ErrAdminRequired` for a caller who is not an admin (`ListAllTasks`) |
 | validate | ✓ | ✓ | calls `Validate()` when the message has one |
+
+### The sign-in limit
+
+`behavior.Limit` limits the messages that implement `behavior.Limited` (`LimitScope`,
+`LimitAccount`): `user/command.RegisterUser` (scope `sign-up`, no account) and `user/query.LogIn`
+(scope `sign-in`, its email). Passkey and SSO sign-in are not limited. For each of those messages,
+the step:
+
+1. counts the attempt against the client's budget, if the context carries a client
+   (`entity.ClientFromContext`, set by the transports' client middleware);
+2. checks the account's budget without counting, when there is an account;
+3. runs the rest of the pipeline and the handler;
+4. after a wrong password (`entity.ErrInvalidCredentials`), counts one failure against the account;
+   after a success, clears the account's count.
+
+A spent budget refuses the attempt in step 1 or 2 with `entity.ErrTooManyAttempts`
+(`entity.KindRateLimited`), carried in an `*entity.RetryAfterError` with the wait. Each transport
+turns it into its status ([api.md](api.md#user-authentication)) and, as for the caller's other
+mistakes, logs nothing. The step runs before authorize and validate, so a malformed attempt spends
+the client's budget too. Checking and counting the account are separate calls, so concurrent wrong
+passwords can pass a few over the budget before it locks. The budgets are the `AUTH_LIMIT_*`
+settings ([configuration.md](configuration.md#sign-in-limit)).
+
+The counters are behind `repo.Limiter` (`internal/repo/contracts.go`), implemented by
+`internal/repo/limiter` on two `valkeylimiter` clients, one per budget, built on the app's Valkey
+client and never closed on their own. Each is a fixed window, starting with the first attempt.
+The keys are `limit:client:{<scope>:<addr>}` (an IPv6 client by its /64) and
+`limit:account:{<scope>:<hash>}`, the hash being the hex SHA-256 of the trimmed, lower-cased email,
+so Valkey holds no email address.
+
+The limit fails open. Each limiter call gets 500 ms at most and does not inherit the caller's
+cancellation. If one fails, the step logs the warning `sign-in limit unavailable` with the scope,
+makes no more limiter calls for that attempt, and lets it through: a Valkey outage never stops
+every sign-in.
 
 ### Commands
 
