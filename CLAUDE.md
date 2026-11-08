@@ -494,6 +494,10 @@ TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest)
     response; `web/src/api/graphql.ts` turns that into the same sign-out a REST 401 triggers.
 - The JWT lives in memory, mirrored to `sessionStorage` (`web/src/auth/token.ts`). Screens that need
   a user go under the `_authed` layout route.
+- **Imports run one way: shared (`api`, `auth`, `components`, `hooks`, `lib`) → domains (`tasks`,
+  `exchange`, `passkey`, `sso`) → `routes`.** A domain never imports another domain, shared code never
+  imports a domain, and nothing imports `routes/`. `make web-check` enforces it
+  (`web/vite.config.ts`); a new domain folder is added to that list. See `docs/web.md`.
 - Client routes must not use the prefixes the Go app owns: `/v1`, `/graphql`, `/docs`,
   `/openapi.*`, `/schemas`, `/healthz`, `/metrics`.
 - Tests import from `vite-plus/test` and sit next to the code as `*.test.ts`.

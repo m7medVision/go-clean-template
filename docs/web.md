@@ -30,6 +30,32 @@ history in a data table. It links to the rate provider, as the provider's terms 
 The UI is built from [shadcn/ui](https://ui.shadcn.com/) components (`web/components.json`; generated
 into `web/src/components/ui/`). Add one with `vp dlx shadcn@latest add <component>` from `web/`.
 
+## Folder map and import layers
+
+```
+web/src/
+  routes/       file-based routes; the only place that composes domains
+  tasks/ exchange/ passkey/ sso/
+                domains: a domain's api.ts, schema.ts, columns.tsx, dialogs, hooks and tests
+  api/          REST and GraphQL clients, problem messages, generated types
+  auth/         the token, roles, re-authentication, redirect, and the signed-in user's profile query
+  components/   shadcn primitives (ui/), data-table/, form/, and shell pieces
+  hooks/ lib/   small shared helpers
+```
+
+Imports run one way, and `make web-check` fails on a violation (`no-restricted-imports` overrides in
+`web/vite.config.ts`):
+
+| Layer | Folders | May import |
+| --- | --- | --- |
+| shared | `api`, `auth`, `components`, `hooks`, `lib` | shared code only |
+| domain | `tasks`, `exchange`, `passkey`, `sso` | shared code and its own folder |
+| routes | `routes` | everything |
+
+A domain never imports another domain; when two need the same code, it moves to a shared folder (the
+profile query is `web/src/auth/profile.ts` for that reason). Nothing imports `routes/`. A new domain
+folder goes in the `domains` list in `web/vite.config.ts`, and a new shared folder in the shared rule.
+
 ## Talking to the API
 
 The client and the API share one origin (the Vite proxy in development, Caddy in the full stack), so
