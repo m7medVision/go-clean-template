@@ -34,8 +34,10 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `METRICS_ENABLED` | `true` | serves Prometheus at `/metrics`: HTTP and gRPC request counts and latencies, commands and queries, projection lag ([api.md](api.md)). It decides only whether `/metrics` is served: the collectors count either way |
 | `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)): REST's `/docs`, its OpenAPI document and schemas, and GraphQL's playground and introspection, and gRPC server reflection |
 
-One variable is read by tooling, not by the app:
+Two variables are read by tooling, not by the app:
 
+- `NATS_PORT` (default `4222`) is the host port the compose `nats` service publishes, and `NATS_URL`
+  in `.env.example` is built from it.
 - `PG_PORT` (default `5432`) is the host port the compose `db` service publishes, and `PG_URL` in
   `.env.example` is built from it. Set it when something else on the host already uses 5432.
 
@@ -121,13 +123,15 @@ The state token's signing key is derived from `JWT_SECRET`, so there is no extra
 
 ## Worker
 
-Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.md) for how they behave.
+Read only by `cmd/worker`; only `NATS_URL` is required, and only by it. See [worker.md](worker.md) for how they behave.
 
 | Env var | Default | |
 | --- | --- | --- |
-| `WORKER_POLL_INTERVAL` | `1s` | sleep after an empty read |
-| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery; its handler's context ends then too |
-| `WORKER_BATCH_SIZE` | `10` | messages per read |
+| `NATS_URL` | required by the worker | NATS with JetStream: the worker's queue. The app never reads it. `RunWorker` refuses to start without it |
+| `WORKER_MAX_RETRIES` | `5` | retries of a failing handler before its message moves to the `poison` topic |
+| `WORKER_RETRY_INITIAL` | `1s` | wait before the first retry; it doubles each time |
+| `WORKER_RETRY_MAX` | `30s` | longest wait between retries |
+| `WORKER_ACK_WAIT` | `5m` | how long JetStream waits for an acknowledgement before redelivering; longer than a handler and its retries |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
 ## CQRS

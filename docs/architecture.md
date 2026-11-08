@@ -25,7 +25,7 @@ flowchart TB
 ```
 
 The queue worker (`cmd/worker`) runs the projectors that keep the read models up to date from the
-events, and the event handlers that react to them. It also consumes the `queue_messages` table:
+events, and the event handlers that react to them. It also consumes topics on NATS JetStream:
 its handlers in `internal/controller/worker` send commands on the same command bus, such as
 `DeliverEmail`, which renders the mail templates and sends over SMTP.
 
@@ -182,7 +182,7 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`internal/repo/mailtmpl`](../internal/repo/mailtmpl) | Email rendering, into a `repo.RenderedEmail`. See [worker.md](worker.md). |
 | [`internal/repo/mailer`](../internal/repo/mailer) | `repo.Mailer` on `pkg/smtp`: hands a rendered email to the SMTP client. |
 | [`internal/repo/session`](../internal/repo/session) | `repo.SessionIssuer`: the auth token every sign-in (password, passkey, SSO) answers with, as a JWT signed by `pkg/jwt`. Use cases name the port, never `*jwt.Manager`. |
-| [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail queue, so the `SendWelcomeEmail` event handler knows nothing about queues or email encoding. It enqueues through its own `notify.Queue` port. |
+| [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail topic, so the `SendWelcomeEmail` event handler knows nothing about the broker or email encoding. It publishes through its own `notify.Publisher` port. |
 | [`internal/repo/limiter`](../internal/repo/limiter) | `repo.Limiter`: the sign-in limit's counters, on two [valkeylimiter](https://pkg.go.dev/github.com/valkey-io/valkey-go/valkeylimiter) fixed-window clients (the client budget and the account budget) built on the app's Valkey client, which they never close. Keys are `limit:client:{<scope>:<addr>}` (an IPv6 client by its /64) and `limit:account:{<scope>:<hash>}`, the hash being the hex SHA-256 of the trimmed, lower-cased email, so no email address is stored. See [cqrs.md](cqrs.md#the-sign-in-limit). |
 | [`pkg/cqrs`](../pkg/cqrs) | The typed command and query buses, and the trace, log and metrics steps every message passes. |
 | [`pkg/migrate`](../pkg/migrate) | goose on a Postgres URL: up, down to a version, status, under goose's advisory lock. `cmd/migrate` and the app's startup apply call it. |
@@ -191,7 +191,7 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`pkg/clientip`](../pkg/clientip) | `Resolve`, the one rule for a request's client: the connection's address, unless it comes from the trusted proxy, then the rightmost `X-Forwarded-For` entry. See [configuration.md](configuration.md#the-client-address). |
 | [`pkg/jwt`](../pkg/jwt) | `Manager` signs and parses the auth JWT. `Scoped` signs short-lived payloads for one purpose, with a key derived from the same secret by HKDF and the purpose as audience, so neither token passes for the other; a sign-in flow that spans two requests keeps its state in one. The auth JWT carries a `roles` claim ([Roles](#roles)). |
 | [`pkg/tracing`](../pkg/tracing) | OpenTelemetry setup; a no-op provider when tracing is off. See [configuration.md](configuration.md#tracing). |
-| [`pkg/worker`](../pkg/worker) | The queue consumer. See [worker.md](worker.md). |
+| [`pkg/broker`](../pkg/broker) | The queue: Watermill on NATS JetStream, one route per topic, retry with backoff, the `poison` topic. See [worker.md](worker.md). |
 | [`pkg/smtp`](../pkg/smtp) | The SMTP client. See [worker.md](worker.md#smtp). |
 | [`tools/gen`](../tools/gen) | The domain and use-case generator behind `make new-domain` and `make new-usecase`. Its own Go module: it imports nothing from the app, and no binary, image or `make test` includes it. See [generator.md](generator.md). |
 

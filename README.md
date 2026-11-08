@@ -30,9 +30,11 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
   and a user), with the provider's roles mapped to the app's.
 - **Postgres for everything durable.** Typed queries with [sqlc](https://sqlc.dev/) and versioned
   [goose](https://github.com/pressly/goose) migrations applied at startup.
-  The event store and the job queue are ordinary tables too.
+  The event store is ordinary tables too.
   [Valkey](https://valkey.io/) runs beside it, for state a restart may lose.
-- **A worker binary.** It runs the projections, and consumes that queue.
+- **A worker binary.** It runs the projections, and consumes its queue on
+  [NATS JetStream](https://nats.io/) through [Watermill](https://watermill.io/), with retries and a
+  poison topic.
   It sends email from templates embedded in the binary.
 - **A React client.** TanStack Router, Query, Table and Form, typed from the OpenAPI document and the
   GraphQL schema.

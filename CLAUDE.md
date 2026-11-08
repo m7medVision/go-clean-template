@@ -10,9 +10,10 @@ transports:
   at `/graphql/playground` when `DOCS_ENABLED`.
 
 A second binary, `cmd/worker`, runs the projections that keep the read models up to date and
-consumes a minimal Postgres queue (the `queue_messages` table); see **CQRS and event sourcing** and
+consumes topics on NATS JetStream through Watermill (`pkg/broker`); see **CQRS and event sourcing** and
 **Queue and worker** below. The app needs it running: every write waits for the projections.
-The app also needs Valkey (`VALKEY_URL`) and refuses to start without one.
+The app also needs Valkey (`VALKEY_URL`) and refuses to start without one; the worker needs NATS
+(`NATS_URL`) and refuses to start without it.
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -103,7 +104,7 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   (`EventStore`, `Subscriber`, `ProjectionCheckpoints`, `SessionIssuer`, `Limiter`), and one file
   per domain (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) holds its
   read model and outbound ports. A port only infrastructure uses lives with its consumer
-  (`notify.Queue`, `eventstore.Importer`, `worker.Queue`, `webapi.Cache`). Implemented by
+  (`notify.Publisher`, `eventstore.Importer`, `webapi.Cache`). Implemented by
   `internal/repo/persistent/eventstore` (the event store), `persistent/projection` (the runner the
   worker runs), `persistent/<domain>/` (each domain's read model, projector and importer), and
   `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`, its
@@ -410,29 +411,29 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 ## Queue and worker
 
-- The queue is one ordinary table, `queue_messages` (created by `internal/app/migrations/00001_baseline.sql`), on the
-  stock `postgres:18.6-alpine` image: no extension, no custom image. Its queries are in
-  `internal/repo/persistent/queries/queue.sql` (sqlc), and `internal/repo/persistent/queue` implements
-  `worker.Queue` (and `notify.Queue`, its `Send`) with them.
-- `ReadQueueMessages` claims and hides in one statement (`FOR UPDATE SKIP LOCKED` in a CTE, then
-  `UPDATE … SET visible_at = now() + vt`). Keep it one statement; splitting it lets two workers take
-  the same message.
-- `worker.Message` lives in `pkg/worker`, and the queue returns it, so the repo satisfies
-  `worker.Queue` with no adapter (`var _ worker.Queue` in `queue.go`). The queue maps each sqlc row
-  to it field by field, so the table's column order never shapes a `pkg/` type.
-- `pkg/worker` is at-least-once: a handler returning `nil` deletes the message; an error leaves it
-  to reappear after `WORKER_VISIBILITY_TIMEOUT`, which also ends the handler's context. Handlers must be idempotent; a body that can never
-  decode should be logged and acknowledged (`return nil`), or it redelivers forever.
+- The queue is NATS JetStream, routed by Watermill in `pkg/broker`: one durable consumer per topic
+  in the queue group `worker-<topic>`, so worker replicas share a topic. **Only the worker connects
+  to NATS** (`NATS_URL`, checked by `RunWorker`, `app.ErrNoNATSURL`); the app never does, so NATS
+  being down delays email but never fails a request.
+- Delivery is at-least-once: a handler returning `nil` acknowledges its message. A failing or
+  panicking handler is retried in the worker with exponential backoff (`WORKER_MAX_RETRIES`,
+  `WORKER_RETRY_INITIAL`, `WORKER_RETRY_MAX`), then its message moves to the `poison` topic and is
+  logged at `Error`. A message that can never succeed returns `broker.Permanent(err)` and goes there
+  at once; never `return nil` to drop one. Handlers must be idempotent. How poison messages are
+  replayed is an open decision, marked by the TODO at the poison middleware.
+- A publish carries an ID; JetStream drops a repeat inside its duplicate window. An event handler
+  publishes with an ID derived from its event (`welcome-<user id>`), so running again after a crash
+  before its checkpoint moved does not send twice. Only the worker publishes: a command in the app
+  has no broker (an outbox for that is not decided yet).
 - The worker is wired in `internal/app/worker.go` (`RunWorker`): the projection runner and the queue
   consumer. Queue handlers send commands on the worker's buses, which hold only what the modules'
   `queues` register (mail delivery). The
   Dockerfile builds `/app` and `/worker` into one image; the compose `worker` service runs
   `/worker`. Only the app applies the schema.
-- A handler enqueues through a port that hides the queue, whose implementation calls the queue's
-  `Send`, which joins the transaction in `ctx`: from an event handler, the message commits with the
-  checkpoint. The `send-welcome-email` event handler (`internal/usecase/user/event`) calls `repo.UserNotifier.Welcome`, implemented by
+- A handler publishes through a port that hides the broker (`notify.Publisher`, which
+  `*broker.Broker` satisfies). The `send-welcome-email` event handler (`internal/usecase/user/event`) calls `repo.UserNotifier.Welcome`, implemented by
   `internal/repo/notify`.
-- Email goes through the `mail` queue (`entity.EmailQueue`): the sender writes the body with
+- Email goes through the `mail` topic (`entity.EmailQueue`): the sender writes the body with
   `entity.EncodeEmail`, and `controller/worker/v1/mail.go` reads it with `entity.DecodeEmail`. That
   handler is the one exception to "decode into a transport-local DTO" — both ends are this codebase.
   It sends the `DeliverEmail` command (`internal/usecase/mail`), whose handler renders with
