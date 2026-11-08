@@ -41,6 +41,8 @@ type domainRequest struct {
 	// transports are the transports the domain gets, in the order rules.Transports lists them.
 	transports []string
 	dryRun     bool
+	// version names the domain's migration; empty for the time the command runs.
+	version string
 }
 
 // usecaseRequest is what make new-usecase asks for.

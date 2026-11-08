@@ -28,7 +28,7 @@ func fixtureRoot() fstest.MapFS {
 		"internal/usecase/exchange/register.go":               file("package exchange\n\ntype Deps struct{ Store, Exchanges int }\n"),
 		"internal/usecase/user/register.go":                   file("package user\n\ntype Deps struct{ Store, Users int }\n"),
 		"internal/repo/persistent/conversion/conversion.go":   file("package conversion\n"),
-		"internal/app/schema/tasks.hcl":                       file("table \"tasks\" {}\n"),
+		"internal/app/migrations/00001_baseline.sql":          file("-- +goose Up\nCREATE TABLE tasks ();\n"),
 		"docs/proto/v1/task.proto":                            file("syntax = \"proto3\";\n\nservice TaskService {}\n"),
 		"internal/controller/graphql/schema/task.graphqls":    file("type Task { id: ID! }\n"),
 		"internal/controller/restapi/v1/task/controller.go":   file("package task\n\nconst _tag = \"tasks\"\n"),
@@ -135,16 +135,16 @@ func TestDomainFreeLooksAtTablesProtoServicesGraphQLTypesAndControllerFolders(t 
 	t.Parallel()
 
 	fsys := fstest.MapFS{
-		"internal/app/schema/widgets.hcl":                   {Data: []byte("table \"widgets\" {}\n")},
-		"docs/proto/v1/thing.proto":                         {Data: []byte("syntax = \"proto3\";\n\nservice GadgetService {}\n")},
-		"internal/controller/graphql/schema/thing.graphqls": {Data: []byte("type Gizmo { id: ID! }\n")},
-		"internal/controller/restapi/v1/response/token.go":  {Data: []byte("package response\n")},
-		"internal/controller/grpc/v1/health/health.go":      {Data: []byte("package health\n")},
-		"internal/controller/graphql/paging/paging.go":      {Data: []byte("package paging\n")},
+		"internal/app/migrations/20260101000000_create_widgets.sql": {Data: []byte("-- +goose Up\n")},
+		"docs/proto/v1/thing.proto":                                 {Data: []byte("syntax = \"proto3\";\n\nservice GadgetService {}\n")},
+		"internal/controller/graphql/schema/thing.graphqls":         {Data: []byte("type Gizmo { id: ID! }\n")},
+		"internal/controller/restapi/v1/response/token.go":          {Data: []byte("package response\n")},
+		"internal/controller/grpc/v1/health/health.go":              {Data: []byte("package health\n")},
+		"internal/controller/graphql/paging/paging.go":              {Data: []byte("package paging\n")},
 	}
 
 	for kebab, owner := range map[string]string{
-		"widget":   "internal/app/schema/widgets.hcl",
+		"widget":   "internal/app/migrations/20260101000000_create_widgets.sql exists",
 		"gadget":   "service GadgetService",
 		"gizmo":    "type Gizmo",
 		"response": "internal/controller/restapi/v1/response exists",
