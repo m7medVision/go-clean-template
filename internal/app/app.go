@@ -49,7 +49,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	store := newEventStore(b.pg, cfg.CQRS.SnapshotEvery)
-	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry)}
+	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), valkey: client}
 
 	if err = eventstore.Backfill(ctx, b.pg, store, importers(b.pg)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)

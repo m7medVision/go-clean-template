@@ -23,38 +23,38 @@ here, and adds no comments to new code unless one is important. Sizes: S = 1–2
 **Verify:** G1, `go vet ./integration-test/...`. **Depends on:** none. **Size:** S
 
 ### 2. The adapter reads the cache
-- [ ] `webapi.Cache` (`Get`, `Set`) in `exchange_openerapi.go`; `New(baseURL string, cache Cache)`.
-- [ ] `latestResponse` decodes `time_next_update_unix` into `NextUpdate`.
-- [ ] One deadline per `Rate`:
-  - [ ] `context.WithTimeoutCause(ctx, w.timeout, errTimedOut)`, with `w.timeout` set to
+- [x] `webapi.Cache` (`Get`, `Set`) in `exchange_openerapi.go`; `New(baseURL string, cache Cache)`.
+- [x] `latestResponse` decodes `time_next_update_unix` into `NextUpdate`.
+- [x] One deadline per `Rate`:
+  - [x] `context.WithTimeoutCause(ctx, w.timeout, errTimedOut)`, with `w.timeout` set to
         `Timeout`;
-  - [ ] `unavailable` treats `errTimedOut` as the provider's failure and a caller that went away
+  - [x] `unavailable` treats `errTimedOut` as the provider's failure and a caller that went away
         as not;
-  - [ ] `export_test.go` adds `SetTimeout`.
-- [ ] `latest`: `cached` first, then `fetch`, then `store`, as in the spec's snippet. Each cache
+  - [x] `export_test.go` adds `SetTimeout`.
+- [x] `latest`: `cached` first, then `fetch`, then `store`, as in the spec's snippet. Each cache
       call runs under `_cacheTimeout` (500 ms). Key prefix `_cacheKeyPrefix = "exchange:latest:"`.
-- [ ] `fetch` reads the body once, through `io.LimitReader` at 1 MiB (`_maxBody`), and decodes it.
-- [ ] `store` runs only for `result: success` with a next update after now, and drops `Set`'s
+- [x] `fetch` reads the body once, through `io.LimitReader` at 1 MiB (`_maxBody`), and decodes it.
+- [x] `store` runs only for `result: success` with a next update after now, and drops `Set`'s
       error. That is the one comment.
-- [ ] Unit tests: a map-backed fake `Cache` (it can be set to fail, or to hang until its ctx ends),
+- [x] Unit tests: a map-backed fake `Cache` (it can be set to fail, or to hang until its ctx ends),
       and the `httptest` server counting its requests. Table-driven where there are cases:
-  - [ ] a miss fetches once and stores the body under `exchange:latest:OMR`, expiring at its next
+  - [x] a miss fetches once and stores the body under `exchange:latest:OMR`, expiring at its next
         update (the body is built with a next update an hour ahead);
-  - [ ] a hit makes no request and returns the cached rate and date;
-  - [ ] on a hit, a target missing from the cached rates is `ErrUnsupportedCurrency`, with no
+  - [x] a hit makes no request and returns the cached rate and date;
+  - [x] on a hit, a target missing from the cached rates is `ErrUnsupportedCurrency`, with no
         request;
-  - [ ] the recorded fixture, whose next update has passed, is returned and not stored;
-  - [ ] error bodies, non-200 answers and undecodable bodies are not stored;
-  - [ ] a body over 1 MiB is `ErrRatesUnavailable` and is not stored;
-  - [ ] a cache whose `Get` fails, or hangs, is a miss; one whose `Set` fails still returns the
+  - [x] the recorded fixture, whose next update has passed, is returned and not stored;
+  - [x] error bodies, non-200 answers and undecodable bodies are not stored;
+  - [x] a body over 1 MiB is `ErrRatesUnavailable` and is not stored;
+  - [x] a cache whose `Get` fails, or hangs, is a miss; one whose `Set` fails still returns the
         rate;
-  - [ ] a cached body that doesn't decode is a miss, and the fresh body replaces it;
-  - [ ] a provider that never answers, under `SetTimeout(100ms)`, is `ErrRatesUnavailable`;
-  - [ ] the existing cases still pass, with a cache that always misses.
-- [ ] Wiring:
-  - [ ] `deps.valkey vk.Client`, which only the app sets (`app.go` passes in the client from
+  - [x] a cached body that doesn't decode is a miss, and the fresh body replaces it;
+  - [x] a provider that never answers, under `SetTimeout(100ms)`, is `ErrRatesUnavailable`;
+  - [x] the existing cases still pass, with a cache that always misses.
+- [x] Wiring:
+  - [x] `deps.valkey vk.Client`, which only the app sets (`app.go` passes in the client from
         `valkey.New`);
-  - [ ] `exchange.go` calls `webapi.New(d.cfg.Exchange.ServiceURL, valkey.NewCache(d.valkey))`.
+  - [x] `exchange.go` calls `webapi.New(d.cfg.Exchange.ServiceURL, valkey.NewCache(d.valkey))`.
 
 **Files:** `internal/repo/webapi/exchange_openerapi.go`, `exchange_openerapi_test.go`,
 `export_test.go`, `internal/app/modules.go`, `internal/app/app.go`, `internal/app/exchange.go`.
