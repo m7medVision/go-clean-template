@@ -72,6 +72,7 @@ commit "the working tree"
 cd "$wt"
 make web-deps
 make new-domain name=widget
+UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/
 echo "gen-e2e: what generating changed:"
 git status --short
 # make openapi ran among the regenerators: the REST operations must be in the exported document,

@@ -303,7 +303,8 @@ per message, then one per statement, request or command.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
 its `SchemaVersion()` and adding an `entity.Upcast` from the previous version to
-`entity.Upcasts()`. A new event type needs an entry in `entity.EventTypes()`, a case in the
+`entity.Upcasts()`, keeping the old frozen sample in `internal/repo/eventcodec/testdata/events/`
+(the codec tests fail when a stored shape drifts from its sample). A new event type needs an entry in `entity.EventTypes()`, a case in the
 aggregate's `Apply`, and a case in the projector; an event the codec does not know fails to load.
 
 **Writes go through aggregates; read-model tables belong to their projector.** A command handler
@@ -626,6 +627,8 @@ among them. What it leaves to you:
   `http.StatusNotImplemented` out of the REST ops' `Errors`;
 - the domain's fields, where the generated comments say: the read shape, the events and `Apply`, the
   HCL table and its SQL, the projector, the request DTOs and messages, and the GraphQL type;
+- the event samples, which `make test` fails without:
+  `UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/`;
 - the docs of step 8;
 - writing this domain before generating another: two untouched generated domains are clones to
   `dupl`, and `make linter-golangci` fails.
