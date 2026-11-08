@@ -12,6 +12,8 @@ import (
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
+	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -23,13 +25,16 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 const _bufSize = 1 << 20
 
 // fakeTask answers ListAllTasks on real buses, and keeps what it was asked.
 type fakeTask struct {
-	listed    []entity.Task
+	listed    []mongotask.TaskWithAttributes
+	stored    mongotask.TaskWithAttributes
+	gotPatch  mongotask.AttributesPatch
 	err       error
 	gotCaller entity.Principal
 	gotStatus *entity.TaskStatus
@@ -38,15 +43,23 @@ type fakeTask struct {
 }
 
 func (f *fakeTask) buses() cqrs.Buses {
-	qs := cqrs.NewQueries()
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[entity.Task]](
-		func(_ context.Context, q query.ListAllTasks) (entity.List[entity.Task], error) {
+	cmds, qs := cqrs.NewCommands(), cqrs.NewQueries()
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[mongotask.TaskWithAttributes]](
+		func(_ context.Context, q query.ListAllTasks) (entity.List[mongotask.TaskWithAttributes], error) {
 			f.gotCaller, f.gotStatus, f.gotLimit, f.gotOffset = q.Principal, q.Status, q.Limit, q.Offset
 
-			return entity.List[entity.Task]{Items: f.listed, Total: len(f.listed)}, f.err
+			return entity.List[mongotask.TaskWithAttributes]{Items: f.listed, Total: len(f.listed)}, f.err
+		}))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, mongotask.TaskWithAttributes](
+		func(context.Context, query.GetTask) (mongotask.TaskWithAttributes, error) { return f.stored, f.err }))
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.SetTaskAttributes, entity.Written](
+		func(_ context.Context, c command.SetTaskAttributes) (entity.Written, error) {
+			f.gotPatch = c.Patch
+
+			return entity.Written{ID: c.TaskID}, f.err
 		}))
 
-	return cqrs.Buses{Commands: cqrs.NewCommands(), Queries: qs}
+	return cqrs.Buses{Commands: cmds, Queries: qs}
 }
 
 // dial serves the task routes behind the auth interceptor over an in-memory listener.
@@ -88,7 +101,7 @@ func signedIn(t *testing.T, manager *jwt.Manager, roles []string) context.Contex
 func TestListAllTasks(t *testing.T) {
 	t.Parallel()
 
-	tk := &fakeTask{listed: []entity.Task{
+	tk := &fakeTask{listed: []mongotask.TaskWithAttributes{
 		{ID: "task-1", UserID: "alice", Status: entity.TaskStatusDone},
 		{ID: "task-2", UserID: "bob", Status: entity.TaskStatusDone},
 	}}
@@ -117,4 +130,39 @@ func TestListAllTasksAdminRequired(t *testing.T) {
 	_, err := client.ListAllTasks(signedIn(t, manager, []string{"user"}), &pb.ListTasksRequest{Limit: 10})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestUpdateTaskAttributesFollowsTheMask(t *testing.T) {
+	t.Parallel()
+
+	high := mongotask.PriorityHigh
+	tk := &fakeTask{stored: mongotask.TaskWithAttributes{
+		Task: entity.Task{ID: "task-1"}, Attributes: mongotask.Attributes{Priority: &high},
+	}}
+	client, manager := dial(t, tk)
+
+	resp, err := client.UpdateTaskAttributes(signedIn(t, manager, []string{"user"}), &pb.UpdateTaskAttributesRequest{
+		Id:         "task-1",
+		Attributes: &pb.TaskAttributes{Priority: new("high"), Labels: []string{"ignored"}},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"priority", "estimate"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, mongotask.AttributesPatch{
+		Priority: mongotask.SetTo(mongotask.PriorityHigh),
+		Estimate: mongotask.Cleared[float64](),
+	}, tk.gotPatch)
+	assert.Equal(t, "high", resp.GetAttributes().GetPriority())
+}
+
+func TestUpdateTaskAttributesRejectsAnUnknownPath(t *testing.T) {
+	t.Parallel()
+
+	client, manager := dial(t, &fakeTask{})
+
+	_, err := client.UpdateTaskAttributes(signedIn(t, manager, []string{"user"}), &pb.UpdateTaskAttributesRequest{
+		Id: "task-1", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"title"}},
+	})
+
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }

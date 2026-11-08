@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/m7medvision/go-clean-template/config"
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -134,8 +134,8 @@ func TestAPanicAnswers500AndIsCounted(t *testing.T) {
 	t.Parallel()
 
 	b := newTestBuses()
-	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetTask, entity.Task](
-		func(context.Context, query.GetTask) (entity.Task, error) { panic("boom") }))
+	cqrs.HandleQuery(b.Queries, cqrs.HandlerFunc[query.GetTask, mongotask.TaskWithAttributes](
+		func(context.Context, query.GetTask) (mongotask.TaskWithAttributes, error) { panic("boom") }))
 
 	h, token := newTestHandler(t, b, false)
 

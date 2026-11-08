@@ -4,6 +4,8 @@ package grpc.v1;
 
 option go_package = "docs/proto/v1";
 
+import "google/protobuf/field_mask.proto";
+
 service TaskService {
   rpc CreateTask (CreateTaskRequest) returns (TaskResponse);
   rpc GetTask (GetTaskRequest) returns (TaskResponse);
@@ -13,6 +15,9 @@ service TaskService {
   rpc UpdateTask (UpdateTaskRequest) returns (TaskResponse);
   rpc TransitionTask (TransitionTaskRequest) returns (TaskResponse);
   rpc DeleteTask (DeleteTaskRequest) returns (DeleteTaskResponse);
+  // Sets the attributes the mask names (priority, estimate, labels) and leaves the rest. A path in
+  // the mask whose field is unset clears it.
+  rpc UpdateTaskAttributes (UpdateTaskAttributesRequest) returns (TaskResponse);
 }
 
 message CreateTaskRequest {
@@ -45,6 +50,18 @@ message DeleteTaskRequest {
   string id = 1;
 }
 
+message TaskAttributes {
+  optional string priority = 1;
+  optional double estimate = 2;
+  repeated string labels = 3;
+}
+
+message UpdateTaskAttributesRequest {
+  string id = 1;
+  TaskAttributes attributes = 2;
+  google.protobuf.FieldMask update_mask = 3;
+}
+
 message TaskResponse {
   string id = 1;
   string user_id = 2;
@@ -53,6 +70,7 @@ message TaskResponse {
   string status = 5;
   string created_at = 6;
   string updated_at = 7;
+  TaskAttributes attributes = 8;
 }
 
 message ListTasksResponse {

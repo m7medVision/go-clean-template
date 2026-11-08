@@ -16,6 +16,8 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	mgo "go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // unknownEmail is an email no template renders, so delivering it fails before any SMTP.
@@ -28,6 +30,11 @@ func (unknownEmail) Recipient() string { return "john@example.com" }
 // part opens no connection.
 func testDeps(tokens *jwt.Manager) *deps {
 	pg := &postgres.Postgres{}
+
+	client, err := mgo.Connect(options.Client().ApplyURI("mongodb://127.0.0.1:1"))
+	if err != nil {
+		panic(err)
+	}
 
 	return &deps{
 		cfg: &config.Config{
@@ -43,6 +50,7 @@ func testDeps(tokens *jwt.Manager) *deps {
 		store:  newEventStore(pg, 0),
 		l:      slog.New(slog.DiscardHandler),
 		tokens: tokens,
+		mongo:  client.Database("test"),
 	}
 }
 

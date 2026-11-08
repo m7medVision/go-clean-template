@@ -19,13 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TaskService_CreateTask_FullMethodName     = "/grpc.v1.TaskService/CreateTask"
-	TaskService_GetTask_FullMethodName        = "/grpc.v1.TaskService/GetTask"
-	TaskService_ListTasks_FullMethodName      = "/grpc.v1.TaskService/ListTasks"
-	TaskService_ListAllTasks_FullMethodName   = "/grpc.v1.TaskService/ListAllTasks"
-	TaskService_UpdateTask_FullMethodName     = "/grpc.v1.TaskService/UpdateTask"
-	TaskService_TransitionTask_FullMethodName = "/grpc.v1.TaskService/TransitionTask"
-	TaskService_DeleteTask_FullMethodName     = "/grpc.v1.TaskService/DeleteTask"
+	TaskService_CreateTask_FullMethodName           = "/grpc.v1.TaskService/CreateTask"
+	TaskService_GetTask_FullMethodName              = "/grpc.v1.TaskService/GetTask"
+	TaskService_ListTasks_FullMethodName            = "/grpc.v1.TaskService/ListTasks"
+	TaskService_ListAllTasks_FullMethodName         = "/grpc.v1.TaskService/ListAllTasks"
+	TaskService_UpdateTask_FullMethodName           = "/grpc.v1.TaskService/UpdateTask"
+	TaskService_TransitionTask_FullMethodName       = "/grpc.v1.TaskService/TransitionTask"
+	TaskService_DeleteTask_FullMethodName           = "/grpc.v1.TaskService/DeleteTask"
+	TaskService_UpdateTaskAttributes_FullMethodName = "/grpc.v1.TaskService/UpdateTaskAttributes"
 )
 
 // TaskServiceClient is the client API for TaskService service.
@@ -40,6 +41,9 @@ type TaskServiceClient interface {
 	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*TaskResponse, error)
 	TransitionTask(ctx context.Context, in *TransitionTaskRequest, opts ...grpc.CallOption) (*TaskResponse, error)
 	DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error)
+	// Sets the attributes the mask names (priority, estimate, labels) and leaves the rest. A path in
+	// the mask whose field is unset clears it.
+	UpdateTaskAttributes(ctx context.Context, in *UpdateTaskAttributesRequest, opts ...grpc.CallOption) (*TaskResponse, error)
 }
 
 type taskServiceClient struct {
@@ -120,6 +124,16 @@ func (c *taskServiceClient) DeleteTask(ctx context.Context, in *DeleteTaskReques
 	return out, nil
 }
 
+func (c *taskServiceClient) UpdateTaskAttributes(ctx context.Context, in *UpdateTaskAttributesRequest, opts ...grpc.CallOption) (*TaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_UpdateTaskAttributes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TaskServiceServer is the server API for TaskService service.
 // All implementations must embed UnimplementedTaskServiceServer
 // for forward compatibility.
@@ -132,6 +146,9 @@ type TaskServiceServer interface {
 	UpdateTask(context.Context, *UpdateTaskRequest) (*TaskResponse, error)
 	TransitionTask(context.Context, *TransitionTaskRequest) (*TaskResponse, error)
 	DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error)
+	// Sets the attributes the mask names (priority, estimate, labels) and leaves the rest. A path in
+	// the mask whose field is unset clears it.
+	UpdateTaskAttributes(context.Context, *UpdateTaskAttributesRequest) (*TaskResponse, error)
 	mustEmbedUnimplementedTaskServiceServer()
 }
 
@@ -162,6 +179,9 @@ func (UnimplementedTaskServiceServer) TransitionTask(context.Context, *Transitio
 }
 func (UnimplementedTaskServiceServer) DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteTask not implemented")
+}
+func (UnimplementedTaskServiceServer) UpdateTaskAttributes(context.Context, *UpdateTaskAttributesRequest) (*TaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateTaskAttributes not implemented")
 }
 func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
 func (UnimplementedTaskServiceServer) testEmbeddedByValue()                     {}
@@ -310,6 +330,24 @@ func _TaskService_DeleteTask_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TaskService_UpdateTaskAttributes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTaskAttributesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).UpdateTaskAttributes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_UpdateTaskAttributes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).UpdateTaskAttributes(ctx, req.(*UpdateTaskAttributesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -344,6 +382,10 @@ var TaskService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteTask",
 			Handler:    _TaskService_DeleteTask_Handler,
+		},
+		{
+			MethodName: "UpdateTaskAttributes",
+			Handler:    _TaskService_UpdateTaskAttributes_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

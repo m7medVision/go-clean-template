@@ -3,7 +3,8 @@
 package model
 
 import (
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/99designs/gqlgen/graphql"
+	"github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 )
 
 // A currency conversion. Amounts and rates are decimal strings, so no precision is lost to
@@ -33,9 +34,16 @@ type Mutation struct {
 type Query struct {
 }
 
+// A field left out stays as it is; null clears it.
+type TaskAttributesInput struct {
+	Priority graphql.Omittable[*task.Priority] `json:"priority,omitempty"`
+	Estimate graphql.Omittable[*float64]       `json:"estimate,omitempty"`
+	Labels   graphql.Omittable[[]string]       `json:"labels,omitempty"`
+}
+
 type TaskList struct {
-	Tasks []entity.Task `json:"tasks"`
-	Total int           `json:"total"`
+	Tasks []task.TaskWithAttributes `json:"tasks"`
+	Total int                       `json:"total"`
 }
 
 type UpdateTaskInput struct {

@@ -6,6 +6,7 @@ import (
 	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpctask "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
 	resttask "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
+	mongoTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
@@ -19,7 +20,10 @@ import (
 func taskModule() module {
 	return module{
 		handlers: func(d *deps, b cqrs.Buses) error {
-			task.Register(b.Commands, b.Queries, task.Deps{Store: d.store, Tasks: persistTaskRepo.NewReadModel(d.pg)})
+			task.Register(b.Commands, b.Queries, task.Deps{
+				Store: d.store, Tasks: persistTaskRepo.NewReadModel(d.pg),
+				Attributes: mongoTaskRepo.NewAttributesStore(d.mongo), Logger: d.l,
+			})
 
 			return nil
 		},

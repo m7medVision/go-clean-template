@@ -8,6 +8,16 @@ type Task {
   status: TaskStatus!
   createdAt: Time!
   updatedAt: Time!
+  attributes: TaskAttributes!
 }
 
 type TaskList { tasks: [Task!]!  total: Int! }
+
+enum TaskPriority { LOW MEDIUM HIGH }
+
+type TaskAttributes {
+  priority: TaskPriority
+  "In hours."
+  estimate: Float
+  labels: [String!]
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/user"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	userquery "github.com/m7medvision/go-clean-template/internal/usecase/user/query"
@@ -44,8 +45,10 @@ func taskBuses(stored *entity.Task) cqrs.Buses {
 		func(context.Context, command.UpdateTask) (entity.Written, error) {
 			return entity.Written{ID: stored.ID}, nil
 		}))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
-		func(context.Context, query.GetTask) (entity.Task, error) { return *stored, nil }))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, mongotask.TaskWithAttributes](
+		func(context.Context, query.GetTask) (mongotask.TaskWithAttributes, error) {
+			return mongotask.TaskWithAttributes{Task: *stored}, nil
+		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}
 }

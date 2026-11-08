@@ -8,6 +8,7 @@ import (
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/rpcerr"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
@@ -33,7 +34,7 @@ func (c *Controller) readBack(ctx context.Context, userID, taskID string) (*v1.T
 	return NewTaskResponse(&task), nil
 }
 
-func listPage[Q cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
+func listPage[Q cqrs.QueryOf[entity.List[mongotask.TaskWithAttributes]]](ctx context.Context, c *Controller, q Q, op string) (*v1.ListTasksResponse, error) {
 	page, err := cqrs.SendQuery(ctx, c.qs, q)
 	if err != nil {
 		return nil, rpcerr.Status(ctx, c.l, err, op)

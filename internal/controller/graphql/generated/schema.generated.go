@@ -13,21 +13,23 @@ import (
 	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // region    ************************** generated!.gotpl **************************
 
 type MutationResolver interface {
-	CreateTask(ctx context.Context, input model.CreateTaskInput) (*entity.Task, error)
+	CreateTask(ctx context.Context, input model.CreateTaskInput) (*task.TaskWithAttributes, error)
 	DeleteTask(ctx context.Context, id string) (bool, error)
-	TransitionTask(ctx context.Context, id string, status entity.TaskStatus) (*entity.Task, error)
-	UpdateTask(ctx context.Context, id string, input model.UpdateTaskInput) (*entity.Task, error)
+	TransitionTask(ctx context.Context, id string, status entity.TaskStatus) (*task.TaskWithAttributes, error)
+	UpdateTask(ctx context.Context, id string, input model.UpdateTaskInput) (*task.TaskWithAttributes, error)
+	UpdateTaskAttributes(ctx context.Context, id string, input model.TaskAttributesInput) (*task.TaskWithAttributes, error)
 }
 type QueryResolver interface {
 	AllTasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
 	ExchangeHistory(ctx context.Context, limit int, offset int) (*model.ConversionList, error)
-	Task(ctx context.Context, id string) (*entity.Task, error)
+	Task(ctx context.Context, id string) (*task.TaskWithAttributes, error)
 	Tasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
 }
 
@@ -82,6 +84,28 @@ func (ec *executionContext) field_Mutation_transitionTask_args(ctx context.Conte
 		return nil, err
 	}
 	args["status"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateTaskAttributes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.TaskAttributesInput, error) {
+			return ec.unmarshalNTaskAttributesInput2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskAttributesInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
 	return args, nil
 }
 
@@ -234,8 +258,8 @@ func (ec *executionContext) _Mutation_createTask(ctx context.Context, field grap
 			return ec.Resolvers.Mutation().CreateTask(ctx, fc.Args["input"].(model.CreateTaskInput))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *task.TaskWithAttributes) graphql.Marshaler {
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx, selections, v)
 		},
 		true,
 		true,
@@ -322,8 +346,8 @@ func (ec *executionContext) _Mutation_transitionTask(ctx context.Context, field 
 			return ec.Resolvers.Mutation().TransitionTask(ctx, fc.Args["id"].(string), fc.Args["status"].(entity.TaskStatus))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *task.TaskWithAttributes) graphql.Marshaler {
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx, selections, v)
 		},
 		true,
 		true,
@@ -366,8 +390,8 @@ func (ec *executionContext) _Mutation_updateTask(ctx context.Context, field grap
 			return ec.Resolvers.Mutation().UpdateTask(ctx, fc.Args["id"].(string), fc.Args["input"].(model.UpdateTaskInput))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *task.TaskWithAttributes) graphql.Marshaler {
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx, selections, v)
 		},
 		true,
 		true,
@@ -391,6 +415,50 @@ func (ec *executionContext) fieldContext_Mutation_updateTask(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateTask_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateTaskAttributes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateTaskAttributes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateTaskAttributes(ctx, fc.Args["id"].(string), fc.Args["input"].(model.TaskAttributesInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *task.TaskWithAttributes) graphql.Marshaler {
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateTaskAttributes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Task(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateTaskAttributes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -498,8 +566,8 @@ func (ec *executionContext) _Query_task(ctx context.Context, field graphql.Colle
 			return ec.Resolvers.Query().Task(ctx, fc.Args["id"].(string))
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *task.TaskWithAttributes) graphql.Marshaler {
+			return ec.marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx, selections, v)
 		},
 		true,
 		true,
@@ -704,6 +772,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateTask":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateTask(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateTaskAttributes":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateTaskAttributes(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

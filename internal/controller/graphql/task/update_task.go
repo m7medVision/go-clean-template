@@ -6,12 +6,12 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/middleware"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
 
-func (m Mutation) UpdateTask(ctx context.Context, id string, input model.UpdateTaskInput) (*entity.Task, error) {
+func (m Mutation) UpdateTask(ctx context.Context, id string, input model.UpdateTaskInput) (*mongotask.TaskWithAttributes, error) {
 	caller, err := middleware.Caller(ctx)
 	if err != nil {
 		return nil, err

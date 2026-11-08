@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,4 +48,14 @@ func TestTheSchemaDocumentsTheDomainsRules(t *testing.T) {
 	}
 
 	assert.Equal(t, entity.TaskStatuses(), values)
+
+	priority := schema.Types["TaskPriority"]
+	require.NotNil(t, priority)
+
+	var priorities []mongotask.Priority
+	for _, v := range priority.EnumValues {
+		priorities = append(priorities, mongotask.Priority(strings.ToLower(v.Name)))
+	}
+
+	assert.Equal(t, mongotask.Priorities(), priorities)
 }
