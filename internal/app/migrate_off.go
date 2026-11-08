@@ -7,4 +7,4 @@ import (
 	"log/slog"
 )
 
-func syncSchema(context.Context, *slog.Logger, string) error { return nil }
+func migrateSchema(context.Context, *slog.Logger, string) error { return nil }

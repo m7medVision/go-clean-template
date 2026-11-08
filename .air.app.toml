@@ -1,13 +1,13 @@
 # air config for the app (cmd/app): `go tool air -c .air.app.toml`, started by `make dev`.
-# Built with -tags migrate like `make run`, and .hcl is watched, so saving a schema file re-syncs the
-# database on restart.
+# Built with -tags migrate like `make run`, and .sql is watched, so a new migration is applied on
+# restart.
 root = "."
 tmp_dir = "tmp"
 
 [build]
 cmd = "CGO_ENABLED=0 go build -tags migrate -o ./tmp/app ./cmd/app"
 entrypoint = ["./tmp/app"]
-include_ext = ["go", "hcl", "tmpl"]
+include_ext = ["go", "sql", "tmpl"]
 exclude_dir = [".git", ".github", "caddy", "integration-test", "tasks", "tmp", "vendor", "web"]
 exclude_regex = ["_test\\.go$"]
 exclude_unchanged = true
