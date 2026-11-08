@@ -65,6 +65,10 @@ const config = defineConfig({
     overrides: layers,
   },
   resolve: { tsconfigPaths: true },
+  test: {
+    setupFiles: ["./src/testing/setup.ts"],
+    environmentOptions: { happyDOM: { url: "http://localhost:3000" } },
+  },
   server: {
     // `make dev` and `make web-dev` export WEB_PORT from .env / .env.example.
     port: Number(process.env.WEB_PORT ?? "3000"),
