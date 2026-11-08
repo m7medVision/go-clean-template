@@ -56,6 +56,9 @@ make run          # the app, applying the schema at startup
 make web-dev      # the web client on http://localhost:3000
 ```
 
+With the app and the worker running, `make web-e2e` runs the browser test (see
+[web.md](web.md#end-to-end-test)).
+
 ```sh
 make run-worker   # the worker: projections and the queue, once the app has applied the schema
 ```

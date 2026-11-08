@@ -99,6 +99,21 @@ request with no handler fails the test. Assert on roles and text a user sees, no
 Flows covered: sign-in (success, wrong password, rate limit), tasks (list, add, move, delete),
 exchange (history, convert, refusal).
 
+### End-to-end test
+
+`web/e2e/tasks.spec.ts` drives Chromium through the real app and worker: sign up as a fresh user,
+sign in, add a task, move it, sign out. It is the only test that talks to the Go service, and it
+leaves nothing to clean up (a new user every run).
+
+```sh
+make dev        # or: make compose-up, then make run and make run-worker (SSO off: unset OIDC_ISSUER)
+make web-e2e    # Playwright against WEB_PORT, starting `vp dev` if nothing answers there
+```
+
+`make web-e2e` stops with a message when the app does not answer on `HTTP_PORT`. The first run needs
+the browser: `vp -C web exec playwright install chromium`. CI runs it in its own job, `runner / web /
+e2e`, which keeps the trace of a failure as an artifact and does not block merging.
+
 ## Passkeys
 
 The browser half of a WebAuthn ceremony is in `web/src/passkey/webauthn.ts`, on the browser's own
