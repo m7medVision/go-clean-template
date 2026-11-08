@@ -21,7 +21,6 @@ func Register(cmds *cqrs.Commands, qs *cqrs.Queries, d Deps) {
 	cqrs.HandleCommand(cmds, command.UpdateTaskHandler{Store: d.Store})
 	cqrs.HandleCommand(cmds, command.TransitionTaskHandler{Store: d.Store})
 	cqrs.HandleCommand(cmds, command.DeleteTaskHandler{Store: d.Store, Attributes: d.Attributes, Logger: d.Logger})
-
 	cqrs.HandleCommand(cmds, command.SetTaskAttributesHandler{Tasks: d.Tasks, Attributes: d.Attributes})
 
 	cqrs.HandleQuery(qs, query.GetTaskHandler{Tasks: d.Tasks, Attributes: d.Attributes})
