@@ -3,8 +3,8 @@ import { createRouter } from "@tanstack/react-router";
 
 import { onUnauthorized } from "#/api/client";
 import { auth } from "#/auth/token";
-import { RouteError, RouteNotFound } from "#/components/route-error";
 import { reportError } from "#/lib/error-tracking";
+import { routerDefaults } from "./router-defaults";
 import { routeTree } from "./routeTree.gen";
 
 export const queryClient = new QueryClient({
@@ -20,8 +20,7 @@ export const router = createRouter({
   // TanStack Query owns freshness, so the router always asks it.
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,
-  defaultErrorComponent: RouteError,
-  defaultNotFoundComponent: RouteNotFound,
+  ...routerDefaults,
 });
 
 onUnauthorized(() => {

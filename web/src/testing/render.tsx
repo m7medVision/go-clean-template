@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 
 import { auth } from "#/auth/token";
 import { routeTree } from "#/routeTree.gen";
+import { routerDefaults } from "#/router-defaults";
 
 // renderRoute mounts the app's real route tree at path, with a fresh query cache that never retries.
 export function renderRoute(path: string) {
@@ -16,6 +17,7 @@ export function renderRoute(path: string) {
     context: { queryClient, auth },
     history: createMemoryHistory({ initialEntries: [path] }),
     defaultPendingMinMs: 0,
+    ...routerDefaults,
   });
 
   render(
