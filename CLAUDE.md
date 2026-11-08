@@ -501,6 +501,8 @@ TanStack Query, built and checked with Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest)
 - Client routes must not use the prefixes the Go app owns: `/v1`, `/graphql`, `/docs`,
   `/openapi.*`, `/schemas`, `/healthz`, `/metrics`.
 - Tests import from `vite-plus/test` and sit next to the code as `*.test.ts`.
+  A screen is a `*.test.tsx` with `// @vitest-environment happy-dom` that renders the real routes through
+  `web/src/testing` (MSW handlers typed from the generated API types); see `docs/web.md`.
 
 ## Keep the docs current
 
