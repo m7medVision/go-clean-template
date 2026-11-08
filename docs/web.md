@@ -80,6 +80,17 @@ options in `web/src/<domain>/api.ts`.
   [Zod](https://zod.dev/) schema per domain (`web/src/components/form/`). A currency picker is
   `field.SelectField`.
 
+### Errors
+
+A failed route load or a render crash shows `RouteError` (`web/src/components/route-error.tsx`) in
+that route's area: the sidebar and breadcrumb stay, the message is `problemMessage` (the server's
+text, never an error's own message or stack), and "Try again" resets the failed queries and reloads
+the route. It is the router's `defaultErrorComponent`; a route can still set its own (`AllTasksError`
+on `/admin/tasks`, whose 403 does not heal on retry). An unknown URL shows `RouteNotFound`, a full
+page with a link to `/tasks`. A rejected token is handled apart from all of this: `rejectSession`
+signs the user out on a REST 401 and on GraphQL's `UNAUTHENTICATED`. A mutation's failure is never
+thrown into rendering; the form or dialog shows it with `FormError`.
+
 ## Testing
 
 Pure logic is tested in `*.test.ts` beside the code. A screen is tested in `*.test.tsx` that starts
@@ -114,17 +125,6 @@ make web-e2e    # Playwright against WEB_PORT, starting `vp dev` if nothing answ
 `make web-e2e` stops with a message when the app does not answer on `HTTP_PORT`. The first run needs
 the browser: `vp -C web exec playwright install chromium`. CI runs it in its own job, `runner / web /
 e2e`, which keeps the trace of a failure as an artifact and does not block merging.
-### Errors
-
-A failed route load or a render crash shows `RouteError` (`web/src/components/route-error.tsx`) in
-that route's area: the sidebar and breadcrumb stay, the message is `problemMessage` (the server's
-text, never an error's own message or stack), and "Try again" resets the failed queries and reloads
-the route. It is the router's `defaultErrorComponent`; a route can still set its own (`AllTasksError`
-on `/admin/tasks`, whose 403 does not heal on retry). An unknown URL shows `RouteNotFound`, a full
-page with a link to `/tasks`. A rejected token is handled apart from all of this: `rejectSession`
-signs the user out on a REST 401 and on GraphQL's `UNAUTHENTICATED`. A mutation's failure is never
-thrown into rendering; the form or dialog shows it with `FormError`.
-
 ## Error tracking
 
 With `VITE_SENTRY_DSN` set at build time, `initErrorTracking` (`web/src/lib/error-tracking.ts`) loads
