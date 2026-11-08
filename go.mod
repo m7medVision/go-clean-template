@@ -37,6 +37,7 @@ require (
 	github.com/shopspring/decimal v1.6.0
 	github.com/stretchr/testify v1.12.1
 	github.com/valkey-io/valkey-go v1.0.79
+	github.com/valkey-io/valkey-go/valkeylimiter v1.0.79
 	github.com/valkey-io/valkey-go/valkeyotel v1.0.79
 	github.com/vektah/gqlparser/v2 v2.5.64
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0

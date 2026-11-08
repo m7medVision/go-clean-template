@@ -1,13 +1,17 @@
 // Package repo holds the ports the use cases call: the ones every domain shares here, and each
-// domain's in the file named after it (task.go, user.go, …), whose gomock mocks go:generate writes
-// to repomock/ (make mock). The packages under internal/repo implement them.
+// domain's in the file named after it (task.go, user.go, …). go:generate writes gomock mocks of the
+// ones a test constructs to repomock/, one file per contract file (make mock). The packages under
+// internal/repo implement them.
 package repo
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
+
+//go:generate mockgen -source=contracts.go -destination=repomock/contracts.go -package=repomock -exclude_interfaces=EventStore,Subscriber,ProjectionCheckpoints,SessionIssuer
 
 type (
 	// EventStore keeps aggregates as streams of events.
@@ -46,5 +50,12 @@ type (
 	// SessionIssuer signs the auth token a sign-in answers with, carrying the user's roles.
 	SessionIssuer interface {
 		Issue(userID string, roles []entity.Role) (string, error)
+	}
+
+	Limiter interface {
+		TakeClient(ctx context.Context, scope string, client netip.Addr) (entity.Allowance, error)
+		CheckAccount(ctx context.Context, scope, account string) (entity.Allowance, error)
+		TakeAccountFailure(ctx context.Context, scope, account string) error
+		ClearAccount(ctx context.Context, scope, account string) error
 	}
 )

@@ -86,20 +86,20 @@ docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:*
 `web/src/api/schema.gen.ts`. **Verify:** G1; `make web-check`. **Depends on:** none. **Size:** L
 
 ### 6. The counters
-- [ ] `repo.Limiter` in `internal/repo/contracts.go` (`TakeClient`, `CheckAccount`,
+- [x] `repo.Limiter` in `internal/repo/contracts.go` (`TakeClient`, `CheckAccount`,
       `TakeAccountFailure`, `ClearAccount`), added to its `go:generate` list; `make mock`.
-- [ ] `internal/repo/limiter`: `New(client vk.Client, limits entity.Limits) (repo.Limiter,
+- [x] `internal/repo/limiter`: `New(client vk.Client, limits entity.Limits) (repo.Limiter,
       error)`, two `valkeylimiter` clients built with a `ClientBuilder` returning `client`. Their
       key prefixes are `limit:client` and `limit:account`, and they are never closed.
-- [ ] Identifiers:
-  - [ ] client: `<scope>:<addr>`, an IPv6 client by its `/64`;
-  - [ ] account: `<scope>:<hex sha256 of the lower-cased, trimmed email>`.
+- [x] Identifiers:
+  - [x] client: `<scope>:<addr>`, an IPv6 client by its `/64`;
+  - [x] account: `<scope>:<hex sha256 of the lower-cased, trimmed email>`.
 
       Unit-tested through `export_test.go`.
-- [ ] `valkeylimiter` v1.0.79 in `go.mod`; read `make deps`' diff.
-- [ ] `integration-test/limit_test.go`, against the stack's Valkey under scope `_test:<uuid>`:
-  - [ ] a client budget of 2 refuses the 3rd take, with a `RetryAfter`;
-  - [ ] after `ClearAccount`, failures count from zero.
+- [x] `valkeylimiter` v1.0.79 in `go.mod`; read `make deps`' diff.
+- [x] `integration-test/limit_test.go`, against the stack's Valkey under scope `_test:<uuid>`:
+  - [x] a client budget of 2 refuses the 3rd take, with a `RetryAfter`;
+  - [x] after `ClearAccount`, failures count from zero.
 
 **Files:** `internal/repo/contracts.go`, `internal/repo/repomock/contracts.go`,
 `internal/repo/limiter/limiter.go` (+ `export_test.go`, test), `go.mod`, `go.sum`,
