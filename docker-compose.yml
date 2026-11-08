@@ -92,7 +92,7 @@ services:
           - valkey.lvh.me
 
   mongo:
-    image: mongo:8.3.13
+    image: mongo:9.0.4
     environment:
       MONGO_INITDB_ROOT_USERNAME: "user"
       MONGO_INITDB_ROOT_PASSWORD: "mongoPa55w0rd"
