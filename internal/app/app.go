@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
@@ -24,12 +25,13 @@ var ErrNoValkeyURL = errors.New("app: VALKEY_URL is not set")
 // ends or a server fails. It returns once both have stopped and the pool is closed. It installs every
 // module's handlers but mail delivery's, which only the worker runs.
 func Run(ctx context.Context, cfg *config.Config) error {
-	if cfg.JWT.Secret == "" {
-		return fmt.Errorf("app - Run: %w", ErrNoJWTSecret)
+	if err := requireAppSettings(cfg); err != nil {
+		return fmt.Errorf("app - Run: %w", err)
 	}
 
-	if cfg.Valkey.URL == "" {
-		return fmt.Errorf("app - Run: %w", ErrNoValkeyURL)
+	proxy, err := trustedProxy(cfg.HTTP.TrustedProxy)
+	if err != nil {
+		return fmt.Errorf("app - Run - TRUSTED_PROXY: %w", err)
 	}
 
 	b, err := newBootstrap(ctx, cfg, cfg.App.Name)
@@ -64,7 +66,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("app - Run - register the projection lag collector: %w", err)
 	}
 
-	httpServer := newHTTPServer(cfg.HTTP.Port, newHTTPHandler(cfg, b.buses, d.tokens, b.metrics, b.l), cfg.CQRS.ConsistencyTimeout)
+	httpServer := newHTTPServer(cfg.HTTP.Port, newHTTPHandler(cfg, proxy, b.buses, d.tokens, b.metrics, b.l), cfg.CQRS.ConsistencyTimeout)
 	grpcServer := newGRPCServer(b.buses, d.tokens, b.metrics, cfg.Docs.Enabled, b.l)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -76,4 +78,24 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func requireAppSettings(cfg *config.Config) error {
+	if cfg.JWT.Secret == "" {
+		return ErrNoJWTSecret
+	}
+
+	if cfg.Valkey.URL == "" {
+		return ErrNoValkeyURL
+	}
+
+	return nil
+}
+
+func trustedProxy(addr string) (netip.Addr, error) {
+	if addr == "" {
+		return netip.Addr{}, nil
+	}
+
+	return netip.ParseAddr(addr)
 }

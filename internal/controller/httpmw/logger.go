@@ -1,12 +1,14 @@
 // Package httpmw is the middleware the app's HTTP mux wraps every request in, whatever serves it
-// (REST, GraphQL, the docs, /healthz, /metrics): the request log, tracing, metrics and panic
-// recovery. REST's own Huma middleware, the token check, is in restapi/middleware.
+// (REST, GraphQL, the docs, /healthz, /metrics): the client address, the request log, tracing,
+// metrics and panic recovery. REST's own Huma middleware, the token check, is in restapi/middleware.
 package httpmw
 
 import (
 	"log/slog"
 	"net"
 	"net/http"
+
+	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
 type statusRecorder struct {
@@ -57,6 +59,10 @@ func Logger(l *slog.Logger) func(http.Handler) http.Handler {
 }
 
 func clientAddr(r *http.Request) string {
+	if client, ok := entity.ClientFromContext(r.Context()); ok {
+		return client.String()
+	}
+
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

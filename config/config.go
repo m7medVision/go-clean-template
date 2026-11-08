@@ -40,7 +40,8 @@ type (
 
 	// HTTP is read only by the app; the worker serves no HTTP.
 	HTTP struct {
-		Port string `env:"HTTP_PORT" envDefault:"8080"`
+		Port         string `env:"HTTP_PORT" envDefault:"8080"`
+		TrustedProxy string `env:"TRUSTED_PROXY"`
 	}
 
 	Log struct {

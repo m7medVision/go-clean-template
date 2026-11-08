@@ -26,19 +26,19 @@ L = 6–8.
 **Size:** S
 
 ### 2. The client address on HTTP
-- [ ] `config.HTTP.TrustedProxy` (`TRUSTED_PROXY`, no default, no `required`); `.env.example`
+- [x] `config.HTTP.TrustedProxy` (`TRUSTED_PROXY`, no default, no `required`); `.env.example`
       gains an empty `TRUSTED_PROXY=`.
-- [ ] `internal/app` parses it once with `netip.ParseAddr` (empty means no proxy); a bad address
+- [x] `internal/app` parses it once with `netip.ParseAddr` (empty means no proxy); a bad address
       stops `Run` with a wrapped error.
-- [ ] `entity.ContextWithClient(ctx, netip.Addr)` and
+- [x] `entity.ContextWithClient(ctx, netip.Addr)` and
       `entity.ClientFromContext(ctx) (netip.Addr, bool)` in `internal/entity/client.go`, with a
       test.
-- [ ] `httpmw.ClientAddress(proxy netip.Addr)`: `clientip.Resolve(RemoteAddr,
+- [x] `httpmw.ClientAddress(proxy netip.Addr)`: `clientip.Resolve(RemoteAddr,
       r.Header.Values("X-Forwarded-For"), proxy)` into the context. It is the first middleware in
       `internal/app/http.go`.
-- [ ] `httpmw.Logger` and `httpmw.Recovery` log `entity.ClientFromContext`, falling back to the
+- [x] `httpmw.Logger` and `httpmw.Recovery` log `entity.ClientFromContext`, falling back to the
       remote address when it is missing.
-- [ ] Tests: a request from the proxy with a header, a forged header from elsewhere, no proxy
+- [x] Tests: a request from the proxy with a header, a forged header from elsewhere, no proxy
       configured; the logger's `client` field shows the resolved address.
 
 **Files:** `config/config.go`, `.env.example`, `internal/entity/client.go` (+ test),

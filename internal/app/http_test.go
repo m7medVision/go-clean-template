@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func newTestHandlerWith(t *testing.T, b cqrs.Buses, cfg *config.Config) (handler
 	token, err := tokens.GenerateToken("user-1", nil)
 	require.NoError(t, err)
 
-	return newHTTPHandler(cfg, b, tokens, newMetrics(), slog.New(slog.DiscardHandler)), token
+	return newHTTPHandler(cfg, netip.Addr{}, b, tokens, newMetrics(), slog.New(slog.DiscardHandler)), token
 }
 
 func get(t *testing.T, h http.Handler, target, token string) *httptest.ResponseRecorder {
