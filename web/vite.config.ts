@@ -22,6 +22,37 @@ const backendPaths = [
 
 const generated = ["src/routeTree.gen.ts", "src/api/schema.gen.ts", "src/graphql/**"];
 
+const domains = ["tasks", "exchange", "passkey", "sso"];
+
+type Restriction = ["error", { patterns: { regex: string; message: string }[] }];
+
+const restrict = (folders: string[], forbidden: string[], message: string) => {
+  const rule: Restriction = [
+    "error",
+    { patterns: [{ regex: `^#/(${forbidden.join("|")})(/|$)`, message }] },
+  ];
+
+  return {
+    files: folders.map((folder) => `src/${folder}/**`),
+    rules: { "no-restricted-imports": rule },
+  };
+};
+
+const layers = [
+  ...domains.map((domain) =>
+    restrict(
+      [domain],
+      [...domains.filter((other) => other !== domain), "routes"],
+      "a domain never imports another domain or a route",
+    ),
+  ),
+  restrict(
+    ["api", "auth", "components", "hooks", "lib"],
+    [...domains, "routes"],
+    "shared code never imports a domain or a route",
+  ),
+];
+
 const config = defineConfig({
   fmt: {
     ignorePatterns: ["dist/**", ...generated],
@@ -31,6 +62,7 @@ const config = defineConfig({
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
+    overrides: layers,
   },
   resolve: { tsconfigPaths: true },
   server: {
