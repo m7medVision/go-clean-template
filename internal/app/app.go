@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/netip"
 
 	"github.com/m7medvision/go-clean-template/config"
@@ -14,7 +15,10 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/mongo"
 	"github.com/m7medvision/go-clean-template/pkg/valkey"
+	vk "github.com/valkey-io/valkey-go"
+	mgo "go.mongodb.org/mongo-driver/v2/mongo"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,7 +26,10 @@ import (
 // the worker starts without it, and Run refuses to start without it.
 var ErrNoJWTSecret = errors.New("app: JWT_SECRET is not set")
 
-var ErrNoValkeyURL = errors.New("app: VALKEY_URL is not set")
+var (
+	ErrNoValkeyURL = errors.New("app: VALKEY_URL is not set")
+	ErrNoMongoURL  = errors.New("app: MONGO_URL is not set")
+)
 
 // Run applies the schema, imports what predates event sourcing, and serves HTTP and gRPC until ctx
 // ends or a server fails. It returns once both have stopped and the pool is closed. It installs every
@@ -39,11 +46,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer b.close(ctx)
 
-	client, err := valkey.New(ctx, cfg.Valkey.URL)
+	stores, err := openStores(ctx, cfg, b.l)
 	if err != nil {
-		return fmt.Errorf("app - Run - valkey.New: %w", err)
+		return fmt.Errorf("app - Run: %w", err)
 	}
-	defer client.Close()
+	defer stores.close(ctx)
+
+	client, db := stores.valkey, stores.mongo
 
 	lim, err := limiter.New(client, entity.Limits(cfg.AuthLimit))
 	if err != nil {
@@ -57,7 +66,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	store := newEventStore(b.pg, cfg.CQRS.SnapshotEvery)
-	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), valkey: client}
+	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), valkey: client, mongo: db}
 
 	if err = eventstore.Backfill(ctx, b.pg, store, importers(b.pg)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
@@ -86,6 +95,37 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
+type stores struct {
+	valkey     vk.Client
+	mongo      *mgo.Database
+	disconnect func(context.Context) error
+	l          *slog.Logger
+}
+
+func openStores(ctx context.Context, cfg *config.Config, l *slog.Logger) (*stores, error) {
+	client, err := valkey.New(ctx, cfg.Valkey.URL)
+	if err != nil {
+		return nil, fmt.Errorf("valkey.New: %w", err)
+	}
+
+	db, disconnect, err := mongo.New(ctx, cfg.Mongo.URL)
+	if err != nil {
+		client.Close()
+
+		return nil, fmt.Errorf("mongo.New: %w", err)
+	}
+
+	return &stores{valkey: client, mongo: db, disconnect: disconnect, l: l}, nil
+}
+
+func (s *stores) close(ctx context.Context) {
+	if err := s.disconnect(context.WithoutCancel(ctx)); err != nil {
+		s.l.Error("app - Run - mongo disconnect", "error", err)
+	}
+
+	s.valkey.Close()
+}
+
 func appSettings(cfg *config.Config) (netip.Addr, error) {
 	if cfg.JWT.Secret == "" {
 		return netip.Addr{}, ErrNoJWTSecret
@@ -93,6 +133,10 @@ func appSettings(cfg *config.Config) (netip.Addr, error) {
 
 	if cfg.Valkey.URL == "" {
 		return netip.Addr{}, ErrNoValkeyURL
+	}
+
+	if cfg.Mongo.URL == "" {
+		return netip.Addr{}, ErrNoMongoURL
 	}
 
 	proxy, err := trustedProxy(cfg.HTTP.TrustedProxy)

@@ -19,6 +19,7 @@ type (
 		GRPC      GRPC
 		JWT       JWT
 		Valkey    Valkey
+		Mongo     Mongo
 		AuthLimit AuthLimit
 		Metrics   Metrics
 		Docs      Docs
@@ -65,6 +66,12 @@ type (
 	// checks it.
 	Valkey struct {
 		URL string `env:"VALKEY_URL"`
+	}
+
+	// Mongo has no required tag: the worker parses the same config and has no Mongo, so app.Run
+	// checks it. The database is the URL's path.
+	Mongo struct {
+		URL string `env:"MONGO_URL"`
 	}
 
 	AuthLimit struct {
