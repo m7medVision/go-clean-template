@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func dialGRPC(t *testing.T, b cqrs.Buses, tokens *jwt.Manager) *grpc.ClientConn 
 	t.Helper()
 
 	lis := bufconn.Listen(_bufSize)
-	srv := newGRPCServer(b, tokens, newMetrics(), false, slog.New(slog.DiscardHandler))
+	srv := newGRPCServer(netip.Addr{}, b, tokens, newMetrics(), false, slog.New(slog.DiscardHandler))
 
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {

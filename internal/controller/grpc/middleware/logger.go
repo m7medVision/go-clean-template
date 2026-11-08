@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 
+	"github.com/m7medvision/go-clean-template/internal/entity"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -21,6 +22,10 @@ func Logger(l *slog.Logger) grpc.UnaryServerInterceptor {
 }
 
 func clientAddr(ctx context.Context) string {
+	if client, ok := entity.ClientFromContext(ctx); ok {
+		return client.String()
+	}
+
 	p, ok := peer.FromContext(ctx)
 	if !ok || p.Addr == nil {
 		return ""

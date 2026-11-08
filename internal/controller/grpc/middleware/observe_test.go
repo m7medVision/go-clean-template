@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net"
+	"net/netip"
 	"testing"
 
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
@@ -123,16 +124,41 @@ func TestStreamRecoveryTurnsAPanicIntoInternal(t *testing.T) {
 func TestLoggerLogsEveryCall(t *testing.T) {
 	t.Parallel()
 
-	var logs bytes.Buffer
+	tests := []struct {
+		name     string
+		resolved bool
+		want     string
+	}{
+		{"the client resolved behind the proxy", true, _forwarded},
+		{"the peer when none was resolved", false, _proxy},
+	}
 
-	_, err := grpcmw.Logger(slog.New(slog.NewJSONHandler(&logs, nil)))(fromClient(t.Context()), nil, unaryInfo(), notFound)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	assert.Equal(t, codes.NotFound, status.Code(err))
+			var logs bytes.Buffer
 
-	r := onlyRecord(t, &logs)
-	assert.Equal(t, "10.0.0.7", r["client"])
-	assert.Equal(t, _method, r["method"])
-	assert.Equal(t, codes.NotFound.String(), r["code"])
+			logger := grpcmw.Logger(slog.New(slog.NewJSONHandler(&logs, nil)))
+			logged := func(ctx context.Context, req any) (any, error) { return logger(ctx, req, unaryInfo(), notFound) }
+			call := logged
+
+			if tt.resolved {
+				call = func(ctx context.Context, req any) (any, error) {
+					return grpcmw.ClientAddress(netip.MustParseAddr(_proxy))(ctx, req, unaryInfo(), logged)
+				}
+			}
+
+			_, err := call(forwardedBy(t, tcp(_proxy+":41000")), nil)
+
+			assert.Equal(t, codes.NotFound, status.Code(err))
+
+			r := onlyRecord(t, &logs)
+			assert.Equal(t, tt.want, r["client"])
+			assert.Equal(t, _method, r["method"])
+			assert.Equal(t, codes.NotFound.String(), r["code"])
+		})
+	}
 }
 
 func TestMetricsCountAndTimeEveryCall(t *testing.T) {

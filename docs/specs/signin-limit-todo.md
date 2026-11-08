@@ -47,11 +47,11 @@ L = 6–8.
 **Size:** L
 
 ### 3. The client address on gRPC
-- [ ] An interceptor in `internal/controller/grpc/middleware/client.go`:
+- [x] An interceptor in `internal/controller/grpc/middleware/client.go`:
       `clientip.Resolve(peer, metadata "x-forwarded-for", proxy)` into the context. It goes first
       in the unary chain and the stream chain (`internal/app/grpc.go`).
-- [ ] The gRPC logger and recovery log `entity.ClientFromContext`, falling back to the peer.
-- [ ] Tests over `bufconn`: metadata from the proxy, forged metadata from elsewhere.
+- [x] The gRPC logger and recovery log `entity.ClientFromContext`, falling back to the peer.
+- [x] Tests over `bufconn`: metadata from the proxy, forged metadata from elsewhere.
 
 **Files:** `internal/controller/grpc/middleware/client.go` (+ test), `logger.go`, `recovery.go`,
 `internal/app/grpc.go`. **Verify:** G1. **Depends on:** 2. **Size:** M
