@@ -21,7 +21,8 @@ So does `/sso/callback`.
 
 `/admin/tasks` ("All tasks") is a read-only data table of every user's tasks over GraphQL `allTasks`.
 The sidebar shows its link when the token's `roles` claim includes `admin` (`web/src/auth/roles.ts`
-reads the claim without verifying it: a UI hint only, since the server checks the role). A user who
+reads the claim without verifying it: a UI hint only, since the server checks the role). The link is rendered inside `<Authorization allowedRoles={["admin"]}>`
+(`web/src/components/authorization.tsx`), the one place the UI gates something by role. A user who
 opens the URL anyway gets the server's `admin role required` in the route's error view.
 
 `/exchange` converts an amount (Omani Rial to Chinese Yuan by default) with a REST form and lists the
