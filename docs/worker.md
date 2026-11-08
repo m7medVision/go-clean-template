@@ -29,7 +29,7 @@ running worker and exits; the worker replays every event into them. Only project
 
 ## The queue
 
-The table is `queue_messages` ([schema](../internal/app/schema/queue_messages.hcl)), read and written
+The table is `queue_messages` ([migration](../internal/app/migrations/00001_baseline.sql)), read and written
 through [`internal/repo/persistent/queue`](../internal/repo/persistent/queue) (`Send`, `Read`,
 `Delete`). One table holds every queue, told apart by its `queue` column, so a queue exists as soon
 as something is sent to it.

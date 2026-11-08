@@ -26,8 +26,8 @@ make dev-down  # close the tmux session and stop the containers
 
 The panes are:
 
-- **app**: `.air.app.toml`, built with `-tags migrate`. It rebuilds on `.go`, `.hcl` and `.tmpl`
-  changes, so saving a schema file re-syncs the database.
+- **app**: `.air.app.toml`, built with `-tags migrate`. It rebuilds on `.go`, `.sql` and `.tmpl`
+  changes, so a new migration is applied on the restart.
 - **worker**: `.air.worker.toml`. It starts once the app answers `/healthz`, because only the app
   applies the schema. It runs the projections the app's reads come from, so the app needs it.
 - **web**: the Vite+ dev server on http://localhost:3000.
@@ -66,7 +66,7 @@ make run-worker   # the worker: projections and the queue, once the app has appl
 `make run` alone is not enough: without the worker the read models never catch up, and every write
 answers `503` after `CQRS_CONSISTENCY_TIMEOUT` ([cqrs.md](cqrs.md#reads-after-writes)).
 `make run` regenerates the protobuf code first, so it needs `protoc` on `PATH`.
-`make bin-deps` installs the tools the targets run (`mockgen`, linters, `atlas`).
+`make bin-deps` installs the tools the targets run (`mockgen`, linters).
 
 ## Local services
 
@@ -99,18 +99,28 @@ instead of open.er-api.com. The stub serves the same recorded response
 cannot drift apart.
 
 ```sh
-make schema-roundtrip                   # schema up from origin/master, down to it, up again
-make schema-roundtrip BASE_REF=HEAD~1   # against any other branch or commit
+make schema-roundtrip                   # every migration up, down to zero, up again; none merged edited
+make schema-roundtrip BASE_REF=HEAD~1   # compare against any other branch or commit
 ```
 
-The schema is declarative, so there are no down migrations: "down" means applying the older HCL,
-which Atlas reaches by dropping what that version lacks. `scripts/schema-roundtrip.sh` takes the base
-schema out of git with `git archive`, applies base → working tree → base → working tree to a
-throwaway Postgres container it starts and removes, and fails if any apply errors or leaves drift.
-It never touches `PG_URL`. It needs `docker` and `atlas` on `PATH`; with `ROUNDTRIP_PG_URL` set it
-uses that database instead of a container, and refuses one that is not empty. In CI it runs on pull requests
-that change the schema, against the PR's base branch (the parent branch, for a stacked PR), on the
-Postgres `bmizerany/setup-postgres` starts, like every other job that needs one.
+`scripts/schema-roundtrip.sh` first fails if a migration that exists at the base ref was edited,
+renamed or removed: a merged migration is never changed, a change is a new file. Then it builds
+`cmd/migrate` and, on a throwaway Postgres container it starts and removes, applies every migration,
+rolls them all back (`down-to 0`) and applies them again, so a `Down` that does not undo its `Up`
+fails. It never touches `PG_URL`. It needs `docker` and `go` on `PATH`; with `ROUNDTRIP_PG_URL` set
+it uses that database instead of a container, and refuses one that already has migrations applied.
+In CI it runs on pull requests that change a migration or the migration code, against the PR's base
+branch (the parent branch, for a stacked PR), on the Postgres `bmizerany/setup-postgres` starts,
+like every other job that needs one.
+
+Migrations by hand, on `PG_URL`'s database:
+
+```sh
+make migrate-new name=add_archived_at   # internal/app/migrations/<timestamp>_add_archived_at.sql
+make migrate-status
+make migrate-up
+make migrate-down version=0             # roll back to a version; 0 empties the database
+```
 
 The domain and use-case generator, `tools/gen`, is its own module, so `make test` does not reach it:
 `make gen-check` and `make gen-e2e` test it ([generator.md](generator.md#goldens-and-checks)).

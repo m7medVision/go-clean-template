@@ -319,8 +319,8 @@ implements `repo.EventStore.Save`. It runs one transaction, joining the context'
    user, the trace ID, `command ConvertCurrency`), through the sqlc query `AppendEvent`.
 4. `NOTIFY events`, which Postgres delivers to the worker when the transaction commits.
 
-The events table, like every table, is declared in [`internal/app/schema/`](../internal/app/schema/)
-(`events.hcl`), and its queries are SQL in
+The events table, like every table, is created by a migration in
+[`internal/app/migrations/`](../internal/app/migrations/), and its queries are SQL in
 [`queries/eventstore.sql`](../internal/repo/persistent/queries/eventstore.sql) that `make sqlc`
 turns into typed Go.
 

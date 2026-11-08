@@ -28,7 +28,7 @@ make proto-v1 graphql sqlc mock openapi web-api web-graphql format
 go build ./...
 ```
 
-So both targets need what those need: `protoc`, Docker (for `make sqlc`), Atlas, the `vp` CLI with
+So both targets need what those need: `protoc`, the `vp` CLI with
 `make web-deps` run once, and the tools `make bin-deps` installs. The first failure stops them, and
 the target tells you to run the undo the generator printed ([Undo](#undo)). A dry run writes
 nothing, so it runs none of them.
@@ -67,7 +67,7 @@ transport, as `task` keeps them. The files it creates, for `invoice`:
 | Layer | Transport | Created |
 | --- | --- | --- |
 | entity | all | `internal/entity/invoice.go` (the read shape, its `ReadableBy`, and the sentinels `ErrInvoiceNotFound`, `ErrInvoiceForbidden`), `invoice_aggregate.go` (`InvoiceAggregate`, `InvoiceStreamID`, `NewInvoiceAggregate`, `StreamOf`, `Update`, `Delete`, `Apply`), `invoice_events.go` (`InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `InvoiceEvents()`), `invoice_aggregate_test.go` |
-| read model | all | `internal/app/schema/invoices.hcl` (no foreign keys), `internal/repo/persistent/queries/invoice.sql`, `internal/repo/invoice.go` (`InvoiceReadModel`, with the `go:generate` directive `make mock` runs), `persistent/invoice/invoice.go` (`NewReadModel`), `invoice_test.go` |
+| read model | all | `internal/app/migrations/<timestamp>_create_invoices.sql` (no foreign keys), `internal/repo/persistent/queries/invoice.sql`, `internal/repo/invoice.go` (`InvoiceReadModel`, with the `go:generate` directive `make mock` runs), `persistent/invoice/invoice.go` (`NewReadModel`), `invoice_test.go` |
 | projector | all | `persistent/invoice/projector.go` (`NewProjector`, through `projection.NewProjector`, handling the invoice events, and the unexported `project`), `export_test.go` (exports `project` to its test), `projector_test.go` against a fake `Querier` |
 | use case | all | `internal/usecase/invoice/register.go`; in `command/`, `create_`, `update_` and `delete_invoice.go`, each with its test against `memstore`, and `command_test.go`; in `query/`, `get_invoice.go`, `list_invoices.go` and `query_test.go` against `repomock` |
 | module | all | `internal/app/invoice.go`: `invoiceModule()`, its handlers, its projector, and its REST and gRPC registration |

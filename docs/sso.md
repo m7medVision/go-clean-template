@@ -18,7 +18,7 @@ The code, layer by layer:
 | Events | [`internal/entity/user_aggregate.go`](../internal/entity/user_aggregate.go): `NewOIDCUserAggregate` records `UserRegisteredViaOIDC` and claims the identity, the email and the username |
 | Use case | [`internal/usecase/oidc`](../internal/usecase/oidc): the queries `BeginOIDCLogin` and `GetOIDCStatus`, the command `FinishOIDCLogin`, against the `repo.SSOProvider` port |
 | Adapter | [`internal/repo/sso`](../internal/repo/sso/sso.go), the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `golang.org/x/oauth2`; it owns the state token's scope and lifetime, and sends the provider the redirect URI `config.App.SSOCallbackURL` builds. `ssotest/` is a provider on httptest for its tests |
-| Read model | the `user` projector in [`internal/repo/persistent/user`](../internal/repo/persistent/user/projector.go) writes `users` and [`user_identities`](../internal/app/schema/user_identities.hcl) |
+| Read model | the `user` projector in [`internal/repo/persistent/user`](../internal/repo/persistent/user/projector.go) writes `users` and `user_identities` |
 | Ceremony token | [`pkg/jwt/scoped.go`](../pkg/jwt/scoped.go) |
 | REST | [`internal/controller/restapi/v1/oidc/`](../internal/controller/restapi/v1/oidc) |
 | Web | [`web/src/sso/`](../web/src/sso), with the button in [`use-sso-sign-in.ts`](../web/src/sso/use-sso-sign-in.ts) that [`routes/login.tsx`](../web/src/routes/login.tsx) offers, and the callback in [`routes/sso.callback.tsx`](../web/src/routes/sso.callback.tsx) |

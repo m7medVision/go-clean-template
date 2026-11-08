@@ -54,10 +54,10 @@ REST. gRPC and GraphQL keep accepting the JWT as they do today.
 In:
 
 - `internal/entity/passkey.go` (credential type, sentinels in `errors.go`)
-- `internal/app/schema/webauthn_credentials.hcl`: credential ID, user_id,
+- a `webauthn_credentials` table: credential ID, user_id,
   public key, sign count, AAGUID, backup flags, transports, name,
   created_at, last_used_at
-- `internal/app/schema/webauthn_used_challenges.hcl`: challenge hash
+- a `webauthn_used_challenges` table: challenge hash
   primary key, expires_at; expired rows deleted when `finish` inserts
 - `repo.Passkey` and `usecase.Passkey` contracts, with implementations
   and traced decorators

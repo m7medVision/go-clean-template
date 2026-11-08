@@ -24,14 +24,14 @@ different settings than CI. Use the target, not the tool.
 
 | Task | Use this | Not this |
 | --- | --- | --- |
-| Install tool binaries (`mockgen`, linters, `atlas`) | `make bin-deps` | `go install ...` |
+| Install tool binaries (`mockgen`, linters) | `make bin-deps` | `go install ...` |
 | Unit tests | `make test` | `go test ./...` — the target adds `-race -covermode atomic` and scopes to `./config/... ./internal/... ./pkg/...` |
 | Integration tests | `make compose-up-integration-test` | `make integration-test` — see below |
 | Lint | `make linter-golangci` | `golangci-lint run` |
 | Format | `make format` | `gofmt` — the target runs `go fix`, `gofumpt`, and `gci` with the repo's import grouping |
 | Regenerate mocks | `make mock` | `mockgen ...` |
 | Regenerate protobuf | `make proto-v1` | `protoc ...` |
-| Regenerate SQL query code | `make sqlc` | `sqlc generate` — the target first renders the HCL schema to SQL with Atlas (needs Docker for `ATLAS_DEV_URL`), then runs the sqlc pinned in `go.mod` |
+| Regenerate SQL query code | `make sqlc` | `sqlc generate` — the target runs the sqlc pinned in `go.mod`, which reads the migrations as its schema |
 | Regenerate the REST OpenAPI document | `make openapi` | `go run ./cmd/openapi` — the target writes through a temp file so a failed run never truncates `docs/openapi/v1.json` |
 | Install frontend dependencies | `make web-deps` | `bun install` / `vp install` — the target uses the frozen lockfile |
 | Regenerate frontend REST types | `make web-api` | `npx openapi-typescript ...` — the target refreshes `docs/openapi/v1.json` first |
@@ -49,7 +49,8 @@ different settings than CI. Use the target, not the tool.
 | Run the worker locally (projections and queue; the app needs it) | `make run-worker` | `go run ./cmd/worker` |
 | Rebuild one projection's read model | `make projection-rebuild name=<projector>` | `go run ./cmd/worker -rebuild ...` |
 | Run everything in dev mode (tmux, hot reload) | `make dev` / `make dev-down` | `go tool air ...` in separate terminals — `scripts/dev.sh` passes the loaded env into every tmux pane and turns tracing off |
-| Apply schema changes | `make schema-apply` | `atlas schema apply ...` |
+| Add a migration | `make migrate-new name=<name>` | writing the file by hand — the target names it `<timestamp>_<name>.sql` in `internal/app/migrations` |
+| Apply, roll back, list migrations | `make migrate-up`, `make migrate-down version=<v>`, `make migrate-status` | `goose ...` — the targets run `cmd/migrate` on `PG_URL`, with the migrations the app embeds |
 | Add a domain (CRUD stubs on every layer and transport) | `make new-domain name=<name>` (`dry-run=1` first) | copying the `task` domain — the target checks every rule before it writes, then runs the regenerators and prints the undo; see `docs/generator.md` |
 | Add a command or query to a domain | `make new-usecase domain=<domain> name=<name> kind=command\|query` (`dry-run=1` first) | writing the message, its registration and each transport's operation by hand, or `go -C tools/gen run .` — the target runs the regenerators after the write |
 | Check the generator (lint, format, unit and golden tests, tidy) | `make gen-check` | `go test` in `tools/gen` — the target uses the root `.golangci.yml`, `-race` and `go mod tidy -diff` |
@@ -70,7 +71,7 @@ Traps in these targets:
   `vp` provisions the Node version in `web/.node-version` and bun itself.
 - **`make new-domain`, `make new-usecase` and `make gen-e2e` run the regenerators** (`proto-v1`,
   `graphql`, `sqlc`, `mock`, `openapi`, `web-api`, `web-graphql`, `format`), so they need `protoc`,
-  Docker, Atlas, `vp` and `make web-deps`, as those do. The generator refuses to run while a tracked
+  `vp` and `make web-deps`, as those do. The generator refuses to run while a tracked
   file has uncommitted changes (rule R3): commit first. Untracked files may stay, outside what it
   writes.
 
@@ -117,8 +118,8 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   token), which every transport imports and which imports none, and `internal/controller/httpmw`
   (the middleware around every HTTP request: client address, log, tracing, metrics, recovery),
   which REST's `Auth` borrows its problem writer from; see **Controller layout** below.
-- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, valkey, tracing,
-  clientip).
+- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, migrate, valkey,
+  tracing, clientip).
   Logging is `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
@@ -359,8 +360,6 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 - `docs/proto/v1/*.pb.go` ← `make proto-v1` from the `.proto` files beside them.
 - `internal/repo/repomock/*.go` ← `make mock`, from the `go:generate` directives in `internal/repo/`.
-- `internal/repo/persistent/queries/schema/schema.sql` ← `make sqlc`, rendered by Atlas from
-  `internal/app/schema/*.hcl`. It exists only because sqlc cannot read HCL; CI fails when it is stale.
 - `internal/repo/persistent/queries/*.go` ← `make sqlc` from the `.sql` query files beside them,
   that rendered schema, and `sqlc.yaml`.
 - `internal/controller/graphql/generated/` and `internal/controller/graphql/model/` ← `make graphql`
@@ -411,7 +410,7 @@ around blocks), `funlen` (65 lines / 40 statements), `gocyclo` (10), `gocognit` 
 
 ## Queue and worker
 
-- The queue is one ordinary table, `queue_messages` (`internal/app/schema/queue_messages.hcl`), on the
+- The queue is one ordinary table, `queue_messages` (created by `internal/app/migrations/00001_baseline.sql`), on the
   stock `postgres:18.6-alpine` image: no extension, no custom image. Its queries are in
   `internal/repo/persistent/queries/queue.sql` (sqlc), and `internal/repo/persistent/queue` implements
   `worker.Queue` (and `notify.Queue`, its `Send`) with them.
@@ -626,7 +625,7 @@ among them. What it leaves to you:
 - the five handlers' bodies, and tests of what they do in place of the stubs' tests; then
   `http.StatusNotImplemented` out of the REST ops' `Errors`;
 - the domain's fields, where the generated comments say: the read shape, the events and `Apply`, the
-  HCL table and its SQL, the projector, the request DTOs and messages, and the GraphQL type;
+  table's migration and its SQL, the projector, the request DTOs and messages, and the GraphQL type;
 - the event samples, which `make test` fails without:
   `UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/`;
 - the docs of step 8;
@@ -641,9 +640,9 @@ generated files copy — read it before writing. The steps are what the generate
    `<domain>-<id>`, `Apply`, and the behavior methods that record events); `<domain>_events.go` with
    the events, added to `EventTypes()`. Its sentinel errors go in `internal/entity/<domain>.go`. A
    value unique across records is a claim (`entity.Claim`), saved with the events.
-2. **Schema** — the read-model table as `internal/app/schema/<domain>.hcl` (Atlas declarative
-   workflow), with no foreign keys: its projector advances on its own. Then `make sqlc` to refresh
-   the rendered schema sqlc reads; set any new env vars in `docker-compose.yml` and `.env.example`.
+2. **Schema** — the read-model table in a new migration (`make migrate-new name=create_<plural>`),
+   with no foreign keys: its projector advances on its own. Then `make sqlc`, which reads the
+   migrations; set any new env vars in `docker-compose.yml` and `.env.example`.
 3. **Read-model contract** — add `<Domain>ReadModel` to `internal/repo/<domain>.go`, with a
    `go:generate` directive like `task.go`'s, then `make mock`.
 4. **Read model and projector** — in `internal/repo/persistent/<domain>/`: `<domain>.go` (`package
@@ -687,25 +686,27 @@ with worked examples per transport; follow it rather than inventing a scheme.
 
 ## Database
 
-The database schema is managed with [Atlas](https://atlasgo.io/) using the declarative workflow:
-the desired state lives in `internal/app/schema/*.hcl`, one file per table, embedded into the
-binary; change the schema by editing the matching file, review the diff with `make schema-apply`
-(host-side), and let Atlas apply it. The app applies the
-schema itself at startup only when built with the `migrate` build tag (`internal/app/migrate.go`)
-— that is what `make run`, `make dev` (`.air.app.toml`) and the Dockerfile do; startup apply needs only `PG_URL`.
-There is no Atlas dev database: the stack runs exactly one database, and the apply diffs the HCL
-straight against it. Do not add one back. The apply is declarative, so it **drops** tables and
-columns the HCL does not declare. Make sure `PG_URL` points at this project's database before you
-start the app. `PG_PORT` moves the compose `db` host port and `PG_URL` together. `ATLAS_DEV_URL` is
-read only by `make sqlc`, where it is a throwaway `docker://` container. Queries are plain SQL
-in `internal/repo/persistent/queries/*.sql`, compiled by [sqlc](https://sqlc.dev/) into typed Go
-(`make sqlc`). sqlc cannot read HCL, so `make sqlc` first has Atlas render the HCL schema to
-`internal/repo/persistent/queries/schema/schema.sql`; edit the HCL, never that file. The read models and projectors call the generated
+The schema is versioned SQL migrations run by [goose](https://github.com/pressly/goose): one file
+per change in `internal/app/migrations/`, named `<timestamp>_<name>.sql` (`make migrate-new`), each
+with a `-- +goose Up` and a `-- +goose Down` section; `00001_baseline.sql` is the schema as it stood
+when the repo moved to goose. The files are embedded into the binary (`migrations.FS`), and the app
+applies the pending ones at startup, under goose's Postgres advisory lock, only when built with the
+`migrate` build tag (`internal/app/migrate.go`, through `pkg/migrate`) — that is what `make run`,
+`make dev` (`.air.app.toml`) and the Dockerfile do; it needs only `PG_URL`. The worker never
+migrates. **A migration merged to master is never edited or removed**: a change is a new file, and
+`make schema-roundtrip` (CI too) fails otherwise; every `Down` must undo its `Up`, which the same
+check proves by going up, down to zero and up again on a throwaway Postgres. There is no dev
+database: the stack runs exactly one database. Do not add one back. A database built by the old
+Atlas schema is not upgraded: reset it. `PG_PORT` moves the compose `db` host port and `PG_URL`
+together. Queries are plain SQL in `internal/repo/persistent/queries/*.sql`, compiled by
+[sqlc](https://sqlc.dev/) into typed Go (`make sqlc`), which reads the migrations as its schema
+(ignoring the `Down` sections). The read models and projectors call the generated
 `*queries.Queries` (projectors through the `Querier` interface, so they can be tested with a fake)
 and convert its rows to `entity` types; there is no ORM and no query building at runtime. The event
 store's own tables (`events`, `snapshots`, `claims`, `projection_checkpoints`, and the backfill's
-`backfill_markers`) are HCL files like any other. Generated row structs share the entities' field order, so `entity.Task(row)` is a
-plain conversion. A schema change that breaks that alignment fails to compile.
+`backfill_markers`) are migrations like any other. Generated row structs share the entities' field
+order, so `entity.Task(row)` is a plain conversion. A schema change that breaks that alignment
+fails to compile.
 
 ## Tests
 

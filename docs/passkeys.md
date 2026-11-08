@@ -165,9 +165,9 @@ A token that is forged, expired, from another purpose, or whose payload does not
 
 ## Data model
 
-Two tables, declared in [`internal/app/schema/`](../internal/app/schema) like the rest.
+Two tables, created by a migration in [`internal/app/migrations/`](../internal/app/migrations) like the rest.
 
-`webauthn_credentials` ([HCL](../internal/app/schema/webauthn_credentials.hcl)), one row per passkey:
+`webauthn_credentials`, one row per passkey:
 
 | Column | Type | |
 | --- | --- | --- |
@@ -183,7 +183,7 @@ field in the library needs no schema change. The `credential` column never leave
 `entity.Passkey` tags it `json:"-"`, and the API returns `id`, `name`, `created_at` and
 `last_used_at`.
 
-`webauthn_used_challenges` ([HCL](../internal/app/schema/webauthn_used_challenges.hcl)), one row per
+`webauthn_used_challenges`, one row per
 burned login challenge:
 
 | Column | Type | |

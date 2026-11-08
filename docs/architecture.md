@@ -169,7 +169,8 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`internal/repo/ceremony`](../internal/repo/ceremony) | The WebAuthn adapter: the only package that imports [go-webauthn](https://github.com/go-webauthn/webauthn). It stores nothing. |
 | [`internal/usecase/oidc`](../internal/usecase/oidc) | SSO sign-in through an OpenID Connect provider, behind `repo.SSOProvider`. `FinishOIDCLogin` finds the identity's user through its claim, or creates one. See [sso.md](sso.md). |
 | [`internal/repo/sso`](../internal/repo/sso) | The OpenID Connect adapter: the only package that imports [go-oidc](https://github.com/coreos/go-oidc) and `x/oauth2`. It runs the authorization-code flow with PKCE, keeps the sign-in's state in a scoped token, and maps the provider's role claim to app roles. Every call to the provider goes through one client, and one deadline (`sso.Timeout`) bounds a step's calls together; any failure to reach the provider or get an answer from it is `ErrOIDCUnavailable`. |
-| [`internal/repo/persistent`](../internal/repo/persistent) | Postgres. Each domain's package holds its read model, its projector and its importer. SQL lives in `queries/*.sql` and [sqlc](https://sqlc.dev/) compiles it to typed Go; there is no ORM. `make sqlc` first renders the HCL schema to `queries/schema/schema.sql` with Atlas in a throwaway container, so it needs Docker. |
+| [`internal/app/migrations`](../internal/app/migrations) | The goose migrations, embedded as `migrations.FS`; the app applies them at startup with the `migrate` tag. |
+| [`internal/repo/persistent`](../internal/repo/persistent) | Postgres. Each domain's package holds its read model, its projector and its importer. SQL lives in `queries/*.sql` and [sqlc](https://sqlc.dev/) compiles it to typed Go; there is no ORM. sqlc reads the migrations in `internal/app/migrations` as its schema. |
 | [`internal/repo/persistent/eventstore`](../internal/repo/persistent/eventstore) | The event store: append under the store's lock with an optimistic version check, claims, snapshots, the reader the projection runner tails, and the backfill: one import loop for every domain's importer, with its markers in `backfill_markers`. |
 | [`internal/repo/eventcodec`](../internal/repo/eventcodec) | What both event stores share, with no driver: the codec that encodes events and upcasts old versions (`entity.Upcasts()`), when a stream is due a snapshot, what a taken claim answers, and the metadata an event is stored with. |
 | [`internal/repo/persistent/projection`](../internal/repo/persistent/projection) | The projection runner the worker runs (checkpoints, `LISTEN`, rebuild), `NewProjector`, the shell every domain's projector is (its name, tables and events, and its `project` function), the checkpoints the wait step reads, and the `projection_lag_events` collector. |
@@ -184,6 +185,7 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 | [`internal/repo/notify`](../internal/repo/notify) | `repo.UserNotifier`: turns account events (the welcome) into emails on the mail queue, so the `SendWelcomeEmail` event handler knows nothing about queues or email encoding. It enqueues through its own `notify.Queue` port. |
 | [`internal/repo/limiter`](../internal/repo/limiter) | `repo.Limiter`: the sign-in limit's counters, on two [valkeylimiter](https://pkg.go.dev/github.com/valkey-io/valkey-go/valkeylimiter) fixed-window clients (the client budget and the account budget) built on the app's Valkey client, which they never close. Keys are `limit:client:{<scope>:<addr>}` (an IPv6 client by its /64) and `limit:account:{<scope>:<hash>}`, the hash being the hex SHA-256 of the trimmed, lower-cased email, so no email address is stored. See [cqrs.md](cqrs.md#the-sign-in-limit). |
 | [`pkg/cqrs`](../pkg/cqrs) | The typed command and query buses, and the trace, log and metrics steps every message passes. |
+| [`pkg/migrate`](../pkg/migrate) | goose on a Postgres URL: up, down to a version, status, under goose's advisory lock. `cmd/migrate` and the app's startup apply call it. |
 | [`pkg/postgres`](../pkg/postgres) | The pool (unexported): `New` waits for an unreachable database, trying again every second until its context ends, and fails at once on a login the database refuses. `InTx` and `Executor` carry a transaction in the context, which every repository and the event store join; `Connect` opens a connection outside the pool for a `LISTEN`. |
 | [`pkg/valkey`](../pkg/valkey) | The Valkey client: `New` parses the URL, builds a client that traces every command ([valkeyotel](https://pkg.go.dev/github.com/valkey-io/valkey-go/valkeyotel)), and pings it, failing at once when the server does not answer. The app opens one in `app.go` after the bootstrap and closes it when it stops; the worker has none. `Cache` (`NewCache`) gets and sets bytes by key, each with an absolute expiry (`SET … PXAT`); a missing key is a miss, not an error. |
 | [`pkg/clientip`](../pkg/clientip) | `Resolve`, the one rule for a request's client: the connection's address, unless it comes from the trusted proxy, then the rightmost `X-Forwarded-For` entry. See [configuration.md](configuration.md#the-client-address). |
@@ -195,11 +197,11 @@ user ID. Roles are fixed when the token is issued, so a change takes effect at t
 
 ### Schema
 
-The schema is declarative: `internal/app/schema/*.hcl`, one file per table, embedded in the binary.
-Built with the `migrate` tag (`make run`, `make dev` and the Dockerfile do this), the app diffs that
-schema against its database at startup with [Atlas](https://atlasgo.io/) and makes the database match.
-There are no migration files and no separate dev database. The apply creates what is missing **and
-drops tables and columns the HCL does not declare**, so check `PG_URL` before starting the app.
+The schema is versioned SQL migrations run by [goose](https://github.com/pressly/goose):
+`internal/app/migrations/<timestamp>_<name>.sql`, each with an Up and a Down section, embedded in the
+binary. Built with the `migrate` tag (`make run`, `make dev` and the Dockerfile do this), the app
+applies the pending ones at startup, under a Postgres advisory lock, so two instances never run one
+twice. A merged migration is never edited: a change is a new file. There is no separate dev database.
 
 ```sh
 go run -tags migrate ./cmd/app

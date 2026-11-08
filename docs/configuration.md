@@ -27,19 +27,17 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `GRPC_PORT` | `8081` | the gRPC transport |
 | `TRUSTED_PROXY` | empty (no proxy) | the one address whose `X-Forwarded-For` the app reads, on HTTP and gRPC: Caddy's. An address that doesn't parse stops the app at startup. See [The client address](#the-client-address) |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |
-| `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
+| `PG_URL` | required | the app's database. The app applies the pending goose migrations to it at startup (with the `migrate` tag) |
 | `PG_POOL_MAX` | required | |
 | `JWT_SECRET` | required by the app | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
 | `METRICS_ENABLED` | `true` | serves Prometheus at `/metrics`: HTTP and gRPC request counts and latencies, commands and queries, projection lag ([api.md](api.md)). It decides only whether `/metrics` is served: the collectors count either way |
 | `DOCS_ENABLED` | `false` | the API reference UIs and documents ([api.md](api.md)): REST's `/docs`, its OpenAPI document and schemas, and GraphQL's playground and introspection, and gRPC server reflection |
 
-Two variables are read by tooling, not by the app:
+One variable is read by tooling, not by the app:
 
 - `PG_PORT` (default `5432`) is the host port the compose `db` service publishes, and `PG_URL` in
   `.env.example` is built from it. Set it when something else on the host already uses 5432.
-- `ATLAS_DEV_URL` is read only by `make sqlc`, which renders the HCL schema in a throwaway
-  `docker://` Postgres container.
 
 ### The client address
 
