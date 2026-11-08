@@ -91,12 +91,20 @@ CRUD with a status state machine. Tasks are scoped to the authenticated user.
 | Update | `PUT /v1/tasks/{id}` |
 | Transition | `PATCH /v1/tasks/{id}/status` |
 | Delete | `DELETE /v1/tasks/{id}` |
+| Update attributes | `PATCH /v1/tasks/{id}/attributes` |
 
 - Status transitions: `todo` → `in_progress` → `done`, and `in_progress` → `todo`.
 - Lists page with `limit`/`offset` (10 by default, at most 100; `entity.Page` holds the rule for
   every transport, and on gRPC an unset `limit` is the default) and take an optional `status` filter.
 - The admin list needs the `admin` role in the caller's token, or it answers `403`. A password
   sign-in grants only `user`; see [architecture.md](architecture.md#roles).
+- **Attributes** are typed fields kept in MongoDB, beside the event-sourced task: `priority`
+  (`low`, `medium`, `high`), `estimate` (hours, 0.5–200) and `labels` (at most 10, each 1–30
+  characters, no duplicates). Every task read returns them as `attributes`; a task that never had
+  any returns empty ones. The update merges: a field left out stays as it is, `null` clears it, a
+  value sets it (gRPC: the `update_mask` names the fields, and a named field left unset clears it;
+  GraphQL: an input field left out stays). It answers the task with its attributes. Deleting a task
+  deletes its attributes.
 
 ## Currency exchange
 
@@ -168,6 +176,7 @@ in `<domain>_types.graphqls`, and each field in its own file, named after it
 | Update a task | `mutation updateTask` |
 | Transition a task | `mutation transitionTask` |
 | Delete a task | `mutation deleteTask` |
+| Update a task's attributes | `mutation updateTaskAttributes` |
 | Exchange history | `query exchangeHistory` |
 
 - With `DOCS_ENABLED=true`, a playground is at `/graphql/playground`. Put
@@ -199,6 +208,7 @@ Services are defined in [auth.proto](proto/v1/auth.proto), [task.proto](proto/v1
 | Update a task | `TaskService/UpdateTask` |
 | Transition a task | `TaskService/TransitionTask` |
 | Delete a task | `TaskService/DeleteTask` |
+| Update a task's attributes | `TaskService/UpdateTaskAttributes` |
 | Convert | `ExchangeService/Convert` |
 | Exchange history | `ExchangeService/GetHistory` |
 

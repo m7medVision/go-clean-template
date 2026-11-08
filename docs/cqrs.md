@@ -124,6 +124,19 @@ interface (`repo.TaskReadModel`, …) and nothing else. It never loads an aggreg
 returns a record by its ID, whoever owns it, and the query decides whether the caller may read it
 with the record's `ReadableBy` (`GetTask`, `GetPasskey`, `GetConversion`).
 
+The task queries also read `repo.TaskAttributesStore` (MongoDB): `GetTask` one document, the lists
+one `GetMany` per page, and they answer `mongotask.TaskWithAttributes`.
+
+### The one write outside an aggregate: task attributes
+
+`SetTaskAttributes` (`internal/usecase/task/command`) checks the task through the read model
+(`ReadableBy`) and writes the attributes straight to MongoDB through `repo.TaskAttributesStore`. It
+records no event and answers an `entity.Written` with none, so the wait step does not wait. That is
+the cost of the exception: attributes have no history, no projector rebuilds them, and MongoDB must
+be backed up on its own. `DeleteTask` deletes the task through the aggregate, then its document; a
+MongoDB failure there is logged and the command still succeeds, leaving an unreachable document.
+Use this shape only for data whose history nobody needs.
+
 The begin steps of the passkey and SSO ceremonies are queries: they record nothing, since the token
 they return carries the ceremony's state.
 

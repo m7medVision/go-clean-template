@@ -154,6 +154,7 @@ Decide by asking what the code knows about:
 | a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a read-model table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | read-model method calling the generated query |
+| a document kept in MongoDB instead of Postgres | `internal/entity/mongo/<domain>/` (its types and rules), `internal/repo/mongo/<domain>/` (the store) | a port in `internal/repo/<domain>.go`, written directly by a command with no event (task attributes) |
 | how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | `NewProjector` returning `projection.NewProjector(name, tables, handles, pg, project)`, one case per event in the unexported `project`; returned by its module's `projector` |
 | rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, returned by its module's `importer` (`internal/app/<domain>.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
@@ -318,6 +319,9 @@ usernames, SSO identities) is a claim saved with the events, not a unique index 
 A read model returns a record by its ID, whoever owns it; the query handler then asks the record's
 `ReadableBy(userID)` (another user's task is `ErrTaskForbidden`, passkey `ErrPasskeyNotFound`,
 conversion `ErrConversionNotFound`), never the SQL. The task aggregate changes a task by that rule.
+The one exception is a task's attributes (`internal/entity/mongo/task`, stored in MongoDB by
+`internal/repo/mongo/task`): `SetTaskAttributes` writes them directly, with no event, and the task
+queries merge them in (`docs/cqrs.md`).
 
 **Mocks are generated, not written.** Each file in `internal/repo/repomock/` comes from the
 `go:generate` directive of the contract file it is named after (`repo/task.go` →
@@ -528,7 +532,7 @@ the matching page whenever a change touches what it documents:
 | Release rules, `release.yml` or `.goreleaser.yaml` | `docs/releasing.md` |
 | The exchange `Convert` path (handler, `ConvertCurrency` command, aggregate, webapi, event store, projector, query) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
-| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path, its module `app/task.go` and its per-operation transport files included), a shared file the generator edits (`entity/event.go`, `app/modules.go`, `graphql/resolver.go`; for `new-usecase`, a domain's `register.go`, REST `controller.go` and `.proto`), or a convention the generated code relies on (the `Deps` field names, `_tag`, `gqlgen.yml`'s `autobind`) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
+| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path, its module `app/task.go` and its per-operation transport files included, except task attributes: `make new-domain` never writes a MongoDB store, so the templates keep each file's shape without them), a shared file the generator edits (`entity/event.go`, `app/modules.go`, `graphql/resolver.go`; for `new-usecase`, a domain's `register.go`, REST `controller.go` and `.proto`), or a convention the generated code relies on (the `Deps` field names, `_tag`, `gqlgen.yml`'s `autobind`) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
 | The generator's commands, flags, rules, output or template conventions | `docs/generator.md` |
 
 ## Adding a use case to an existing domain
