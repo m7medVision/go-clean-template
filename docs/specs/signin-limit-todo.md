@@ -57,12 +57,13 @@ L = 6–8.
 `internal/app/grpc.go`. **Verify:** G1. **Depends on:** 2. **Size:** M
 
 ### 4. Caddy at a fixed address
-- [ ] `docker-compose.yml`:
-  - [ ] `app_network` gets `ipam` with subnet `172.30.0.0/24`;
-  - [ ] `caddy` gets `ipv4_address: 172.30.0.10`;
-  - [ ] the backend environment gets `TRUSTED_PROXY: "172.30.0.10"`.
-- [ ] `docker compose config` renders; the scratchpad's `isolate.py` learns to rewrite the subnet,
-      the address and `TRUSTED_PROXY` for G3.
+- [x] `docker-compose.yml`:
+  - [x] `app_network` gets `ipam` with subnet `172.30.0.0/24`;
+  - [x] `caddy` gets `ipv4_address: 172.30.0.10`;
+  - [x] the backend environment gets `TRUSTED_PROXY: "172.30.0.10"`.
+- [x] `docker compose config` renders.
+- [ ] The scratchpad's `isolate.py` learns to rewrite the subnet, the address and `TRUSTED_PROXY`
+      for G3.
 
 **Files:** `docker-compose.yml`. **Verify:** G1; `docker compose -f docker-compose.yml -f
 docker-compose-integration-test.yml config` renders. **Depends on:** 2. **Size:** S
