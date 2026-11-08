@@ -30,7 +30,7 @@ import {
   DialogTitle,
 } from "#/components/ui/dialog";
 import { isReauthRequired } from "#/auth/reauth";
-import { profileQuery } from "#/user/api";
+import { profileQuery } from "#/auth/profile";
 import { addPasskey, type Passkey, passkeysKey, passkeysQuery } from "./api";
 import { DeletePasskeyDialog, RenamePasskeyDialog } from "./passkey-dialogs";
 import { passkeySchema, reauthSchema } from "./schema";

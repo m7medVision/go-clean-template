@@ -12,7 +12,7 @@ import {
 
 import { isAdmin } from "#/auth/roles";
 import { auth } from "#/auth/token";
-import { profileQuery } from "#/user/api";
+import { profileQuery } from "#/auth/profile";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
 import {
   DropdownMenu,

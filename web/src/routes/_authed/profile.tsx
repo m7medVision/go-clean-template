@@ -2,7 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { profileQuery } from "#/user/api";
+import { profileQuery } from "#/auth/profile";
 import { passkeysQuery } from "#/passkey/api";
 import { PasskeysCard } from "#/passkey/passkeys-card";
 import { Avatar, AvatarFallback } from "#/components/ui/avatar";
