@@ -284,6 +284,15 @@ jobs:
           done
           echo "Valkey did not answer PONG" >&2
           exit 1
+      - name: Start NATS
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.15.2-alpine -js -m 8222
+          for _ in $(seq 30); do
+            curl -sf -o /dev/null "http://localhost:8222/healthz?js-enabled-only=true" && exit 0
+            sleep 2
+          done
+          echo "NATS did not become healthy" >&2
+          exit 1
       - name: Build the app
         run: go build -tags migrate -o "$RUNNER_TEMP/app" ./cmd/app
       - name: Start the app
@@ -334,6 +343,9 @@ jobs:
       - name: Valkey log
         if: failure()
         run: docker logs valkey
+      - name: NATS log
+        if: failure()
+        run: docker logs nats
 
   # One browser test through the real app and worker. Not in ci-ok's needs on purpose:
   # it reports, and blocks nothing, until it has been stable for a couple of weeks.
@@ -369,6 +381,15 @@ jobs:
             sleep 2
           done
           echo "Valkey did not answer PONG" >&2
+          exit 1
+      - name: Start NATS
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.15.2-alpine -js -m 8222
+          for _ in $(seq 30); do
+            curl -sf -o /dev/null "http://localhost:8222/healthz?js-enabled-only=true" && exit 0
+            sleep 2
+          done
+          echo "NATS did not become healthy" >&2
           exit 1
       - name: Start Mailpit
         run: docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3

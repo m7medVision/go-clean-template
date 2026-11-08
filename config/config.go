@@ -19,6 +19,7 @@ type (
 		GRPC      GRPC
 		JWT       JWT
 		Valkey    Valkey
+		NATS      NATS
 		AuthLimit AuthLimit
 		Metrics   Metrics
 		Docs      Docs
@@ -65,6 +66,12 @@ type (
 	// checks it.
 	Valkey struct {
 		URL string `env:"VALKEY_URL"`
+	}
+
+	// NATS has no required tag: the app parses the same config and never uses it, so RunWorker
+	// checks it.
+	NATS struct {
+		URL string `env:"NATS_URL"`
 	}
 
 	AuthLimit struct {

@@ -4,10 +4,11 @@ import (
 	"time"
 )
 
-// Worker has the fields of worker.Settings, so it converts to one.
+// Worker has the fields of broker.Settings, so it converts to one.
 type Worker struct {
-	PollInterval      time.Duration `env:"WORKER_POLL_INTERVAL" envDefault:"1s"`
-	VisibilityTimeout time.Duration `env:"WORKER_VISIBILITY_TIMEOUT" envDefault:"30s"`
-	BatchSize         int           `env:"WORKER_BATCH_SIZE" envDefault:"10"`
-	ShutdownTimeout   time.Duration `env:"WORKER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	MaxRetries      int           `env:"WORKER_MAX_RETRIES" envDefault:"5"`
+	RetryInitial    time.Duration `env:"WORKER_RETRY_INITIAL" envDefault:"1s"`
+	RetryMax        time.Duration `env:"WORKER_RETRY_MAX" envDefault:"30s"`
+	AckWait         time.Duration `env:"WORKER_ACK_WAIT" envDefault:"5m"`
+	ShutdownTimeout time.Duration `env:"WORKER_SHUTDOWN_TIMEOUT" envDefault:"10s"`
 }

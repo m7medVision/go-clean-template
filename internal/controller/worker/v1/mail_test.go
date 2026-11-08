@@ -10,8 +10,8 @@ import (
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
+	"github.com/m7medvision/go-clean-template/pkg/broker"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
-	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,28 +43,33 @@ func TestMailController_Handle(t *testing.T) {
 		body          func(t *testing.T) json.RawMessage
 		deliverErr    error
 		wantErr       error
+		wantPermanent bool
 		wantDelivered int
 	}{
 		{
-			name:          "a body that is not an email is dropped, retrying cannot fix it",
+			name:          "a body that is not an email is poison, retrying cannot fix it",
 			body:          func(*testing.T) json.RawMessage { return json.RawMessage(`"not an object"`) },
+			wantPermanent: true,
 			wantDelivered: 0,
 		},
 		{
-			name: "an email this build does not know is dropped",
+			name: "an email this build does not know is poison",
 			body: func(*testing.T) json.RawMessage {
 				return json.RawMessage(`{"template":"nope","data":{}}`)
 			},
+			wantPermanent: true,
 			wantDelivered: 0,
 		},
 		{
-			name:          "a delivery that reports an unknown email is dropped",
+			name:          "a delivery that reports an unknown email is poison",
 			body:          welcomeBody,
 			deliverErr:    fmt.Errorf("render: %w", entity.ErrUnknownEmail),
+			wantErr:       entity.ErrUnknownEmail,
+			wantPermanent: true,
 			wantDelivered: 1,
 		},
 		{
-			name:          "a failed send is returned so the message is redelivered",
+			name:          "a failed send is returned so the message is retried",
 			body:          welcomeBody,
 			deliverErr:    errSMTPDown,
 			wantErr:       errSMTPDown,
@@ -79,13 +84,19 @@ func TestMailController_Handle(t *testing.T) {
 			mail := &fakeMail{err: tc.deliverErr}
 			c := v1.NewMailController(mail.commands(), slog.New(slog.DiscardHandler))
 
-			err := c.Handle(context.Background(), &worker.Message{ID: 1, Body: tc.body(t)})
+			err := c.Handle(context.Background(), tc.body(t))
 
-			if tc.wantErr != nil {
-				require.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr != nil || tc.wantPermanent {
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
+
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+
+			assert.Equal(t, tc.wantPermanent, broker.IsPermanent(err))
 
 			assert.Len(t, mail.delivered, tc.wantDelivered)
 		})

@@ -10,10 +10,10 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 )
 
-// SendWelcomeEmail enqueues the welcome email for each user who registers with a password. Users
-// imported by the backfill, and users created by an SSO sign-in, get none. The worker runs it inside
-// the transaction that moves its checkpoint, and the queue joins that transaction, so each user's
-// email is enqueued exactly once.
+// SendWelcomeEmail publishes the welcome email for each user who registers with a password. Users
+// imported by the backfill, and users created by an SSO sign-in, get none. The worker runs it before
+// it moves its checkpoint, so a crash in between publishes again; the message ID is the user's, so
+// the broker drops the repeat and each user gets the email once.
 type SendWelcomeEmail struct {
 	Notifier repo.UserNotifier
 }

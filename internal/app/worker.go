@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/m7medvision/go-clean-template/config"
@@ -9,23 +10,35 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
-	"github.com/m7medvision/go-clean-template/pkg/worker"
+	"github.com/m7medvision/go-clean-template/pkg/broker"
 	"golang.org/x/sync/errgroup"
 )
 
-// RunWorker runs every module's projectors and event handlers, and consumes the queues the modules
-// register, until ctx ends. It returns once both have stopped and the pool is closed. It installs
-// only what its queues send to, so the sign-in settings the app needs do not stop it. It does not
-// apply the schema; the app does.
+// ErrNoNATSURL is a worker started without NATS_URL: its queue is NATS JetStream.
+var ErrNoNATSURL = errors.New("app: NATS_URL is not set")
+
+// RunWorker runs every module's projectors and event handlers, and consumes the topics the modules
+// register on NATS, until ctx ends. It returns once both have stopped and the pool is closed. It
+// installs only what its topics send to, so the sign-in settings the app needs do not stop it. It
+// does not apply the schema; the app does.
 func RunWorker(ctx context.Context, cfg *config.Config) error {
+	if cfg.NATS.URL == "" {
+		return ErrNoNATSURL
+	}
+
 	b, err := newBootstrap(ctx, cfg, cfg.App.Name+"-worker")
 	if err != nil {
 		return fmt.Errorf("app - RunWorker: %w", err)
 	}
 	defer b.close(ctx)
 
-	d := &deps{cfg: cfg, pg: b.pg, l: b.l}
+	br, err := broker.New(cfg.NATS.URL, broker.Settings(cfg.Worker), b.l)
+	if err != nil {
+		return fmt.Errorf("app - RunWorker - broker.New: %w", err)
+	}
+	defer br.Close()
+
+	d := &deps{cfg: cfg, pg: b.pg, l: b.l, broker: br}
 
 	runner, err := newRunner(d)
 	if err != nil {
@@ -34,13 +47,12 @@ func RunWorker(ctx context.Context, cfg *config.Config) error {
 
 	buses := newBuses(b.pg, projectors(b.pg), cfg.CQRS.ConsistencyTimeout, b.metrics, b.l)
 
-	w := worker.New(b.l, queue.New(b.pg), worker.Settings(cfg.Worker))
-	if err = registerQueues(d, buses, w); err != nil {
+	if err = registerQueues(d, buses, br); err != nil {
 		return fmt.Errorf("app - RunWorker - registerQueues: %w", err)
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error { return w.Run(ctx) })
+	g.Go(func() error { return br.Run(ctx) })
 	g.Go(func() error { return runner.Run(ctx) })
 
 	if err = g.Wait(); err != nil {

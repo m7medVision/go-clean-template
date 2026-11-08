@@ -6,12 +6,13 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/m7medvision/go-clean-template/config"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
+	"github.com/m7medvision/go-clean-template/pkg/broker"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
-	"github.com/m7medvision/go-clean-template/pkg/worker"
 	vk "github.com/valkey-io/valkey-go"
 	"google.golang.org/grpc"
 )
@@ -38,9 +39,9 @@ type module struct {
 	projector func(pg *postgres.Postgres) projection.Projector
 	// eventHandlers are the side effects that follow its events.
 	eventHandlers func(d *deps) []repo.Subscriber
-	// queues registers the queues the domain consumes on w, and the handlers their messages send
+	// queues registers the topics the domain consumes on r, and the handlers their messages send
 	// to on the worker's buses.
-	queues func(d *deps, b cqrs.Buses, w *worker.Worker) error
+	queues func(d *deps, b cqrs.Buses, r queueRouter) error
 }
 
 type deps struct {
@@ -53,6 +54,12 @@ type deps struct {
 	// tokens signs and checks the auth token. Only the app has one: the worker issues none.
 	tokens *jwt.Manager
 	valkey vk.Client
+	// broker publishes to NATS. Only the worker has one: the app never connects to NATS.
+	broker notify.Publisher
+}
+
+type queueRouter interface {
+	Handle(topic string, h broker.HandlerFunc)
 }
 
 // modules lists every domain. GraphQL is the one transport not registered here: gqlgen needs one
@@ -131,13 +138,13 @@ func registerGRPC(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
 
 // registerQueues registers every queue the worker consumes on w, and their handlers on b. It fails
 // when a handler cannot be built from its settings, such as a broken email template.
-func registerQueues(d *deps, b cqrs.Buses, w *worker.Worker) error {
+func registerQueues(d *deps, b cqrs.Buses, r queueRouter) error {
 	for _, m := range modules() {
 		if m.queues == nil {
 			continue
 		}
 
-		if err := m.queues(d, b, w); err != nil {
+		if err := m.queues(d, b, r); err != nil {
 			return err
 		}
 	}
