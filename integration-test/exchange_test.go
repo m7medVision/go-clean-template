@@ -3,8 +3,13 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/m7medvision/go-clean-template/pkg/valkey"
 )
 
 // The app's EXCHANGE_SERVICE_URL points at integration-test/exchange-stub, which answers every
@@ -74,6 +79,59 @@ func TestHTTPConvertV1(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.expected, resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestHTTPConvertV1ReadsTheCachedRates(t *testing.T) {
+	valkeyURL := os.Getenv("VALKEY_URL")
+	if valkeyURL == "" {
+		t.Fatal("VALKEY_URL is not set")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), connectWait)
+	defer cancel()
+
+	client, err := valkey.New(ctx, valkeyURL)
+	if err != nil {
+		t.Fatalf("Failed to connect to Valkey: %v", err)
+	}
+
+	t.Cleanup(client.Close)
+
+	const key = "exchange:latest:USD"
+
+	t.Cleanup(func() {
+		if err := client.Do(context.Background(), client.B().Del().Key(key).Build()).Error(); err != nil {
+			t.Errorf("Failed to delete %s: %v", key, err)
+		}
+	})
+
+	lastUpdate := time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC)
+	expiresAt := time.Now().Add(time.Hour)
+	rates := fmt.Sprintf(
+		`{"result":"success","time_last_update_unix":%d,"time_next_update_unix":%d,"rates":{"CNY":7.123456}}`,
+		lastUpdate.Unix(), expiresAt.Unix())
+
+	if err := valkey.NewCache(client).Set(ctx, key, []byte(rates), expiresAt); err != nil {
+		t.Fatalf("Failed to seed %s: %v", key, err)
+	}
+
+	token := registerAndLogin(t)
+
+	resp := postConvert(t, token, `{"from":"USD","to":"CNY","amount":"1"}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected status %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	got := parseJSON[conversionBody](t, resp)
+	want := conversionBody{
+		From: "USD", To: "CNY", Amount: "1", Rate: "7.123456", Result: "7.12", RateDate: "2026-11-01",
+	}
+
+	if got != want {
+		t.Errorf("Expected %+v, got %+v", want, got)
 	}
 }
 

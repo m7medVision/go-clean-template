@@ -62,11 +62,11 @@ here, and adds no comments to new code unless one is important. Sizes: S = 1–2
 by one line each)
 
 ### 3. The end-to-end proof
-- [ ] `integration-test/exchange_test.go`:
-  - [ ] seed `exchange:latest:USD` through `valkey.Cache` with a body whose `CNY` rate isn't the
+- [x] `integration-test/exchange_test.go`:
+  - [x] seed `exchange:latest:USD` through `valkey.Cache` with a body whose `CNY` rate isn't the
         stub's 17.406483 and whose next update is an hour ahead;
-  - [ ] `POST /v1/exchange/convert` USD → CNY answers 200 with the seeded rate and its date;
-  - [ ] the key is deleted in `t.Cleanup`.
+  - [x] `POST /v1/exchange/convert` USD → CNY answers 200 with the seeded rate and its date;
+  - [x] the key is deleted in `t.Cleanup`.
 
 **Files:** `integration-test/exchange_test.go`.
 **Verify:** G1, `go vet ./integration-test/...`; G3. **Depends on:** 1, 2. **Size:** S
