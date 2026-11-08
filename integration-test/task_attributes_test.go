@@ -146,7 +146,7 @@ func TestGraphQLTaskAttributes(t *testing.T) {
 	created := httpCreateTask(t, token, "graphql attributes", "")
 
 	body, err := json.Marshal(map[string]any{
-		"query": `mutation($id: ID!) { updateTaskAttributes(id: $id, input: {priority: LOW, labels: ["ui"]}) { id attributes { priority labels } } }`,
+		"query":     `mutation($id: ID!) { updateTaskAttributes(id: $id, input: {priority: LOW, labels: ["ui"]}) { id attributes { priority labels } } }`,
 		"variables": map[string]any{"id": created.ID},
 	})
 	require.NoError(t, err)
