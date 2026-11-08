@@ -23,8 +23,15 @@ import {
 } from "#/components/ui/dialog";
 import { FormError } from "#/components/form/form-components";
 import { useAppForm, zodValidation } from "#/components/form/use-app-form";
-import { createTask, deleteTask, tasksKey, updateTask } from "./api";
-import { taskSchema } from "./schema";
+import { createTask, deleteTask, tasksKey, updateTask, updateTaskAttributes } from "./api";
+import {
+  attributesForm,
+  attributesPatch,
+  editTaskSchema,
+  noPriority,
+  priorities,
+  taskSchema,
+} from "./schema";
 import type { Task } from "./status";
 
 // TaskFormDialog creates a task, or edits `task` when one is given.
@@ -50,32 +57,30 @@ export function TaskFormDialog({
 }
 
 function TaskForm({ task, onDone }: { task?: Task; onDone: () => void }) {
-  const queryClient = useQueryClient();
+  return task ? <EditTaskForm task={task} onDone={onDone} /> : <CreateTaskForm onDone={onDone} />;
+}
 
-  const onSuccess = () => {
-    void queryClient.invalidateQueries({ queryKey: tasksKey });
-    onDone();
-  };
-  const create = useMutation({ ...createTask, onSuccess });
-  const update = useMutation({ ...updateTask, onSuccess });
+function CreateTaskForm({ onDone }: { onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const create = useMutation({
+    ...createTask,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tasksKey });
+      onDone();
+    },
+  });
 
   const form = useAppForm({
-    defaultValues: { title: task?.title ?? "", description: task?.description ?? "" },
+    defaultValues: { title: "", description: "" },
     ...zodValidation(taskSchema),
-    onSubmit: ({ value }) => {
-      const input = taskSchema.parse(value);
-
-      return task ? update.mutateAsync({ id: task.id, input }) : create.mutateAsync({ input });
-    },
+    onSubmit: ({ value }) => create.mutateAsync({ input: taskSchema.parse(value) }),
   });
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{task ? "Edit task" : "Add task"}</DialogTitle>
-        <DialogDescription>
-          {task ? "Change the title or description." : "New tasks start in To do."}
-        </DialogDescription>
+        <DialogTitle>Add task</DialogTitle>
+        <DialogDescription>New tasks start in To do.</DialogDescription>
       </DialogHeader>
       <form.AppForm>
         <form.Form>
@@ -91,16 +96,91 @@ function TaskForm({ task, onDone }: { task?: Task; onDone: () => void }) {
               />
             )}
           </form.AppField>
-          <FormError error={(task ? update : create).error} />
+          <FormError error={create.error} />
           <DialogFooter className="mt-2">
             <DialogClose asChild>
               <Button type="button" variant="outline">
                 Cancel
               </Button>
             </DialogClose>
-            <form.SubmitButton pending="Saving…">
-              {task ? "Save changes" : "Add task"}
-            </form.SubmitButton>
+            <form.SubmitButton pending="Saving…">Add task</form.SubmitButton>
+          </DialogFooter>
+        </form.Form>
+      </form.AppForm>
+    </>
+  );
+}
+
+const priorityOptions = [
+  { value: noPriority, label: "None" },
+  ...priorities.map((p) => ({ value: p, label: p[0] + p.slice(1).toLowerCase() })),
+];
+
+function EditTaskForm({ task, onDone }: { task: Task; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const update = useMutation(updateTask);
+  const updateAttributes = useMutation(updateTaskAttributes);
+
+  const form = useAppForm({
+    defaultValues: {
+      title: task.title,
+      description: task.description,
+      ...attributesForm(task.attributes),
+    },
+    ...zodValidation(editTaskSchema),
+    onSubmit: async ({ value }) => {
+      const { title, description } = taskSchema.parse(value);
+      await update.mutateAsync({ id: task.id, input: { title, description } });
+
+      const patch = attributesPatch(task.attributes, value);
+      if (Object.keys(patch).length > 0) {
+        await updateAttributes.mutateAsync({ id: task.id, input: patch });
+      }
+
+      void queryClient.invalidateQueries({ queryKey: tasksKey });
+      onDone();
+    },
+  });
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Edit task</DialogTitle>
+        <DialogDescription>Change the title, the description or the attributes.</DialogDescription>
+      </DialogHeader>
+      <form.AppForm>
+        <form.Form>
+          <form.AppField name="title">
+            {(field) => <field.TextField label="Title" required placeholder="What needs doing?" />}
+          </form.AppField>
+          <form.AppField name="description">
+            {(field) => (
+              <field.TextareaField
+                label="Description"
+                rows={4}
+                placeholder="Add details (optional)"
+              />
+            )}
+          </form.AppField>
+          <form.AppField name="priority">
+            {(field) => <field.SelectField label="Priority" options={priorityOptions} />}
+          </form.AppField>
+          <form.AppField name="estimate">
+            {(field) => (
+              <field.TextField label="Estimate" description="Hours, 0.5–200." inputMode="decimal" />
+            )}
+          </form.AppField>
+          <form.AppField name="labels">
+            {(field) => <field.TextField label="Labels" description="Separated by commas." />}
+          </form.AppField>
+          <FormError error={update.error ?? updateAttributes.error} />
+          <DialogFooter className="mt-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <form.SubmitButton pending="Saving…">Save changes</form.SubmitButton>
           </DialogFooter>
         </form.Form>
       </form.AppForm>

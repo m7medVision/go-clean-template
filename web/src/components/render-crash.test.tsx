@@ -45,6 +45,7 @@ describe("a screen that crashes while rendering", () => {
             status: "TODO",
             createdAt: "2026-11-08T00:00:00Z",
             updatedAt: "2026-11-08T00:00:00Z",
+            attributes: { priority: null, estimate: null, labels: null },
           },
         ],
       },

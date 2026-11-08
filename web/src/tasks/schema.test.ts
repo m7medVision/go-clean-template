@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { taskSchema } from "./schema";
+import { attributesForm, attributesPatch, attributesSchema, taskSchema } from "./schema";
 
 describe("taskSchema", () => {
   it("trims the title and description", () => {
@@ -19,5 +19,46 @@ describe("taskSchema", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toContain(message);
+  });
+});
+
+describe("attributesSchema", () => {
+  it("accepts an empty form", () => {
+    expect(attributesSchema.safeParse({ priority: "NONE", estimate: "", labels: "" }).success).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ["an estimate under the minimum", { priority: "NONE", estimate: "0.1", labels: "" }],
+    ["an estimate over the maximum", { priority: "NONE", estimate: "201", labels: "" }],
+    ["an estimate that is no number", { priority: "NONE", estimate: "soon", labels: "" }],
+    ["a duplicate label", { priority: "NONE", estimate: "", labels: "a, a" }],
+    ["a label too long", { priority: "NONE", estimate: "", labels: "x".repeat(31) }],
+    ["too many labels", { priority: "NONE", estimate: "", labels: "a,b,c,d,e,f,g,h,i,j,k" }],
+  ])("rejects %s", (_, input) => {
+    expect(attributesSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe("attributesPatch", () => {
+  const current = { priority: "HIGH" as const, estimate: 2, labels: ["a"] };
+
+  it("sends nothing when nothing changed", () => {
+    expect(attributesPatch(current, attributesForm(current))).toEqual({});
+  });
+
+  it("sends only the changed fields, and null for a cleared one", () => {
+    expect(attributesPatch(current, { priority: "HIGH", estimate: "", labels: "a, b" })).toEqual({
+      estimate: null,
+      labels: ["a", "b"],
+    });
+  });
+
+  it("clears the priority and the labels with null", () => {
+    expect(attributesPatch(current, { priority: "NONE", estimate: "2", labels: "" })).toEqual({
+      priority: null,
+      labels: null,
+    });
   });
 });

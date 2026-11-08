@@ -16,20 +16,22 @@ import * as types from './graphql';
  */
 type Documents = {
     "\n  query ExchangeHistory($limit: Int!, $offset: Int!) {\n    exchangeHistory(limit: $limit, offset: $offset) {\n      total\n      conversions {\n        from\n        to\n        amount\n        rate\n        result\n        rateDate\n      }\n    }\n  }\n": typeof types.ExchangeHistoryDocument,
-    "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": typeof types.TasksDocument,
+    "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n        attributes {\n          priority\n          estimate\n          labels\n        }\n      }\n    }\n  }\n": typeof types.TasksDocument,
     "\n  query AllTasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    allTasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        userId\n        title\n        status\n        createdAt\n      }\n    }\n  }\n": typeof types.AllTasksDocument,
     "\n  mutation CreateTask($input: CreateTaskInput!) {\n    createTask(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateTaskDocument,
     "\n  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {\n    updateTask(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateTaskDocument,
     "\n  mutation TransitionTask($id: ID!, $status: TaskStatus!) {\n    transitionTask(id: $id, status: $status) {\n      id\n    }\n  }\n": typeof types.TransitionTaskDocument,
+    "\n  mutation UpdateTaskAttributes($id: ID!, $input: TaskAttributesInput!) {\n    updateTaskAttributes(id: $id, input: $input) {\n      id\n    }\n  }\n": typeof types.UpdateTaskAttributesDocument,
     "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n": typeof types.DeleteTaskDocument,
 };
 const documents: Documents = {
     "\n  query ExchangeHistory($limit: Int!, $offset: Int!) {\n    exchangeHistory(limit: $limit, offset: $offset) {\n      total\n      conversions {\n        from\n        to\n        amount\n        rate\n        result\n        rateDate\n      }\n    }\n  }\n": types.ExchangeHistoryDocument,
-    "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n      }\n    }\n  }\n": types.TasksDocument,
+    "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n        attributes {\n          priority\n          estimate\n          labels\n        }\n      }\n    }\n  }\n": types.TasksDocument,
     "\n  query AllTasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    allTasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        userId\n        title\n        status\n        createdAt\n      }\n    }\n  }\n": types.AllTasksDocument,
     "\n  mutation CreateTask($input: CreateTaskInput!) {\n    createTask(input: $input) {\n      id\n    }\n  }\n": types.CreateTaskDocument,
     "\n  mutation UpdateTask($id: ID!, $input: UpdateTaskInput!) {\n    updateTask(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateTaskDocument,
     "\n  mutation TransitionTask($id: ID!, $status: TaskStatus!) {\n    transitionTask(id: $id, status: $status) {\n      id\n    }\n  }\n": types.TransitionTaskDocument,
+    "\n  mutation UpdateTaskAttributes($id: ID!, $input: TaskAttributesInput!) {\n    updateTaskAttributes(id: $id, input: $input) {\n      id\n    }\n  }\n": types.UpdateTaskAttributesDocument,
     "\n  mutation DeleteTask($id: ID!) {\n    deleteTask(id: $id)\n  }\n": types.DeleteTaskDocument,
 };
 
@@ -40,7 +42,7 @@ export function graphql(source: "\n  query ExchangeHistory($limit: Int!, $offset
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n      }\n    }\n  }\n"): typeof import('./graphql').TasksDocument;
+export function graphql(source: "\n  query Tasks($status: TaskStatus, $limit: Int!, $offset: Int!) {\n    tasks(status: $status, limit: $limit, offset: $offset) {\n      total\n      tasks {\n        id\n        title\n        description\n        status\n        createdAt\n        updatedAt\n        attributes {\n          priority\n          estimate\n          labels\n        }\n      }\n    }\n  }\n"): typeof import('./graphql').TasksDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -57,6 +59,10 @@ export function graphql(source: "\n  mutation UpdateTask($id: ID!, $input: Updat
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation TransitionTask($id: ID!, $status: TaskStatus!) {\n    transitionTask(id: $id, status: $status) {\n      id\n    }\n  }\n"): typeof import('./graphql').TransitionTaskDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateTaskAttributes($id: ID!, $input: TaskAttributesInput!) {\n    updateTaskAttributes(id: $id, input: $input) {\n      id\n    }\n  }\n"): typeof import('./graphql').UpdateTaskAttributesDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

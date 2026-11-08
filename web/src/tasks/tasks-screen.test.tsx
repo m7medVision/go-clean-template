@@ -22,6 +22,7 @@ const row = (id: string, title: string, status: TaskStatus = "TODO"): Row => ({
   status,
   createdAt: "2026-11-08T00:00:00Z",
   updatedAt: "2026-11-08T00:00:00Z",
+  attributes: { priority: null, estimate: null, labels: null },
 });
 
 // serve answers the task operations from an in-memory list, as the API would.

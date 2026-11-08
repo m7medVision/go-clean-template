@@ -15,6 +15,11 @@ const TasksQuery = graphql(`
         status
         createdAt
         updatedAt
+        attributes {
+          priority
+          estimate
+          labels
+        }
       }
     }
   }
@@ -60,6 +65,14 @@ const TransitionTaskMutation = graphql(`
   }
 `);
 
+const UpdateTaskAttributesMutation = graphql(`
+  mutation UpdateTaskAttributes($id: ID!, $input: TaskAttributesInput!) {
+    updateTaskAttributes(id: $id, input: $input) {
+      id
+    }
+  }
+`);
+
 const DeleteTaskMutation = graphql(`
   mutation DeleteTask($id: ID!) {
     deleteTask(id: $id)
@@ -78,4 +91,5 @@ export const allTasksQuery = (variables: AllTasksQueryVariables) =>
 export const createTask = graphqlMutationOptions(CreateTaskMutation);
 export const updateTask = graphqlMutationOptions(UpdateTaskMutation);
 export const transitionTask = graphqlMutationOptions(TransitionTaskMutation);
+export const updateTaskAttributes = graphqlMutationOptions(UpdateTaskAttributesMutation);
 export const deleteTask = graphqlMutationOptions(DeleteTaskMutation);

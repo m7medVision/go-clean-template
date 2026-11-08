@@ -68,6 +68,35 @@ export function taskColumns(actions: TaskRowActions) {
         </Badge>
       ),
     }),
+    helper.accessor((task) => task.attributes.priority ?? "", {
+      id: "priority",
+      header,
+      meta: { label: "Priority" },
+      cell: ({ row }) => {
+        const priority = row.original.attributes.priority;
+
+        return priority ? (
+          <Badge variant="outline" className="font-normal">
+            {priority[0] + priority.slice(1).toLowerCase()}
+          </Badge>
+        ) : null;
+      },
+    }),
+    helper.accessor((task) => (task.attributes.labels ?? []).join(" "), {
+      id: "labels",
+      header,
+      meta: { label: "Labels" },
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.original.attributes.labels ?? []).map((label) => (
+            <Badge key={label} variant="secondary" className="font-normal">
+              {label}
+            </Badge>
+          ))}
+        </div>
+      ),
+    }),
     helper.accessor((task) => statusProgress[task.status], {
       id: "progress",
       header,
