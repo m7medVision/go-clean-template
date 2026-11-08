@@ -14,6 +14,10 @@ var (
 	ErrInvalidTaskDescription = newError(KindInvalid, fmt.Sprintf("description must be at most %d characters", MaxTaskDescriptionLen))
 	ErrInvalidTaskStatus      = newError(KindInvalid, "invalid task status")
 	ErrInvalidTransition      = newError(KindInvalid, "invalid status transition")
+	ErrInvalidTaskPriority    = newError(KindInvalid, "priority must be low, medium or high")
+	ErrInvalidTaskEstimate    = newError(KindInvalid, "estimate must be 0.5–200 hours")
+	ErrInvalidTaskLabels      = newError(KindInvalid, "labels must be at most 10, each 1–30 characters, with no duplicates")
+	ErrUnknownTaskAttribute   = newError(KindInvalid, "unknown attribute: the attributes are priority, estimate and labels")
 )
 
 const (
