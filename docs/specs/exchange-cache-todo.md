@@ -8,16 +8,16 @@ here, and adds no comments to new code unless one is important. Sizes: S = 1–2
 ---
 
 ### 1. A cache in `pkg/valkey`
-- [ ] `valkey.Cache` and `NewCache(client vk.Client) *Cache`.
-- [ ] `Get(ctx, key) ([]byte, bool, error)`: a missing key (`vk.IsValkeyNil`) is `nil, false, nil`;
+- [x] `valkey.Cache` and `NewCache(client vk.Client) *Cache`.
+- [x] `Get(ctx, key) ([]byte, bool, error)`: a missing key (`vk.IsValkeyNil`) is `nil, false, nil`;
       any other error is wrapped `valkey - Cache.Get: %w`.
-- [ ] `Set(ctx, key, value, expiresAt) error`: `SET key value PXAT expiresAt`, the value sent with
+- [x] `Set(ctx, key, value, expiresAt) error`: `SET key value PXAT expiresAt`, the value sent with
       `vk.BinaryString`; its error is wrapped `valkey - Cache.Set: %w`.
-- [ ] `integration-test/valkey_test.go`, under `_test:<uuid>`:
-  - [ ] `Get` of a missing key is `false` with no error;
-  - [ ] `Set` then `Get` returns the bytes;
-  - [ ] `PEXPIRETIME` equals `expiresAt.UnixMilli()`;
-  - [ ] the key is deleted in `t.Cleanup`.
+- [x] `integration-test/valkey_test.go`, under `_test:<uuid>`:
+  - [x] `Get` of a missing key is `false` with no error;
+  - [x] `Set` then `Get` returns the bytes;
+  - [x] `PEXPIRETIME` equals `expiresAt.UnixMilli()`;
+  - [x] the key is deleted in `t.Cleanup`.
 
 **Files:** `pkg/valkey/cache.go`, `integration-test/valkey_test.go`.
 **Verify:** G1, `go vet ./integration-test/...`. **Depends on:** none. **Size:** S
