@@ -12,6 +12,7 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/worker"
+	vk "github.com/valkey-io/valkey-go"
 	"google.golang.org/grpc"
 )
 
@@ -51,6 +52,7 @@ type deps struct {
 	store repo.EventStore
 	// tokens signs and checks the auth token. Only the app has one: the worker issues none.
 	tokens *jwt.Manager
+	valkey vk.Client
 }
 
 // modules lists every domain. GraphQL is the one transport not registered here: gqlgen needs one

@@ -25,20 +25,21 @@ const (
 )
 
 // newBuses builds the command and query buses with their pipelines, outermost step first:
-// trace, log, metrics and stamp on both; then, for commands, wait for the projections, retry on a
-// concurrent write; then authorize and validate on both, right before the handler.
+// trace, log, metrics and stamp on both, then the extra steps the binary adds (the app's Limit);
+// then, for commands, wait for the projections, retry on a concurrent write; then authorize and
+// validate on both, right before the handler.
 // A write waits consistencyTimeout at most for the projectors of what it wrote to pass it. The
-// metrics step registers its collectors on metrics.
+// metrics step registers its collectors on metrics, so each binary builds its buses once.
 func newBuses(
 	pg *postgres.Postgres, projectors []projection.Projector, consistencyTimeout time.Duration,
-	metrics prometheus.Registerer, l *slog.Logger,
-) (*cqrs.Commands, *cqrs.Queries) {
-	outer := []cqrs.Step{
+	metrics prometheus.Registerer, l *slog.Logger, extra ...cqrs.Step,
+) cqrs.Buses {
+	outer := slices.Concat([]cqrs.Step{
 		cqrs.Trace(otel.GetTracerProvider()),
 		cqrs.Log(l),
 		cqrs.Metrics(metrics),
 		behavior.Stamp(),
-	}
+	}, extra)
 	inner := []cqrs.Step{behavior.Authorize(), behavior.Validate()}
 
 	cmds := cqrs.NewCommands(slices.Concat(outer, []cqrs.Step{
@@ -47,7 +48,7 @@ func newBuses(
 	}, inner)...)
 	qs := cqrs.NewQueries(slices.Concat(outer, inner)...)
 
-	return cmds, qs
+	return cqrs.Buses{Commands: cmds, Queries: qs}
 }
 
 func newCodec() *eventcodec.Codec {

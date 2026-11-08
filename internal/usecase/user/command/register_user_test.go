@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/memstore"
+	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/command"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,4 +52,13 @@ func TestRegisterUserRefusesATakenEmailOrUsername(t *testing.T) {
 
 	_, err = h.Handle(context.Background(), command.RegisterUser{Username: "jo", Email: "other@example.com", Password: "p"})
 	require.ErrorIs(t, err, entity.ErrUserAlreadyExists)
+}
+
+func TestRegisterUserIsLimitedBySignUpWithNoAccount(t *testing.T) {
+	t.Parallel()
+
+	var c behavior.Limited = command.RegisterUser{Username: "jo", Email: "jo@example.com", Password: "secret-pass"}
+
+	assert.Equal(t, "sign-up", c.LimitScope())
+	assert.Empty(t, c.LimitAccount())
 }

@@ -13,6 +13,7 @@ services:
   app:
     environment:
       EXCHANGE_SERVICE_URL: "http://exchange:8090"
+      AUTH_LIMIT_CLIENT_ATTEMPTS: "1000"
     depends_on:
       - exchange
 
@@ -23,6 +24,7 @@ services:
       context: .
       dockerfile: integration-test/Dockerfile
     environment:
+      VALKEY_URL: "valkey://valkey:6379/0"
       # Read by queue_test.go to check what the worker consumed.
       PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db?sslmode=disable"
     depends_on:

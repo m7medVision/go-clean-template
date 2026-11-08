@@ -13,7 +13,7 @@ ALL_STACK = $(INTEGRATION_TEST_STACK)
 
 # The compose services the app needs on the host: make compose-up starts COMPOSE_SERVICES, make dev
 # (scripts/dev.sh reads DEV_SERVICES) and make dev-down add the rest.
-COMPOSE_SERVICES = db
+COMPOSE_SERVICES = db valkey
 COMPOSE_SERVICES += mailpit
 DEV_SERVICES = $(COMPOSE_SERVICES)
 DEV_SERVICES += keycloak

@@ -12,6 +12,7 @@ transports:
 A second binary, `cmd/worker`, runs the projections that keep the read models up to date and
 consumes a minimal Postgres queue (the `queue_messages` table); see **CQRS and event sourcing** and
 **Queue and worker** below. The app needs it running: every write waits for the projections.
+The app also needs Valkey (`VALKEY_URL`) and refuses to start without one.
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -41,7 +42,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
-| Start dependencies (Postgres) | `make compose-up` | `docker compose up` |
+| Start dependencies (Postgres, Valkey) | `make compose-up` | `docker compose up` |
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
@@ -98,14 +99,15 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   (load, change, save) and `behavior/` (the app's pipeline steps) are shared by every domain. There
   are no use-case interfaces: a controller builds its domain's command or query and sends it.
 - `internal/repo/` — the interfaces handlers call: `contracts.go` holds the shared ones
-  (`EventStore`, `Subscriber`, `ProjectionCheckpoints`, `SessionIssuer`), and one file per domain
-  (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) holds its read model and
-  outbound ports. A port only infrastructure uses lives with its consumer (`notify.Queue`,
-  `eventstore.Importer`, `worker.Queue`). Implemented by
+  (`EventStore`, `Subscriber`, `ProjectionCheckpoints`, `SessionIssuer`, `Limiter`), and one file
+  per domain (`task.go`, `user.go`, `exchange.go`, `passkey.go`, `oidc.go`, `mail.go`) holds its
+  read model and outbound ports. A port only infrastructure uses lives with its consumer
+  (`notify.Queue`, `eventstore.Importer`, `worker.Queue`, `webapi.Cache`). Implemented by
   `internal/repo/persistent/eventstore` (the event store), `persistent/projection` (the runner the
   worker runs), `persistent/<domain>/` (each domain's read model, projector and importer), and
-  `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`,
-  unit-tested against the recorded response in `testdata/` that the integration stub also serves).
+  `internal/repo/webapi/` (outbound HTTP: the ExchangeRate-API rate client, plain `net/http`, its
+  rates cached in Valkey until the provider's next update, unit-tested against the recorded
+  response in `testdata/` that the integration stub also serves).
   `internal/repo/memstore` is the in-memory event store command-handler tests use; it and the
   Postgres store share `internal/repo/eventcodec` (codec, snapshot rule, claims, metadata).
 - `internal/controller/<transport>/v1/<domain>/` — one folder per domain in each transport, holding
@@ -113,10 +115,11 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   imports its domain's `command`/`query` packages only for the message types. Controllers never
   import each other, except `internal/controller/authn` (the caller of a request, read from its
   token), which every transport imports and which imports none, and `internal/controller/httpmw`
-  (the middleware around every HTTP request: log, tracing, metrics, recovery), which REST's `Auth`
-  borrows its problem writer from; see **Controller layout** below.
-- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, tracing). Logging is
-  `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
+  (the middleware around every HTTP request: client address, log, tracing, metrics, recovery),
+  which REST's `Auth` borrows its problem writer from; see **Controller layout** below.
+- `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, valkey, tracing,
+  clientip).
+  Logging is `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
   module (`github.com/m7medvision/go-clean-template/tools/gen`). It imports nothing from the app, and
@@ -126,9 +129,9 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
 Inner layers never import outer ones. Wiring happens exactly once, in `internal/app`: one file per
 domain (`task.go`, `user.go`, …) returns its `module` (handlers, importer, REST and gRPC
 registration, projector, event handlers, queues), `modules.go` lists the modules and is the only
-domain list besides `graphql/resolver.go`; `buses.go` (`newBuses`), `bootstrap.go` (what both
-binaries start from), `http.go` (the one chi mux: REST and GraphQL mounted side by side), `grpc.go`
-(the gRPC server and its interceptors) and
+domain list besides `graphql/resolver.go`; `buses.go` (`newBuses`, which each binary calls with its
+own steps), `bootstrap.go` (what both binaries start from), `http.go` (the one chi mux: REST and
+GraphQL mounted side by side), `grpc.go` (the gRPC server and its interceptors) and
 `app.go` / `worker.go` (`Run`, `RunWorker`). Each binary installs only the module parts it runs: the
 worker the projectors, event handlers and queues (mail delivery), the app everything else.
 Every long-running part (the HTTP and gRPC servers, the queue worker, the projection runner) is a
@@ -271,13 +274,13 @@ shape from a neighbouring handler in the same transport.
    `context.Context` is the first parameter of every method that crosses a layer.
 5. **Map the error** with the transport's one function: `apierr.Problem`, `rpcerr.Status` or
    `gqlerr.Map`. Each `entity.Err*` is an `*entity.Error` carrying its kind (not found, forbidden,
-   invalid, exists, conflict, unavailable, upstream, not implemented) and the message the caller is
-   shown; the function turns the kind into the transport's status (on REST a `huma.Error*`, which
-   renders the standard RFC 9457 `application/problem+json` model) and logs what needs logging.
-   Any other error is logged and answered as a generic 500 / `Internal` / `INTERNAL`. A domain folder
-   never maps errors itself: a new sentinel needs only its kind. A REST operation lists its statuses
-   with `apierr.CommandErrors(...)` or `apierr.QueryErrors(...)`, which add the ones every command or
-   query can answer.
+   invalid, exists, conflict, unavailable, upstream, not implemented, rate limited) and the message
+   the caller is shown; the function turns the kind into the transport's status (on REST a
+   `huma.Error*`, which renders the standard RFC 9457 `application/problem+json` model) and logs
+   what needs logging. Any other error is logged and answered as a generic 500 / `Internal` /
+   `INTERNAL`. A domain folder never maps errors itself: a new sentinel needs only its kind. A REST
+   operation lists its statuses with `apierr.CommandErrors(...)` or `apierr.QueryErrors(...)`,
+   which add the ones every command or query can answer.
 6. **Encode the response.** Return an `entity` type directly only when its JSON shape is already
    the API shape — `entity.User` is safe this way because `PasswordHash` is tagged `json:"-"`.
    Anything with a wrapper, a projection or a different field set gets a type in the domain
@@ -288,12 +291,15 @@ shape from a neighbouring handler in the same transport.
 ## Conventions that will bite you
 
 **Pipeline steps, not decorators.** Every message passes the buses' steps, built in `newBuses`
-(`internal/app/buses.go`): trace, log, metrics and stamp on both buses; wait (for the projections)
-and retry (on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`AdminOnly()`)
-and validate (`Validate()`). A handler carries none of these. A message type with no registered
-handler is `cqrs.ErrNoHandler` at the first send, so a new message needs its line in `register.go`.
-Below the buses, otelpgx traces every SQL statement and otelhttp every outbound call, so
-repositories carry no tracing code: a span per message, then one per statement or request.
+(`internal/app/buses.go`), which each binary calls itself: trace, log, metrics and stamp on both
+buses; then, on the app's buses only, limit (the sign-in limit, for a `behavior.Limited` message:
+`RegisterUser`, `LogIn`), which `Run` passes as an extra step; wait (for the projections) and retry
+(on `entity.ErrConcurrencyConflict`) on commands only; then authorize (`AdminOnly()`) and validate
+(`Validate()`). The worker's buses have no limit step. A handler carries none of these. A message
+type with no registered handler is `cqrs.ErrNoHandler` at the first send, so a new message needs
+its line in `register.go`. Below the buses, otelpgx traces every SQL statement, otelhttp every
+outbound call and valkeyotel every Valkey command, so repositories carry no tracing code: a span
+per message, then one per statement, request or command.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
 its `SchemaVersion()` and adding an `entity.Upcast` from the previous version to
@@ -336,8 +342,10 @@ reads, never `*config.Config`; no controller imports `config`. Defaults are writ
 from it, as `worker.Settings(cfg.Worker)`). A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
-startup. `.env.example` is read both by `make` (`include`) and by the shell in CI
-(`. ./.env.example`), so values there must not need quoting: no spaces.
+startup. A setting only the app needs (`JWT_SECRET`, `VALKEY_URL`) carries no `required` tag,
+because the worker parses the same config: `app.Run` checks it instead. `.env.example` is read
+both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so values there must not
+need quoting: no spaces.
 `MAIL_FROM` is a bare address for that reason.
 
 **The linter is strict and non-obvious.** `.golangci.yml` enables ~45 linters. The ones that

@@ -3,6 +3,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"net/netip"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -24,9 +25,12 @@ const (
 // newHTTPHandler serves REST and GraphQL side by side. Every request is logged, traced (the global
 // provider is a no-op when tracing is off), counted on metrics and recovered from a panic;
 // METRICS_ENABLED decides only whether /metrics serves the registry.
-func newHTTPHandler(cfg *config.Config, b cqrs.Buses, tokens *jwt.Manager, metrics *prometheus.Registry, l *slog.Logger) http.Handler {
+func newHTTPHandler(
+	cfg *config.Config, proxy netip.Addr, b cqrs.Buses, tokens *jwt.Manager, metrics *prometheus.Registry, l *slog.Logger,
+) http.Handler {
 	r := chi.NewRouter()
 
+	r.Use(httpmw.ClientAddress(proxy))
 	r.Use(chimw.StripSlashes)
 	r.Use(httpmw.Logger(l))
 	r.Use(httpmw.Tracing(_healthzPath, _metricsPath))

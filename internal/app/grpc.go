@@ -2,6 +2,7 @@ package app
 
 import (
 	"log/slog"
+	"net/netip"
 
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -12,19 +13,22 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// newGRPCServer counts and times every unary call on metrics. It only traces and recovers
-// streaming calls: server reflection, the one streaming service, needs no token. Reflection is the
-// gRPC API's reference, so it is served only with docs, as REST's and GraphQL's are.
-func newGRPCServer(b cqrs.Buses, jwtManager *jwt.Manager, metrics prometheus.Registerer, docs bool, l *slog.Logger) *grpc.Server {
+// newGRPCServer counts and times every unary call on metrics. It only traces streaming calls, reads
+// their client and recovers them: server reflection, the one streaming service, needs no token.
+// Reflection is the gRPC API's reference, so it is served only with docs, as REST's and GraphQL's are.
+func newGRPCServer(
+	proxy netip.Addr, b cqrs.Buses, jwtManager *jwt.Manager, metrics prometheus.Registerer, docs bool, l *slog.Logger,
+) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.ChainUnaryInterceptor(
+			grpcmw.ClientAddress(proxy),
 			grpcmw.Logger(l),
 			grpcmw.NewMetrics(metrics).Interceptor,
 			grpcmw.Recovery(l),
 			grpcmw.Auth(jwtManager, publicGRPCMethods()...),
 		),
-		grpc.ChainStreamInterceptor(grpcmw.StreamRecovery(l)),
+		grpc.ChainStreamInterceptor(grpcmw.StreamClientAddress(proxy), grpcmw.StreamRecovery(l)),
 	)
 
 	registerGRPC(srv, b, l)

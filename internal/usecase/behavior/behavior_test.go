@@ -1,16 +1,22 @@
 package behavior_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
+	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 const (
@@ -21,6 +27,8 @@ const (
 var (
 	errInvalid    = errors.New("title is empty")
 	errCheckpoint = errors.New("checkpoint read failed")
+	errStore      = errors.New("read model unreachable")
+	errValkey     = errors.New("valkey unreachable")
 )
 
 type WriteThing struct {
@@ -290,4 +298,342 @@ func TestWaitAlsoWaitsForAResultThatEmbedsWritten(t *testing.T) {
 	_, err := cqrs.SendCommand(context.Background(), cmds, SignInThing{})
 
 	require.ErrorIs(t, err, entity.ErrReadModelBehind)
+}
+
+const (
+	_scope        = "sign-in"
+	_email        = "jo@example.com"
+	_token        = "token"
+	_limitTimeout = 500 * time.Millisecond
+)
+
+type LogInThing struct {
+	cqrs.Query[string]
+
+	Email string
+}
+
+func (LogInThing) LimitScope() string     { return _scope }
+func (q LogInThing) LimitAccount() string { return q.Email }
+
+func client() netip.Addr { return netip.MustParseAddr("203.0.113.7") }
+
+func fromClient(t *testing.T) context.Context {
+	t.Helper()
+
+	return entity.ContextWithClient(t.Context(), client())
+}
+
+func allowed() entity.Allowance { return entity.Allowance{Allowed: true} }
+
+type limitRun struct {
+	limiter *repomock.MockLimiter
+	logs    bytes.Buffer
+	calls   int
+}
+
+func newLimitRun(t *testing.T) *limitRun {
+	t.Helper()
+
+	return &limitRun{limiter: repomock.NewMockLimiter(gomock.NewController(t))}
+}
+
+func (r *limitRun) send(ctx context.Context, body any, answer error) (any, error) {
+	step := behavior.Limit(r.limiter, slog.New(slog.NewJSONHandler(&r.logs, nil)))
+	next := func(context.Context) (any, error) {
+		r.calls++
+
+		return _token, answer
+	}
+
+	return step(ctx, cqrs.Message{Kind: cqrs.KindQuery, Name: "LogInThing", Body: body}, next)
+}
+
+func (r *limitRun) lines(t *testing.T) []map[string]any {
+	t.Helper()
+
+	var lines []map[string]any
+
+	for dec := json.NewDecoder(&r.logs); dec.More(); {
+		var line map[string]any
+
+		require.NoError(t, dec.Decode(&line))
+
+		lines = append(lines, line)
+	}
+
+	return lines
+}
+
+func TestLimitRefusesASpentBudgetBeforeTheHandler(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		expect     func(l *repomock.MockLimiterMockRecorder)
+		retryAfter time.Duration
+	}{
+		"the client's": {
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeClient(gomock.Any(), _scope, client()).Return(entity.Allowance{RetryAfter: 30 * time.Second}, nil)
+			},
+			retryAfter: 30 * time.Second,
+		},
+		"the account's": {
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeClient(gomock.Any(), _scope, client()).Return(allowed(), nil)
+				l.CheckAccount(gomock.Any(), _scope, _email).Return(entity.Allowance{RetryAfter: 15 * time.Minute}, nil)
+			},
+			retryAfter: 15 * time.Minute,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newLimitRun(t)
+			tc.expect(r.limiter.EXPECT())
+
+			out, err := r.send(fromClient(t), LogInThing{Email: _email}, nil)
+
+			require.ErrorIs(t, err, entity.ErrTooManyAttempts)
+
+			var retry *entity.RetryAfterError
+
+			require.ErrorAs(t, err, &retry)
+			assert.Equal(t, tc.retryAfter, retry.RetryAfter)
+			assert.EqualError(t, err, "behavior - Limit LogInThing: too many attempts")
+			assert.Nil(t, out)
+			assert.Zero(t, r.calls)
+			assert.Empty(t, r.lines(t))
+		})
+	}
+}
+
+func TestLimitSettlesTheAccountByTheHandlersAnswer(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		answer error
+		expect func(l *repomock.MockLimiterMockRecorder)
+	}{
+		"a wrong password counts a failure": {
+			answer: entity.ErrInvalidCredentials,
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeAccountFailure(gomock.Any(), _scope, _email).Return(nil)
+			},
+		},
+		"a success clears the account": {
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.ClearAccount(gomock.Any(), _scope, _email).Return(nil)
+			},
+		},
+		"another failure neither counts nor clears": {
+			answer: errStore,
+			expect: func(*repomock.MockLimiterMockRecorder) {},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newLimitRun(t)
+			r.limiter.EXPECT().TakeClient(gomock.Any(), _scope, client()).Return(allowed(), nil)
+			r.limiter.EXPECT().CheckAccount(gomock.Any(), _scope, _email).Return(allowed(), nil)
+			tc.expect(r.limiter.EXPECT())
+
+			out, err := r.send(fromClient(t), LogInThing{Email: _email}, tc.answer)
+
+			assert.Equal(t, tc.answer, err, "the handler's error, unwrapped")
+			assert.Equal(t, _token, out)
+			assert.Equal(t, 1, r.calls)
+			assert.Empty(t, r.lines(t))
+		})
+	}
+}
+
+func TestLimitWithoutAClientSkipsTheClientBudget(t *testing.T) {
+	t.Parallel()
+
+	r := newLimitRun(t)
+	r.limiter.EXPECT().CheckAccount(gomock.Any(), _scope, _email).Return(allowed(), nil)
+	r.limiter.EXPECT().ClearAccount(gomock.Any(), _scope, _email).Return(nil)
+
+	out, err := r.send(t.Context(), LogInThing{Email: _email}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, _token, out)
+	assert.Equal(t, 1, r.calls)
+}
+
+func TestLimitCountsTheFailureOfARequestWhoseCallerWentAway(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(fromClient(t))
+	cancel()
+
+	live := func(ctx context.Context) { assert.NoError(t, ctx.Err()) }
+
+	r := newLimitRun(t)
+	r.limiter.EXPECT().TakeClient(gomock.Any(), _scope, client()).
+		DoAndReturn(func(ctx context.Context, _ string, _ netip.Addr) (entity.Allowance, error) {
+			live(ctx)
+
+			return allowed(), nil
+		})
+	r.limiter.EXPECT().CheckAccount(gomock.Any(), _scope, _email).
+		DoAndReturn(func(ctx context.Context, _, _ string) (entity.Allowance, error) {
+			live(ctx)
+
+			return allowed(), nil
+		})
+	r.limiter.EXPECT().TakeAccountFailure(gomock.Any(), _scope, _email).
+		DoAndReturn(func(ctx context.Context, _, _ string) error {
+			live(ctx)
+
+			return nil
+		})
+
+	_, err := r.send(ctx, LogInThing{Email: _email}, entity.ErrInvalidCredentials)
+
+	require.ErrorIs(t, err, entity.ErrInvalidCredentials)
+	assert.Empty(t, r.lines(t))
+}
+
+func TestLimitWithoutAnAccountMakesNoAccountCalls(t *testing.T) {
+	t.Parallel()
+
+	for name, answer := range map[string]error{
+		"a success":        nil,
+		"a wrong password": entity.ErrInvalidCredentials,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newLimitRun(t)
+			r.limiter.EXPECT().TakeClient(gomock.Any(), _scope, client()).Return(allowed(), nil)
+
+			out, err := r.send(fromClient(t), LogInThing{}, answer)
+
+			assert.Equal(t, answer, err)
+			assert.Equal(t, _token, out)
+			assert.Equal(t, 1, r.calls)
+		})
+	}
+}
+
+func TestLimitPassesAMessageThatIsNotLimited(t *testing.T) {
+	t.Parallel()
+
+	r := newLimitRun(t)
+
+	out, err := r.send(fromClient(t), WriteThing{Title: "a"}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, _token, out)
+	assert.Equal(t, 1, r.calls)
+}
+
+func TestLimitLetsTheAttemptThroughWhenTheLimiterFails(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		answer error
+		expect func(l *repomock.MockLimiterMockRecorder)
+	}{
+		"taking from the client": {
+			answer: entity.ErrInvalidCredentials,
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeClient(gomock.Any(), _scope, client()).Return(entity.Allowance{}, errValkey)
+			},
+		},
+		"checking the account": {
+			answer: entity.ErrInvalidCredentials,
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeClient(gomock.Any(), _scope, client()).Return(allowed(), nil)
+				l.CheckAccount(gomock.Any(), _scope, _email).Return(entity.Allowance{}, errValkey)
+			},
+		},
+		"counting a failure": {
+			answer: entity.ErrInvalidCredentials,
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeClient(gomock.Any(), _scope, client()).Return(allowed(), nil)
+				l.CheckAccount(gomock.Any(), _scope, _email).Return(allowed(), nil)
+				l.TakeAccountFailure(gomock.Any(), _scope, _email).Return(errValkey)
+			},
+		},
+		"clearing the account": {
+			expect: func(l *repomock.MockLimiterMockRecorder) {
+				l.TakeClient(gomock.Any(), _scope, client()).Return(allowed(), nil)
+				l.CheckAccount(gomock.Any(), _scope, _email).Return(allowed(), nil)
+				l.ClearAccount(gomock.Any(), _scope, _email).Return(errValkey)
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newLimitRun(t)
+			tc.expect(r.limiter.EXPECT())
+
+			out, err := r.send(fromClient(t), LogInThing{Email: _email}, tc.answer)
+
+			assert.Equal(t, tc.answer, err)
+			assert.Equal(t, _token, out)
+			assert.Equal(t, 1, r.calls)
+
+			lines := r.lines(t)
+			require.Len(t, lines, 1, "one warning for the attempt")
+			assert.Equal(t, "WARN", lines[0]["level"])
+			assert.Equal(t, "sign-in limit unavailable", lines[0]["msg"])
+			assert.Equal(t, _scope, lines[0]["scope"])
+			assert.Equal(t, errValkey.Error(), lines[0]["error"])
+		})
+	}
+}
+
+func TestLimitGivesEveryLimiterCallADeadline(t *testing.T) {
+	t.Parallel()
+
+	for name, answer := range map[string]error{
+		"a wrong password": entity.ErrInvalidCredentials,
+		"a success":        nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			r := newLimitRun(t)
+			bounded := func(ctx context.Context) {
+				deadline, ok := ctx.Deadline()
+				if assert.True(t, ok, "the call has a deadline") {
+					assert.LessOrEqual(t, time.Until(deadline), _limitTimeout)
+				}
+			}
+
+			r.limiter.EXPECT().TakeClient(gomock.Any(), _scope, client()).
+				DoAndReturn(func(ctx context.Context, _ string, _ netip.Addr) (entity.Allowance, error) {
+					bounded(ctx)
+
+					return allowed(), nil
+				})
+			r.limiter.EXPECT().CheckAccount(gomock.Any(), _scope, _email).
+				DoAndReturn(func(ctx context.Context, _, _ string) (entity.Allowance, error) {
+					bounded(ctx)
+
+					return allowed(), nil
+				})
+
+			settle := func(ctx context.Context, _, _ string) error {
+				bounded(ctx)
+
+				return nil
+			}
+			if answer == nil {
+				r.limiter.EXPECT().ClearAccount(gomock.Any(), _scope, _email).DoAndReturn(settle)
+			} else {
+				r.limiter.EXPECT().TakeAccountFailure(gomock.Any(), _scope, _email).DoAndReturn(settle)
+			}
+
+			_, err := r.send(fromClient(t), LogInThing{Email: _email}, answer)
+
+			assert.Equal(t, answer, err)
+		})
+	}
 }

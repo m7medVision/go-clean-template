@@ -12,6 +12,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
+	"github.com/m7medvision/go-clean-template/pkg/valkey"
 	"google.golang.org/grpc"
 )
 
@@ -21,7 +22,7 @@ func exchangeModule() module {
 	return module{
 		handlers: func(d *deps, b cqrs.Buses) error {
 			exchange.Register(b.Commands, b.Queries, exchange.Deps{
-				Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
+				Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL, valkey.NewCache(d.valkey)), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
 			})
 
 			return nil

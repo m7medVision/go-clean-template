@@ -28,9 +28,10 @@ Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-templa
 - **Roles** carried in the auth token and checked once, on the buses, for every transport.
 - **SSO.** Sign in through any OpenID Connect provider (Keycloak ships ready in dev, with an admin
   and a user), with the provider's roles mapped to the app's.
-- **Postgres and nothing else.** Typed queries with [sqlc](https://sqlc.dev/) and a declarative
+- **Postgres for everything durable.** Typed queries with [sqlc](https://sqlc.dev/) and a declarative
   [Atlas](https://atlasgo.io/) schema applied at startup.
   The event store and the job queue are ordinary tables too.
+  [Valkey](https://valkey.io/) runs beside it, for state a restart may lose.
 - **A worker binary.** It runs the projections, and consumes that queue.
   It sends email from templates embedded in the binary.
 - **A React client.** TanStack Router, Query, Table and Form, typed from the OpenAPI document and the
@@ -75,6 +76,7 @@ Then open:
 - <http://127.0.0.1:8025>: Mailpit, which catches the email the app sends
 
 If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` first.
+If something else holds 6379, set `VALKEY_PORT=6380` the same way.
 
 ## Docs
 

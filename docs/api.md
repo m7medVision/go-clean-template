@@ -26,6 +26,18 @@ Registration, login, and JWT-based authorization.
 
 - Passwords are hashed with bcrypt; JWTs expire after `JWT_TOKEN_EXPIRY`.
 - Registration queues a welcome email that the worker sends (see [worker.md](worker.md)).
+- Password sign-in and sign-up are limited, on every transport, with budgets per window
+  (`AUTH_LIMIT_WINDOW`, 15 minutes; [configuration.md](configuration.md#sign-in-limit)):
+  - each client address gets 20 attempts at each (`AUTH_LIMIT_CLIENT_ATTEMPTS`). Every attempt
+    counts, a malformed one too. The address is the connection's, or behind Caddy the one Caddy
+    forwards ([configuration.md](configuration.md#the-client-address));
+  - each account gets 5 wrong passwords (`AUTH_LIMIT_ACCOUNT_FAILURES`). Once they are spent, the
+    next sign-in is refused even with the right password. A successful sign-in clears the count.
+- A refused attempt answers `429` with `Retry-After` in whole seconds (rounded up, at least 1), and
+  gRPC `ResourceExhausted` with a `RetryInfo` detail. The message, `too many attempts`, does not say
+  which budget was spent. The OpenAPI document lists `429` on `register` and `login`.
+- Anyone who knows an email can spend its 5 failures and block password sign-in to that account
+  for up to a window. Passkey and SSO sign-in are not limited, so they still work.
 
 ## SSO
 
@@ -165,7 +177,8 @@ in `<domain>_types.graphqls`, and each field in its own file, named after it
   so it needs no token. The web client's types come from the schema files, not from introspection.
 - Errors carry `extensions.code`: `UNAUTHENTICATED`, `BAD_USER_INPUT`, `NOT_FOUND`, `FORBIDDEN`
   (the admin list without the `admin` role), `UNAVAILABLE` and `CONFLICT` (a write's `503` and `409`
-  on REST), `NOT_IMPLEMENTED` (a generated stub handler's `501`), `INTERNAL`. An expired token is
+  on REST), `NOT_IMPLEMENTED` (a generated stub handler's `501`), `RATE_LIMITED` (REST's `429`; no
+  GraphQL operation signs in today), `INTERNAL`. An expired token is
   `UNAUTHENTICATED` in a 200 response.
 
 ## gRPC
@@ -198,7 +211,8 @@ Services are defined in [auth.proto](proto/v1/auth.proto), [task.proto](proto/v1
   user or task `NotFound`, a taken username or email `AlreadyExists`, another user's task or the admin
   list without the `admin` role `PermissionDenied`, a write the read models have not caught up with
   `Unavailable`, a write that lost to a concurrent one `Aborted`, a generated stub handler
-  `Unimplemented`, and anything else `Internal`.
+  `Unimplemented`, a spent sign-in budget on `Register` or `Login` `ResourceExhausted` (with a
+  `RetryInfo` detail), and anything else `Internal`.
 
 ## Versioning
 

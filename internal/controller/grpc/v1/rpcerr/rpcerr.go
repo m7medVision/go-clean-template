@@ -4,11 +4,14 @@ package rpcerr
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // Status is the gRPC status for err, logged under op as its kind says.
@@ -18,12 +21,20 @@ func Status(ctx context.Context, l *slog.Logger, err error, op string) error {
 		l.Log(ctx, level, "grpc - "+op, "error", err)
 	}
 
-	return status.Error(code(kind), entity.Message(err))
+	st := status.New(code(kind), entity.Message(err))
+	if retry, ok := errors.AsType[*entity.RetryAfterError](err); ok {
+		info := &errdetails.RetryInfo{RetryDelay: durationpb.New(retry.RetryAfter)}
+		if detailed, detailErr := st.WithDetails(info); detailErr == nil {
+			st = detailed
+		}
+	}
+
+	return st.Err()
 }
 
 // code is the gRPC code of a kind. A switch, so that exhaustive fails the lint on a kind it does
 // not name.
-func code(k entity.Kind) codes.Code {
+func code(k entity.Kind) codes.Code { //nolint:gocyclo,cyclop // exhaustive needs every kind named, and each status is a case of its own
 	switch k {
 	case entity.KindInvalid:
 		return codes.InvalidArgument
@@ -41,6 +52,8 @@ func code(k entity.Kind) codes.Code {
 		return codes.Unavailable
 	case entity.KindNotImplemented:
 		return codes.Unimplemented
+	case entity.KindRateLimited:
+		return codes.ResourceExhausted
 	case entity.KindInternal:
 	}
 

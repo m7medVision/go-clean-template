@@ -17,7 +17,7 @@ Content-Type: application/json
 The exchange domain is used because it is the only one that touches every kind of dependency:
 - an inbound transport;
 - a domain rule;
-- an outbound HTTP API;
+- an outbound HTTP API, and the cache in front of it;
 - the event store;
 - a projection.
 
@@ -31,14 +31,25 @@ sequenceDiagram
   participant CB as command bus
   participant C as ConvertCurrency handler
   participant W as Rate API client
+  participant V as Valkey
+  participant X as ExchangeRate-API
   participant S as event store
   participant P as exchange projector (worker)
   participant QB as query bus
   participant Q as GetConversion handler
   H->>CB: SendCommand(ConvertCurrency)
-  CB->>C: trace, log, metrics, stamp, wait, retry, authorize, validate
+  CB->>C: trace, log, metrics, stamp, limit, wait, retry, authorize, validate
   C->>C: entity.NewConversion: normalise and validate
   C->>W: Rate(ctx, "OMR", "CNY")
+  W->>V: GET exchange:latest:OMR
+  alt hit
+    V-->>W: the provider's body
+  else miss
+    V-->>W: nil
+    W->>X: GET /v6/latest/OMR
+    X-->>W: 200, the body
+    W->>V: SET exchange:latest:OMR … PXAT next update
+  end
   W-->>C: 17.406483, 2026-10-19
   C->>S: Save(CurrencyConverted)
   S-->>C: position 42
@@ -58,9 +69,12 @@ builds the two buses once, and each domain's module registers its handlers on th
 
 ```go
 exchange.Register(b.Commands, b.Queries, exchange.Deps{
-	Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
+	Store: d.store, Rates: webapi.New(d.cfg.Exchange.ServiceURL, valkey.NewCache(d.valkey)), Exchanges: persistExchangeRepo.NewReadModel(d.pg),
 })
 ```
+
+`d.valkey` is the Valkey client the app opens in [`app.go`](../internal/app/app.go). Only the app
+sets it, because only the app runs these handlers.
 
 [`internal/usecase/exchange/register.go`](../internal/usecase/exchange/register.go) lists its
 handlers, one line each. The transports get the buses and nothing else:
@@ -79,15 +93,16 @@ got, which is what lets the unit tests hand it the in-memory store and mocks ins
 ## 1. Middleware
 
 The app's HTTP mux, [`internal/app/http.go`](../internal/app/http.go), installs chi middleware in
-this order (chi's `StripSlashes`, then the rest from
+this order (chi's `StripSlashes` second, every other one from
 [`internal/controller/httpmw`](../internal/controller/httpmw), which wraps GraphQL, the docs and
 `/healthz` as it wraps REST), and mounts the REST API ([`restapi.NewHandler`](../internal/controller/restapi/router.go)),
 whose Huma middleware `Auth` runs once the request has matched an operation, before any handler:
 
 | Middleware | What it does to this request |
 | --- | --- |
+| `ClientAddress` | resolves the client's address with [`clientip.Resolve`](../pkg/clientip/clientip.go) and stores it with `entity.ContextWithClient`: the connection's address, or, on a connection from `TRUSTED_PROXY` (Caddy), the rightmost `X-Forwarded-For` entry ([configuration.md](configuration.md#the-client-address)) |
 | `StripSlashes` | `/v1/exchange/convert/` and `/v1/exchange/convert` are the same route |
-| `Logger` | logs client address, method, path, status and response size when the request ends |
+| `Logger` | logs the client address `ClientAddress` resolved, method, path, status and response size when the request ends |
 | `Tracing` | starts the server span and reads an incoming `traceparent`, so a caller's trace continues here. Every request is traced but `/healthz` and `/metrics`; with `TRACING_ENABLED` off the span goes nowhere, but the trace ID still reaches the events' correlation ID |
 | `Metrics` | counts the request in `http_requests_total` and times it in `http_request_duration_seconds`, labeled with the route pattern, on the registry `/metrics` serves when `METRICS_ENABLED` |
 | `Recovery` | turns a panic in any later layer into a 500 instead of a dropped connection |
@@ -185,6 +200,7 @@ the pipeline from [`newBuses`](../internal/app/buses.go), outermost first:
 | log | `pkg/cqrs` | logs the outcome and duration at debug |
 | metrics | `pkg/cqrs` | counts it in `cqrs_messages_total` and times it in `cqrs_message_duration_seconds` |
 | stamp | `internal/usecase/behavior` | puts the caller's user ID and `command ConvertCurrency` in the context's event metadata |
+| limit | `internal/usecase/behavior` | nothing here: `ConvertCurrency` is not `behavior.Limited`; only sign-up and password sign-in are ([cqrs.md](cqrs.md#the-sign-in-limit)) |
 | wait | `internal/usecase/behavior` | after the handler: holds the result until the projectors of the events it wrote have passed `Written.Position` (step 8) |
 | retry | `internal/usecase/behavior` | runs the handler again on `entity.ErrConcurrencyConflict`, three attempts in all |
 | authorize | `internal/usecase/behavior` | nothing here: `ConvertCurrency` needs no role |
@@ -259,12 +275,36 @@ implements `repo.ExchangeWebAPI` against the
   `encoding/json` hands each number's text straight to `decimal`.
 - **The date is the provider's.** `time_last_update_unix` is truncated to a UTC date and returned with
   the rate, so the response says which day's rate it used, not when the request ran.
+- **The rates are cached until the provider's next update.** Before the request, the client reads
+  `exchange:latest:OMR` (`exchange:latest:` plus the base) from Valkey. A hit goes through the same
+  decode as a fresh body and makes no request, so a target missing from the cached rates is still
+  `ErrUnsupportedCurrency`. On a miss the client stores the provider's body byte for byte with
+  `SET … PXAT`, expiring at its `time_next_update_unix`. Every app instance reads the same keys.
+  Valkey has no persistence, so a restart empties the cache and the next conversion from each base
+  refills it.
+- **Only a current success is stored.** That is a 200 whose body decodes, says `result: success`
+  and has a next update still ahead. Error bodies, other statuses and bodies that do not decode are
+  never stored, and neither is a body whose next update has passed, such as the recorded fixture
+  the integration stub serves.
+- **The cache fails open.** A read that errors, takes over 500 ms (`_cacheTimeout`) or returns a
+  body that does not decode is a miss, and the conversion goes to the provider. A write that fails
+  only costs the next conversion a request. The cache's errors are not logged: valkeyotel marks the
+  failed command's span as an error.
+- **One deadline bounds the whole lookup.** `webapi.Timeout` (5 s) covers all of `Rate`: the cache
+  read, the request and the cache write. A provider slower than that is still
+  `ErrRatesUnavailable`; a caller that went away is not. The app's HTTP write deadline
+  ([`servers.go`](../internal/app/servers.go)) leaves room for it.
+- **The body is read through a 1 MiB limit** (`_maxBody`). A body cut at the limit does not decode,
+  so it is `ErrRatesUnavailable` and is never stored.
 - **It joins the trace.** The `http.Client` uses an `otelhttp` transport, so the outbound GET is a
-  child span of the `command ConvertCurrency` span and sends `traceparent` onward. It has a 5-second timeout
-  (`webapi.Timeout`, which the app's HTTP write deadline leaves room for) and uses the request's `ctx`, so a client disconnect cancels it.
+  child span of the `command ConvertCurrency` span and sends `traceparent` onward, and valkeyotel
+  opens a span for each Valkey command. Every call runs on the request's `ctx`, so a client
+  disconnect cancels it.
 
 This is the only file that knows the provider's URL layout or JSON shape. Switching providers means a
-new implementation of the same interface. The command handler doesn't change.
+new implementation of the same interface. The command handler doesn't change. Nor does it know about
+the cache: `webapi.Cache` (`Get`, `Set`) is declared in this package, beside its only consumer, and
+[`pkg/valkey.Cache`](../pkg/valkey/cache.go) satisfies it.
 
 ## 7. The event store
 
@@ -313,7 +353,7 @@ the conversion is saved, but a read could still miss it.
 
 ## 9. The query
 
-`SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp,
+`SendQuery(GetConversion)` runs through the query bus's steps (trace, log, metrics, stamp, limit,
 authorize, validate) to
 [`query/get_conversion.go`](../internal/usecase/exchange/query/get_conversion.go), which reads
 the row by its ID from `repo.ExchangeReadModel` and only from it, then asks the conversion's
@@ -327,7 +367,9 @@ With `TRACING_ENABLED=true`, this request shows up in Jaeger as one trace:
 ```
 POST /v1/exchange/convert              (otelhttp server span, httpmw.Tracing)
 ├── command ConvertCurrency            (the command bus's trace step)
-│   ├── HTTP GET                       (otelhttp client span → open.er-api.com)
+│   ├── GET                            (valkeyotel: the cache read)
+│   ├── HTTP GET                       (otelhttp client span → open.er-api.com, on a miss)
+│   ├── SET                            (valkeyotel: the cache write, on a miss)
 │   ├── BEGIN, SELECT, INSERT, COMMIT  (otelpgx, a span per statement: the event store's Save)
 │   └── SELECT                         (otelpgx: the wait step reading projection_checkpoints, once a poll)
 └── query GetConversion                (the query bus's trace step)
@@ -335,7 +377,8 @@ POST /v1/exchange/convert              (otelhttp server span, httpmw.Tracing)
 ```
 
 Repositories open no spans of their own: below the buses' span, otelpgx opens one per SQL
-statement, named after its operation, with the statement in `db.query.text`. The projector's insert
+statement, named after its operation, with the statement in `db.query.text`, and valkeyotel one
+per Valkey command, named after the command. The projector's insert
 runs in the worker, so it isn't part of this trace; the event's metadata carries the trace ID as its
 correlation ID.
 
@@ -392,8 +435,8 @@ Each layer is tested at its own boundary, with the layer below replaced:
 | Command handler | [`command/convert_currency_test.go`](../internal/usecase/exchange/command/convert_currency_test.go) | the in-memory event store (`internal/repo/memstore`), and a gomock rate client from `repomock` |
 | Query handlers | [`query/query_test.go`](../internal/usecase/exchange/query/query_test.go) | a gomock read model from `repomock` |
 | Projector | [`persistent/exchange/projector_test.go`](../internal/repo/persistent/exchange/projector_test.go) | a fake of sqlc's `Querier` |
-| Rate client | [`webapi/exchange_openerapi_test.go`](../internal/repo/webapi/exchange_openerapi_test.go) | an `httptest` server replaying a recorded OMR response from `testdata/` |
-| Whole stack | [`integration-test/exchange_test.go`](../integration-test/exchange_test.go) | a Caddy stub serving that same recorded response, so the suite never calls the real provider |
+| Rate client | [`webapi/exchange_openerapi_test.go`](../internal/repo/webapi/exchange_openerapi_test.go) | an `httptest` server replaying a recorded OMR response from `testdata/` and counting its requests, and a map-backed fake `Cache` that can fail or hang |
+| Whole stack | [`integration-test/exchange_test.go`](../integration-test/exchange_test.go) | a Caddy stub serving that same recorded response, so the suite never calls the real provider. `TestHTTPConvertV1ReadsTheCachedRates` seeds `exchange:latest:USD` in the stack's Valkey with a rate the stub never serves, and gets it back from `POST /v1/exchange/convert` |
 
 The memstore passes the same contract suite as the Postgres store
 ([`internal/repo/eventstoretest`](../internal/repo/eventstoretest/suite.go)), so a handler tested on

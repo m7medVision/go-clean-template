@@ -9,6 +9,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/repo/session"
+	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user/query"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/stretchr/testify/assert"
@@ -84,4 +85,13 @@ func TestLogInReturnsAReadFailure(t *testing.T) {
 
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	assert.NotErrorIs(t, err, entity.ErrInvalidCredentials)
+}
+
+func TestLogInIsLimitedBySignInAndItsEmail(t *testing.T) {
+	t.Parallel()
+
+	var q behavior.Limited = query.LogIn{Email: "jo@example.com", Password: "secret"}
+
+	assert.Equal(t, "sign-in", q.LimitScope())
+	assert.Equal(t, "jo@example.com", q.LimitAccount())
 }

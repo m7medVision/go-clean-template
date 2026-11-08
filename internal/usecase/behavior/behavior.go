@@ -1,13 +1,14 @@
 // Package behavior holds the application's own steps of the command and query pipelines: they
 // know the domain (roles, metadata, the read model's consistency), which pkg/cqrs must not.
 //
-// The buses run them in this order, outermost first: Stamp, Wait, Retry, Authorize, Validate.
+// The buses run them outermost first: Stamp, Limit, Wait, Retry, Authorize, Validate.
 package behavior
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
+
+const _limitTimeout = 500 * time.Millisecond
 
 // Actor is a message that acts for a user, recorded on the events it causes.
 type Actor interface {
@@ -34,6 +37,11 @@ type Validator interface {
 	Validate() error
 }
 
+type Limited interface {
+	LimitScope() string
+	LimitAccount() string
+}
+
 // Stamp records who sent a message and which message it was in the context's event metadata, so
 // the events its handler appends carry them.
 func Stamp() cqrs.Step {
@@ -47,6 +55,113 @@ func Stamp() cqrs.Step {
 
 		return next(entity.ContextWithMetadata(ctx, md))
 	}
+}
+
+func Limit(limiter repo.Limiter, l *slog.Logger) cqrs.Step {
+	return func(ctx context.Context, msg cqrs.Message, next cqrs.Next) (any, error) {
+		m, ok := msg.Body.(Limited)
+		if !ok {
+			return next(ctx)
+		}
+
+		a := &attempt{limiter: limiter, l: l, scope: m.LimitScope(), account: m.LimitAccount()}
+
+		if err := a.admit(ctx); err != nil {
+			return nil, fmt.Errorf("behavior - Limit %s: %w", msg.Name, err)
+		}
+
+		out, err := next(ctx)
+		a.settle(ctx, err)
+
+		return out, err
+	}
+}
+
+type attempt struct {
+	limiter repo.Limiter
+	l       *slog.Logger
+	scope   string
+	account string
+	failed  bool
+}
+
+func (a *attempt) admit(ctx context.Context) error {
+	if err := a.takeClient(ctx); err != nil {
+		return err
+	}
+
+	return a.checkAccount(ctx)
+}
+
+func (a *attempt) takeClient(ctx context.Context) error {
+	client, ok := entity.ClientFromContext(ctx)
+	if !ok {
+		return nil
+	}
+
+	limitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), _limitTimeout)
+	defer cancel()
+
+	allowance, err := a.limiter.TakeClient(limitCtx, a.scope, client)
+
+	return a.refusal(ctx, allowance, err)
+}
+
+func (a *attempt) checkAccount(ctx context.Context) error {
+	if a.account == "" || a.failed {
+		return nil
+	}
+
+	limitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), _limitTimeout)
+	defer cancel()
+
+	// Checking and counting are separate calls, so concurrent wrong passwords can pass a few over
+	// the budget before it locks.
+	allowance, err := a.limiter.CheckAccount(limitCtx, a.scope, a.account)
+
+	return a.refusal(ctx, allowance, err)
+}
+
+func (a *attempt) refusal(ctx context.Context, allowance entity.Allowance, err error) error {
+	switch {
+	case err != nil:
+		a.failOpen(ctx, err)
+
+		return nil
+	case !allowance.Allowed:
+		return entity.TooManyAttempts(allowance.RetryAfter)
+	default:
+		return nil
+	}
+}
+
+func (a *attempt) settle(ctx context.Context, err error) {
+	if a.account == "" || a.failed {
+		return
+	}
+
+	switch {
+	case err == nil:
+		a.record(ctx, a.limiter.ClearAccount)
+	case errors.Is(err, entity.ErrInvalidCredentials):
+		a.record(ctx, a.limiter.TakeAccountFailure)
+	}
+}
+
+func (a *attempt) record(ctx context.Context, update func(ctx context.Context, scope, account string) error) {
+	limitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), _limitTimeout)
+	defer cancel()
+
+	if err := update(limitCtx, a.scope, a.account); err != nil {
+		a.failOpen(ctx, err)
+	}
+}
+
+func (a *attempt) failOpen(ctx context.Context, err error) {
+	a.failed = true
+	// An outage of the counter store must not stop every sign-in, so its error lets the attempt
+	// through.
+	a.l.WarnContext(ctx, "sign-in limit unavailable", "scope", a.scope, "error", err)
 }
 
 // Wait holds a command's result until the projectors of the events it wrote (an entity.Write, alone

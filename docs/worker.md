@@ -49,7 +49,8 @@ as something is sent to it.
   handlers, then cancels their context.
 - **Startup.** The app applies the schema, not the worker. A worker that starts first logs
   `relation "queue_messages" does not exist` until the app has run, then carries on. It serves no
-  HTTP and issues no token, so it starts without `JWT_SECRET`, which the app requires.
+  HTTP, issues no token and reads no Valkey, so it starts without `JWT_SECRET` and `VALKEY_URL`,
+  which the app requires.
 
 The settings are in [configuration.md](configuration.md#worker).
 

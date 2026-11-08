@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -157,7 +158,7 @@ func TestServeGRPCDropsAStreamThatOutlastsTheDrain(t *testing.T) {
 	t.Parallel()
 
 	port := freePort(t)
-	srv := newGRPCServer(newTestBuses(), jwt.New("test-secret", time.Hour), newMetrics(), true, slog.New(slog.DiscardHandler))
+	srv := newGRPCServer(netip.Addr{}, newTestBuses(), jwt.New("test-secret", time.Hour), newMetrics(), true, slog.New(slog.DiscardHandler))
 
 	var logs bytes.Buffer
 
