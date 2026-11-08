@@ -1,12 +1,15 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 
 import { onUnauthorized } from "#/api/client";
 import { auth } from "#/auth/token";
 import { RouteError, RouteNotFound } from "#/components/route-error";
+import { reportError } from "#/lib/error-tracking";
 import { routeTree } from "./routeTree.gen";
 
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: reportError }),
+  mutationCache: new MutationCache({ onError: reportError }),
   defaultOptions: { queries: { staleTime: 30_000 } },
 });
 

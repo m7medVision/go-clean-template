@@ -3,7 +3,10 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 
+import { initErrorTracking } from "#/lib/error-tracking";
 import { queryClient, router } from "./router";
+
+void initErrorTracking();
 
 const rootElement = document.getElementById("app");
 

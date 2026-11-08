@@ -27,3 +27,14 @@ export function tokenRoles(token: string | null): string[] {
 }
 
 export const isAdmin = (token: string | null) => tokenRoles(token).includes("admin");
+
+export function tokenSubject(token: string | null): string | undefined {
+  if (!token) return undefined;
+
+  const claims = payload(token);
+  if (typeof claims !== "object" || claims === null) return undefined;
+
+  const { sub } = claims as { sub?: unknown };
+
+  return typeof sub === "string" ? sub : undefined;
+}
