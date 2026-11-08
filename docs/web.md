@@ -79,6 +79,17 @@ options in `web/src/<domain>/api.ts`.
   [Zod](https://zod.dev/) schema per domain (`web/src/components/form/`). A currency picker is
   `field.SelectField`.
 
+### Errors
+
+A failed route load or a render crash shows `RouteError` (`web/src/components/route-error.tsx`) in
+that route's area: the sidebar and breadcrumb stay, the message is `problemMessage` (the server's
+text, never an error's own message or stack), and "Try again" resets the failed queries and reloads
+the route. It is the router's `defaultErrorComponent`; a route can still set its own (`AllTasksError`
+on `/admin/tasks`, whose 403 does not heal on retry). An unknown URL shows `RouteNotFound`, a full
+page with a link to `/tasks`. A rejected token is handled apart from all of this: `rejectSession`
+signs the user out on a REST 401 and on GraphQL's `UNAUTHENTICATED`. A mutation's failure is never
+thrown into rendering; the form or dialog shows it with `FormError`.
+
 ## Passkeys
 
 The browser half of a WebAuthn ceremony is in `web/src/passkey/webauthn.ts`, on the browser's own
