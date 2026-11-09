@@ -250,14 +250,15 @@ func (s *fakeStore) Notifications(ctx context.Context) <-chan struct{} {
 }
 
 // recorder is a subscriber that keeps the positions it handled: of Ticked events, or of the types
-// in handles when set. failAt makes it fail once at that position; onHandle runs before it records.
+// in handles when set. failAt makes it fail at that position once, or failures times; onHandle runs before it records.
 type recorder struct {
 	name     string
 	handles  []entity.Event
 	mu       sync.Mutex
 	handled  []int64
 	failAt   int64
-	failed   bool
+	failures int
+	failed   int
 	onHandle func(e *entity.RecordedEvent)
 }
 
@@ -279,8 +280,8 @@ func (r *recorder) Handle(_ context.Context, e *entity.RecordedEvent) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if e.Position == r.failAt && !r.failed {
-		r.failed = true
+	if e.Position == r.failAt && r.failed < max(1, r.failures) {
+		r.failed++
 
 		return errHandle
 	}
@@ -305,7 +306,11 @@ func (r *recorder) positions() []int64 {
 func start(t *testing.T, s *fakeStore, poll time.Duration, subs ...repo.Subscriber) {
 	t.Helper()
 
-	runner := projection.New(slog.New(slog.DiscardHandler), s, poll, 2, subs...)
+	run(t, projection.New(slog.New(slog.DiscardHandler), s, poll, 2, subs...))
+}
+
+func run(t *testing.T, runner *projection.Runner) {
+	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -462,4 +467,75 @@ func TestARunnerRetriesItsCheckpointUntilTheSchemaExists(t *testing.T) {
 
 	require.Eventually(t, handledUpTo(s, r, 2), _eventually, _tick)
 	assert.Equal(t, []int64{1, 2}, r.positions())
+}
+
+// levels records the level of every line the runner logs about a subscriber.
+type levels struct {
+	slog.Handler
+
+	mu   sync.Mutex
+	seen []slog.Level
+}
+
+func (l *levels) Enabled(context.Context, slog.Level) bool { return true }
+
+func (l *levels) Handle(_ context.Context, r slog.Record) error { //nolint:gocritic // slog.Handler fixes the signature
+	if r.Message == "projection - handle an event" {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		l.seen = append(l.seen, r.Level)
+	}
+
+	return nil
+}
+
+func (l *levels) got() []slog.Level {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return append([]slog.Level(nil), l.seen...)
+}
+
+func TestAnEventFailingAgainIsReportedOnce(t *testing.T) {
+	t.Parallel()
+
+	s := newFakeStore(3)
+	r := &recorder{name: "r", failAt: 2, failures: 3}
+	l := &levels{}
+
+	run(t, projection.New(slog.New(l), s, _poll, 2, r))
+
+	require.Eventually(t, handledUpTo(s, r, 3), _eventually, _tick)
+	assert.Equal(t, []slog.Level{slog.LevelError, slog.LevelWarn, slog.LevelWarn}, l.got())
+}
+
+func TestACheckpointFailingWithinTheGraceIsOnlyAWarning(t *testing.T) {
+	t.Parallel()
+
+	s := newFakeStore(1)
+	s.ensureFails = 3
+	r := &recorder{name: "r"}
+	l := &levels{}
+
+	run(t, projection.New(slog.New(l), s, _poll, 2, r))
+
+	require.Eventually(t, handledUpTo(s, r, 1), _eventually, _tick)
+	assert.Equal(t, []slog.Level{slog.LevelWarn, slog.LevelWarn, slog.LevelWarn}, l.got())
+}
+
+func TestACheckpointFailingPastTheGraceIsOneError(t *testing.T) {
+	t.Parallel()
+
+	s := newFakeStore(1)
+	s.ensureFails = 3
+	r := &recorder{name: "r"}
+	l := &levels{}
+
+	runner := projection.New(slog.New(l), s, _poll, 2, r)
+	projection.SetCheckpointGrace(runner, 0)
+	run(t, runner)
+
+	require.Eventually(t, handledUpTo(s, r, 1), _eventually, _tick)
+	assert.Equal(t, []slog.Level{slog.LevelError, slog.LevelWarn, slog.LevelWarn}, l.got())
 }
