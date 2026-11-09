@@ -1,7 +1,7 @@
 # Spec: web error handling
 
 Module id: `web-errors` · second of six (see [web.md](web.md)) · Depends on nothing ·
-Status: **approved 2026-11-08 (all three open questions as assumed); plan and tasks written, implementation not started**
+Status: **done: merged 2026-11-08 (#53), released in v0.5.0**
 
 Facts below were checked in `web/src` on 2026-11-08.
 

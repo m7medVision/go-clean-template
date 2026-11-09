@@ -2,7 +2,7 @@
 
 Module id: `goose` · first of the observability and messaging work (see
 [README.md](README.md#migrations)) · Depends on nothing · Blocks `nats-queue` · Status:
-**approved 2026-11-08**
+**done: merged 2026-11-09 with #56 (stacked under it), released in v0.6.0**
 
 Paths below are checked against `feat/valkey` at `79e68ed` on 2026-11-08.
 

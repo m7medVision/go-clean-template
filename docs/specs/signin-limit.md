@@ -1,7 +1,7 @@
 # Spec: sign-in and sign-up attempts limited in Valkey
 
 Module id: `signin-limit` · third of three in one PR (see [README.md](README.md#valkey)) · Depends
-on `valkey` · Status: **spec approved 2026-11-08; plan in [signin-limit-plan.md](signin-limit-plan.md), tasks in
+on `valkey` · Status: **done: merged 2026-11-08 (#52), released in v0.4.0; plan in [signin-limit-plan.md](signin-limit-plan.md), tasks in
 [signin-limit-todo.md](signin-limit-todo.md)**
 
 Paths are checked against `feat/valkey` at `0b5c6f5` on 2026-11-08.

@@ -1,6 +1,6 @@
 # Specs
 
-Two modules, built in this order. Each has its own spec and ships as its own PR.
+Two modules, built in this order. Each has its own spec and ships as its own PR. Both are done: `cqrs` merged 2026-11-04 (#45), `generator` 2026-11-05 (#47), released in v0.3.0.
 
 | Module id | Responsibility | Depends on | PR | Spec |
 | --- | --- | --- | --- | --- |
@@ -10,12 +10,12 @@ Two modules, built in this order. Each has its own spec and ships as its own PR.
 Build order: `cqrs` → `generator`. The generator's templates copy the shapes `cqrs` settles, so
 its spec is checked against the merged `cqrs` code before its plan is written.
 
-After both merged, a structural refactor of the Go service: [untangle.md](untangle.md) (decision
+After both merged, a structural refactor of the Go service (done: merged 2026-11-07, #51, v0.3.1): [untangle.md](untangle.md) (decision
 log), [untangle-plan.md](untangle-plan.md), [untangle-todo.md](untangle-todo.md).
 
 ## Valkey
 
-Three modules, one PR (approved 2026-11-08), one commit series per module, built in this order.
+Three modules, one PR (approved 2026-11-08; done: merged 2026-11-08, #52, v0.4.0), one commit series per module, built in this order.
 
 | Module id | Responsibility | Depends on | Spec |
 | --- | --- | --- | --- |
@@ -40,8 +40,7 @@ Build order: `mongo` → `task-attributes`. Only the app uses Mongo.
 
 ## Migrations
 
-One module, after the MongoDB modules and before `nats-queue`, whose outbox tables need it. Spec
-approved 2026-11-08.
+One module, built before `nats-queue`. Spec approved 2026-11-08; done: merged 2026-11-09 with #56, v0.6.0.
 
 | Module id | Responsibility | Depends on | Spec |
 | --- | --- | --- | --- |
@@ -49,7 +48,7 @@ approved 2026-11-08.
 
 ## Observability and messaging
 
-Four modules, after the MongoDB modules. `nats-queue` approved 2026-11-08 except its outbox; the
+Four modules, after the MongoDB modules. `nats-queue` is done (merged 2026-11-09, #56, v0.6.0; the outbox turned out not to be needed); the
 others written 2026-11-08, awaiting review; each to be grilled again before approval.
 
 | Module id | Responsibility | Depends on | Spec |
@@ -63,6 +62,6 @@ Build order: `goose` (above) → `nats-queue` → `glitchtip` → `posthog` → 
 
 ## Web
 
-Six modules for `web/`; capability map approved 2026-11-08. Specs: [web-boundaries.md](web-boundaries.md)
-(approved), [plan](web-boundaries-plan.md), [tasks](web-boundaries-todo.md); [web-errors.md](web-errors.md) (approved), [plan](web-errors-plan.md), [tasks](web-errors-todo.md); [web-authz.md](web-authz.md), [web-tests.md](web-tests.md), [web-e2e.md](web-e2e.md) and [web-error-tracking.md](web-error-tracking.md) (implemented under /goal, branches `feat/web-*`; plans and tasks beside each). See
+Six modules for `web/`; capability map approved 2026-11-08. All six are done: merged 2026-11-08 (#53), v0.5.0. Specs: [web-boundaries.md](web-boundaries.md)
+(done), [plan](web-boundaries-plan.md), [tasks](web-boundaries-todo.md); [web-errors.md](web-errors.md) (done), [plan](web-errors-plan.md), [tasks](web-errors-todo.md); [web-authz.md](web-authz.md), [web-tests.md](web-tests.md), [web-e2e.md](web-e2e.md) and [web-error-tracking.md](web-error-tracking.md) (done; plans and tasks beside each). See
 [web.md](web.md).
