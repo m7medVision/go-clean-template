@@ -1,7 +1,7 @@
 # Spec: web error tracking
 
 Module id: `web-error-tracking` · sixth of six (see [web.md](web.md)) · Depends on `web-errors` ·
-Status: **implemented 2026-11-08 on `feat/web-error-tracking` under the /goal directive, not separately approved; see web-error-tracking-todo.md for what is open**
+Status: **done: merged 2026-11-08 (#53), released in v0.5.0; source-map upload stays open until a deployment exists (see web-error-tracking-todo.md)**
 
 Facts below were checked in the repo on 2026-11-08.
 

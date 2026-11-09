@@ -1,8 +1,8 @@
 # Spec: the queue on NATS JetStream
 
 Module id: `nats-queue` · first of four (see [README.md](README.md#observability-and-messaging)) ·
-Depends on `goose` · Status: **approved 2026-11-08 except the outbox**, which turned out not to be needed
-here and keeps its own session; work starts after the Mongo modules and `goose`
+Depends on `goose` · Status: **done: merged 2026-11-09 (#56), released in v0.6.0** (approved 2026-11-08 except the outbox, which turned out not to be needed
+here and keeps its own session; it was built before the Mongo modules, on top of `goose`)
 
 Paths below are checked against `feat/valkey` at `79e68ed` on 2026-11-08.
 

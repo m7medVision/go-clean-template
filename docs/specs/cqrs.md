@@ -1,6 +1,6 @@
 # Spec: full CQRS with event sourcing
 
-Module id: `cqrs` · PR 1 of 2 · Status: **draft, awaiting approval**
+Module id: `cqrs` · PR 1 of 2 · Status: **done: merged 2026-11-04 (#45), released in v0.3.0**
 
 ## Objective
 

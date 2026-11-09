@@ -1,6 +1,6 @@
 # Capability map: web/ structure and quality
 
-Status: **capability map approved 2026-11-08. All six module specs are written; plans follow each approval.**
+Status: **done: all six modules merged 2026-11-08 (#53), released in v0.5.0**
 Idea source: [bulletproof-react](https://github.com/alan2207/bulletproof-react) (project structure,
 testing, error handling, security), compared with `web/` on 2026-11-08.
 

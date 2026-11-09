@@ -1,7 +1,7 @@
 # Spec: Valkey in the stack
 
 Module id: `valkey` · first of three in one PR (see [README.md](README.md#valkey)) · Depends on
-nothing · Status: **spec approved 2026-11-08; plan in [valkey-plan.md](valkey-plan.md), tasks in [valkey-todo.md](valkey-todo.md)**
+nothing · Status: **done: merged 2026-11-08 (#52), released in v0.4.0; plan in [valkey-plan.md](valkey-plan.md), tasks in [valkey-todo.md](valkey-todo.md)**
 
 Paths and versions below are checked against master at `0aba6bd` (#51 merged) on 2026-11-08.
 

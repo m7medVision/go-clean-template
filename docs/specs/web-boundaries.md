@@ -1,7 +1,7 @@
 # Spec: web import boundaries
 
 Module id: `web-boundaries` · first of six (see [web.md](web.md)) · Depends on nothing ·
-Status: **implemented 2026-11-08 on `feat/web-boundaries`; awaiting merge**
+Status: **done: merged 2026-11-08 (#53), released in v0.5.0**
 
 Facts below were checked in `web/` on 2026-11-08 (Oxlint 1.89.0 in `web/node_modules`).
 
