@@ -11,6 +11,7 @@ import (
 	wmnats "github.com/ThreeDotsLabs/watermill-nats/v2/pkg/nats"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/m7medvision/go-clean-template/pkg/sentrylog"
 	"github.com/nats-io/nats.go"
 )
 
@@ -112,7 +113,7 @@ func newRouter(pub message.Publisher, s Settings, logger watermill.LoggerAdapter
 		Logger:          logger,
 	}
 
-	router.AddMiddleware(poison, giveUp(l), retry.Middleware, middleware.Recoverer)
+	router.AddMiddleware(sentrylog.Watermill, poison, giveUp(l), retry.Middleware, middleware.Recoverer)
 
 	return router, nil
 }

@@ -31,6 +31,7 @@ type (
 		Exchange  Exchange
 		WebAuthn  WebAuthn
 		OIDC      OIDC
+		Sentry    Sentry
 	}
 
 	App struct {

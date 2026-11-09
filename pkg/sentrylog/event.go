@@ -17,9 +17,16 @@ func event(ctx context.Context, r *slog.Record, base []slog.Attr) *sentry.Event 
 	ev.Message = r.Message
 	attrs := sentry.Context{}
 
-	var err error
+	var (
+		err      error
+		panicked string
+	)
 
 	each(r, base, func(a slog.Attr) {
+		if a.Key == "panic" {
+			panicked = a.Value.String()
+		}
+
 		if e, ok := a.Value.Any().(error); ok && a.Key == "error" {
 			err = e
 		} else if allowed(a.Key) {
@@ -33,7 +40,7 @@ func event(ctx context.Context, r *slog.Record, base []slog.Attr) *sentry.Event 
 		ev.SetException(err, _maxErrorDepth)
 	}
 
-	ev.Fingerprint = []string{r.Message, operation(err)}
+	ev.Fingerprint = []string{r.Message, operation(err) + panicked}
 
 	if sc := trace.SpanContextFromContext(ctx); sc.HasTraceID() {
 		ev.Tags["trace_id"] = sc.TraceID().String()
@@ -86,7 +93,7 @@ func operation(err error) string {
 
 func allowed(key string) bool {
 	switch key {
-	case "op", "name", "kind", "duration", "subscriber", "topic", "status", "method":
+	case "op", "name", "kind", "duration", "subscriber", "topic", "status", "method", "panic":
 		return true
 	}
 

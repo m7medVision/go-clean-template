@@ -27,7 +27,7 @@ func Recovery(l *slog.Logger) func(http.Handler) http.Handler {
 					panic(p)
 				}
 
-				l.Error("http panic", "client", clientAddr(r), "method", r.Method, "uri", r.URL.RequestURI(),
+				l.ErrorContext(r.Context(), "http panic", "client", clientAddr(r), "method", r.Method, "uri", r.URL.RequestURI(),
 					"panic", fmt.Sprint(p), "stack", string(debug.Stack()))
 
 				if rec.wroteHeader {

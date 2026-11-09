@@ -11,6 +11,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/sentrylog"
 )
 
 // Caller is who sent a request, as their token says.
@@ -39,6 +40,8 @@ func ReadToken(tokens *jwt.Manager, token string) (Caller, error) {
 }
 
 func WithCaller(ctx context.Context, c Caller) context.Context {
+	sentrylog.SetUser(ctx, c.UserID)
+
 	return context.WithValue(ctx, callerKey{}, c)
 }
 
