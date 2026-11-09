@@ -172,11 +172,11 @@ func TestAUsecaseRegistersItsHandlerAfterTheLastOfItsKind(t *testing.T) {
 	}{
 		{
 			usecaseRequest{domain: "task", name: "archive-task", kind: "command"},
-			"DeleteTaskHandler{Store: d.Store})\n\tcqrs.HandleCommand(cmds, command.ArchiveTaskHandler{Store: d.Store})\n",
+			"SetTaskAttributesHandler{Tasks: d.Tasks, Attributes: d.Attributes})\n\tcqrs.HandleCommand(cmds, command.ArchiveTaskHandler{Store: d.Store})\n",
 		},
 		{
 			usecaseRequest{domain: "task", name: "count-tasks", kind: "query"},
-			"ListAllTasksHandler{Tasks: d.Tasks})\n\tcqrs.HandleQuery(qs, query.CountTasksHandler{Tasks: d.Tasks})\n",
+			"ListAllTasksHandler{Tasks: d.Tasks, Attributes: d.Attributes})\n\tcqrs.HandleQuery(qs, query.CountTasksHandler{Tasks: d.Tasks})\n",
 		},
 		{
 			usecaseRequest{domain: "exchange", name: "count-conversions", kind: "query"},

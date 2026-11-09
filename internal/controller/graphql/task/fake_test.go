@@ -6,6 +6,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -16,6 +17,8 @@ import (
 // is set, and called records that one reached a handler.
 type fakeTask struct {
 	stored     entity.Task
+	attrs      mongotask.Attributes
+	gotPatch   mongotask.AttributesPatch
 	err        error
 	called     bool
 	listStatus *entity.TaskStatus
@@ -32,6 +35,10 @@ func (f *fakeTask) write(change func(t *entity.Task)) (entity.Written, error) {
 	change(&f.stored)
 
 	return entity.Written{ID: f.stored.ID}, nil
+}
+
+func (f *fakeTask) read() mongotask.TaskWithAttributes {
+	return mongotask.TaskWithAttributes{Task: f.stored, Attributes: f.attrs}
 }
 
 func (f *fakeTask) buses() cqrs.Buses {
@@ -58,23 +65,30 @@ func (f *fakeTask) buses() cqrs.Buses {
 			return f.write(func(*entity.Task) {})
 		}))
 
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
-		func(context.Context, query.GetTask) (entity.Task, error) {
+	cqrs.HandleCommand(cmds, cqrs.HandlerFunc[command.SetTaskAttributes, entity.Written](
+		func(_ context.Context, c command.SetTaskAttributes) (entity.Written, error) {
+			f.gotPatch = c.Patch
+
+			return f.write(func(*entity.Task) {})
+		}))
+
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, mongotask.TaskWithAttributes](
+		func(context.Context, query.GetTask) (mongotask.TaskWithAttributes, error) {
 			f.called = true
 
-			return f.stored, f.err
+			return f.read(), f.err
 		}))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, entity.List[entity.Task]](
-		func(_ context.Context, q query.ListTasks) (entity.List[entity.Task], error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListTasks, entity.List[mongotask.TaskWithAttributes]](
+		func(_ context.Context, q query.ListTasks) (entity.List[mongotask.TaskWithAttributes], error) {
 			f.called, f.listStatus = true, q.Status
 
-			return entity.List[entity.Task]{Items: []entity.Task{f.stored}, Total: 1}, f.err
+			return entity.List[mongotask.TaskWithAttributes]{Items: []mongotask.TaskWithAttributes{f.read()}, Total: 1}, f.err
 		}))
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[entity.Task]](
-		func(_ context.Context, q query.ListAllTasks) (entity.List[entity.Task], error) {
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.ListAllTasks, entity.List[mongotask.TaskWithAttributes]](
+		func(_ context.Context, q query.ListAllTasks) (entity.List[mongotask.TaskWithAttributes], error) {
 			f.called, f.listCaller, f.listStatus = true, q.Principal, q.Status
 
-			return entity.List[entity.Task]{Items: []entity.Task{f.stored}, Total: 1}, f.err
+			return entity.List[mongotask.TaskWithAttributes]{Items: []mongotask.TaskWithAttributes{f.read()}, Total: 1}, f.err
 		}))
 
 	return cqrs.Buses{Commands: cmds, Queries: qs}

@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
@@ -21,10 +22,13 @@ type DeleteTask struct {
 
 func (c DeleteTask) ActorID() string { return c.UserID }
 
-// DeleteTaskHandler's Now is the clock (time.Now when nil).
+// DeleteTaskHandler's Now is the clock (time.Now when nil). Attributes are deleted after the task;
+// a failure there is logged, not returned: the task is gone, and an orphan document is unreachable.
 type DeleteTaskHandler struct {
-	Store repo.EventStore
-	Now   func() time.Time
+	Store      repo.EventStore
+	Attributes repo.TaskAttributesStore
+	Logger     *slog.Logger
+	Now        func() time.Time
 }
 
 func (h DeleteTaskHandler) Handle(ctx context.Context, cmd DeleteTask) (entity.Written, error) {
@@ -33,6 +37,10 @@ func (h DeleteTaskHandler) Handle(ctx context.Context, cmd DeleteTask) (entity.W
 	})
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("DeleteTask: %w", err)
+	}
+
+	if err = h.Attributes.Delete(ctx, cmd.TaskID); err != nil {
+		h.Logger.ErrorContext(ctx, "DeleteTask - h.Attributes.Delete", "task", cmd.TaskID, "error", err)
 	}
 
 	return written, nil

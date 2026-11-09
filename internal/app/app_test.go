@@ -11,6 +11,8 @@ import (
 // The worker starts without JWT_SECRET and VALKEY_URL, so config leaves them optional; the app
 // refuses to start without either, or with a TRUSTED_PROXY that is no address, before it opens
 // anything.
+const _mongoURL = "mongodb://localhost:27017/app"
+
 func TestTheAppRefusesToStartWithoutItsSettings(t *testing.T) {
 	t.Parallel()
 
@@ -22,11 +24,12 @@ func TestTheAppRefusesToStartWithoutItsSettings(t *testing.T) {
 		cfg  *config.Config
 		want error
 	}{
-		{"no JWT secret", &config.Config{HTTP: config.HTTP{Port: "8080"}, Valkey: config.Valkey{URL: "valkey://localhost:6379/0"}}, ErrNoJWTSecret},
-		{"no Valkey URL", &config.Config{HTTP: config.HTTP{Port: "8080"}, JWT: config.JWT{Secret: "secret"}}, ErrNoValkeyURL},
+		{"no JWT secret", &config.Config{HTTP: config.HTTP{Port: "8080"}, Valkey: config.Valkey{URL: "valkey://localhost:6379/0"}, Mongo: config.Mongo{URL: _mongoURL}}, ErrNoJWTSecret},
+		{"no Valkey URL", &config.Config{HTTP: config.HTTP{Port: "8080"}, JWT: config.JWT{Secret: "secret"}, Mongo: config.Mongo{URL: _mongoURL}}, ErrNoValkeyURL},
+		{"no Mongo URL", &config.Config{HTTP: config.HTTP{Port: "8080"}, JWT: config.JWT{Secret: "secret"}, Valkey: config.Valkey{URL: "valkey://localhost:6379/0"}}, ErrNoMongoURL},
 		{"a trusted proxy that is no address", &config.Config{
 			HTTP: config.HTTP{Port: "8080", TrustedProxy: "not-an-address"}, JWT: config.JWT{Secret: "secret"},
-			Valkey: config.Valkey{URL: "valkey://localhost:6379/0"},
+			Valkey: config.Valkey{URL: "valkey://localhost:6379/0"}, Mongo: config.Mongo{URL: _mongoURL},
 		}, errBadProxy},
 	}
 

@@ -37,3 +37,17 @@ models:
         value: github.com/m7medvision/go-clean-template/internal/entity.TaskStatusInProgress
       DONE:
         value: github.com/m7medvision/go-clean-template/internal/entity.TaskStatusDone
+  # A task as the API reads it is the event-sourced task plus its attributes from MongoDB.
+  Task:
+    model: github.com/m7medvision/go-clean-template/internal/entity/mongo/task.TaskWithAttributes
+  TaskAttributes:
+    model: github.com/m7medvision/go-clean-template/internal/entity/mongo/task.Attributes
+  TaskPriority:
+    model: github.com/m7medvision/go-clean-template/internal/entity/mongo/task.Priority
+    enum_values:
+      LOW:
+        value: github.com/m7medvision/go-clean-template/internal/entity/mongo/task.PriorityLow
+      MEDIUM:
+        value: github.com/m7medvision/go-clean-template/internal/entity/mongo/task.PriorityMedium
+      HIGH:
+        value: github.com/m7medvision/go-clean-template/internal/entity/mongo/task.PriorityHigh

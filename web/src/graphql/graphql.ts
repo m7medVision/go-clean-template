@@ -9,6 +9,18 @@ export type CreateTaskInput = {
   title: string;
 };
 
+/** A field left out stays as it is; null clears it. */
+export type TaskAttributesInput = {
+  estimate?: number | null | undefined;
+  labels?: Array<string> | null | undefined;
+  priority?: TaskPriority | null | undefined;
+};
+
+export type TaskPriority =
+  | 'HIGH'
+  | 'LOW'
+  | 'MEDIUM';
+
 export type TaskStatus =
   | 'DONE'
   | 'IN_PROGRESS'
@@ -34,7 +46,7 @@ export type TasksQueryVariables = Exact<{
 }>;
 
 
-export type TasksQuery = { tasks: { total: number, tasks: Array<{ id: string, title: string, description: string, status: TaskStatus, createdAt: string, updatedAt: string }> } };
+export type TasksQuery = { tasks: { total: number, tasks: Array<{ id: string, title: string, description: string, status: TaskStatus, createdAt: string, updatedAt: string, attributes: { priority: TaskPriority | null, estimate: number | null, labels: Array<string> | null } }> } };
 
 export type AllTasksQueryVariables = Exact<{
   status?: TaskStatus | null | undefined;
@@ -67,6 +79,14 @@ export type TransitionTaskMutationVariables = Exact<{
 
 
 export type TransitionTaskMutation = { transitionTask: { id: string } };
+
+export type UpdateTaskAttributesMutationVariables = Exact<{
+  id: string | number;
+  input: TaskAttributesInput;
+}>;
+
+
+export type UpdateTaskAttributesMutation = { updateTaskAttributes: { id: string } };
 
 export type DeleteTaskMutationVariables = Exact<{
   id: string | number;
@@ -120,6 +140,11 @@ export const TasksDocument = new TypedDocumentString(`
       status
       createdAt
       updatedAt
+      attributes {
+        priority
+        estimate
+        labels
+      }
     }
   }
 }
@@ -159,6 +184,13 @@ export const TransitionTaskDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<TransitionTaskMutation, TransitionTaskMutationVariables>;
+export const UpdateTaskAttributesDocument = new TypedDocumentString(`
+    mutation UpdateTaskAttributes($id: ID!, $input: TaskAttributesInput!) {
+  updateTaskAttributes(id: $id, input: $input) {
+    id
+  }
+}
+    `) as unknown as TypedDocumentString<UpdateTaskAttributesMutation, UpdateTaskAttributesMutationVariables>;
 export const DeleteTaskDocument = new TypedDocumentString(`
     mutation DeleteTask($id: ID!) {
   deleteTask(id: $id)

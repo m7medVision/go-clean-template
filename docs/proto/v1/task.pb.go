@@ -9,6 +9,7 @@ package v1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	fieldmaskpb "google.golang.org/protobuf/types/known/fieldmaskpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -333,6 +334,126 @@ func (x *DeleteTaskRequest) GetId() string {
 	return ""
 }
 
+type TaskAttributes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Priority      *string                `protobuf:"bytes,1,opt,name=priority,proto3,oneof" json:"priority,omitempty"`
+	Estimate      *float64               `protobuf:"fixed64,2,opt,name=estimate,proto3,oneof" json:"estimate,omitempty"`
+	Labels        []string               `protobuf:"bytes,3,rep,name=labels,proto3" json:"labels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskAttributes) Reset() {
+	*x = TaskAttributes{}
+	mi := &file_docs_proto_v1_task_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskAttributes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskAttributes) ProtoMessage() {}
+
+func (x *TaskAttributes) ProtoReflect() protoreflect.Message {
+	mi := &file_docs_proto_v1_task_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskAttributes.ProtoReflect.Descriptor instead.
+func (*TaskAttributes) Descriptor() ([]byte, []int) {
+	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TaskAttributes) GetPriority() string {
+	if x != nil && x.Priority != nil {
+		return *x.Priority
+	}
+	return ""
+}
+
+func (x *TaskAttributes) GetEstimate() float64 {
+	if x != nil && x.Estimate != nil {
+		return *x.Estimate
+	}
+	return 0
+}
+
+func (x *TaskAttributes) GetLabels() []string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+type UpdateTaskAttributesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Attributes    *TaskAttributes        `protobuf:"bytes,2,opt,name=attributes,proto3" json:"attributes,omitempty"`
+	UpdateMask    *fieldmaskpb.FieldMask `protobuf:"bytes,3,opt,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateTaskAttributesRequest) Reset() {
+	*x = UpdateTaskAttributesRequest{}
+	mi := &file_docs_proto_v1_task_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateTaskAttributesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateTaskAttributesRequest) ProtoMessage() {}
+
+func (x *UpdateTaskAttributesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_docs_proto_v1_task_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateTaskAttributesRequest.ProtoReflect.Descriptor instead.
+func (*UpdateTaskAttributesRequest) Descriptor() ([]byte, []int) {
+	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UpdateTaskAttributesRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateTaskAttributesRequest) GetAttributes() *TaskAttributes {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
+func (x *UpdateTaskAttributesRequest) GetUpdateMask() *fieldmaskpb.FieldMask {
+	if x != nil {
+		return x.UpdateMask
+	}
+	return nil
+}
+
 type TaskResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -342,13 +463,14 @@ type TaskResponse struct {
 	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
 	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     string                 `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Attributes    *TaskAttributes        `protobuf:"bytes,8,opt,name=attributes,proto3" json:"attributes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TaskResponse) Reset() {
 	*x = TaskResponse{}
-	mi := &file_docs_proto_v1_task_proto_msgTypes[6]
+	mi := &file_docs_proto_v1_task_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +482,7 @@ func (x *TaskResponse) String() string {
 func (*TaskResponse) ProtoMessage() {}
 
 func (x *TaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_docs_proto_v1_task_proto_msgTypes[6]
+	mi := &file_docs_proto_v1_task_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +495,7 @@ func (x *TaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResponse.ProtoReflect.Descriptor instead.
 func (*TaskResponse) Descriptor() ([]byte, []int) {
-	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{6}
+	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TaskResponse) GetId() string {
@@ -425,6 +547,13 @@ func (x *TaskResponse) GetUpdatedAt() string {
 	return ""
 }
 
+func (x *TaskResponse) GetAttributes() *TaskAttributes {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
 type ListTasksResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tasks         []*TaskResponse        `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
@@ -435,7 +564,7 @@ type ListTasksResponse struct {
 
 func (x *ListTasksResponse) Reset() {
 	*x = ListTasksResponse{}
-	mi := &file_docs_proto_v1_task_proto_msgTypes[7]
+	mi := &file_docs_proto_v1_task_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -447,7 +576,7 @@ func (x *ListTasksResponse) String() string {
 func (*ListTasksResponse) ProtoMessage() {}
 
 func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_docs_proto_v1_task_proto_msgTypes[7]
+	mi := &file_docs_proto_v1_task_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -460,7 +589,7 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListTasksResponse) Descriptor() ([]byte, []int) {
-	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{7}
+	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListTasksResponse) GetTasks() []*TaskResponse {
@@ -485,7 +614,7 @@ type DeleteTaskResponse struct {
 
 func (x *DeleteTaskResponse) Reset() {
 	*x = DeleteTaskResponse{}
-	mi := &file_docs_proto_v1_task_proto_msgTypes[8]
+	mi := &file_docs_proto_v1_task_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -497,7 +626,7 @@ func (x *DeleteTaskResponse) String() string {
 func (*DeleteTaskResponse) ProtoMessage() {}
 
 func (x *DeleteTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_docs_proto_v1_task_proto_msgTypes[8]
+	mi := &file_docs_proto_v1_task_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -510,14 +639,14 @@ func (x *DeleteTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTaskResponse.ProtoReflect.Descriptor instead.
 func (*DeleteTaskResponse) Descriptor() ([]byte, []int) {
-	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{8}
+	return file_docs_proto_v1_task_proto_rawDescGZIP(), []int{10}
 }
 
 var File_docs_proto_v1_task_proto protoreflect.FileDescriptor
 
 const file_docs_proto_v1_task_proto_rawDesc = "" +
 	"\n" +
-	"\x18docs/proto/v1/task.proto\x12\agrpc.v1\"K\n" +
+	"\x18docs/proto/v1/task.proto\x12\agrpc.v1\x1a google/protobuf/field_mask.proto\"K\n" +
 	"\x11CreateTaskRequest\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\" \n" +
@@ -535,7 +664,20 @@ const file_docs_proto_v1_task_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"#\n" +
 	"\x11DeleteTaskRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xc5\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x84\x01\n" +
+	"\x0eTaskAttributes\x12\x1f\n" +
+	"\bpriority\x18\x01 \x01(\tH\x00R\bpriority\x88\x01\x01\x12\x1f\n" +
+	"\bestimate\x18\x02 \x01(\x01H\x01R\bestimate\x88\x01\x01\x12\x16\n" +
+	"\x06labels\x18\x03 \x03(\tR\x06labelsB\v\n" +
+	"\t_priorityB\v\n" +
+	"\t_estimate\"\xa3\x01\n" +
+	"\x1bUpdateTaskAttributesRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x127\n" +
+	"\n" +
+	"attributes\x18\x02 \x01(\v2\x17.grpc.v1.TaskAttributesR\n" +
+	"attributes\x12;\n" +
+	"\vupdate_mask\x18\x03 \x01(\v2\x1a.google.protobuf.FieldMaskR\n" +
+	"updateMask\"\xfe\x01\n" +
 	"\fTaskResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +
@@ -545,11 +687,14 @@ const file_docs_proto_v1_task_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x06 \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\tR\tupdatedAt\"V\n" +
+	"updated_at\x18\a \x01(\tR\tupdatedAt\x127\n" +
+	"\n" +
+	"attributes\x18\b \x01(\v2\x17.grpc.v1.TaskAttributesR\n" +
+	"attributes\"V\n" +
 	"\x11ListTasksResponse\x12+\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x15.grpc.v1.TaskResponseR\x05tasks\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"\x14\n" +
-	"\x12DeleteTaskResponse2\xe5\x03\n" +
+	"\x12DeleteTaskResponse2\xba\x04\n" +
 	"\vTaskService\x12?\n" +
 	"\n" +
 	"CreateTask\x12\x1a.grpc.v1.CreateTaskRequest\x1a\x15.grpc.v1.TaskResponse\x129\n" +
@@ -560,7 +705,8 @@ const file_docs_proto_v1_task_proto_rawDesc = "" +
 	"UpdateTask\x12\x1a.grpc.v1.UpdateTaskRequest\x1a\x15.grpc.v1.TaskResponse\x12G\n" +
 	"\x0eTransitionTask\x12\x1e.grpc.v1.TransitionTaskRequest\x1a\x15.grpc.v1.TaskResponse\x12E\n" +
 	"\n" +
-	"DeleteTask\x12\x1a.grpc.v1.DeleteTaskRequest\x1a\x1b.grpc.v1.DeleteTaskResponseB\x0fZ\rdocs/proto/v1b\x06proto3"
+	"DeleteTask\x12\x1a.grpc.v1.DeleteTaskRequest\x1a\x1b.grpc.v1.DeleteTaskResponse\x12S\n" +
+	"\x14UpdateTaskAttributes\x12$.grpc.v1.UpdateTaskAttributesRequest\x1a\x15.grpc.v1.TaskResponseB\x0fZ\rdocs/proto/v1b\x06proto3"
 
 var (
 	file_docs_proto_v1_task_proto_rawDescOnce sync.Once
@@ -574,39 +720,47 @@ func file_docs_proto_v1_task_proto_rawDescGZIP() []byte {
 	return file_docs_proto_v1_task_proto_rawDescData
 }
 
-var file_docs_proto_v1_task_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_docs_proto_v1_task_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_docs_proto_v1_task_proto_goTypes = []any{
-	(*CreateTaskRequest)(nil),     // 0: grpc.v1.CreateTaskRequest
-	(*GetTaskRequest)(nil),        // 1: grpc.v1.GetTaskRequest
-	(*ListTasksRequest)(nil),      // 2: grpc.v1.ListTasksRequest
-	(*UpdateTaskRequest)(nil),     // 3: grpc.v1.UpdateTaskRequest
-	(*TransitionTaskRequest)(nil), // 4: grpc.v1.TransitionTaskRequest
-	(*DeleteTaskRequest)(nil),     // 5: grpc.v1.DeleteTaskRequest
-	(*TaskResponse)(nil),          // 6: grpc.v1.TaskResponse
-	(*ListTasksResponse)(nil),     // 7: grpc.v1.ListTasksResponse
-	(*DeleteTaskResponse)(nil),    // 8: grpc.v1.DeleteTaskResponse
+	(*CreateTaskRequest)(nil),           // 0: grpc.v1.CreateTaskRequest
+	(*GetTaskRequest)(nil),              // 1: grpc.v1.GetTaskRequest
+	(*ListTasksRequest)(nil),            // 2: grpc.v1.ListTasksRequest
+	(*UpdateTaskRequest)(nil),           // 3: grpc.v1.UpdateTaskRequest
+	(*TransitionTaskRequest)(nil),       // 4: grpc.v1.TransitionTaskRequest
+	(*DeleteTaskRequest)(nil),           // 5: grpc.v1.DeleteTaskRequest
+	(*TaskAttributes)(nil),              // 6: grpc.v1.TaskAttributes
+	(*UpdateTaskAttributesRequest)(nil), // 7: grpc.v1.UpdateTaskAttributesRequest
+	(*TaskResponse)(nil),                // 8: grpc.v1.TaskResponse
+	(*ListTasksResponse)(nil),           // 9: grpc.v1.ListTasksResponse
+	(*DeleteTaskResponse)(nil),          // 10: grpc.v1.DeleteTaskResponse
+	(*fieldmaskpb.FieldMask)(nil),       // 11: google.protobuf.FieldMask
 }
 var file_docs_proto_v1_task_proto_depIdxs = []int32{
-	6, // 0: grpc.v1.ListTasksResponse.tasks:type_name -> grpc.v1.TaskResponse
-	0, // 1: grpc.v1.TaskService.CreateTask:input_type -> grpc.v1.CreateTaskRequest
-	1, // 2: grpc.v1.TaskService.GetTask:input_type -> grpc.v1.GetTaskRequest
-	2, // 3: grpc.v1.TaskService.ListTasks:input_type -> grpc.v1.ListTasksRequest
-	2, // 4: grpc.v1.TaskService.ListAllTasks:input_type -> grpc.v1.ListTasksRequest
-	3, // 5: grpc.v1.TaskService.UpdateTask:input_type -> grpc.v1.UpdateTaskRequest
-	4, // 6: grpc.v1.TaskService.TransitionTask:input_type -> grpc.v1.TransitionTaskRequest
-	5, // 7: grpc.v1.TaskService.DeleteTask:input_type -> grpc.v1.DeleteTaskRequest
-	6, // 8: grpc.v1.TaskService.CreateTask:output_type -> grpc.v1.TaskResponse
-	6, // 9: grpc.v1.TaskService.GetTask:output_type -> grpc.v1.TaskResponse
-	7, // 10: grpc.v1.TaskService.ListTasks:output_type -> grpc.v1.ListTasksResponse
-	7, // 11: grpc.v1.TaskService.ListAllTasks:output_type -> grpc.v1.ListTasksResponse
-	6, // 12: grpc.v1.TaskService.UpdateTask:output_type -> grpc.v1.TaskResponse
-	6, // 13: grpc.v1.TaskService.TransitionTask:output_type -> grpc.v1.TaskResponse
-	8, // 14: grpc.v1.TaskService.DeleteTask:output_type -> grpc.v1.DeleteTaskResponse
-	8, // [8:15] is the sub-list for method output_type
-	1, // [1:8] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	6,  // 0: grpc.v1.UpdateTaskAttributesRequest.attributes:type_name -> grpc.v1.TaskAttributes
+	11, // 1: grpc.v1.UpdateTaskAttributesRequest.update_mask:type_name -> google.protobuf.FieldMask
+	6,  // 2: grpc.v1.TaskResponse.attributes:type_name -> grpc.v1.TaskAttributes
+	8,  // 3: grpc.v1.ListTasksResponse.tasks:type_name -> grpc.v1.TaskResponse
+	0,  // 4: grpc.v1.TaskService.CreateTask:input_type -> grpc.v1.CreateTaskRequest
+	1,  // 5: grpc.v1.TaskService.GetTask:input_type -> grpc.v1.GetTaskRequest
+	2,  // 6: grpc.v1.TaskService.ListTasks:input_type -> grpc.v1.ListTasksRequest
+	2,  // 7: grpc.v1.TaskService.ListAllTasks:input_type -> grpc.v1.ListTasksRequest
+	3,  // 8: grpc.v1.TaskService.UpdateTask:input_type -> grpc.v1.UpdateTaskRequest
+	4,  // 9: grpc.v1.TaskService.TransitionTask:input_type -> grpc.v1.TransitionTaskRequest
+	5,  // 10: grpc.v1.TaskService.DeleteTask:input_type -> grpc.v1.DeleteTaskRequest
+	7,  // 11: grpc.v1.TaskService.UpdateTaskAttributes:input_type -> grpc.v1.UpdateTaskAttributesRequest
+	8,  // 12: grpc.v1.TaskService.CreateTask:output_type -> grpc.v1.TaskResponse
+	8,  // 13: grpc.v1.TaskService.GetTask:output_type -> grpc.v1.TaskResponse
+	9,  // 14: grpc.v1.TaskService.ListTasks:output_type -> grpc.v1.ListTasksResponse
+	9,  // 15: grpc.v1.TaskService.ListAllTasks:output_type -> grpc.v1.ListTasksResponse
+	8,  // 16: grpc.v1.TaskService.UpdateTask:output_type -> grpc.v1.TaskResponse
+	8,  // 17: grpc.v1.TaskService.TransitionTask:output_type -> grpc.v1.TaskResponse
+	10, // 18: grpc.v1.TaskService.DeleteTask:output_type -> grpc.v1.DeleteTaskResponse
+	8,  // 19: grpc.v1.TaskService.UpdateTaskAttributes:output_type -> grpc.v1.TaskResponse
+	12, // [12:20] is the sub-list for method output_type
+	4,  // [4:12] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_docs_proto_v1_task_proto_init() }
@@ -614,13 +768,14 @@ func file_docs_proto_v1_task_proto_init() {
 	if File_docs_proto_v1_task_proto != nil {
 		return
 	}
+	file_docs_proto_v1_task_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_docs_proto_v1_task_proto_rawDesc), len(file_docs_proto_v1_task_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

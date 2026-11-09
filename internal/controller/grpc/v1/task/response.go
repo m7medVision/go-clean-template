@@ -3,11 +3,12 @@ package task
 import (
 	v1 "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	"github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/response"
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 )
 
-func NewTaskResponse(task *entity.Task) *v1.TaskResponse {
+func NewTaskResponse(task *mongotask.TaskWithAttributes) *v1.TaskResponse {
 	return &v1.TaskResponse{
+		Attributes:  newAttributes(task.Attributes),
 		Id:          task.ID,
 		UserId:      task.UserID,
 		Title:       task.Title,
@@ -18,7 +19,17 @@ func NewTaskResponse(task *entity.Task) *v1.TaskResponse {
 	}
 }
 
-func NewListTasksResponse(tasks []entity.Task, total int) *v1.ListTasksResponse {
+func newAttributes(a mongotask.Attributes) *v1.TaskAttributes {
+	out := &v1.TaskAttributes{Estimate: a.Estimate, Labels: a.Labels}
+	if a.Priority != nil {
+		p := string(*a.Priority)
+		out.Priority = &p
+	}
+
+	return out
+}
+
+func NewListTasksResponse(tasks []mongotask.TaskWithAttributes, total int) *v1.ListTasksResponse {
 	pbTasks := make([]*v1.TaskResponse, len(tasks))
 	for i := range tasks {
 		pbTasks[i] = NewTaskResponse(&tasks[i])

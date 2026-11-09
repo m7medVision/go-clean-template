@@ -25,6 +25,7 @@ services:
       dockerfile: integration-test/Dockerfile
     environment:
       VALKEY_URL: "valkey://valkey:6379/0"
+      MONGO_URL: "mongodb://user:mongoPa55w0rd@mongo:27017/app?authSource=admin"
       NATS_URL: "nats://nats:4222"
       # Read by queue_test.go to check what the worker consumed.
       PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db?sslmode=disable"

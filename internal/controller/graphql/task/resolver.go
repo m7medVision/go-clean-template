@@ -9,6 +9,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/gqlerr"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 )
@@ -28,7 +29,7 @@ func New(b cqrs.Buses, l *slog.Logger) (Query, Mutation) {
 	return Query{qs: b.Queries, l: l}, Mutation{cmds: b.Commands, qs: b.Queries, l: l}
 }
 
-func page[L cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, q Query, list L, op string) (*model.TaskList, error) {
+func page[L cqrs.QueryOf[entity.List[mongotask.TaskWithAttributes]]](ctx context.Context, q Query, list L, op string) (*model.TaskList, error) {
 	p, err := cqrs.SendQuery(ctx, q.qs, list)
 	if err != nil {
 		return nil, gqlerr.Map(ctx, q.l, err, op)
@@ -38,7 +39,7 @@ func page[L cqrs.QueryOf[entity.List[entity.Task]]](ctx context.Context, q Query
 }
 
 // result reads back the task a mutation wrote, as its answer.
-func (m Mutation) result(ctx context.Context, userID, taskID, op string) (*entity.Task, error) {
+func (m Mutation) result(ctx context.Context, userID, taskID, op string) (*mongotask.TaskWithAttributes, error) {
 	task, err := cqrs.SendQuery(ctx, m.qs, query.GetTask{UserID: userID, TaskID: taskID})
 	if err != nil {
 		return nil, gqlerr.Map(ctx, m.l, err, op)

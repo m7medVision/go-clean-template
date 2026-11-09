@@ -46,10 +46,11 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateTask     func(childComplexity int, input model.CreateTaskInput) int
-		DeleteTask     func(childComplexity int, id string) int
-		TransitionTask func(childComplexity int, id string, status entity.TaskStatus) int
-		UpdateTask     func(childComplexity int, id string, input model.UpdateTaskInput) int
+		CreateTask           func(childComplexity int, input model.CreateTaskInput) int
+		DeleteTask           func(childComplexity int, id string) int
+		TransitionTask       func(childComplexity int, id string, status entity.TaskStatus) int
+		UpdateTask           func(childComplexity int, id string, input model.UpdateTaskInput) int
+		UpdateTaskAttributes func(childComplexity int, id string, input model.TaskAttributesInput) int
 	}
 
 	Query struct {
@@ -60,6 +61,7 @@ type ComplexityRoot struct {
 	}
 
 	Task struct {
+		Attributes  func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
 		Description func(childComplexity int) int
 		ID          func(childComplexity int) int
@@ -67,6 +69,12 @@ type ComplexityRoot struct {
 		Title       func(childComplexity int) int
 		UpdatedAt   func(childComplexity int) int
 		UserID      func(childComplexity int) int
+	}
+
+	TaskAttributes struct {
+		Estimate func(childComplexity int) int
+		Labels   func(childComplexity int) int
+		Priority func(childComplexity int) int
 	}
 
 	TaskList struct {
@@ -183,6 +191,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateTask(childComplexity, args["id"].(string), args["input"].(model.UpdateTaskInput)), true
+	case "Mutation.updateTaskAttributes":
+		if e.ComplexityRoot.Mutation.UpdateTaskAttributes == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateTaskAttributes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateTaskAttributes(childComplexity, args["id"].(string), args["input"].(model.TaskAttributesInput)), true
 
 	case "Query.allTasks":
 		if e.ComplexityRoot.Query.AllTasks == nil {
@@ -230,6 +249,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.Tasks(childComplexity, args["status"].(*entity.TaskStatus), args["limit"].(int), args["offset"].(int)), true
 
+	case "Task.attributes":
+		if e.ComplexityRoot.Task.Attributes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Attributes(childComplexity), true
 	case "Task.createdAt":
 		if e.ComplexityRoot.Task.CreatedAt == nil {
 			break
@@ -273,6 +298,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Task.UserID(childComplexity), true
 
+	case "TaskAttributes.estimate":
+		if e.ComplexityRoot.TaskAttributes.Estimate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskAttributes.Estimate(childComplexity), true
+	case "TaskAttributes.labels":
+		if e.ComplexityRoot.TaskAttributes.Labels == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskAttributes.Labels(childComplexity), true
+	case "TaskAttributes.priority":
+		if e.ComplexityRoot.TaskAttributes.Priority == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TaskAttributes.Priority(childComplexity), true
+
 	case "TaskList.tasks":
 		if e.ComplexityRoot.TaskList.Tasks == nil {
 			break
@@ -296,6 +340,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalers := func() *graphql.InputUnmarshalerIndex {
 		return graphql.NewInputUnmarshalerIndex(
 			graphql.NewInputUnmarshaler("CreateTaskInput", ec.unmarshalInputCreateTaskInput),
+			graphql.NewInputUnmarshaler("TaskAttributesInput", ec.unmarshalInputTaskAttributesInput),
 			graphql.NewInputUnmarshaler("UpdateTaskInput", ec.unmarshalInputUpdateTaskInput),
 		)
 	}
@@ -432,9 +477,19 @@ type Task {
   status: TaskStatus!
   createdAt: Time!
   updatedAt: Time!
+  attributes: TaskAttributes!
 }
 
 type TaskList { tasks: [Task!]!  total: Int! }
+
+enum TaskPriority { LOW MEDIUM HIGH }
+
+type TaskAttributes {
+  priority: TaskPriority
+  "In hours."
+  estimate: Float
+  labels: [String!]
+}
 `, BuiltIn: false},
 	{Name: "../schema/tasks.graphqls", Input: `extend type Query {
   tasks(status: TaskStatus, limit: Int! = 10, offset: Int! = 0): TaskList!
@@ -448,6 +503,19 @@ type TaskList { tasks: [Task!]!  total: Int! }
 
 extend type Mutation {
   updateTask(id: ID!, input: UpdateTaskInput!): Task!
+}
+`, BuiltIn: false},
+	{Name: "../schema/update_task_attributes.graphqls", Input: `directive @goField(forceResolver: Boolean, name: String, omittable: Boolean) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+
+"A field left out stays as it is; null clears it."
+input TaskAttributesInput {
+  priority: TaskPriority @goField(omittable: true)
+  estimate: Float @goField(omittable: true)
+  labels: [String!] @goField(omittable: true)
+}
+
+extend type Mutation {
+  updateTaskAttributes(id: ID!, input: TaskAttributesInput!): Task!
 }
 `, BuiltIn: false},
 }
@@ -501,8 +569,22 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_createdAt(ctx, field)
 	case "updatedAt":
 		return ec.fieldContext_Task_updatedAt(ctx, field)
+	case "attributes":
+		return ec.fieldContext_Task_attributes(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Task", field.Name)
+}
+
+func (ec *executionContext) childFields_TaskAttributes(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "priority":
+		return ec.fieldContext_TaskAttributes_priority(ctx, field)
+	case "estimate":
+		return ec.fieldContext_TaskAttributes_estimate(ctx, field)
+	case "labels":
+		return ec.fieldContext_TaskAttributes_labels(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TaskAttributes", field.Name)
 }
 
 func (ec *executionContext) childFields_TaskList(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {

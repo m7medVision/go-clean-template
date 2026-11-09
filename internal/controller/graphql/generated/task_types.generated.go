@@ -12,6 +12,7 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/model"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	"github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -25,7 +26,7 @@ import (
 
 // region    **************************** field.gotpl *****************************
 
-func (ec *executionContext) _Task_id(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_id(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -48,7 +49,7 @@ func (ec *executionContext) fieldContext_Task_id(_ context.Context, field graphq
 	return graphql.NewScalarFieldContext("Task", field, false, false, "ID")
 }
 
-func (ec *executionContext) _Task_userId(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_userId(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -71,7 +72,7 @@ func (ec *executionContext) fieldContext_Task_userId(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("Task", field, false, false, "ID")
 }
 
-func (ec *executionContext) _Task_title(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_title(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -94,7 +95,7 @@ func (ec *executionContext) fieldContext_Task_title(_ context.Context, field gra
 	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
 }
 
-func (ec *executionContext) _Task_description(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_description(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -117,7 +118,7 @@ func (ec *executionContext) fieldContext_Task_description(_ context.Context, fie
 	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
 }
 
-func (ec *executionContext) _Task_status(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_status(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -140,7 +141,7 @@ func (ec *executionContext) fieldContext_Task_status(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("Task", field, false, false, "TaskStatus")
 }
 
-func (ec *executionContext) _Task_createdAt(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_createdAt(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -163,7 +164,7 @@ func (ec *executionContext) fieldContext_Task_createdAt(_ context.Context, field
 	return graphql.NewScalarFieldContext("Task", field, false, false, "Time")
 }
 
-func (ec *executionContext) _Task_updatedAt(ctx context.Context, field graphql.CollectedField, obj *entity.Task) (ret graphql.Marshaler) {
+func (ec *executionContext) _Task_updatedAt(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
@@ -186,6 +187,107 @@ func (ec *executionContext) fieldContext_Task_updatedAt(_ context.Context, field
 	return graphql.NewScalarFieldContext("Task", field, false, false, "Time")
 }
 
+func (ec *executionContext) _Task_attributes(ctx context.Context, field graphql.CollectedField, obj *task.TaskWithAttributes) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_attributes(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Attributes, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v task.Attributes) graphql.Marshaler {
+			return ec.marshalNTaskAttributes2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐAttributes(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_attributes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Task",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TaskAttributes(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TaskAttributes_priority(ctx context.Context, field graphql.CollectedField, obj *task.Attributes) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskAttributes_priority(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Priority, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *task.Priority) graphql.Marshaler {
+			return ec.marshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TaskAttributes_priority(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskAttributes", field, false, false, "TaskPriority")
+}
+
+func (ec *executionContext) _TaskAttributes_estimate(ctx context.Context, field graphql.CollectedField, obj *task.Attributes) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskAttributes_estimate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Estimate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *float64) graphql.Marshaler {
+			return ec.marshalOFloat2ᚖfloat64(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TaskAttributes_estimate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskAttributes", field, false, false, "Float")
+}
+
+func (ec *executionContext) _TaskAttributes_labels(ctx context.Context, field graphql.CollectedField, obj *task.Attributes) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TaskAttributes_labels(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Labels, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TaskAttributes_labels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TaskAttributes", field, false, false, "String")
+}
+
 func (ec *executionContext) _TaskList_tasks(ctx context.Context, field graphql.CollectedField, obj *model.TaskList) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -198,8 +300,8 @@ func (ec *executionContext) _TaskList_tasks(ctx context.Context, field graphql.C
 			return obj.Tasks, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v []entity.Task) graphql.Marshaler {
-			return ec.marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskᚄ(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v []task.TaskWithAttributes) graphql.Marshaler {
+			return ec.marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributesᚄ(ctx, selections, v)
 		},
 		true,
 		true,
@@ -255,7 +357,7 @@ func (ec *executionContext) fieldContext_TaskList_total(_ context.Context, field
 
 var taskImplementors = []string{"Task"}
 
-func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj *entity.Task) graphql.Marshaler {
+func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj *task.TaskWithAttributes) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, taskImplementors)
 
 	out := graphql.NewFieldSet(fields)
@@ -297,6 +399,54 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 		case "updatedAt":
 			out.Values[i] = ec._Task_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attributes":
+			out.Values[i] = ec._Task_attributes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var taskAttributesImplementors = []string{"TaskAttributes"}
+
+func (ec *executionContext) _TaskAttributes(ctx context.Context, sel ast.SelectionSet, obj *task.Attributes) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, taskAttributesImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TaskAttributes")
+		case "priority":
+			out.Values[i] = ec._TaskAttributes_priority(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "estimate":
+			out.Values[i] = ec._TaskAttributes_estimate(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "labels":
+			out.Values[i] = ec._TaskAttributes_labels(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -358,15 +508,15 @@ func (ec *executionContext) _TaskList(ctx context.Context, sel ast.SelectionSet,
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) marshalNTask2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx context.Context, sel ast.SelectionSet, v entity.Task) graphql.Marshaler {
+func (ec *executionContext) marshalNTask2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx context.Context, sel ast.SelectionSet, v task.TaskWithAttributes) graphql.Marshaler {
 	return ec._Task(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTaskᚄ(ctx context.Context, sel ast.SelectionSet, v []entity.Task) graphql.Marshaler {
+func (ec *executionContext) marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributesᚄ(ctx context.Context, sel ast.SelectionSet, v []task.TaskWithAttributes) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
 		fc.Result = &v[i]
-		return ec.marshalNTask2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx, sel, v[i])
+		return ec.marshalNTask2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx, sel, v[i])
 	})
 
 	for _, e := range ret {
@@ -378,12 +528,16 @@ func (ec *executionContext) marshalNTask2ᚕgithubᚗcomᚋm7medvisionᚋgoᚑcl
 	return ret
 }
 
-func (ec *executionContext) marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐTask(ctx context.Context, sel ast.SelectionSet, v *entity.Task) graphql.Marshaler {
+func (ec *executionContext) marshalNTask2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐTaskWithAttributes(ctx context.Context, sel ast.SelectionSet, v *task.TaskWithAttributes) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "Task!")
 		return graphql.Null
 	}
 	return ec._Task(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNTaskAttributes2githubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐAttributes(ctx context.Context, sel ast.SelectionSet, v task.Attributes) graphql.Marshaler {
+	return ec._TaskAttributes(ctx, sel, &v)
 }
 
 func (ec *executionContext) marshalNTaskList2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋcontrollerᚋgraphqlᚋmodelᚐTaskList(ctx context.Context, sel ast.SelectionSet, v *model.TaskList) graphql.Marshaler {
@@ -419,6 +573,38 @@ var (
 		entity.TaskStatusTodo:       "TODO",
 		entity.TaskStatusInProgress: "IN_PROGRESS",
 		entity.TaskStatusDone:       "DONE",
+	}
+)
+
+func (ec *executionContext) unmarshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority(ctx context.Context, v any) (*task.Priority, error) {
+	if v == nil {
+		return nil, nil
+	}
+	tmp, err := graphql.UnmarshalString(v)
+	res := unmarshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority[tmp]
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority(ctx context.Context, sel ast.SelectionSet, v *task.Priority) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalString(marshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority[*v])
+	return res
+}
+
+var (
+	unmarshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority = map[string]task.Priority{
+		"LOW":    task.PriorityLow,
+		"MEDIUM": task.PriorityMedium,
+		"HIGH":   task.PriorityHigh,
+	}
+	marshalOTaskPriority2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚋmongoᚋtaskᚐPriority = map[task.Priority]string{
+		task.PriorityLow:    "LOW",
+		task.PriorityMedium: "MEDIUM",
+		task.PriorityHigh:   "HIGH",
 	}
 )
 

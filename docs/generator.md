@@ -414,3 +414,9 @@ renamed helper, a different test shape) belongs in the matching template under
 generator edits: the three in the table above, and the domain files `new-usecase` edits
 (`register.go`, the REST `controller.go`, the `.proto` file). Then `make gen-e2e` must pass. Code that still compiles but no longer looks like `task` is the drift the
 e2e job cannot see, so the template is updated in the same change.
+
+**One part of `task` is not copied: its attributes.** `make new-domain` never writes a MongoDB
+store. The templates keep the `task` files as they were before attributes: no
+`SetTaskAttributes`, no attributes in the queries, the read shapes or the transports, and no
+`internal/entity/mongo` or `internal/repo/mongo` package. A domain that needs documents adds them
+by hand, as `task` did.

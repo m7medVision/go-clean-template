@@ -1,0 +1,12 @@
+directive @goField(forceResolver: Boolean, name: String, omittable: Boolean) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+
+"A field left out stays as it is; null clears it."
+input TaskAttributesInput {
+  priority: TaskPriority @goField(omittable: true)
+  estimate: Float @goField(omittable: true)
+  labels: [String!] @goField(omittable: true)
+}
+
+extend type Mutation {
+  updateTaskAttributes(id: ID!, input: TaskAttributesInput!): Task!
+}

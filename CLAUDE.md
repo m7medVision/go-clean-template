@@ -12,8 +12,8 @@ transports:
 A second binary, `cmd/worker`, runs the projections that keep the read models up to date and
 consumes topics on NATS JetStream through Watermill (`pkg/broker`); see **CQRS and event sourcing** and
 **Queue and worker** below. The app needs it running: every write waits for the projections.
-The app also needs Valkey (`VALKEY_URL`) and refuses to start without one; the worker needs NATS
-(`NATS_URL`) and refuses to start without it.
+The app also needs Valkey (`VALKEY_URL`) and MongoDB (`MONGO_URL`), and refuses to start without
+either; the worker needs NATS (`NATS_URL`) and refuses to start without it.
 Module path: `github.com/m7medvision/go-clean-template`. The Go version is declared in `go.mod`.
 A React client (TanStack Router + Query, built with Vite+) lives in `web/`; see **Frontend** below.
 
@@ -43,7 +43,7 @@ different settings than CI. Use the target, not the tool.
 | Regenerate GraphQL | `make graphql` | `go tool gqlgen ...` — `gqlgen.yml` paths resolve against the working directory, so the target runs gqlgen from the config's directory |
 | Tidy / verify modules | `make deps` | `go mod tidy` |
 | Vulnerability scan | `make deps-audit` | `govulncheck ./...` |
-| Start dependencies (Postgres, Valkey) | `make compose-up` | `docker compose up` |
+| Start dependencies (Postgres, Valkey, MongoDB) | `make compose-up` | `docker compose up` |
 | Start the whole stack including the app | `make compose-up-all` | `docker compose up` |
 | Tear down | `make compose-down` | `docker compose down` |
 | Run the app locally | `make run` | `go run ./cmd/app` — the target regenerates docs and builds with `-tags migrate` |
@@ -120,7 +120,7 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   (the middleware around every HTTP request: client address, log, tracing, metrics, recovery),
   which REST's `Auth` borrows its problem writer from; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, migrate, valkey,
-  tracing, clientip).
+  mongo, tracing, clientip).
   Logging is `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
@@ -154,6 +154,7 @@ Decide by asking what the code knows about:
 | a concern every message shares (auth, retry, logging) | `internal/usecase/behavior` (app rules) or `pkg/cqrs` (generic) | a `cqrs.Step`, added in `newBuses` |
 | SQL text | `internal/repo/persistent/queries/<domain>.sql` | an sqlc-annotated query, then `make sqlc` |
 | a read-model table, a driver error code | `internal/repo/persistent/<domain>/<domain>.go` | read-model method calling the generated query |
+| a document kept in MongoDB instead of Postgres | `internal/entity/mongo/<domain>/` (its types and rules), `internal/repo/mongo/<domain>/` (the store) | a port in `internal/repo/<domain>.go`, written directly by a command with no event (task attributes) |
 | how events change a read-model table | `internal/repo/persistent/<domain>/projector.go` | `NewProjector` returning `projection.NewProjector(name, tables, handles, pg, project)`, one case per event in the unexported `project`; returned by its module's `projector` |
 | rows a domain wrote before it stored events | `internal/repo/persistent/<domain>/importer.go` | `*Imported` events, returned by its module's `importer` (`internal/app/<domain>.go`) |
 | an outbound HTTP API | `internal/repo/webapi/<name>.go` | method on the webapi struct |
@@ -300,7 +301,8 @@ buses; then, on the app's buses only, limit (the sign-in limit, for a `behavior.
 (`Validate()`). The worker's buses have no limit step. A handler carries none of these. A message
 type with no registered handler is `cqrs.ErrNoHandler` at the first send, so a new message needs
 its line in `register.go`. Below the buses, otelpgx traces every SQL statement, otelhttp every
-outbound call and valkeyotel every Valkey command, so repositories carry no tracing code: a span
+outbound call, valkeyotel every Valkey command and `pkg/mongo`'s command monitor every Mongo
+command, so repositories carry no tracing code: a span
 per message, then one per statement, request or command.
 
 **Events are forever.** A stored event is never rewritten. Changing an event's shape means raising
@@ -317,6 +319,9 @@ usernames, SSO identities) is a claim saved with the events, not a unique index 
 A read model returns a record by its ID, whoever owns it; the query handler then asks the record's
 `ReadableBy(userID)` (another user's task is `ErrTaskForbidden`, passkey `ErrPasskeyNotFound`,
 conversion `ErrConversionNotFound`), never the SQL. The task aggregate changes a task by that rule.
+The one exception is a task's attributes (`internal/entity/mongo/task`, stored in MongoDB by
+`internal/repo/mongo/task`): `SetTaskAttributes` writes them directly, with no event, and the task
+queries merge them in (`docs/cqrs.md`).
 
 **Mocks are generated, not written.** Each file in `internal/repo/repomock/` comes from the
 `go:generate` directive of the contract file it is named after (`repo/task.go` →
@@ -345,7 +350,7 @@ reads, never `*config.Config`; no controller imports `config`. Defaults are writ
 from it, as `worker.Settings(cfg.Worker)`). A new
 setting needs the struct field, an entry in `.env.example`, and — if the container needs it — the
 `environment` block in `docker-compose.yml`. Fields tagged `required` make the app fail at
-startup. A setting only the app needs (`JWT_SECRET`, `VALKEY_URL`) carries no `required` tag,
+startup. A setting only the app needs (`JWT_SECRET`, `VALKEY_URL`, `MONGO_URL`) carries no `required` tag,
 because the worker parses the same config: `app.Run` checks it instead. `.env.example` is read
 both by `make` (`include`) and by the shell in CI (`. ./.env.example`), so values there must not
 need quoting: no spaces.
@@ -527,7 +532,7 @@ the matching page whenever a change touches what it documents:
 | Release rules, `release.yml` or `.goreleaser.yaml` | `docs/releasing.md` |
 | The exchange `Convert` path (handler, `ConvertCurrency` command, aggregate, webapi, event store, projector, query) | `docs/request-flow.md`, which quotes that code |
 | A layering rule (what may import what, where code goes) | `Rules` in `docs/architecture.md`, and the `Clean Architecture` section of `README.md` |
-| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path, its module `app/task.go` and its per-operation transport files included), a shared file the generator edits (`entity/event.go`, `app/modules.go`, `graphql/resolver.go`; for `new-usecase`, a domain's `register.go`, REST `controller.go` and `.proto`), or a convention the generated code relies on (the `Deps` field names, `_tag`, `gqlgen.yml`'s `autobind`) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
+| A file a generator template mirrors: a `task` domain file (each template under `tools/gen/templates` copies the `task` file at its path, its module `app/task.go` and its per-operation transport files included, except task attributes: `make new-domain` never writes a MongoDB store, so the templates keep each file's shape without them), a shared file the generator edits (`entity/event.go`, `app/modules.go`, `graphql/resolver.go`; for `new-usecase`, a domain's `register.go`, REST `controller.go` and `.proto`), or a convention the generated code relies on (the `Deps` field names, `_tag`, `gqlgen.yml`'s `autobind`) | its template under `tools/gen/templates` and its golden (`UPDATE_GOLDEN=1 go -C tools/gen test ./...`, then review the diff); `make gen-check` and `make gen-e2e` must pass |
 | The generator's commands, flags, rules, output or template conventions | `docs/generator.md` |
 
 ## Adding a use case to an existing domain

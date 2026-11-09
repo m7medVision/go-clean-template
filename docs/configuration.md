@@ -83,6 +83,13 @@ None can be turned off: a value of zero or less stops the app at startup.
 | `VALKEY_URL` | required by the app | `valkey://host:port/db`, or `valkeys://` for TLS; a password goes in the URL (`valkey://:secret@host:6379/0`). The app connects at startup and stops when Valkey cannot be reached: unlike Postgres, it does not wait for a server that is still starting |
 | `VALKEY_PORT` | `6379` | the host port the compose `valkey` service publishes, and `VALKEY_URL` in `.env.example` is built from it, as `PG_URL` is from `PG_PORT`. Set it when something else on the host already uses 6379. The app does not read it |
 
+## MongoDB
+
+| Env var | Default | |
+| --- | --- | --- |
+| `MONGO_URL` | required by the app | `mongodb://user:password@host:port/database?authSource=admin`; the path names the database the app uses. The app connects and pings at startup and stops when MongoDB cannot be reached. The worker does not read it |
+| `MONGO_PORT` | `27017` | the host port the compose `mongo` service publishes, and `MONGO_URL` in `.env.example` is built from it, as `PG_URL` is from `PG_PORT`. The app does not read it |
+
 ## Exchange
 
 | Env var | Default | |
@@ -174,7 +181,7 @@ http://127.0.0.1:16686.
   so they join the same trace (all but the SSO key fetch, which go-oidc runs in the background).
 - **Every layer has spans.** A trace shows the request, then a span per command or query (the
   buses' trace step), then one per SQL statement (otelpgx), per outbound HTTP call (otelhttp) and per Valkey command
-  (valkeyotel).
+  (valkeyotel) and per MongoDB command (`pkg/mongo`'s command monitor).
 - **No-op when disabled.** With `TRACING_ENABLED=false`, a no-op provider is installed, so the
   instrumentation, HTTP's included, runs unconditionally with no overhead. An incoming `traceparent`
   still propagates, so every transport records the caller's trace ID as its events' correlation ID.

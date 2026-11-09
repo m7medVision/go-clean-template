@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi/resttest"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +30,7 @@ func TestCreateTask(t *testing.T) {
 		t.Parallel()
 
 		handler := newRouter(&fakeTask{
-			stored: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo},
+			stored: mongotask.TaskWithAttributes{Task: entity.Task{ID: "task-1", Status: entity.TaskStatusTodo}},
 		})
 
 		resp := resttest.Do(t.Context(), handler, http.MethodPost, "/v1/tasks", token, `{"title":"my task"}`)
@@ -49,7 +50,7 @@ func TestDeleteTaskAnswers204(t *testing.T) {
 func TestListAllTasks(t *testing.T) {
 	t.Parallel()
 
-	tk := &fakeTask{listed: []entity.Task{
+	tk := &fakeTask{listed: []mongotask.TaskWithAttributes{
 		{ID: "task-1", UserID: "alice", Title: "Alice's", Status: entity.TaskStatusDone},
 		{ID: "task-2", UserID: "bob", Title: "Bob's", Status: entity.TaskStatusDone},
 	}}

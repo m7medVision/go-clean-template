@@ -13,7 +13,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/graphqltest"
-	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/query"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
@@ -26,8 +26,8 @@ const _panicDetail = "secret panic detail"
 // panicBuses panic on GetTask.
 func panicBuses() cqrs.Buses {
 	qs := cqrs.NewQueries()
-	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, entity.Task](
-		func(context.Context, query.GetTask) (entity.Task, error) { panic(_panicDetail) }))
+	cqrs.HandleQuery(qs, cqrs.HandlerFunc[query.GetTask, mongotask.TaskWithAttributes](
+		func(context.Context, query.GetTask) (mongotask.TaskWithAttributes, error) { panic(_panicDetail) }))
 
 	return cqrs.Buses{Queries: qs}
 }

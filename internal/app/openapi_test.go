@@ -7,6 +7,7 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/app"
 	"github.com/m7medvision/go-clean-template/internal/entity"
+	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -130,6 +131,9 @@ func TestBodyLengthHintsDocumentTheDomainsRules(t *testing.T) {
 					MaxLength *int     `json:"maxLength"`
 					Pattern   string   `json:"pattern"`
 					Enum      []string `json:"enum"`
+					Minimum   *float64 `json:"minimum"`
+					Maximum   *float64 `json:"maximum"`
+					MaxItems  *int     `json:"maxItems"`
 				} `json:"properties"`
 			} `json:"schemas"`
 		} `json:"components"`
@@ -154,5 +158,18 @@ func TestBodyLengthHintsDocumentTheDomainsRules(t *testing.T) {
 
 	for _, name := range []string{"Task", "TransitionTask"} {
 		assert.Equal(t, taskStatuses(), schemas[name].Properties["status"].Enum, name)
+	}
+
+	priorities := make([]string, 0, len(mongotask.Priorities()))
+	for _, p := range mongotask.Priorities() {
+		priorities = append(priorities, string(p))
+	}
+
+	for _, name := range []string{"TaskAttributes", "UpdateTaskAttributes"} {
+		attrs := schemas[name].Properties
+		assert.Equal(t, priorities, attrs["priority"].Enum, name)
+		assert.InDelta(t, mongotask.MinEstimate, *attrs["estimate"].Minimum, 0, name)
+		assert.InDelta(t, mongotask.MaxEstimate, *attrs["estimate"].Maximum, 0, name)
+		assert.Equal(t, mongotask.MaxLabels, *attrs["labels"].MaxItems, name)
 	}
 }

@@ -21,6 +21,7 @@ x-backend-app-environment: &x-backend-app-environment
   PG_POOL_MAX: "2"
   PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db"
   VALKEY_URL: "valkey://valkey:6379/0"
+  MONGO_URL: "mongodb://user:mongoPa55w0rd@mongo:27017/app?authSource=admin"
   NATS_URL: "nats://nats:4222"
   # gRPC
   GRPC_PORT: "8081"
@@ -92,6 +93,25 @@ services:
         aliases:
           - valkey.lvh.me
 
+  mongo:
+    image: mongo:9.0.4
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "user"
+      MONGO_INITDB_ROOT_PASSWORD: "mongoPa55w0rd"
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      # Host port from MONGO_PORT (.env); MONGO_URL follows it
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping: 1}).ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    networks:
+      app_network:
+        aliases:
+          - mongo.lvh.me
   # The worker's queue: NATS with JetStream, its streams kept on a volume.
   nats:
     image: nats:2.15.2-alpine
@@ -180,6 +200,8 @@ services:
         condition: service_started
       valkey:
         condition: service_healthy
+      mongo:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -247,4 +269,5 @@ networks:
 
 volumes:
   db_data:
+  mongo_data:
   nats_data:

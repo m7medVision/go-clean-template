@@ -284,6 +284,19 @@ jobs:
           done
           echo "Valkey did not answer PONG" >&2
           exit 1
+      - name: Start MongoDB
+        run: |
+          docker run -d --name mongo -p 27017:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=mongoPa55w0rd \
+            mongo:9.0.4
+          for _ in $(seq 30); do
+            docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' 2>/dev/null | grep -q 1 && exit 0
+            sleep 2
+          done
+          echo "MongoDB did not answer ping" >&2
+          docker ps -a --filter name=mongo
+          docker logs mongo 2>&1 | tail -50
+          exit 1
       - name: Start NATS
         run: |
           docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.15.2-alpine -js -m 8222
@@ -381,6 +394,19 @@ jobs:
             sleep 2
           done
           echo "Valkey did not answer PONG" >&2
+          exit 1
+      - name: Start MongoDB
+        run: |
+          docker run -d --name mongo -p 27017:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=mongoPa55w0rd \
+            mongo:9.0.4
+          for _ in $(seq 30); do
+            docker exec mongo mongosh --quiet --eval 'db.runCommand({ping: 1}).ok' 2>/dev/null | grep -q 1 && exit 0
+            sleep 2
+          done
+          echo "MongoDB did not answer ping" >&2
+          docker ps -a --filter name=mongo
+          docker logs mongo 2>&1 | tail -50
           exit 1
       - name: Start NATS
         run: |

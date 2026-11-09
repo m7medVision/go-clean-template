@@ -340,6 +340,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tasks/{id}/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update task attributes
+         * @description Set or clear a task's attributes: a field left out stays as it is, null clears it
+         */
+        patch: operations["update-task-attributes"];
+        trace?: never;
+    };
     "/v1/tasks/{id}/status": {
         parameters: {
             query?: never;
@@ -542,6 +562,7 @@ export interface components {
             [key: string]: unknown;
         };
         Task: {
+            attributes: components["schemas"]["TaskAttributes"];
             /**
              * Format: date-time
              * @example 2026-01-01T00:00:00Z
@@ -565,6 +586,24 @@ export interface components {
             updated_at: string;
             /** @example 550e8400-e29b-41d4-a716-446655440000 */
             user_id: string;
+        };
+        TaskAttributes: {
+            /**
+             * Format: double
+             * @example 3.5
+             */
+            estimate?: number;
+            /**
+             * @example [
+             *       "backend"
+             *     ]
+             */
+            labels?: string[] | null;
+            /**
+             * @example high
+             * @enum {string}
+             */
+            priority?: "low" | "medium" | "high";
         };
         TaskList: {
             tasks: components["schemas"]["Task"][] | null;
@@ -592,6 +631,22 @@ export interface components {
             description?: string;
             /** @example Updated task */
             title: string;
+        } & {
+            [key: string]: unknown;
+        };
+        UpdateTaskAttributes: {
+            /**
+             * Format: double
+             * @description hours; null clears it; left out, it stays
+             */
+            estimate?: number | null;
+            /** @description null clears them; left out, they stay */
+            labels?: string[] | null;
+            /**
+             * @description null clears it; left out, it stays
+             * @enum {string|null}
+             */
+            priority?: "low" | "medium" | "high" | null;
         } & {
             [key: string]: unknown;
         };
@@ -1849,6 +1904,95 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-task-attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskAttributes"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

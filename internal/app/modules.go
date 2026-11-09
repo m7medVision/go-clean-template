@@ -14,6 +14,7 @@ import (
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	vk "github.com/valkey-io/valkey-go"
+	mgo "go.mongodb.org/mongo-driver/v2/mongo"
 	"google.golang.org/grpc"
 )
 
@@ -54,6 +55,7 @@ type deps struct {
 	// tokens signs and checks the auth token. Only the app has one: the worker issues none.
 	tokens *jwt.Manager
 	valkey vk.Client
+	mongo  *mgo.Database
 	// broker publishes to NATS. Only the worker has one: the app never connects to NATS.
 	broker notify.Publisher
 }

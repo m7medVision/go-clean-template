@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	entity "github.com/m7medvision/go-clean-template/internal/entity"
+	task "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -84,4 +85,86 @@ func (m *MockTaskReadModel) ListAll(ctx context.Context, status *entity.TaskStat
 func (mr *MockTaskReadModelMockRecorder) ListAll(ctx, status, page any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockTaskReadModel)(nil).ListAll), ctx, status, page)
+}
+
+// MockTaskAttributesStore is a mock of TaskAttributesStore interface.
+type MockTaskAttributesStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockTaskAttributesStoreMockRecorder
+	isgomock struct{}
+}
+
+// MockTaskAttributesStoreMockRecorder is the mock recorder for MockTaskAttributesStore.
+type MockTaskAttributesStoreMockRecorder struct {
+	mock *MockTaskAttributesStore
+}
+
+// NewMockTaskAttributesStore creates a new mock instance.
+func NewMockTaskAttributesStore(ctrl *gomock.Controller) *MockTaskAttributesStore {
+	mock := &MockTaskAttributesStore{ctrl: ctrl}
+	mock.recorder = &MockTaskAttributesStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTaskAttributesStore) EXPECT() *MockTaskAttributesStoreMockRecorder {
+	return m.recorder
+}
+
+// Delete mocks base method.
+func (m *MockTaskAttributesStore) Delete(ctx context.Context, taskID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, taskID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockTaskAttributesStoreMockRecorder) Delete(ctx, taskID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockTaskAttributesStore)(nil).Delete), ctx, taskID)
+}
+
+// Get mocks base method.
+func (m *MockTaskAttributesStore) Get(ctx context.Context, taskID string) (task.Attributes, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, taskID)
+	ret0, _ := ret[0].(task.Attributes)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockTaskAttributesStoreMockRecorder) Get(ctx, taskID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockTaskAttributesStore)(nil).Get), ctx, taskID)
+}
+
+// GetMany mocks base method.
+func (m *MockTaskAttributesStore) GetMany(ctx context.Context, taskIDs []string) (map[string]task.Attributes, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMany", ctx, taskIDs)
+	ret0, _ := ret[0].(map[string]task.Attributes)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMany indicates an expected call of GetMany.
+func (mr *MockTaskAttributesStoreMockRecorder) GetMany(ctx, taskIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockTaskAttributesStore)(nil).GetMany), ctx, taskIDs)
+}
+
+// Patch mocks base method.
+func (m *MockTaskAttributesStore) Patch(ctx context.Context, taskID string, p task.AttributesPatch) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Patch", ctx, taskID, p)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Patch indicates an expected call of Patch.
+func (mr *MockTaskAttributesStoreMockRecorder) Patch(ctx, taskID, p any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockTaskAttributesStore)(nil).Patch), ctx, taskID, p)
 }
