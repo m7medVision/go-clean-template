@@ -3,7 +3,7 @@
 Module id: `glitchtip` · see [README.md](README.md#observability-and-messaging) · Depends on nothing
 (built after `nats-queue` so its given-up messages are covered) · Shares the GlitchTip server and
 release name with [web-error-tracking.md](web-error-tracking.md) (done, #53) · Status: **approved
-2026-11-10, built on `docs/glitchtip-spec`, awaiting review**
+2026-11-10, built on `feat/glitchtip`, awaiting review**
 
 ## Objective
 
