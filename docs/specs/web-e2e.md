@@ -1,7 +1,7 @@
 # Spec: web end-to-end tests
 
 Module id: `web-e2e` · fifth of six (see [web.md](web.md)) · Depends on `web-tests` ·
-Status: **implemented 2026-11-08 on `feat/web-e2e` under the /goal directive, not separately approved; see web-e2e-todo.md for what is open**
+Status: **done: merged 2026-11-08 (#53), released in v0.5.0; see web-e2e-todo.md for the one open check**
 
 Facts below were checked in the repo on 2026-11-08.
 

@@ -1,7 +1,7 @@
 # Spec: web screen tests
 
 Module id: `web-tests` · fourth of six (see [web.md](web.md)) · Depends on `web-boundaries` ·
-Status: **implemented 2026-11-08 on `feat/web-tests` under the /goal directive, not separately approved; see web-tests-todo.md for what is open**
+Status: **done: merged 2026-11-08 (#53), released in v0.5.0**
 
 Facts below were checked in `web/` on 2026-11-08 (Vitest 5.0.5 through Vite+, `vp test`).
 

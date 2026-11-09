@@ -2,7 +2,7 @@
 
 Scope: the Go code only (`cmd/`, `config/`, `internal/`, `pkg/`, `integration-test/`, `tools/gen`).
 `web/` is touched only where a generated file follows a Go change (`make web-api`, `make web-graphql`).
-Extras chosen: **Comments** and **Tests**. Approved 2026-11-07. Plan: [untangle-plan.md](untangle-plan.md) ·
+Extras chosen: **Comments** and **Tests**. Approved 2026-11-07; done: merged 2026-11-07 (#51), released in v0.3.1. Plan: [untangle-plan.md](untangle-plan.md) ·
 Tasks: [untangle-todo.md](untangle-todo.md).
 
 Method: an import graph, a skeleton of all 7.7k non-test declaration lines, git co-change history,

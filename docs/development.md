@@ -15,6 +15,8 @@ in `DEV_SERVICES` (see the `Makefile`) run in docker:
 - `mongo`: [MongoDB](https://www.mongodb.com/), which the app needs to start. Its data is in the
   `mongo_data` volume; compose creates the root user `user` / `mongoPa55w0rd`, which `MONGO_URL`
   carries.
+- `nats`: [NATS](https://nats.io/) with JetStream, the worker's queue, which the worker needs to
+  start. Its streams are kept on the `nats_data` volume.
 - `mailpit`: [Mailpit](https://mailpit.axllent.org/), which catches email.
 - `keycloak`: the SSO provider.
 
@@ -63,7 +65,7 @@ With the app and the worker running, `make web-e2e` runs the browser test (see
 [web.md](web.md#end-to-end-test)).
 
 ```sh
-make run-worker   # the worker: projections and the queue, once the app has applied the schema
+make run-worker   # the worker: projections and the NATS topics, once the app has applied the schema
 ```
 
 `make run` alone is not enough: without the worker the read models never catch up, and every write
@@ -82,6 +84,7 @@ answers `503` after `CQRS_CONSISTENCY_TIMEOUT` ([cqrs.md](cqrs.md#reads-after-wr
 | Postgres | `127.0.0.1:${PG_PORT}`; credentials in `PG_URL` in [`.env.example`](../.env.example) |
 | Valkey | `127.0.0.1:${VALKEY_PORT}`, and `valkey:6379` (alias `valkey.lvh.me`) inside the compose network; no UI |
 | MongoDB | `127.0.0.1:${MONGO_PORT}`, and `mongo:27017` (alias `mongo.lvh.me`) inside the compose network; no UI (`docker compose exec mongo mongosh -u user -p mongoPa55w0rd`) |
+| NATS | `127.0.0.1:${NATS_PORT}`, and `nats:4222` (alias `nats.lvh.me`) inside the compose network; monitoring on `:8222` inside it |
 | Mailpit | http://127.0.0.1:8025 (inbox and API), SMTP on `127.0.0.1:1025` |
 | Keycloak | http://keycloak.lvh.me:8180 (realm `app`; admin console `admin` / `admin`); see [sso.md](sso.md#keycloak-in-development) |
 | Jaeger | http://127.0.0.1:16686 (full stack only) |

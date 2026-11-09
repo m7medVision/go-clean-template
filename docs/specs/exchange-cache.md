@@ -1,7 +1,7 @@
 # Spec: the exchange rates cached in Valkey
 
 Module id: `exchange-cache` · second of three in one PR (see [README.md](README.md#valkey)) ·
-Depends on `valkey` · Status: **spec approved 2026-11-08; plan in [exchange-cache-plan.md](exchange-cache-plan.md), tasks in
+Depends on `valkey` · Status: **done: merged 2026-11-08 (#52), released in v0.4.0; plan in [exchange-cache-plan.md](exchange-cache-plan.md), tasks in
 [exchange-cache-todo.md](exchange-cache-todo.md)**
 
 Paths are checked against `feat/valkey` at `b071664` on 2026-11-08.

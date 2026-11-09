@@ -1,118 +1,77 @@
 package integration_test
 
 import (
-	"context"
-	"encoding/json"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	wmnats "github.com/ThreeDotsLabs/watermill-nats/v2/pkg/nats"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
-	"github.com/m7medvision/go-clean-template/pkg/postgres"
-	"github.com/stretchr/testify/assert"
+	"github.com/m7medvision/go-clean-template/pkg/broker"
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	// visibilityQueue is read by nobody but the test.
-	visibilityQueue = "integration-test-visibility"
-
 	queueWait = 30 * time.Second
 	queuePoll = 200 * time.Millisecond
-	queueVT   = time.Second
-	queueQty  = 10
 )
 
-func newQueuePostgres(t *testing.T) *postgres.Postgres {
+func natsURL(t *testing.T) string {
 	t.Helper()
 
-	// Set by docker-compose-integration-test.yml: Postgres as seen from inside the compose network.
-	pgURL := os.Getenv("PG_URL")
-	require.NotEmpty(t, pgURL, "PG_URL is not set")
+	url := os.Getenv("NATS_URL")
+	require.NotEmpty(t, url, "NATS_URL is not set")
 
-	ctx, cancel := context.WithTimeout(t.Context(), connectWait)
-	defer cancel()
-
-	pg, err := postgres.New(ctx, pgURL, 1)
-	require.NoError(t, err)
-	t.Cleanup(pg.Close)
-
-	return pg
+	return url
 }
 
-func queueRowExists(ctx context.Context, t *testing.T, pg *postgres.Postgres, id int64) bool {
+func newPublisher(t *testing.T) *broker.Broker {
 	t.Helper()
 
-	var exists bool
-
-	err := pg.Executor(ctx).QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM queue_messages WHERE id = $1)", id).Scan(&exists)
+	b, err := broker.New(natsURL(t), broker.Settings{AckWait: time.Minute, ShutdownTimeout: time.Second},
+		slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = b.Close() })
 
-	return exists
+	return b
 }
 
-// The worker service reads the mail queue, delivers what is on it, and deletes the message once
-// its handler accepts it.
-func TestWorkerConsumesTheMailQueue(t *testing.T) {
-	ctx := context.Background()
-	pg := newQueuePostgres(t)
+// The worker consumes the mail topic and delivers what is on it.
+func TestWorkerConsumesTheMailTopic(t *testing.T) {
 	name := sanitizeTestName(t)
 	email := name + "@test.com"
 
 	body, err := entity.EncodeEmail(entity.WelcomeEmail{To: email, Username: name, LoginURL: "http://localhost/login"})
 	require.NoError(t, err)
 
-	id, err := queue.New(pg).Send(ctx, entity.EmailQueue, body)
-	require.NoError(t, err)
+	require.NoError(t, newPublisher(t).Publish(t.Context(), entity.EmailQueue, "it-"+name, body))
 
-	require.Eventually(t, func() bool { return !queueRowExists(ctx, t, pg, id) },
-		queueWait, queuePoll, "worker never consumed message %d", id)
 	require.Eventually(t, func() bool { return findMailTo(t, email) != "" },
-		mailWait, mailPoll, "message %d never reached Mailpit", id)
+		mailWait, mailPoll, "the email never reached Mailpit")
 }
 
-// A read message is hidden for the visibility timeout, then redelivered with a higher read count.
-// Only a delete on its own queue removes it.
-func TestQueueVisibilityTimeoutRedelivers(t *testing.T) {
-	ctx := context.Background()
-	pg := newQueuePostgres(t)
-	q := queue.New(pg)
+// A message the mail handler can never decode is not retried: it lands on the poison topic,
+// with the reason, and is not lost.
+func TestAnUndecodableMessageGoesToThePoisonTopic(t *testing.T) {
+	id := "it-poison-" + sanitizeTestName(t)
 
-	id, err := q.Send(ctx, visibilityQueue, json.RawMessage(`{"n":1}`))
+	require.NoError(t, newPublisher(t).Publish(t.Context(), entity.EmailQueue, id, []byte(`"not an email"`)))
+
+	nc, err := nats.Connect(natsURL(t))
 	require.NoError(t, err)
+	t.Cleanup(nc.Close)
 
-	first, err := q.Read(ctx, visibilityQueue, queueVT, queueQty)
+	js, err := nc.JetStream()
 	require.NoError(t, err)
-	require.Len(t, first, 1)
-	assert.Equal(t, id, first[0].ID)
-	assert.Equal(t, int32(1), first[0].ReadCount)
-	assert.JSONEq(t, `{"n":1}`, string(first[0].Body))
-
-	hidden, err := q.Read(ctx, visibilityQueue, queueVT, queueQty)
-	require.NoError(t, err)
-	assert.Empty(t, hidden, "message must stay hidden until its visibility timeout expires")
-
-	var again []int64
 
 	require.Eventually(t, func() bool {
-		msgs, err := q.Read(ctx, visibilityQueue, queueVT, queueQty)
-		require.NoError(t, err)
-
-		for _, m := range msgs {
-			if m.ID == id {
-				assert.Equal(t, int32(2), m.ReadCount)
-
-				again = append(again, m.ID)
-			}
+		msg, err := js.GetLastMsg(broker.PoisonTopic, broker.PoisonTopic)
+		if err != nil {
+			return false
 		}
 
-		return len(again) == 1
-	}, queueWait, queuePoll, "message %d was never redelivered", id)
-
-	require.NoError(t, q.Delete(ctx, entity.EmailQueue, id))
-	assert.True(t, queueRowExists(ctx, t, pg, id), "a delete on another queue must leave the message")
-
-	require.NoError(t, q.Delete(ctx, visibilityQueue, id))
-	assert.False(t, queueRowExists(ctx, t, pg, id))
+		return msg.Header.Get(wmnats.WatermillUUIDHdr) == id && msg.Header.Get("reason_poisoned") != ""
+	}, queueWait, queuePoll, "message %s never reached the poison topic", id)
 }

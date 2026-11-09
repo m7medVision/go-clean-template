@@ -26,7 +26,6 @@ type Querier interface {
 	CountTasks(ctx context.Context, arg CountTasksParams) (int64, error)
 	DeleteExpiredChallenges(ctx context.Context) error
 	DeletePasskeyRow(ctx context.Context, id entity.PasskeyID) error
-	DeleteQueueMessage(ctx context.Context, arg DeleteQueueMessageParams) error
 	DeleteTaskRow(ctx context.Context, id string) error
 	EnsureCheckpoint(ctx context.Context, name string) error
 	GetCheckpoint(ctx context.Context, name string) (int64, error)
@@ -83,13 +82,9 @@ type Querier interface {
 	// with an underscore are scratch streams (the store's own tests write them): only a reader that
 	// asks for them gets them, and the worker's never does.
 	ReadAll(ctx context.Context, arg ReadAllParams) ([]Event, error)
-	// ReadQueueMessages claims up to qty visible messages and hides them for vt_seconds in one
-	// statement. SKIP LOCKED lets concurrent workers claim disjoint batches without waiting.
-	ReadQueueMessages(ctx context.Context, arg ReadQueueMessagesParams) ([]ReadQueueMessagesRow, error)
 	ReadStream(ctx context.Context, arg ReadStreamParams) ([]Event, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) error
 	ResetCheckpoint(ctx context.Context, name string) error
-	SendQueueMessage(ctx context.Context, arg SendQueueMessageParams) (int64, error)
 	SetConversionID(ctx context.Context, arg SetConversionIDParams) error
 	SetPasskeyName(ctx context.Context, arg SetPasskeyNameParams) error
 	SetPasskeyUsage(ctx context.Context, arg SetPasskeyUsageParams) error

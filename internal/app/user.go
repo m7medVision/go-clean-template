@@ -9,7 +9,6 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/notify"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
-	"github.com/m7medvision/go-clean-template/internal/repo/persistent/queue"
 	persistUserRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/user"
 	"github.com/m7medvision/go-clean-template/internal/repo/session"
 	"github.com/m7medvision/go-clean-template/internal/usecase/user"
@@ -38,7 +37,7 @@ func userModule() module {
 		grpcPublic: grpcuser.PublicMethods(),
 		projector:  persistUserRepo.NewProjector,
 		eventHandlers: func(d *deps) []repo.Subscriber {
-			return []repo.Subscriber{userevent.SendWelcomeEmail{Notifier: notify.New(queue.New(d.pg), d.cfg.App.LoginURL())}}
+			return []repo.Subscriber{userevent.SendWelcomeEmail{Notifier: notify.New(d.broker, d.cfg.App.LoginURL())}}
 		},
 	}
 }

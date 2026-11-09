@@ -67,13 +67,13 @@ func findMailTo(t *testing.T, addr string) string {
 }
 
 // requireNoWelcomeToFollow waits until no second welcome email to the user can still arrive: the
-// event handler's checkpoint has passed the user's registration, so it will not run for it again,
-// and the mail queue holds nothing for email, so whatever it enqueued has been delivered.
+// event handler's checkpoint has passed the user's registration, so it will not publish for it
+// again, and the email it published has reached Mailpit.
 func requireNoWelcomeToFollow(t *testing.T, userID, email string) {
 	t.Helper()
 
 	ctx := t.Context()
-	db := newQueuePostgres(t).Executor(ctx)
+	db := newPostgres(t).Executor(ctx)
 
 	var registered int64
 
@@ -90,19 +90,13 @@ func requireNoWelcomeToFollow(t *testing.T, userID, email string) {
 		return err == nil && at >= registered
 	}, mailWait, mailPoll, "the welcome email handler never passed position %d", registered)
 
-	require.Eventually(t, func() bool {
-		var pending bool
-
-		err := db.QueryRow(ctx,
-			"SELECT EXISTS (SELECT 1 FROM queue_messages WHERE queue = $1 AND body->'data'->>'to' = $2)",
-			entity.EmailQueue, email).Scan(&pending)
-
-		return err == nil && !pending
-	}, mailWait, mailPoll, "the mail queue never delivered the email to %s", email)
+	require.Eventually(t, func() bool { return findMailTo(t, email) != "" },
+		mailWait, mailPoll, "the mail topic never delivered the email to %s", email)
 }
 
-// Registering over REST enqueues a welcome email, once: the event handler enqueues it in the
-// transaction that moves its checkpoint. The worker renders it and sends it to Mailpit.
+// Registering over REST sends a welcome email, once: the event handler publishes it to the mail
+// topic under the user's message ID, so a republish after a crash is dropped by JetStream. The
+// worker renders it and sends it to Mailpit.
 func TestHTTPRegisterSendsWelcomeEmail(t *testing.T) {
 	name := sanitizeTestName(t)
 	email := name + "@test.com"

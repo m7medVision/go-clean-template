@@ -22,6 +22,7 @@ x-backend-app-environment: &x-backend-app-environment
   PG_URL: "postgres://user:myAwEsOm3pa55%40w0rd@db:5432/db"
   VALKEY_URL: "valkey://valkey:6379/0"
   MONGO_URL: "mongodb://user:mongoPa55w0rd@mongo:27017/app?authSource=admin"
+  NATS_URL: "nats://nats:4222"
   # gRPC
   GRPC_PORT: "8081"
   # Metrics
@@ -37,9 +38,10 @@ x-backend-app-environment: &x-backend-app-environment
   JWT_SECRET: "your-secret-key-change-in-production"
   JWT_TOKEN_EXPIRY: "15m"
   # Worker (cmd/worker)
-  WORKER_POLL_INTERVAL: "1s"
-  WORKER_VISIBILITY_TIMEOUT: "30s"
-  WORKER_BATCH_SIZE: "10"
+  WORKER_MAX_RETRIES: "5"
+  WORKER_RETRY_INITIAL: "1s"
+  WORKER_RETRY_MAX: "30s"
+  WORKER_ACK_WAIT: "5m"
   WORKER_SHUTDOWN_TIMEOUT: "10s"
   # Mail (cmd/worker sends it to Mailpit)
   SMTP_HOST: "mailpit"
@@ -110,6 +112,23 @@ services:
       app_network:
         aliases:
           - mongo.lvh.me
+  # The worker's queue: NATS with JetStream, its streams kept on a volume.
+  nats:
+    image: nats:2.15.2-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz?js-enabled-only=true"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks:
+      app_network:
+        aliases:
+          - nats.lvh.me
 
   jaeger:
     image: jaegertracing/all-in-one:1.76.0
@@ -196,7 +215,7 @@ services:
         aliases:
           - app.lvh.me
 
-  # Queue consumer (queue_messages table): the app image, started on its /worker entry point
+  # Projections and the queue consumer (NATS JetStream): the app image, started on its /worker entry point
   worker:
     platform: linux/amd64
     build:
@@ -207,9 +226,14 @@ services:
     environment:
       <<: *x-backend-app-environment
     depends_on:
-      - db
-      - jaeger
-      - mailpit
+      db:
+        condition: service_started
+      jaeger:
+        condition: service_started
+      mailpit:
+        condition: service_started
+      nats:
+        condition: service_healthy
     networks:
       app_network:
         aliases:
@@ -246,3 +270,4 @@ networks:
 volumes:
   db_data:
   mongo_data:
+  nats_data:

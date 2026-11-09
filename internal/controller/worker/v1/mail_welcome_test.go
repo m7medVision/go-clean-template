@@ -9,7 +9,6 @@ import (
 
 	v1 "github.com/m7medvision/go-clean-template/internal/controller/worker/v1"
 	"github.com/m7medvision/go-clean-template/internal/entity"
-	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,13 +28,13 @@ func welcomeBody(t *testing.T) json.RawMessage {
 	return body
 }
 
-func TestMailController_HandleDeliversWhatWasEnqueued(t *testing.T) {
+func TestMailController_HandleDeliversWhatWasPublished(t *testing.T) {
 	t.Parallel()
 
 	mail := &fakeMail{}
 	c := v1.NewMailController(mail.commands(), slog.New(slog.DiscardHandler))
 
-	require.NoError(t, c.Handle(context.Background(), &worker.Message{ID: 1, Body: welcomeBody(t)}))
+	require.NoError(t, c.Handle(context.Background(), welcomeBody(t)))
 
 	require.Len(t, mail.delivered, 1)
 	assert.Equal(t, entity.WelcomeEmail{

@@ -10,10 +10,10 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/sso"
 	mailcommand "github.com/m7medvision/go-clean-template/internal/usecase/mail/command"
 	oidcquery "github.com/m7medvision/go-clean-template/internal/usecase/oidc/query"
+	"github.com/m7medvision/go-clean-template/pkg/broker"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
-	"github.com/m7medvision/go-clean-template/pkg/worker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mgo "go.mongodb.org/mongo-driver/v2/mongo"
@@ -78,8 +78,9 @@ func TestTheWorkerInstallsOnlyWhatItsQueuesSendTo(t *testing.T) {
 	t.Parallel()
 
 	b := newTestBuses()
-	w := worker.New(slog.New(slog.DiscardHandler), nil, worker.Settings{})
-	require.NoError(t, registerQueues(testDeps(nil), b, w))
+	r := &fakeRouter{}
+	require.NoError(t, registerQueues(testDeps(nil), b, r))
+	assert.Contains(t, r.topics, entity.EmailQueue)
 
 	_, err := cqrs.SendCommand(t.Context(), b.Commands, mailcommand.DeliverEmail{Email: unknownEmail{}})
 	require.ErrorIs(t, err, entity.ErrUnknownEmail)
@@ -103,8 +104,7 @@ func TestABadMailSenderStopsTheWorker(t *testing.T) {
 	d := testDeps(nil)
 	d.cfg.Mail.From = "not an address"
 
-	w := worker.New(slog.New(slog.DiscardHandler), nil, worker.Settings{})
-	require.Error(t, registerQueues(d, newTestBuses(), w))
+	require.Error(t, registerQueues(d, newTestBuses(), &fakeRouter{}))
 }
 
 // A subscriber's name keys its checkpoint row, and an importer's domain its backfill marker. Renaming
@@ -153,4 +153,12 @@ func TestAWriteWaitsForItsDomainsProjector(t *testing.T) {
 	assert.Len(t, byEvent, len(entity.EventTypes()))
 	assert.Equal(t, []string{"task"}, byEvent[entity.TaskCreated{}.EventType()])
 	assert.Equal(t, []string{"passkey"}, byEvent[entity.PasskeyUsed{}.EventType()])
+}
+
+type fakeRouter struct {
+	topics []string
+}
+
+func (f *fakeRouter) Handle(topic string, _ broker.HandlerFunc) {
+	f.topics = append(f.topics, topic)
 }

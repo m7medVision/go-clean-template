@@ -1,6 +1,6 @@
 # Spec: domain and use-case generator
 
-Module id: `generator` · PR 2 of 2 · Depends on `cqrs` · Status: **implemented; plan in [generator-plan.md](generator-plan.md), user docs in [docs/generator.md](../generator.md)**
+Module id: `generator` · PR 2 of 2 · Depends on `cqrs` · Status: **done: merged 2026-11-05 (#47), released in v0.3.0; plan in [generator-plan.md](generator-plan.md), user docs in [docs/generator.md](../generator.md)**
 
 Paths and shapes below are checked against master at `e952512`, where `cqrs` merged (#45). Each
 template copies the `task` domain's file at the same path.

@@ -2,7 +2,6 @@ package notify_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
@@ -14,29 +13,31 @@ import (
 
 const _loginURL = "https://example.com/login"
 
-var errQueueDown = errors.New("queue down")
+var errQueueDown = errors.New("broker down")
 
-type fakeQueue struct {
+type fakePublisher struct {
 	err   error
-	queue string
-	body  json.RawMessage
+	topic string
+	id    string
+	body  []byte
 }
 
-func (f *fakeQueue) Send(_ context.Context, queue string, body json.RawMessage) (int64, error) {
-	f.queue, f.body = queue, body
+func (f *fakePublisher) Publish(_ context.Context, topic, id string, body []byte) error {
+	f.topic, f.id, f.body = topic, id, body
 
-	return 1, f.err
+	return f.err
 }
 
-func TestWelcomeEnqueuesTheWelcomeEmail(t *testing.T) {
+func TestWelcomePublishesTheWelcomeEmail(t *testing.T) {
 	t.Parallel()
 
-	q := &fakeQueue{}
+	q := &fakePublisher{}
 
-	err := notify.New(q, _loginURL).Welcome(t.Context(), &entity.User{Username: "testuser", Email: "test@example.com"})
+	err := notify.New(q, _loginURL).Welcome(t.Context(), &entity.User{ID: "u-1", Username: "testuser", Email: "test@example.com"})
 	require.NoError(t, err)
 
-	assert.Equal(t, entity.EmailQueue, q.queue)
+	assert.Equal(t, entity.EmailQueue, q.topic)
+	assert.Equal(t, "welcome-u-1", q.id)
 
 	email, err := entity.DecodeEmail(q.body)
 	require.NoError(t, err)
@@ -47,10 +48,10 @@ func TestWelcomeEnqueuesTheWelcomeEmail(t *testing.T) {
 	}, email)
 }
 
-func TestWelcomeReturnsTheQueueError(t *testing.T) {
+func TestWelcomeReturnsThePublishError(t *testing.T) {
 	t.Parallel()
 
-	q := &fakeQueue{err: errQueueDown}
+	q := &fakePublisher{err: errQueueDown}
 
 	err := notify.New(q, _loginURL).Welcome(t.Context(), &entity.User{Username: "testuser", Email: "test@example.com"})
 

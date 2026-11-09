@@ -20,6 +20,7 @@ type (
 		JWT       JWT
 		Valkey    Valkey
 		Mongo     Mongo
+		NATS      NATS
 		AuthLimit AuthLimit
 		Metrics   Metrics
 		Docs      Docs
@@ -72,6 +73,12 @@ type (
 	// checks it. The database is the URL's path.
 	Mongo struct {
 		URL string `env:"MONGO_URL"`
+	}
+
+	// NATS has no required tag: the app parses the same config and never uses it, so RunWorker
+	// checks it.
+	NATS struct {
+		URL string `env:"NATS_URL"`
 	}
 
 	AuthLimit struct {

@@ -17,7 +17,7 @@ type (
 	}
 
 	// UserNotifier tells a user about events on their account. The queue-backed implementation
-	// (internal/repo/notify) enqueues an email for the worker to send.
+	// (internal/repo/notify) publishes an email for the worker to send.
 	UserNotifier interface {
 		Welcome(ctx context.Context, user *entity.User) error
 	}
