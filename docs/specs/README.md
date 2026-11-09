@@ -55,7 +55,7 @@ others written 2026-11-08, awaiting review; each to be grilled again before appr
 | --- | --- | --- | --- |
 | `nats-queue` | The queue moves to NATS JetStream through Watermill: router in the worker (NATS is the worker's only), outbox design pending, retry with backoff, poison topic, recover; `queue_messages` and `pkg/worker` removed | `goose` | [nats-queue.md](nats-queue.md) |
 | `glitchtip` | Unexpected backend errors to GlitchTip through one `slog` wrapper, with breadcrumbs; `SENTRY_DSN`. Unblocks `web-error-tracking` | — | [glitchtip.md](glitchtip.md) |
-| `posthog` | Optional analytics: a typed event catalogue, seven launch events through the outbox to PostHog, web page views, identify and masked replay | `nats-queue`, `task-attributes` | [posthog.md](posthog.md) |
+| `posthog` | Optional analytics: a typed event catalogue, seven launch events (four from the worker's event handlers to one or more vendor sinks, PostHog first; three from the web), web page views, identify and masked replay | `nats-queue`, `task-attributes` | [posthog.md](posthog.md) |
 | `feature-flags` | OpenFeature; GO Feature Flag on `flags.yaml` in development, code defaults in production; `GetFlags` on REST and GraphQL; the `task-attributes` flag | `task-attributes` | [feature-flags.md](feature-flags.md) |
 
 Build order: `goose` (above) → `nats-queue` → `glitchtip` → `posthog` → `feature-flags`.

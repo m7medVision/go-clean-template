@@ -6,10 +6,12 @@ import (
 	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpcexchange "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/exchange"
 	restexchange "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/exchange"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistExchangeRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/exchange"
 	"github.com/m7medvision/go-clean-template/internal/repo/webapi"
 	"github.com/m7medvision/go-clean-template/internal/usecase/exchange"
+	exchangeevent "github.com/m7medvision/go-clean-template/internal/usecase/exchange/event"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"github.com/m7medvision/go-clean-template/pkg/valkey"
@@ -33,5 +35,8 @@ func exchangeModule() module {
 			pb.RegisterExchangeServiceServer(s, grpcexchange.New(b, l))
 		},
 		projector: persistExchangeRepo.NewProjector,
+		eventHandlers: func(d *deps) []repo.Subscriber {
+			return capture(d, func(a repo.Analytics) repo.Subscriber { return exchangeevent.CaptureExchange{Analytics: a} })
+		},
 	}
 }

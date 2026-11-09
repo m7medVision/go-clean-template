@@ -38,7 +38,8 @@ func RunWorker(ctx context.Context, cfg *config.Config) error {
 	}
 	defer br.Close()
 
-	d := &deps{cfg: cfg, pg: b.pg, l: b.l, broker: br}
+	sinks := analyticsSinks(cfg.Analytics)
+	d := &deps{cfg: cfg, pg: b.pg, l: b.l, broker: br, sinks: sinks, analytics: newAnalytics(br, sinks)}
 
 	runner, err := newRunner(d)
 	if err != nil {

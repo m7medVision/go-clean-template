@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { Link, Outlet, createFileRoute, redirect, useMatches } from "@tanstack/react-router";
 
 import { AppSidebar } from "#/components/app-sidebar";
+import { signedOut } from "#/lib/analytics";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,6 +33,7 @@ function AuthedLayout() {
   // mounted profile query refetch without a token, and its 401 bounces the user to /login again.
   const logout = async () => {
     auth.clear();
+    signedOut();
     await navigate({ to: "/login" });
     queryClient.clear();
   };

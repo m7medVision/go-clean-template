@@ -162,6 +162,22 @@ func (s *fakeStore) EnsureCheckpoint(_ context.Context, name string) error {
 	return nil
 }
 
+func (s *fakeStore) EnsureCheckpointAtHead(_ context.Context, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.checkpoints[name]; !ok {
+		var head int64
+		if n := len(s.events); n > 0 {
+			head = s.events[n-1].Position
+		}
+
+		s.checkpoints[name] = head
+	}
+
+	return nil
+}
+
 func (s *fakeStore) Checkpoint(_ context.Context, name string) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -462,4 +478,24 @@ func TestARunnerRetriesItsCheckpointUntilTheSchemaExists(t *testing.T) {
 
 	require.Eventually(t, handledUpTo(s, r, 2), _eventually, _tick)
 	assert.Equal(t, []int64{1, 2}, r.positions())
+}
+
+type headRecorder struct{ recorder }
+
+func (*headRecorder) StartsAtHead() bool { return true }
+
+func TestASubscriberThatStartsAtHeadSkipsTheHistory(t *testing.T) {
+	t.Parallel()
+
+	s := newFakeStore(5)
+	fresh := &headRecorder{name: "fresh"}
+	s.checkpoints["kept"] = 2
+	kept := &headRecorder{name: "kept"}
+
+	start(t, s, time.Millisecond, fresh, kept)
+
+	require.Eventually(t, handledUpTo(s, &kept.recorder, 5), time.Second, time.Millisecond)
+	require.Eventually(t, handledUpTo(s, &fresh.recorder, 5), time.Second, time.Millisecond)
+	assert.Empty(t, fresh.positions())
+	assert.Equal(t, []int64{3, 4, 5}, kept.positions())
 }

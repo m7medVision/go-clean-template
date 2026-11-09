@@ -17,6 +17,8 @@ const cases = [
   ["shared auth importing a domain", "auth", "#/tasks/status", true],
   ["a domain importing its own folder", "tasks", "#/tasks/status", false],
   ["a domain importing shared code", "tasks", "#/api/problem", false],
+  ["a domain importing the analytics vendor", "tasks", "posthog-js", true],
+  ["shared code importing the analytics vendor", "auth", "posthog-js", true],
 ] as const;
 
 const file = (folder: string, index: number) => `src/${folder}/__probe_${index}.ts`;

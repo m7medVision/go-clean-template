@@ -25,6 +25,7 @@
     "lucide-react": "^1.66.0",
     "openapi-fetch": "^0.17.0",
     "openapi-react-query": "^0.5.4",
+    "posthog-js": "^1.447.5",
     "radix-ui": "^1.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

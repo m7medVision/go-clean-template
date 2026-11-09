@@ -42,6 +42,11 @@ func (s *PostgresStore) EnsureCheckpoint(ctx context.Context, name string) error
 	return queries.New(s.pg.Executor(ctx)).EnsureCheckpoint(ctx, name)
 }
 
+// EnsureCheckpointAtHead creates name's checkpoint at the store's last event if it has none.
+func (s *PostgresStore) EnsureCheckpointAtHead(ctx context.Context, name string) error {
+	return queries.New(s.pg.Executor(ctx)).EnsureCheckpointAtHead(ctx, name)
+}
+
 func (s *PostgresStore) Checkpoint(ctx context.Context, name string) (int64, error) {
 	return queries.New(s.pg.Executor(ctx)).GetCheckpoint(ctx, name)
 }

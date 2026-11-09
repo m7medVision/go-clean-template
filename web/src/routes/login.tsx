@@ -9,6 +9,8 @@ import { FormError } from "#/components/form/form-components";
 import { useAppForm, zodValidation } from "#/components/form/use-app-form";
 import { Button } from "#/components/ui/button";
 import { FieldSeparator } from "#/components/ui/field";
+import { signedIn } from "#/lib/analytics";
+import type { SignInMethodName } from "#/lib/analytics-events";
 import { usePasskeySignIn } from "#/passkey/use-passkey-sign-in";
 import { ssoStatusQuery } from "#/sso/api";
 import { useSsoSignIn } from "#/sso/use-sso-sign-in";
@@ -31,18 +33,22 @@ function Login() {
   const navigate = useNavigate();
 
   // Every sign-in that finishes on this page ends here.
-  const signIn = (token: string) => {
+  const signIn = (token: string, method: SignInMethodName) => {
     auth.set(token);
+    signedIn(method);
     void navigate({ to: safeRedirect(redirect) });
   };
 
   // The other ways of signing in, as buttons under the form.
-  const methods: SignInMethod[] = [useSsoSignIn(safeRedirect(redirect)), usePasskeySignIn(signIn)];
+  const methods: SignInMethod[] = [
+    useSsoSignIn(safeRedirect(redirect)),
+    usePasskeySignIn((token) => signIn(token, "passkey")),
+  ];
   const available = methods.filter((method) => method.available);
 
   const login = $api.useMutation("post", "/v1/auth/login", {
     onMutate: () => methods.forEach((method) => method.reset()),
-    onSuccess: ({ token }) => signIn(token),
+    onSuccess: ({ token }) => signIn(token, "password"),
   });
 
   const form = useAppForm({

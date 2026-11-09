@@ -3,6 +3,7 @@ import createQueryClient from "openapi-react-query";
 
 import { isReauthRequired } from "#/auth/reauth";
 import { auth } from "#/auth/token";
+import { signedOut } from "#/lib/analytics";
 import type { components, paths } from "./schema.gen";
 
 export type Problem = components["schemas"]["ErrorModel"];
@@ -22,6 +23,7 @@ export function onUnauthorized(handler: () => void) {
 // rejectSession drops the token and runs the onUnauthorized handler. Both transports call it.
 export function rejectSession() {
   auth.clear();
+  signedOut();
   unauthorized();
 }
 

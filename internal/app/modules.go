@@ -58,6 +58,10 @@ type deps struct {
 	mongo  *mgo.Database
 	// broker publishes to NATS. Only the worker has one: the app never connects to NATS.
 	broker notify.Publisher
+	// sinks are the analytics vendors configured, and analytics publishes to them; only the worker
+	// has them, and analytics is nil when there is none.
+	sinks     map[string]repo.AnalyticsSink
+	analytics repo.Analytics
 }
 
 type queueRouter interface {
@@ -74,6 +78,7 @@ func modules() []module {
 		passkeyModule(),
 		oidcModule(),
 		mailModule(),
+		analyticsModule(),
 	}
 }
 
