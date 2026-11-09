@@ -1,5 +1,7 @@
 import { graphqlKey, graphqlMutationOptions, graphqlQueryOptions } from "#/api/graphql";
 import { graphql } from "#/graphql";
+import { capture } from "#/lib/analytics";
+import { analyticsEvents } from "#/lib/analytics-events";
 import type { AllTasksQueryVariables, TasksQueryVariables } from "#/graphql/graphql";
 
 // Every task read and write goes through GraphQL: the list asks only for the columns it shows.
@@ -91,5 +93,9 @@ export const allTasksQuery = (variables: AllTasksQueryVariables) =>
 export const createTask = graphqlMutationOptions(CreateTaskMutation);
 export const updateTask = graphqlMutationOptions(UpdateTaskMutation);
 export const transitionTask = graphqlMutationOptions(TransitionTaskMutation);
-export const updateTaskAttributes = graphqlMutationOptions(UpdateTaskAttributesMutation);
+export const updateTaskAttributes = {
+  ...graphqlMutationOptions(UpdateTaskAttributesMutation),
+  onSuccess: (_: unknown, { input }: { input: object }) =>
+    capture(analyticsEvents.taskAttributesUpdated, { fields: Object.keys(input) }),
+};
 export const deleteTask = graphqlMutationOptions(DeleteTaskMutation);

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { safeRedirect } from "#/auth/redirect";
 import { AuthCard } from "#/components/auth-card";
 import { FormError } from "#/components/form/form-components";
+import { signedIn } from "#/lib/analytics";
 import { finishSso } from "#/sso/api";
 import { type CallbackSearch, callbackProblem } from "#/sso/callback";
 
@@ -30,6 +31,7 @@ function SsoCallback() {
     ...finishSso,
     onSuccess: ({ token, redirect }) => {
       auth.set(token);
+      signedIn("oidc");
       void navigate({ to: safeRedirect(redirect), replace: true });
     },
   });

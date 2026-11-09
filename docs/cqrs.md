@@ -206,6 +206,7 @@ The worker runs one loop per subscriber:
 | `exchange` | projector | `exchange_history` |
 | `passkey` | projector | `webauthn_credentials` |
 | `send-welcome-email` | event handler | the `mail` topic on NATS |
+| `capture-user`, `capture-task`, `capture-exchange` | event handlers, only with an analytics vendor | one `analytics-<sink>` topic per sink ([analytics.md](analytics.md)) |
 
 - **Each loop reads in order.** It reads the events after its checkpoint, in position order, and
   hands the subscriber those of the types it `Handles`. The others move its checkpoint without
@@ -221,6 +222,9 @@ The worker runs one loop per subscriber:
   so even a lost lock cannot apply an event twice.
 - **The loop wakes on notification.** It wakes on `LISTEN events`, and polls every
   `PROJECTION_POLL_INTERVAL` as a fallback.
+- **A new event handler can skip the history.** A subscriber that implements `repo.StartsAtHead`
+  gets its checkpoint at the store's last event the first time it runs, not at 0: the analytics
+  handlers do, so configuring a vendor sends no past events. An existing checkpoint stays.
 - **The worker can start before the app.** If the schema doesn't exist yet, it keeps retrying until
   the app has applied it.
 - **`projection_lag_events{projector}`** on the app's `/metrics` is how far each subscriber is behind.

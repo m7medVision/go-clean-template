@@ -64,8 +64,9 @@ Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker
 function that registers it on a `v1.Router` (`r.Handle(topic, handler)`, which `*broker.Broker`
 implements), called by its module's `queues` in `internal/app` before the worker runs. A message is
 an inbound request like an HTTP call, so a handler has the same shape: decode the body, send a
-command on the command bus with the handler's `ctx`, and return its error. The one topic today is
-`mail` (below): `mail.go` delivers email from it.
+command on the command bus with the handler's `ctx`, and return its error. The topics today are
+`mail` (below), which `mail.go` delivers email from, and one `analytics-<sink>` per configured
+analytics vendor, which `analytics.go` delivers to that vendor ([analytics.md](analytics.md)).
 
 ### Adding a topic
 

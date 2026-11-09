@@ -37,7 +37,10 @@ func userModule() module {
 		grpcPublic: grpcuser.PublicMethods(),
 		projector:  persistUserRepo.NewProjector,
 		eventHandlers: func(d *deps) []repo.Subscriber {
-			return []repo.Subscriber{userevent.SendWelcomeEmail{Notifier: notify.New(d.broker, d.cfg.App.LoginURL())}}
+			welcome := userevent.SendWelcomeEmail{Notifier: notify.New(d.broker, d.cfg.App.LoginURL())}
+
+			return append([]repo.Subscriber{welcome},
+				capture(d, func(a repo.Analytics) repo.Subscriber { return userevent.CaptureUser{Analytics: a} })...)
 		},
 	}
 }

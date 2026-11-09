@@ -11,7 +11,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/entity"
 )
 
-//go:generate mockgen -source=contracts.go -destination=repomock/contracts.go -package=repomock -exclude_interfaces=EventStore,Subscriber,ProjectionCheckpoints,SessionIssuer
+//go:generate mockgen -source=contracts.go -destination=repomock/contracts.go -package=repomock -exclude_interfaces=EventStore,Subscriber,StartsAtHead,ProjectionCheckpoints,SessionIssuer
 
 type (
 	// EventStore keeps aggregates as streams of events.
@@ -39,6 +39,12 @@ type (
 		Name() string
 		Handles() []entity.Event
 		Handle(ctx context.Context, e *entity.RecordedEvent) error
+	}
+
+	// StartsAtHead is a Subscriber that skips the events stored before it first ran, such as an
+	// event handler added to a store with history whose side effects must not reach the past.
+	StartsAtHead interface {
+		StartsAtHead() bool
 	}
 
 	// ProjectionCheckpoints tells how far the projectors have read the event store. Reached reports

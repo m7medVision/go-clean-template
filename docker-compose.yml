@@ -49,6 +49,9 @@ x-backend-app-environment: &x-backend-app-environment
   SMTP_HOST: "mailpit"
   SMTP_PORT: "1025"
   MAIL_FROM: "Go Clean Template <noreply@example.com>"
+  # Analytics (worker): PostHog is on when POSTHOG_API_KEY is set
+  POSTHOG_API_KEY: "${POSTHOG_API_KEY:-}"
+  POSTHOG_HOST: "${POSTHOG_HOST:-https://eu.i.posthog.com}"
   # Exchange rates (ExchangeRate-API open access)
   EXCHANGE_SERVICE_URL: "https://open.er-api.com"
   # WebAuthn (passkeys): Caddy, a dev server, and the app port the integration tests declare

@@ -34,6 +34,7 @@ type Store interface {
 	ReadAll(ctx context.Context, after int64, limit int) ([]entity.RecordedEvent, error)
 	InTx(ctx context.Context, fn func(ctx context.Context) error) error
 	EnsureCheckpoint(ctx context.Context, name string) error
+	EnsureCheckpointAtHead(ctx context.Context, name string) error
 	Checkpoint(ctx context.Context, name string) (int64, error)
 	// TryLock takes name's lock until the context's transaction ends; false when another runner
 	// holds it.
@@ -152,13 +153,14 @@ func (r *Runner) run(ctx context.Context, s repo.Subscriber, wake <-chan struct{
 	}
 }
 
-// ensureCheckpoint creates s's checkpoint, trying again every poll interval until it can: the
+// ensureCheckpoint creates s's checkpoint, at the store's head for a repo.StartsAtHead subscriber,
+// trying again every poll interval until it can: the
 // worker can start before the app has applied the schema. It is false when the runner stops first.
 func (r *Runner) ensureCheckpoint(ctx context.Context, s repo.Subscriber) bool {
 	started, reported := time.Now(), false
 
 	for ctx.Err() == nil {
-		err := r.store.EnsureCheckpoint(ctx, s.Name())
+		err := r.createCheckpoint(ctx, s)
 		if err == nil {
 			return true
 		}
@@ -177,6 +179,14 @@ func (r *Runner) ensureCheckpoint(ctx context.Context, s repo.Subscriber) bool {
 	}
 
 	return false
+}
+
+func (r *Runner) createCheckpoint(ctx context.Context, s repo.Subscriber) error {
+	if h, ok := s.(repo.StartsAtHead); ok && h.StartsAtHead() {
+		return r.store.EnsureCheckpointAtHead(ctx, s.Name())
+	}
+
+	return r.store.EnsureCheckpoint(ctx, s.Name())
 }
 
 // report logs err as an error the first time s fails where it is failing now, and as a warning

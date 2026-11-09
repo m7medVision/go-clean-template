@@ -144,6 +144,16 @@ GlitchTip with `@sentry/vite-plugin` (debug IDs, so no release lookup is needed)
 `dist/`; without it no maps are built, so none are ever served. A reported frame then reads
 `src/api/graphql.ts`, `request`, line 43, not `graphql-bXhJ624U.js:1`.
 
+## Analytics
+
+`web/src/lib/analytics.ts` is the only file that imports `posthog-js`, a lint rule in
+`vite.config.ts` says so, and nothing else knows the vendor. With `VITE_POSTHOG_KEY` set at build
+time it loads PostHog, sends a page view with the route template (`/tasks/$id`) on every route
+change, identifies the user by ID after a sign-in (`signedIn`) and resets on sign-out (`signedOut`).
+The tasks domain sends `task_attributes_updated` with the field names. Replay masks every input and
+all text. The names live in `web/src/lib/analytics-events.ts`; the catalogue is in
+[analytics.md](analytics.md).
+
 ## Passkeys
 
 The browser half of a WebAuthn ceremony is in `web/src/passkey/webauthn.ts`, on the browser's own

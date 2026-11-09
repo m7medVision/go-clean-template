@@ -93,6 +93,7 @@ If something else holds 6379, set `VALKEY_PORT=6380` the same way; 27017, `MONGO
 - [Passkeys](docs/passkeys.md): the WebAuthn ceremonies, replay protection, relying-party setup
 - [SSO and roles](docs/sso.md): OpenID Connect sign-in, the dev Keycloak, role mapping, other providers
 - [Queue and worker](docs/worker.md)
+- [Product analytics](docs/analytics.md)
 - [Web client](docs/web.md)
 - [Releases](docs/releasing.md): how versions are named from commits and what each release ships
 
