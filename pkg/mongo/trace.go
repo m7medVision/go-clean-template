@@ -12,6 +12,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// WARNING: this monitor stands in for the official tracer, which exists upstream but is not released:
+// go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/v2/mongo/otelmongo is listed
+// under excluded-modules in opentelemetry-go-contrib's versions.yaml, so it has no tag to depend on.
+// On every contrib release, check whether that module got a tag; once it has one, delete this file and
+// connect with otelmongo.NewMonitor() in mongo.go.
 const _tracerName = "github.com/m7medvision/go-clean-template/pkg/mongo"
 
 type spans struct {
