@@ -6,10 +6,12 @@ import (
 	pb "github.com/m7medvision/go-clean-template/docs/proto/v1"
 	grpctask "github.com/m7medvision/go-clean-template/internal/controller/grpc/v1/task"
 	resttask "github.com/m7medvision/go-clean-template/internal/controller/restapi/v1/task"
+	"github.com/m7medvision/go-clean-template/internal/repo"
 	mongoTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	persistTaskRepo "github.com/m7medvision/go-clean-template/internal/repo/persistent/task"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task"
+	taskevent "github.com/m7medvision/go-clean-template/internal/usecase/task/event"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	"google.golang.org/grpc"
@@ -33,5 +35,8 @@ func taskModule() module {
 			pb.RegisterTaskServiceServer(s, grpctask.New(b, l))
 		},
 		projector: persistTaskRepo.NewProjector,
+		eventHandlers: func(d *deps) []repo.Subscriber {
+			return capture(d, func(a repo.Analytics) repo.Subscriber { return taskevent.CaptureTask{Analytics: a} })
+		},
 	}
 }

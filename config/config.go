@@ -28,6 +28,7 @@ type (
 		Worker    Worker
 		CQRS      CQRS
 		Mail      Mail
+		Analytics Analytics
 		Exchange  Exchange
 		WebAuthn  WebAuthn
 		OIDC      OIDC

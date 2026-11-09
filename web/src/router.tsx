@@ -3,6 +3,7 @@ import { createRouter } from "@tanstack/react-router";
 
 import { onUnauthorized } from "#/api/client";
 import { auth } from "#/auth/token";
+import { pageview } from "#/lib/analytics";
 import { reportError } from "#/lib/error-tracking";
 import { routerDefaults } from "./router-defaults";
 import { routeTree } from "./routeTree.gen";
@@ -21,6 +22,12 @@ export const router = createRouter({
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,
   ...routerDefaults,
+});
+
+// The route template (/tasks/$id), not the path, so a page view carries no ID.
+router.subscribe("onResolved", () => {
+  const match = router.state.matches.at(-1);
+  if (match) pageview(match.fullPath);
 });
 
 onUnauthorized(() => {

@@ -22,6 +22,8 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `HTTP_PORT` | `8080` | the HTTP API, its docs and metrics |
 | `WEB_PORT` | `3000` | the Vite dev server's port (`make dev`, `make web-dev`); the app does not read it |
 | `VITE_SENTRY_DSN` | empty | the web client, at build time (`make web-dev`, `make web-build`): where it sends unexpected errors; empty starts no SDK and sends nothing. The Go binaries do not read it |
+| `VITE_POSTHOG_KEY` | empty | the web client, at build time: the PostHog project key it sends [analytics](analytics.md) with; empty loads nothing and sends nothing |
+| `VITE_POSTHOG_HOST` | `https://eu.i.posthog.com` | the web client, at build time: the PostHog host |
 | `VITE_RELEASE` | empty | the web client, at build time: the release name on reported errors, and the release the source maps belong to |
 | `SENTRY_URL`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | empty | `make web-build` only: with `SENTRY_AUTH_TOKEN` set, the build emits source maps, uploads them to this GlitchTip organization and project, and deletes them from `dist/`; without it no maps are built. The DSN's public key is the 32-character hex form GlitchTip shows, not a dashed UUID |
 | `GRPC_PORT` | `8081` | the gRPC transport |
@@ -165,6 +167,16 @@ Also read only by the worker, which sends the email.
 | `SMTP_USERNAME` | empty | empty turns auth off; when set, PLAIN auth, sent only over TLS or to localhost |
 | `SMTP_PASSWORD` | empty | |
 | `MAIL_FROM` | `Go Clean Template <noreply@example.com>` | sender address, parsed at startup: anything but exactly one address stops the binary. `.env.example` uses a bare address because of the no-spaces rule |
+
+### Analytics
+
+Read only by the worker, which sends the server's [analytics](analytics.md) events. Each vendor is on
+when its key is set; with none, nothing is captured.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `POSTHOG_API_KEY` | empty | the PostHog project key; set turns the PostHog sink on |
+| `POSTHOG_HOST` | `https://eu.i.posthog.com` | the PostHog host the sink sends to |
 
 ## Tracing
 

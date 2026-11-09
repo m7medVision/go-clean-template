@@ -143,6 +143,18 @@ func (q *Queries) EnsureCheckpoint(ctx context.Context, name string) error {
 	return err
 }
 
+const ensureCheckpointAtHead = `-- name: EnsureCheckpointAtHead :exec
+INSERT INTO projection_checkpoints (name, position)
+SELECT $1, COALESCE(MAX(position), 0)::bigint
+FROM events
+ON CONFLICT (name) DO NOTHING
+`
+
+func (q *Queries) EnsureCheckpointAtHead(ctx context.Context, name string) error {
+	_, err := q.db.Exec(ctx, ensureCheckpointAtHead, name)
+	return err
+}
+
 const getCheckpoint = `-- name: GetCheckpoint :one
 SELECT position
 FROM projection_checkpoints

@@ -27,10 +27,20 @@ const domains = ["tasks", "exchange", "passkey", "sso"];
 
 type Restriction = ["error", { patterns: { regex: string; message: string }[] }];
 
-const restrict = (folders: string[], forbidden: string[], message: string) => {
+const vendor = {
+  regex: "^posthog-js(/|$)",
+  message: "only src/lib/analytics.ts imports posthog-js",
+};
+
+const restrict = (
+  folders: string[],
+  forbidden: string[],
+  message: string,
+  extra: { regex: string; message: string }[] = [vendor],
+) => {
   const rule: Restriction = [
     "error",
-    { patterns: [{ regex: `^#/(${forbidden.join("|")})(/|$)`, message }] },
+    { patterns: [{ regex: `^#/(${forbidden.join("|")})(/|$)`, message }, ...extra] },
   ];
 
   return {
@@ -39,7 +49,14 @@ const restrict = (folders: string[], forbidden: string[], message: string) => {
   };
 };
 
+const vendorOnly = (files: string[]) => {
+  const rule: Restriction = ["error", { patterns: [vendor] }];
+
+  return { files, rules: { "no-restricted-imports": rule } };
+};
+
 const layers = [
+  vendorOnly(["src/*.ts", "src/*.tsx", "src/routes/**", "src/testing/**"]),
   ...domains.map((domain) =>
     restrict(
       [domain],
@@ -52,6 +69,15 @@ const layers = [
     [...domains, "routes"],
     "shared code never imports a domain or a route",
   ),
+  {
+    ...restrict(
+      ["lib"],
+      [...domains, "routes"],
+      "shared code never imports a domain or a route",
+      [],
+    ),
+    files: ["src/lib/analytics.ts"],
+  },
 ];
 
 // Source maps are built only when they can be uploaded to GlitchTip (a Sentry-compatible server)

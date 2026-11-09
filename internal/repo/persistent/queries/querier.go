@@ -28,6 +28,7 @@ type Querier interface {
 	DeletePasskeyRow(ctx context.Context, id entity.PasskeyID) error
 	DeleteTaskRow(ctx context.Context, id string) error
 	EnsureCheckpoint(ctx context.Context, name string) error
+	EnsureCheckpointAtHead(ctx context.Context, name string) error
 	GetCheckpoint(ctx context.Context, name string) (int64, error)
 	GetConversion(ctx context.Context, conversionID *string) (GetConversionRow, error)
 	GetPasskey(ctx context.Context, id entity.PasskeyID) (WebauthnCredential, error)

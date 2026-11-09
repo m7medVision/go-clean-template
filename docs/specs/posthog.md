@@ -1,8 +1,8 @@
 # Spec: product analytics, PostHog first
 
 Module id: `posthog` · third of four (see [README.md](README.md#observability-and-messaging)) ·
-Depends on `nats-queue`, `task-attributes` (both merged) · Status: **spec revised 2026-11-09, awaiting
-review**
+Depends on `nats-queue`, `task-attributes` (both merged) · Status: **built 2026-11-09 in PR #5,
+awaiting review**; the user docs are [docs/analytics.md](../analytics.md)
 
 ## Objective
 
@@ -52,10 +52,12 @@ captured and nothing else changes. Done means:
    - `repo.AnalyticsSink` is the strategy: `Name() string` and
      `Send(ctx, *analytics.Event) error`. One adapter per vendor in
      `internal/repo/analytics/<vendor>/`, the only package importing that vendor's SDK.
-     PostHog (`posthog-go`) is the only adapter in this module.
+     PostHog is the only adapter in this module: plain `net/http` to its capture API, as
+     `internal/repo/webapi` calls its provider.
    - A queue message sends the `DeliverAnalytics` command, whose handler picks the sink by name,
      as mail sends `DeliverEmail`. Each sink sends one event and waits for the answer (not
-     `posthog-go`'s background `Enqueue`), so a failure reaches the queue and is retried.
+     `posthog-go`, whose `Enqueue` batches in the background), so a failure reaches the queue and
+     is retried. A 4xx is `analytics.ErrRejected`, which the queue handler makes permanent.
    - The worker builds the list of sinks from the vendors whose settings are present
      (`internal/app/analytics.go`); zero, one or several.
    - **Fan-out at publish, one topic per sink.** `repo.Analytics.Capture` publishes one message
@@ -98,7 +100,7 @@ captured and nothing else changes. Done means:
 | `~ internal/repo/contracts.go` | `StartsAtHead` |
 | **Adapters** | |
 | `+ internal/repo/analytics/analytics.go` + `_test.go` | the fan-out publisher |
-| `+ internal/repo/analytics/posthog/posthog.go` + `_test.go` | the PostHog sink, the only `posthog-go` import |
+| `+ internal/repo/analytics/posthog/posthog.go` + `_test.go` | the PostHog sink, the only code that knows PostHog |
 | `+ internal/repo/analytics/sinktest/sinktest.go` | the suite every sink passes |
 | **Projection runner** | |
 | `~ internal/repo/persistent/projection/runner.go` + `_test.go` | a `StartsAtHead` subscriber with no checkpoint starts at the head |
@@ -118,7 +120,6 @@ captured and nothing else changes. Done means:
 | **Config** | |
 | `~ config/config.go` + `_test.go` | `Analytics{PostHog}` |
 | `~ .env.example`, `docker-compose.yml` (worker) | `POSTHOG_API_KEY`, `POSTHOG_HOST` |
-| `~ go.mod`, `go.sum` | `github.com/posthog/posthog-go` |
 | **Web** | |
 | `+ web/src/lib/analytics.ts` | the only `posthog-js` import: `init`, `capture`, `identify`, `reset`, `pageview` |
 | `+ web/src/lib/analytics-events.ts` | `user_logged_in`, `task_attributes_updated`, `page_viewed` |
@@ -128,7 +129,7 @@ captured and nothing else changes. Done means:
 | `~ web/src/auth/` | `identify` after sign-in, `reset` on sign-out, `user_logged_in` |
 | `~ web/src/tasks/api.ts` | `task_attributes_updated` on the mutation's success |
 | `~ web/vite.config.ts` | lint: `posthog-js` only in `src/lib/analytics.ts` |
-| `~ web/.env.example`, `web/package.json`, `web/bun.lock` | `VITE_POSTHOG_*`, `posthog-js` |
+| `~ .env.example`, `web/package.json`, `web/bun.lock` | `VITE_POSTHOG_*`, `posthog-js` |
 | **Docs** | |
 | `+ docs/analytics.md` | the catalogue, the strategy, adding a sink |
 | `~ docs/configuration.md`, `docs/worker.md`, `docs/cqrs.md`, `docs/web.md`, `docs/architecture.md` | settings, topics, `capture-*` and `StartsAtHead`, the facade, the packages |
@@ -237,40 +238,39 @@ for _, sink := range sinks {
 `internal/repo/analytics/posthog/posthog.go`
 
 ```go
-ph.Capture{
-	Uuid:       uuid.NewSHA1(uuid.NameSpaceOID, []byte(e.ID)).String(),
-	DistinctId: e.DistinctID,
+capture{
+	APIKey:     s.apiKey,
 	Event:      e.Properties.Name(),
+	DistinctID: e.DistinctID,
+	UUID:       UUID(e.ID),
 	Timestamp:  e.At,
 	Properties: props,
 }
-// sent one at a time and awaited; a 4xx → broker.Permanent
+// POST <host>/i/v0/e/, one at a time and awaited; 429 or 5xx: retried; any other 4xx: ErrRejected
 ```
 
 `internal/repo/persistent/projection/runner.go`
 
 ```go
-if _, ok := s.(repo.StartsAtHead); ok && !found {
-	checkpoint = head
+if h, ok := s.(repo.StartsAtHead); ok && h.StartsAtHead() {
+	return r.store.EnsureCheckpointAtHead(ctx, s.Name())
 }
+
+return r.store.EnsureCheckpoint(ctx, s.Name())
 ```
 
 `internal/app/analytics.go`
 
 ```go
-func analyticsSinks(cfg config.Analytics) (map[string]repo.AnalyticsSink, error) {
+func analyticsSinks(cfg config.Analytics) map[string]repo.AnalyticsSink {
 	sinks := map[string]repo.AnalyticsSink{}
 
 	if cfg.PostHog.APIKey != "" {
-		s, err := posthog.New(cfg.PostHog.APIKey, cfg.PostHog.Host)
-		if err != nil {
-			return nil, fmt.Errorf("analytics - posthog.New: %w", err)
-		}
-
+		s := posthog.New(cfg.PostHog.APIKey, cfg.PostHog.Host)
 		sinks[s.Name()] = s
 	}
 
-	return sinks, nil
+	return sinks
 }
 ```
 
@@ -278,23 +278,24 @@ func analyticsSinks(cfg config.Analytics) (map[string]repo.AnalyticsSink, error)
 
 ```go
 eventHandlers: func(d *deps) []repo.Subscriber {
-	if d.analytics == nil {
-		return nil
-	}
-
-	return []repo.Subscriber{taskevent.CaptureTask{Analytics: d.analytics}}
+	return capture(d, func(a repo.Analytics) repo.Subscriber { return taskevent.CaptureTask{Analytics: a} })
 },
+// capture returns nothing when d.analytics is nil: no vendor configured
 ```
 
 `web/src/lib/analytics.ts`
 
 ```ts
-posthog.init(key, {
+loaded.init(key, {
   api_host: host,
-  session_recording: { maskAllInputs: true, maskTextSelector: "[data-task-text]" },
+  capture_pageview: false,
+  autocapture: false,
+  person_profiles: "identified_only",
+  session_recording: { maskAllInputs: true, maskTextSelector: "*" },
 });
 
-export const pageview = (path: string) => posthog.capture("$pageview", { path });
+export const pageview = (path: string) => capture(analyticsEvents.pageViewed, { path });
+// page_viewed is sent to PostHog as $pageview
 ```
 
 Package names: `entity/analytics`, `repo/analytics` and `usecase/analytics` are all `analytics`; a
