@@ -14,7 +14,7 @@ COPY --from=web-src --chown=vp:vp . ./
 RUN vp build
 
 # Souin ships no storage of its own since v1.7.0, so the in-memory otter storage is built in too.
-FROM caddy:2.11.7-builder AS builder
+FROM caddy:2.11.8-builder AS builder
 
 ARG CADDY_WAF_VERSION=v0.4.15
 
@@ -24,7 +24,7 @@ RUN xcaddy build \
         --with github.com/darkweak/storages/otter/caddy@v0.0.20 \
     && cp "$(go env GOMODCACHE)/github.com/fabriziosalmi/caddy-waf@${CADDY_WAF_VERSION}/rules.json" /waf-rules.json
 
-FROM caddy:2.11.7-alpine
+FROM caddy:2.11.8-alpine
 
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 COPY --from=builder /waf-rules.json /etc/caddy/waf/rules.json
