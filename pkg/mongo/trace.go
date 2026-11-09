@@ -2,6 +2,9 @@ package mongo
 
 import (
 	"context"
+	"net"
+	"strconv"
+	"strings"
 	"sync"
 
 	"go.mongodb.org/mongo-driver/v2/event"
@@ -37,8 +40,8 @@ func (s *spans) started(ctx context.Context, e *event.CommandStartedEvent) {
 			semconv.DBSystemMongoDB,
 			semconv.DBNamespace(e.DatabaseName),
 			semconv.DBOperationName(e.CommandName),
-			attribute.String("server.address", e.ConnectionID),
-		))
+		),
+		trace.WithAttributes(server(e.ConnectionID)...))
 
 	s.mu.Lock()
 	s.open[e.RequestID] = span
@@ -67,4 +70,23 @@ func (s *spans) take(id int64) trace.Span {
 	delete(s.open, id)
 
 	return span
+}
+
+func server(connectionID string) []attribute.KeyValue {
+	addr := connectionID
+	if i := strings.LastIndex(addr, "[-"); i >= 0 {
+		addr = addr[:i]
+	}
+
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return []attribute.KeyValue{semconv.ServerAddress(addr)}
+	}
+
+	attrs := []attribute.KeyValue{semconv.ServerAddress(host)}
+	if p, err := strconv.Atoi(port); err == nil {
+		attrs = append(attrs, semconv.ServerPort(p))
+	}
+
+	return attrs
 }
