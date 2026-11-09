@@ -47,7 +47,8 @@ the same name, created when it is first used.
   retries, or JetStream redelivers it to another worker meanwhile.
 - **Poison.** A message still failing after its retries, or one whose handler returns
   `broker.Permanent(err)` (a body that can never decode), is moved to the `poison` topic with the
-  reason and its topic in its metadata, and logged at `Error`. It is kept, not dropped. How poison
+  reason and its topic in its metadata, and logged at `Error`, which reports it to GlitchTip when
+  `SENTRY_DSN` is set ([error-tracking.md](error-tracking.md)). It is kept, not dropped. How poison
   messages are inspected and replayed is not decided yet (the TODO in `pkg/broker`).
 - **Shutdown.** On SIGTERM the router stops taking messages and waits up to
   `WORKER_SHUTDOWN_TIMEOUT` for the handlers in flight.

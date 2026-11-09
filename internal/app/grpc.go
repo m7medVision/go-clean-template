@@ -7,6 +7,7 @@ import (
 	grpcmw "github.com/m7medvision/go-clean-template/internal/controller/grpc/middleware"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/sentrylog"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -22,13 +23,14 @@ func newGRPCServer(
 	srv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.ChainUnaryInterceptor(
+			sentrylog.UnaryServerInterceptor(),
 			grpcmw.ClientAddress(proxy),
 			grpcmw.Logger(l),
 			grpcmw.NewMetrics(metrics).Interceptor,
 			grpcmw.Recovery(l),
 			grpcmw.Auth(jwtManager, publicGRPCMethods()...),
 		),
-		grpc.ChainStreamInterceptor(grpcmw.StreamClientAddress(proxy), grpcmw.StreamRecovery(l)),
+		grpc.ChainStreamInterceptor(sentrylog.StreamServerInterceptor(), grpcmw.StreamClientAddress(proxy), grpcmw.StreamRecovery(l)),
 	)
 
 	registerGRPC(srv, b, l)

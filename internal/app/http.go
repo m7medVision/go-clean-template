@@ -13,6 +13,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/controller/restapi"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
+	"github.com/m7medvision/go-clean-template/pkg/sentrylog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -34,6 +35,7 @@ func newHTTPHandler(
 	r.Use(chimw.StripSlashes)
 	r.Use(httpmw.Logger(l))
 	r.Use(httpmw.Tracing(_healthzPath, _metricsPath))
+	r.Use(sentrylog.HTTP)
 	r.Use(httpmw.NewMetrics(metrics).Middleware)
 	r.Use(httpmw.Recovery(l))
 

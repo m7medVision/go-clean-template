@@ -34,6 +34,8 @@ x-backend-app-environment: &x-backend-app-environment
   TRACING_OTLP_ENDPOINT: "jaeger:4317"
   TRACING_OTLP_INSECURE: "true"
   TRACING_SAMPLE_RATE: "1.0"  # DON'T set to 1.0 in production, use a lower value like 0.1 or 0.01
+  # Error tracking (GlitchTip): each binary sets its own project's SENTRY_DSN below
+  SENTRY_ENVIRONMENT: "development"
   # JWT
   JWT_SECRET: "your-secret-key-change-in-production"
   JWT_TOKEN_EXPIRY: "15m"
@@ -193,6 +195,7 @@ services:
       context: .
     environment:
       <<: *x-backend-app-environment
+      SENTRY_DSN: "${SENTRY_APP_DSN:-}"
     ports:
       - "8080:8080"
       - "8081:8081"
@@ -228,6 +231,7 @@ services:
     restart: on-failure
     environment:
       <<: *x-backend-app-environment
+      SENTRY_DSN: "${SENTRY_WORKER_DSN:-}"
     depends_on:
       db:
         condition: service_started

@@ -28,6 +28,7 @@ require (
 	github.com/danielgtaylor/huma/v2 v2.40.0
 	github.com/descope/virtualwebauthn v1.0.5
 	github.com/exaring/otelpgx v0.13.0
+	github.com/getsentry/sentry-go v0.50.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/goccy/go-json v0.12.0

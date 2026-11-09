@@ -15,7 +15,12 @@ import (
 
 	"github.com/m7medvision/go-clean-template/internal/entity"
 	"github.com/m7medvision/go-clean-template/internal/repo"
+	"github.com/m7medvision/go-clean-template/pkg/sentrylog"
 )
+
+// _checkpointGrace is how long a checkpoint may fail to be created, as it does while the app has not
+// applied the schema yet, before the failure is reported as an error.
+const _checkpointGrace = time.Minute
 
 var (
 	// errMoved is a checkpoint that was not where the runner read it: a rebuild reset it, or
@@ -48,12 +53,31 @@ type Runner struct {
 	pollInterval time.Duration
 	batchSize    int
 	logger       *slog.Logger
+	grace        time.Duration
+}
+
+// eventError is a subscriber failing on the event at position.
+type eventError struct {
+	position int64
+	err      error
+}
+
+func (e *eventError) Error() string { return e.err.Error() }
+func (e *eventError) Unwrap() error { return e.err }
+
+// failure is where a subscriber last failed, so a failure repeating there is reported once.
+type failure struct {
+	position int64
+	failing  bool
 }
 
 // New returns a runner that runs subscribers on s, reading at most batchSize events at once. An
 // idle subscriber waits pollInterval for a notification before it reads again.
 func New(l *slog.Logger, s Store, pollInterval time.Duration, batchSize int, subscribers ...repo.Subscriber) *Runner {
-	return &Runner{store: s, subscribers: subscribers, pollInterval: pollInterval, batchSize: batchSize, logger: l}
+	return &Runner{
+		store: s, subscribers: subscribers, pollInterval: pollInterval, batchSize: batchSize, logger: l,
+		grace: _checkpointGrace,
+	}
 }
 
 // Run runs one loop per subscriber, and one that fans the store's notifications out to them,
@@ -96,6 +120,8 @@ func fanOut(n <-chan struct{}, wakes []chan struct{}) {
 }
 
 func (r *Runner) run(ctx context.Context, s repo.Subscriber, wake <-chan struct{}) {
+	ctx = sentrylog.Fork(ctx)
+
 	if !r.ensureCheckpoint(ctx, s) {
 		return
 	}
@@ -105,14 +131,18 @@ func (r *Runner) run(ctx context.Context, s repo.Subscriber, wake <-chan struct{
 		handles[e.EventType()] = true
 	}
 
+	var last failure
+
 	for ctx.Err() == nil {
 		full, err := r.batch(ctx, s, handles)
 
 		switch {
 		case full, errors.Is(err, errMoved):
 			continue
-		case err != nil && !errors.Is(err, errBusy):
-			r.logError(ctx, s, err)
+		case err != nil:
+			last = r.report(ctx, s, err, last)
+		default:
+			last = failure{}
 		}
 
 		select {
@@ -127,13 +157,20 @@ func (r *Runner) run(ctx context.Context, s repo.Subscriber, wake <-chan struct{
 // trying again every poll interval until it can: the
 // worker can start before the app has applied the schema. It is false when the runner stops first.
 func (r *Runner) ensureCheckpoint(ctx context.Context, s repo.Subscriber) bool {
+	started, reported := time.Now(), false
+
 	for ctx.Err() == nil {
 		err := r.createCheckpoint(ctx, s)
 		if err == nil {
 			return true
 		}
 
-		r.logError(ctx, s, fmt.Errorf("EnsureCheckpoint: %w", err))
+		level := slog.LevelWarn
+		if !reported && time.Since(started) >= r.grace {
+			level, reported = slog.LevelError, true
+		}
+
+		r.log(ctx, level, s, fmt.Errorf("EnsureCheckpoint: %w", err))
 
 		select {
 		case <-ctx.Done():
@@ -152,9 +189,33 @@ func (r *Runner) createCheckpoint(ctx context.Context, s repo.Subscriber) error 
 	return r.store.EnsureCheckpoint(ctx, s.Name())
 }
 
-func (r *Runner) logError(ctx context.Context, s repo.Subscriber, err error) {
+// report logs err as an error the first time s fails where it is failing now, and as a warning
+// while it keeps failing there, so a stuck event is one GlitchTip issue, not one per poll. A
+// subscriber another runner holds is no failure.
+func (r *Runner) report(ctx context.Context, s repo.Subscriber, err error, last failure) failure {
+	if errors.Is(err, errBusy) {
+		return last
+	}
+
+	now := failure{position: -1, failing: true}
+
+	if at, ok := errors.AsType[*eventError](err); ok {
+		now.position = at.position
+	}
+
+	level := slog.LevelError
+	if last == now {
+		level = slog.LevelWarn
+	}
+
+	r.log(ctx, level, s, err)
+
+	return now
+}
+
+func (r *Runner) log(ctx context.Context, level slog.Level, s repo.Subscriber, err error) {
 	if ctx.Err() == nil {
-		r.logger.Error("projection - handle an event", "subscriber", s.Name(), "error", err)
+		r.logger.Log(ctx, level, "projection - handle an event", "subscriber", s.Name(), "error", err)
 	}
 }
 
@@ -181,7 +242,10 @@ func (r *Runner) batch(ctx context.Context, s repo.Subscriber, handles map[strin
 
 		err = r.move(ctx, s, checkpoint, e.Position, func(ctx context.Context) error {
 			if err := s.Handle(ctx, e); err != nil {
-				return fmt.Errorf("handle %s at %d: %w", e.Event.EventType(), e.Position, err)
+				return &eventError{
+					position: e.Position,
+					err:      fmt.Errorf("handle %s at %d: %w", e.Event.EventType(), e.Position, err),
+				}
 			}
 
 			return nil

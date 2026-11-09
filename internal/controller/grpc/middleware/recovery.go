@@ -39,7 +39,7 @@ func StreamRecovery(l *slog.Logger) grpc.StreamServerInterceptor {
 }
 
 func panicked(ctx context.Context, l *slog.Logger, method string, p any) error {
-	l.Error("grpc panic", "client", clientAddr(ctx), "method", method,
+	l.ErrorContext(ctx, "grpc panic", "client", clientAddr(ctx), "method", method,
 		"panic", fmt.Sprint(p), "stack", string(debug.Stack()))
 
 	return status.Error(codes.Internal, "internal server error")
