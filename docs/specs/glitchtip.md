@@ -3,7 +3,7 @@
 Module id: `glitchtip` · see [README.md](README.md#observability-and-messaging) · Depends on nothing
 (built after `nats-queue` so its given-up messages are covered) · Shares the GlitchTip server and
 release name with [web-error-tracking.md](web-error-tracking.md) (done, #53) · Status: **approved
-2026-11-10, not built**
+2026-11-10, built on `docs/glitchtip-spec`, awaiting review**
 
 ## Objective
 
@@ -48,7 +48,8 @@ to it, so the team is told something broke instead of finding it in stdout. Done
    `{record message, outermost operation}`, the operation being the error text before its first
    `": "` (`CreateTask - aggregate.Save`). The stack is the logging call site (`AttachStacktrace`).
 6. **Attributes on an allowlist.** Events and breadcrumbs carry only `op`, `name`, `kind`,
-   `duration`, `subscriber`, `topic`, `status` and `method` (an HTTP verb or gRPC method name).
+   `duration`, `subscriber`, `topic`, `status`, `method` (an HTTP verb or gRPC method name) and
+   `panic` (a recovered panic's value, which also stands in for the operation in its fingerprint).
    Anything else, `client` and `uri` included, is dropped; a new attribute is added on purpose.
 7. **Tags:** `service` (`app` or `worker`), `trace_id` (from the OTel span in `ctx`), `release`
    (`APP_VERSION`, required, the same string the web build sends), `environment`. User: the ID only,
@@ -88,12 +89,12 @@ worker: { environment: { SENTRY_DSN: "${SENTRY_WORKER_DSN:-}" } }
 | `pkg/sentrylog/hub.go` | `Fork`, `HTTP`, the gRPC unary and stream interceptors, `Watermill`, `SetUser` |
 | `internal/app/bootstrap.go` | `Init` and the wrapped logger when the DSN is set; the flush among the stops |
 | `internal/app/http.go`, `grpc.go`, `worker.go` | the hub middlewares, right after tracing |
-| `pkg/broker/broker.go` | `Settings.Middlewares`, run before retry, so a message's retries share its hub |
+| `pkg/broker/broker.go` | `sentrylog.Watermill` first among the router's middlewares, so a message's retries share its hub (`broker.Settings` stays the shape of `config.Worker`) |
 | `internal/controller/authn` | `sentrylog.SetUser(ctx, id)` |
 | `internal/controller/httpmw/recovery.go`, `grpc/middleware/recovery.go` | `Error` → `ErrorContext` |
 | `internal/repo/persistent/projection/runner.go` | `Fork` per subscriber loop, `eventError{position}`, `report`, the checkpoint grace |
 | `.env.example`, `docker-compose.yml` | the two settings, a DSN per service |
-| `docs/configuration.md`, `docs/architecture.md` (`pkg/sentrylog`), `docs/observability.md`, `docs/worker.md` | what is sent and what is not; the runner's reporting |
+| `docs/configuration.md`, `docs/architecture.md` (`pkg/sentrylog`), a new `docs/error-tracking.md`, `docs/worker.md` | what is sent and what is not; the runner's reporting |
 
 ## Code shape
 
@@ -121,10 +122,12 @@ func Init(o Options) (func(), error) {
 
 type Handler struct {
 	next  slog.Handler
+	root  *sentry.Hub
 	attrs []slog.Attr
 }
 
-func New(next slog.Handler) *Handler { return &Handler{next: next} }
+// root takes the Error records whose context carries no hub; bootstrap passes sentry.CurrentHub().
+func New(next slog.Handler, root *sentry.Hub) *Handler { return &Handler{next: next, root: root} }
 
 func (h *Handler) Enabled(context.Context, slog.Level) bool { return true }
 
@@ -134,12 +137,12 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	switch {
 	case r.Level >= slog.LevelError:
 		if hub == nil {
-			hub = sentry.CurrentHub()
+			hub = h.root
 		}
 
-		hub.CaptureEvent(event(ctx, r, h.attrs))
+		hub.CaptureEvent(event(ctx, &r, h.attrs))
 	case hub != nil:
-		hub.AddBreadcrumb(breadcrumb(r, h.attrs), nil)
+		hub.AddBreadcrumb(breadcrumb(&r, h.attrs), nil)
 	}
 
 	if !h.next.Enabled(ctx, r.Level) {
@@ -264,7 +267,7 @@ if cfg.Sentry.DSN != "" {
 	}
 
 	b.stops = append(b.stops, flush)
-	l = slog.New(sentrylog.New(l.Handler()))
+	l = slog.New(sentrylog.New(l.Handler(), sentry.CurrentHub()))
 }
 ```
 

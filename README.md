@@ -89,6 +89,7 @@ If something else holds 6379, set `VALKEY_PORT=6380` the same way; 27017, `MONGO
 - [API](docs/api.md): every endpoint on every transport, errors, versioning
 - [Development](docs/development.md): dev mode, tests, the full stack behind Caddy
 - [Configuration](docs/configuration.md): every environment variable, tracing
+- [Error tracking](docs/error-tracking.md): what reaches GlitchTip, what never does
 - [Passkeys](docs/passkeys.md): the WebAuthn ceremonies, replay protection, relying-party setup
 - [SSO and roles](docs/sso.md): OpenID Connect sign-in, the dev Keycloak, role mapping, other providers
 - [Queue and worker](docs/worker.md)

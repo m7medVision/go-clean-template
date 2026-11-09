@@ -195,3 +195,14 @@ http://127.0.0.1:16686.
 | `TRACING_OTLP_ENDPOINT` | `localhost:4317` | OTLP/gRPC collector |
 | `TRACING_OTLP_INSECURE` | `true` | no TLS to the collector |
 | `TRACING_SAMPLE_RATE` | `0.1` | parent-based ratio. Use `1.0` locally (`.env.example` does), lower it in production |
+
+## Error tracking
+
+Unexpected errors go to GlitchTip, or any Sentry-protocol server, when a DSN is set; see
+[error-tracking.md](error-tracking.md). Both binaries read these, each with its own project's DSN:
+compose sets the app's from `SENTRY_APP_DSN` and the worker's from `SENTRY_WORKER_DSN`.
+
+| Env var | Default | |
+| --- | --- | --- |
+| `SENTRY_DSN` | empty: off | the project's DSN |
+| `SENTRY_ENVIRONMENT` | `development` | the `environment` of every event |
