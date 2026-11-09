@@ -6,12 +6,16 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"time"
 
 	"github.com/m7medvision/go-clean-template/tools/gen/edit"
 	"github.com/m7medvision/go-clean-template/tools/gen/names"
 	"github.com/m7medvision/go-clean-template/tools/gen/rules"
 	"github.com/m7medvision/go-clean-template/tools/gen/templates"
 )
+
+// _versionLayout is how goose names a migration it creates: a UTC timestamp to the second.
+const _versionLayout = "20060102150405"
 
 // domainLayers are the layers of a new domain, from the entity out; a transport's layers name it,
 // and run only when it was asked for. Every file they create copies the task file at its path, and
@@ -24,7 +28,7 @@ func domainLayers() []layer {
 		// The table, its queries, the read model's contract (which make mock mocks) and the read
 		// model over them, and the projector that writes the table, with its test.
 		{creates: []string{
-			"internal/app/schema/*.tmpl", "internal/repo/persistent/queries/*.tmpl",
+			"internal/app/migrations/*.tmpl", "internal/repo/persistent/queries/*.tmpl",
 			"internal/repo/*.tmpl", "internal/repo/persistent/{{.Name.Pkg}}/*.tmpl",
 		}},
 		// The commands and queries, as stubs with their tests, and the Register that puts them on
@@ -97,7 +101,12 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 		return err
 	}
 
-	pl, err := planDomain(r, &n, req.transports)
+	version := req.version
+	if version == "" {
+		version = time.Now().UTC().Format(_versionLayout)
+	}
+
+	pl, err := planDomain(r, &n, req.transports, version)
 	if err != nil {
 		return err
 	}
@@ -117,8 +126,8 @@ func newDomain(ctx context.Context, req *domainRequest, stdout io.Writer) error 
 
 // planDomain plans every layer of the domain n that runs for transports, against the repository r.
 // What it runs into is in the planner's errs, for the rules.
-func planDomain(r rules.Repo, n *names.Name, transports []string) (*planner, error) {
-	pl, err := newPlanner(r, _domainSet, "new-domain "+n.Kebab, &templates.Data{Name: *n, Transports: transports})
+func planDomain(r rules.Repo, n *names.Name, transports []string, version string) (*planner, error) {
+	pl, err := newPlanner(r, _domainSet, "new-domain "+n.Kebab, &templates.Data{Name: *n, Transports: transports, Version: version})
 	if err != nil {
 		return nil, err
 	}

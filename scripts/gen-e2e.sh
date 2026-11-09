@@ -7,8 +7,7 @@
 # The generator and the gates run in that worktree, which is removed on exit, pass or fail. The
 # working checkout is never touched; nothing starts the app or touches a database.
 #
-# It needs what the regenerators need: protoc, Docker (make sqlc's throwaway dev database), atlas,
-# the vp CLI and the tools make bin-deps installs.
+# It needs what the regenerators need: protoc, the vp CLI and the tools make bin-deps installs.
 #
 # Usage: scripts/gen-e2e.sh. Run it through `make gen-e2e`.
 set -euo pipefail

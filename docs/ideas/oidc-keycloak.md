@@ -54,7 +54,7 @@ most of the revocation gap.
 
 - `entity.Role`, `Principal`, `roles` JWT claim, role-aware auth on REST, gRPC and GraphQL, one
   admin rule in the task use case.
-- `user_identities` table (HCL), repo and use case for OIDC login, `GET /v1/auth/oidc/login` and
+- `user_identities` table, repo and use case for OIDC login, `GET /v1/auth/oidc/login` and
   `GET /v1/auth/oidc/callback`.
 - Config: `OIDC_ISSUER` (empty = OIDC off), `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID`,
   `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URL`, `OIDC_ROLES_CLAIM`, `OIDC_ROLE_MAP`.

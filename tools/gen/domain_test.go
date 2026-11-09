@@ -31,6 +31,9 @@ import (
 // UPDATE_GOLDEN=1 rewrites them all.
 const _goldenDir = "testdata/golden/domain"
 
+// _goldenVersion names the golden domain's migration, so the goldens do not change with the clock.
+const _goldenVersion = "20260101000000"
+
 // someTransports are the sets of transports, short of every one, that have goldens of their own.
 func someTransports() [][]string {
 	return [][]string{{"rest"}, {"grpc", "graphql"}}
@@ -65,7 +68,7 @@ func planWidget(t *testing.T) *planner {
 func planOf(t *testing.T, r rules.Repo, n *names.Name, transports []string) *planner {
 	t.Helper()
 
-	pl, err := planDomain(r, n, transports)
+	pl, err := planDomain(r, n, transports, _goldenVersion)
 	require.NoError(t, err)
 
 	return pl
@@ -601,7 +604,7 @@ func TestModulePathReadsGoMod(t *testing.T) {
 func TestPlanningStopsWithoutTheModule(t *testing.T) {
 	t.Parallel()
 
-	_, err := planDomain(rules.Repo{FS: fstest.MapFS{}}, parseName(t, "widget"), nil)
+	_, err := planDomain(rules.Repo{FS: fstest.MapFS{}}, parseName(t, "widget"), nil, _goldenVersion)
 
 	require.ErrorIs(t, err, rules.ErrTargets)
 	assert.Contains(t, err.Error(), "there is no go.mod")

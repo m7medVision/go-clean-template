@@ -69,6 +69,8 @@ type Data struct {
 	Transports []string
 	// Usecase is the command or query make new-usecase adds to the domain; nil for new-domain.
 	Usecase *Usecase
+	// Version is the timestamp a new domain's migration is named after, as in 20261108120000.
+	Version string
 }
 
 // Usecase is one command or query that make new-usecase adds to an existing domain.

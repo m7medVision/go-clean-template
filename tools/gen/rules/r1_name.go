@@ -29,7 +29,6 @@ func DomainFree(ctx context.Context, r Repo, n *names.Name) error {
 		"internal/entity/" + n.Snake + "_aggregate.go",
 		"internal/repo/" + n.Snake + ".go",
 		"internal/app/" + n.Snake + ".go",
-		"internal/app/schema/" + n.Plural.Snake + ".hcl",
 	}
 
 	for _, t := range Transports() {
@@ -40,6 +39,15 @@ func DomainFree(ctx context.Context, r Repo, n *names.Name) error {
 		if r.Exists(p) {
 			return taken(n, p+" exists")
 		}
+	}
+
+	migrations, err := r.glob(MigrationsDir + "/*_create_" + n.Plural.Snake + ".sql")
+	if err != nil {
+		return err
+	}
+
+	if len(migrations) > 0 {
+		return taken(n, migrations[0]+" exists")
 	}
 
 	if err := noneDeclares(r, n, ProtoDir+"/*.proto", edit.ParseProto, (*edit.Proto).Services, "service", n.Go+"Service"); err != nil {

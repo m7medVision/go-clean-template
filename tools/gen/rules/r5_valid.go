@@ -26,7 +26,7 @@ func valid(p *plan.Plan) error {
 	return nil
 }
 
-// parses parses src by the kind of file at p. Kinds without a parser here, such as SQL and HCL,
+// parses parses src by the kind of file at p. Kinds without a parser here, such as SQL,
 // are checked by the regenerators that read them.
 func parses(p string, src []byte) error {
 	var err error

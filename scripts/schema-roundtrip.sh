@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
-# Schema round trip: proves the HCL in the working tree can be applied on top of the schema at a base
-# git ref (up), rolled back to it (down), and applied again (up), and that each apply leaves nothing
-# to sync. The base schema comes out of git with `git archive`, so no checkout is touched.
+# Migration round trip: every migration in the working tree goes up, down to zero and up again on a
+# throwaway Postgres, and no migration that exists at the base ref was changed or removed.
 #
-# The apply is declarative and drops whatever the target HCL does not declare, so it must never see a
-# real database. Locally it starts a throwaway Postgres container that exists only while the script
-# runs. CI passes ROUNDTRIP_PG_URL, the Postgres that bmizerany/setup-postgres starts on the runner;
-# the script refuses a database that already holds anything.
+# Down to zero drops every table, so it must never see a real database. Locally it starts a
+# throwaway Postgres container that exists only while the script runs. CI passes ROUNDTRIP_PG_URL,
+# the Postgres that bmizerany/setup-postgres starts on the runner; the script refuses a database
+# that already has migrations applied.
 #
 # Usage: scripts/schema-roundtrip.sh [base-ref]   (default: origin/master). Run it through
 # `make schema-roundtrip`.
 set -euo pipefail
 
 BASE_REF=${1:-origin/master}
-SCHEMA_DIR=internal/app/schema
+MIGRATIONS_DIR=internal/app/migrations
 PG_IMAGE=docker.io/library/postgres:18.6-alpine
 
 cd "$(dirname "$0")/.."
 
 url=${ROUNDTRIP_PG_URL:-}
 
-tools="git atlas"
+tools="git go"
 if [ -z "$url" ]; then
 	tools="$tools docker"
 fi
@@ -37,6 +36,15 @@ if ! git rev-parse --verify --quiet "$BASE_REF^{commit}" >/dev/null; then
 	exit 1
 fi
 
+if git cat-file -e "$BASE_REF:$MIGRATIONS_DIR" 2>/dev/null; then
+	changed=$(git diff --name-only --diff-filter=MDR "$BASE_REF" -- "$MIGRATIONS_DIR" | grep '\.sql$' || true)
+	if [ -n "$changed" ]; then
+		echo "schema-roundtrip: migrations merged on $BASE_REF were edited or removed; add a new one instead:" >&2
+		echo "$changed" >&2
+		exit 1
+	fi
+fi
+
 tmp=$(mktemp -d)
 container=""
 
@@ -47,19 +55,6 @@ cleanup() {
 	rm -rf "$tmp"
 }
 trap cleanup EXIT
-
-if ! git cat-file -e "$BASE_REF:$SCHEMA_DIR" 2>/dev/null; then
-	echo "schema-roundtrip: $BASE_REF has no $SCHEMA_DIR; nothing to round-trip against"
-	exit 0
-fi
-
-git archive "$BASE_REF" "$SCHEMA_DIR" | tar -x -C "$tmp"
-base="file://$tmp/$SCHEMA_DIR"
-head="file://$SCHEMA_DIR"
-
-if diff -r "$tmp/$SCHEMA_DIR" "$SCHEMA_DIR" >/dev/null; then
-	echo "schema-roundtrip: schema unchanged since $BASE_REF; checking it applies cleanly"
-fi
 
 if [ -z "$url" ]; then
 	container=$(docker run -d --rm -e POSTGRES_PASSWORD=roundtrip -p 127.0.0.1::5432 "$PG_IMAGE")
@@ -75,28 +70,17 @@ if [ -z "$url" ]; then
 	docker exec "$container" pg_isready -U postgres -h 127.0.0.1 >/dev/null
 fi
 
-# An empty database inspects as the public schema alone; anything more means it is not a throwaway.
-current=$(atlas schema inspect -u "$url" --format '{{ sql . }}')
-if grep -qvE '^(--|CREATE SCHEMA |COMMENT ON SCHEMA |$)' <<<"$current"; then
-	echo "schema-roundtrip: the database is not empty; it needs a throwaway one" >&2
-	exit 1
-fi
+go build -o "$tmp/migrate" ./cmd/migrate
+migrate() { "$tmp/migrate" -url "$url" -dir "$MIGRATIONS_DIR" "$@"; }
 
-# apply STEP TARGET: apply TARGET, then fail unless a second plan against it is empty.
-apply() {
-	echo "== $1"
-	atlas schema apply -u "$url" --to "$2" --auto-approve
-	plan=$(atlas schema apply -u "$url" --to "$2" --dry-run)
-	if ! grep -q "Schema is synced, no changes to be made" <<<"$plan"; then
-		echo "schema-roundtrip: $1 left drift behind:" >&2
-		echo "$plan" >&2
-		exit 1
-	fi
-}
+migrate require-empty
 
-apply "base ($BASE_REF)" "$base"
-apply "up (working tree)" "$head"
-apply "down ($BASE_REF)" "$base"
-apply "up again (working tree)" "$head"
+echo "== up"
+migrate up
+echo "== down to zero"
+migrate down-to 0
+echo "== up again"
+migrate up
+migrate status
 
-echo "schema-roundtrip: up and down against $BASE_REF both apply cleanly"
+echo "schema-roundtrip: every migration goes up, down and up again"

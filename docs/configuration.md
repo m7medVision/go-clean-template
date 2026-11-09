@@ -27,7 +27,7 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 | `GRPC_PORT` | `8081` | the gRPC transport |
 | `TRUSTED_PROXY` | empty (no proxy) | the one address whose `X-Forwarded-For` the app reads, on HTTP and gRPC: Caddy's. An address that doesn't parse stops the app at startup. See [The client address](#the-client-address) |
 | `LOG_LEVEL` | required | `debug`, `info`, `warn`, `error` |
-| `PG_URL` | required | the app's database. The startup schema apply makes it match the HCL schema, dropping what the schema doesn't declare |
+| `PG_URL` | required | the app's database. The app applies the pending goose migrations to it at startup (with the `migrate` tag) |
 | `PG_POOL_MAX` | required | |
 | `JWT_SECRET` | required by the app | change it outside development |
 | `JWT_TOKEN_EXPIRY` | `15m` | the auth token's lifetime. Roles are fixed when it is issued, so this is also how long a revoked role lingers ([architecture.md](architecture.md#roles)) |
@@ -36,10 +36,10 @@ settings reach take them as arguments. "required" means both binaries refuse to 
 
 Two variables are read by tooling, not by the app:
 
+- `NATS_PORT` (default `4222`) is the host port the compose `nats` service publishes, and `NATS_URL`
+  in `.env.example` is built from it.
 - `PG_PORT` (default `5432`) is the host port the compose `db` service publishes, and `PG_URL` in
   `.env.example` is built from it. Set it when something else on the host already uses 5432.
-- `ATLAS_DEV_URL` is read only by `make sqlc`, which renders the HCL schema in a throwaway
-  `docker://` Postgres container.
 
 ### The client address
 
@@ -123,13 +123,15 @@ The state token's signing key is derived from `JWT_SECRET`, so there is no extra
 
 ## Worker
 
-Read only by `cmd/worker`, so none of them is required. See [worker.md](worker.md) for how they behave.
+Read only by `cmd/worker`; only `NATS_URL` is required, and only by it. See [worker.md](worker.md) for how they behave.
 
 | Env var | Default | |
 | --- | --- | --- |
-| `WORKER_POLL_INTERVAL` | `1s` | sleep after an empty read |
-| `WORKER_VISIBILITY_TIMEOUT` | `30s` | how long a read message is hidden before redelivery; its handler's context ends then too |
-| `WORKER_BATCH_SIZE` | `10` | messages per read |
+| `NATS_URL` | required by the worker | NATS with JetStream: the worker's queue. The app never reads it. `RunWorker` refuses to start without it |
+| `WORKER_MAX_RETRIES` | `5` | retries of a failing handler before its message moves to the `poison` topic |
+| `WORKER_RETRY_INITIAL` | `1s` | wait before the first retry; it doubles each time |
+| `WORKER_RETRY_MAX` | `30s` | longest wait between retries |
+| `WORKER_ACK_WAIT` | `5m` | how long JetStream waits for an acknowledgement before redelivering; longer than a handler and its retries |
 | `WORKER_SHUTDOWN_TIMEOUT` | `10s` | grace period for in-flight handlers |
 
 ## CQRS

@@ -16,7 +16,7 @@ tables the queries read are **projections** of those events, kept up to date by 
 | Stream | One aggregate's events, in order: `task-<id>`. Its length is the aggregate's version. |
 | Position | An event's place in the whole store, increasing across all streams. |
 | Projector | Turns events into read-model rows: the `task` projector writes `tasks`. |
-| Event handler | Reacts to an event with a side effect: `SendWelcomeEmail` enqueues the welcome email. |
+| Event handler | Reacts to an event with a side effect: `SendWelcomeEmail` publishes the welcome email. |
 | Checkpoint | The last position a projector or event handler has finished. |
 | Claim | A unique value reserved on the write side, in the same transaction as the events (`user.email`). |
 
@@ -27,7 +27,7 @@ controller ─SendCommand─▶ command bus ─▶ steps ─▶ command handler 
                                                                                        │ NOTIFY
              worker: projection runner ◀─── events after each checkpoint ◀─────────────┘
                ├─ projectors       → read-model tables
-               └─ event handlers   → side effects (the mail queue)
+               └─ event handlers   → side effects (the mail topic on NATS)
 controller ─SendQuery──▶ query bus ─▶ steps ─▶ query handler ─▶ read-model tables
 ```
 
@@ -192,7 +192,7 @@ The worker runs one loop per subscriber:
 | `user` | projector | `users`, `user_identities` |
 | `exchange` | projector | `exchange_history` |
 | `passkey` | projector | `webauthn_credentials` |
-| `send-welcome-email` | event handler | the `mail` queue |
+| `send-welcome-email` | event handler | the `mail` topic on NATS |
 
 - **Each loop reads in order.** It reads the events after its checkpoint, in position order, and
   hands the subscriber those of the types it `Handles`. The others move its checkpoint without
@@ -200,8 +200,9 @@ The worker runs one loop per subscriber:
 - **Every event reaches a read model.** The worker refuses to start when an event type in
   `entity.EventTypes()` has no projector, or when two subscribers share a name (`projection.Check`).
 - **An event and its checkpoint commit together.** Each event is handled in one transaction with the
-  checkpoint's move: a subscriber writes through `Executor(ctx)`, so its rows, or its queue message,
-  commit with the checkpoint exactly once. A failure rolls both back, and the event is retried.
+  checkpoint's move: a subscriber writes through `Executor(ctx)`, so its rows commit with the
+  checkpoint exactly once. A side effect outside Postgres (a NATS publish) is at-least-once instead:
+  it carries an ID the broker deduplicates. A failure rolls both back, and the event is retried.
 - **Several workers can run.** A transaction-scoped advisory lock per subscriber stops two workers
   handling the same subscriber at once. The checkpoint moves only from the position it was read at,
   so even a lost lock cannot apply an event twice.
@@ -293,7 +294,7 @@ See [configuration.md](configuration.md#cqrs): `CQRS_CONSISTENCY_TIMEOUT`,
 - **The worker is required.** Without it, writes answer 503 after the consistency timeout.
 - **Concurrent writes to one record conflict** instead of the last one winning. A write that still
   loses after the retries answers 409 (gRPC `Aborted`, GraphQL `CONFLICT`).
-- **Registration does not fail when the welcome email cannot be enqueued.** The event handler
-  enqueues it exactly once.
+- **Registration does not fail when the welcome email cannot be published.** The event handler
+  publishes it once per user: a repeat carries the same message ID, which NATS drops.
 - **The read-model tables have no foreign keys.**
 - **Appends run one at a time** across the store.

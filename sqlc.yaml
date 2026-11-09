@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: internal/repo/persistent/queries/schema/schema.sql
+    schema: internal/app/migrations
     queries: internal/repo/persistent/queries
     gen:
       go:
@@ -28,8 +28,6 @@ sql:
             go_type: github.com/shopspring/decimal.Decimal
           - column: exchange_history.rate_date
             go_type: time.Time
-          - column: queue_messages.body
-            go_type: encoding/json.RawMessage
           - db_type: timestamptz
             go_type: time.Time
           - db_type: timestamptz

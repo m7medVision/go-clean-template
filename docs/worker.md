@@ -2,9 +2,10 @@
 
 The worker, `cmd/worker`, is a separate binary with two jobs. It runs the **projections**: the
 projectors that keep the read models up to date from the event store, and the event handlers that
-react to events. And it consumes a **queue** in Postgres. There is no broker and no extension: the
-queue is one ordinary table on the stock Postgres image. The welcome email after a registration
-uses both: an event handler enqueues it, a queue handler delivers it.
+react to events. And it consumes a **queue**: topics on [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream),
+routed by [Watermill](https://watermill.io/). Only the worker connects to NATS; the app never does.
+The welcome email after a registration uses both: an event handler publishes it, a topic handler
+delivers it.
 
 The app needs the worker: a write waits for the projectors before it answers
 ([cqrs.md](cqrs.md#reads-after-writes)).
@@ -29,65 +30,70 @@ running worker and exits; the worker replays every event into them. Only project
 
 ## The queue
 
-The table is `queue_messages` ([schema](../internal/app/schema/queue_messages.hcl)), read and written
-through [`internal/repo/persistent/queue`](../internal/repo/persistent/queue) (`Send`, `Read`,
-`Delete`). One table holds every queue, told apart by its `queue` column, so a queue exists as soon
-as something is sent to it.
+[`pkg/broker`](../pkg/broker) wraps Watermill on NATS JetStream: `New` connects a publisher and a
+subscriber to `NATS_URL`, `Publish(ctx, topic, id, body)` sends a message, `Handle(topic, handler)`
+registers a route and `Run` serves them until the context ends. A topic is a JetStream stream of
+the same name, created when it is first used.
 
-[`pkg/worker`](../pkg/worker) polls the registered queues and calls one handler per message:
-
-- **Claiming.** A read takes up to `WORKER_BATCH_SIZE` due messages with `FOR UPDATE SKIP LOCKED` and,
-  in the same statement, hides them until `now() + WORKER_VISIBILITY_TIMEOUT`. Several workers can
-  run side by side without getting the same message at the same time.
-- **At-least-once.** A message is deleted only after its handler returns `nil`. If the handler fails,
-  the message comes back once its visibility timeout expires, so handlers must be idempotent. A
-  handler's context ends with that timeout too: by then another worker may hold the message, so a
-  slow handler is canceled rather than left running beside it.
-  `worker.Message.ReadCount` tells a handler how many times it has been delivered. A body that can
-  never decode should be logged and acknowledged, or it redelivers forever.
-- **Shutdown.** On SIGTERM it stops reading, waits up to `WORKER_SHUTDOWN_TIMEOUT` for in-flight
-  handlers, then cancels their context.
-- **Startup.** The app applies the schema, not the worker. A worker that starts first logs
-  `relation "queue_messages" does not exist` until the app has run, then carries on. It serves no
-  HTTP, issues no token and reads no Valkey, so it starts without `JWT_SECRET` and `VALKEY_URL`,
-  which the app requires.
+- **One route per topic, like an HTTP route.** Each topic has a durable consumer in the queue group
+  `worker-<topic>`, so several workers share a topic's messages and each message reaches one of
+  them; a worker that restarts carries on from the first message not yet acknowledged.
+- **At-least-once.** A message is acknowledged after its handler returns `nil`. Handlers must be
+  idempotent. A publish carries an ID, and JetStream drops a second publish with the same ID inside
+  its duplicate window, so a producer that runs again after a crash does not send twice.
+- **Retry with backoff.** A handler that returns an error, or panics, is retried in the worker
+  `WORKER_MAX_RETRIES` times, waiting from `WORKER_RETRY_INITIAL` and doubling up to
+  `WORKER_RETRY_MAX`. `WORKER_ACK_WAIT` must be longer than a message's handling and all its
+  retries, or JetStream redelivers it to another worker meanwhile.
+- **Poison.** A message still failing after its retries, or one whose handler returns
+  `broker.Permanent(err)` (a body that can never decode), is moved to the `poison` topic with the
+  reason and its topic in its metadata, and logged at `Error`. It is kept, not dropped. How poison
+  messages are inspected and replayed is not decided yet (the TODO in `pkg/broker`).
+- **Shutdown.** On SIGTERM the router stops taking messages and waits up to
+  `WORKER_SHUTDOWN_TIMEOUT` for the handlers in flight.
+- **Startup.** `RunWorker` refuses to start without `NATS_URL` (`app.ErrNoNATSURL`). The app applies
+  the schema, not the worker. It serves no HTTP, issues no token and reads no Valkey, so it starts
+  without `JWT_SECRET` and `VALKEY_URL`, which the app requires.
 
 The settings are in [configuration.md](configuration.md#worker).
 
 ## Handlers
 
 Handlers live in [`internal/controller/worker/v1`](../internal/controller/worker/v1), each with a
-function that registers it on the worker (`w.Handle(queue, handler)`), which its module's `queues`
-in `internal/app` calls before the worker runs: `Run` polls the queues registered when it starts, and
-`Handle` panics after that. A
-queue message is an inbound request like an HTTP call, so a handler has the same shape: decode the
-body into a transport-local DTO, send a command on the command bus with the handler's `ctx`, and
-return its error. The one queue today is `mail` (below): `mail.go` delivers email from it.
+function that registers it on a `v1.Router` (`r.Handle(topic, handler)`, which `*broker.Broker`
+implements), called by its module's `queues` in `internal/app` before the worker runs. A message is
+an inbound request like an HTTP call, so a handler has the same shape: decode the body, send a
+command on the command bus with the handler's `ctx`, and return its error. The one topic today is
+`mail` (below): `mail.go` delivers email from it.
 
-### Adding a queue
+### Adding a topic
 
 1. Handler: `internal/controller/worker/v1/<name>.go`, with the function that registers it, called
    from the `queues` of a module in `internal/app`, which also registers the command handlers its
-   messages send to on the worker's buses.
-2. Producer: give the command or event handler a port whose implementation calls the queue's
-   `Send(ctx, "<name>", body)` (`*queue.Repo`, through a small interface of its own, as
-   `notify.Queue` does). `Send` joins the transaction in `ctx`, so from an event handler the message
-   commits with the handler's checkpoint, exactly once.
+   messages send to on the worker's buses. Return `broker.Permanent(err)` for a message that can
+   never succeed.
+2. Producer: give the event handler a port whose implementation calls
+   `Publish(ctx, "<name>", id, body)` (through a small interface of its own, as `notify.Publisher`
+   does), with an ID that is the same each time the handler runs for the same event. Producers run
+   in the worker, which has the broker; a command in the app cannot publish, because the app has
+   no NATS (an outbox for that is a later decision).
 
 ## Email
 
-Sending is asynchronous. The sender writes the email with `entity.EncodeEmail` and enqueues it on
-`entity.EmailQueue`.
+Sending is asynchronous. The sender writes the email with `entity.EncodeEmail` and publishes it on
+the `entity.EmailQueue` topic.
 For the welcome email the sender is the `send-welcome-email` event handler
 (`internal/usecase/user/event`), which reacts to a registration through a notifier port,
-`repo.UserNotifier`, implemented in `internal/repo/notify`, so the handler never sees the queue or
-the email encoding. A registration answers before its email is enqueued, and an enqueue that fails
-is retried with the event, so a registration never fails over its email.
+`repo.UserNotifier`, implemented in `internal/repo/notify`, so the handler never sees the broker or
+the email encoding. The message ID is `welcome-<user id>`, so a handler that runs again for the same
+registration (the worker crashed before its checkpoint moved) is dropped as a duplicate. A
+registration answers before its email is published, and a publish that fails is retried with the
+event, so a registration never fails over its email.
 The worker's `mail` handler (`v1.NewMailRoutes`) decodes it with
 `entity.DecodeEmail` (both ends are this codebase, so it skips the request DTO) and sends the
 `DeliverEmail` command (`internal/usecase/mail`), whose handler renders and sends.
 Delivery is at-least-once, so an email can arrive twice if the worker stops between the relay
-accepting it and the queue row being deleted.
+accepting it and the message being acknowledged.
 
 In development and in the integration stack, [Mailpit](https://mailpit.axllent.org/) catches every
 email: the inbox is at http://127.0.0.1:8025.
@@ -125,8 +131,8 @@ is another implementation of that interface.
 2. `templates/<name>.html.tmpl` and `templates/<name>.txt.tmpl`.
 3. A full and a zero-value fixture in `mailtmpl_test.go`, then
    `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/`, and review the golden files.
-4. Enqueue it from an event handler for the event that sends it: `body, err := entity.EncodeEmail(e)`,
-   then `Send(ctx, entity.EmailQueue, body)` on the queue.
-   To keep the handler unaware of the queue, put this behind a port, as the welcome email does: a
+4. Publish it from an event handler for the event that sends it: `body, err := entity.EncodeEmail(e)`,
+   then `Publish(ctx, entity.EmailQueue, id, body)` with an ID fixed by the event.
+   To keep the handler unaware of the broker, put this behind a port, as the welcome email does: a
    method on `repo.UserNotifier` in `internal/repo/user.go`, implemented in
    `internal/repo/notify`.

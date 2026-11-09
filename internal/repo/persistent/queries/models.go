@@ -53,15 +53,6 @@ type ProjectionCheckpoint struct {
 	UpdatedAt time.Time
 }
 
-type QueueMessage struct {
-	ID         int64
-	Queue      string
-	Body       json.RawMessage
-	ReadCount  int32
-	EnqueuedAt time.Time
-	VisibleAt  time.Time
-}
-
 type Snapshot struct {
 	StreamID      string
 	StreamVersion int32

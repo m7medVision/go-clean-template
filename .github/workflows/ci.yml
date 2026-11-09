@@ -46,7 +46,7 @@ jobs:
               - '!**/*_test.go'
               - '!internal/repo/**'
               - '!internal/usecase/**'
-              - '!internal/app/schema/**'
+              - '!internal/app/migrations/**'
               - '!internal/controller/grpc/**'
               - '!internal/controller/worker/**'
               - '!docs/proto/**'
@@ -61,7 +61,7 @@ jobs:
         with:
           filters: |
             sqlc:
-              - 'internal/app/schema/**'
+              - 'internal/app/migrations/**'
               - 'internal/repo/persistent/queries/**'
               - 'sqlc.yaml'
               - 'go.mod'
@@ -69,7 +69,9 @@ jobs:
               - 'Makefile'
               - '.github/workflows/ci.yml'
             schema:
-              - 'internal/app/schema/**'
+              - 'internal/app/migrations/**'
+              - 'cmd/migrate/**'
+              - 'pkg/migrate/**'
               - 'scripts/schema-roundtrip.sh'
 
   lint:
@@ -167,23 +169,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27'
-      - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
-        with:
-          version: 18.6.0
-      - name: Install Atlas
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
-      # yamllint disable rule:line-length
       - name: Regenerate
-        run: make sqlc ATLAS_DEV_URL='postgres://postgres@localhost:5432/postgres?sslmode=disable'
-      # yamllint enable rule:line-length
+        run: make sqlc
       - name: Fail on drift
         run: |
           git status --porcelain
           test -z "$(git status --porcelain)"
 
-  # Up from the base branch's schema, down to it, up again: catches an HCL
-  # change Atlas cannot apply over the previous one, or cannot roll back
-  # from. Pull requests only; the checkout is the PR merged into its base.
+  # Every migration up, down to zero and up again, and no migration merged on
+  # the base branch edited: catches a Down that does not undo its Up. Pull
+  # requests only; the checkout is the PR merged into its base.
   schema-roundtrip:
     name: runner / schema / up and down
     needs: [changes, lint]
@@ -195,16 +190,17 @@ jobs:
       BASE: ${{ github.base_ref }}
     steps:
       - uses: actions/checkout@v7
-      # git archive needs only the base branch's tree, not its history.
+      # The edited-migration check diffs against the base branch's tree only.
       - name: Fetch the base branch
         run: >-
           git fetch --depth=1 origin
           "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27'
       - uses: bmizerany/setup-postgres@0923a0e749e6648dfb69918e9cbc2dad41662196 # v4
         with:
           version: 18.6.0
-      - name: Install Atlas
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
       # The runner's fresh postgres database is the throwaway target.
       - name: Round trip
         env:
@@ -272,8 +268,6 @@ jobs:
           quay.io/keycloak/keycloak:26.8.1 start-dev --import-realm
       - name: Create the app database
         run: createdb db
-      - name: Install Atlas
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
       - name: Start the exchange-rate stub
         run: >-
           docker run -d --name exchange -p 8090:8090
@@ -289,6 +283,15 @@ jobs:
             sleep 2
           done
           echo "Valkey did not answer PONG" >&2
+          exit 1
+      - name: Start NATS
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.15.2-alpine -js -m 8222
+          for _ in $(seq 30); do
+            curl -sf -o /dev/null "http://localhost:8222/healthz?js-enabled-only=true" && exit 0
+            sleep 2
+          done
+          echo "NATS did not become healthy" >&2
           exit 1
       - name: Build the app
         run: go build -tags migrate -o "$RUNNER_TEMP/app" ./cmd/app
@@ -340,6 +343,9 @@ jobs:
       - name: Valkey log
         if: failure()
         run: docker logs valkey
+      - name: NATS log
+        if: failure()
+        run: docker logs nats
 
   # One browser test through the real app and worker. Not in ci-ok's needs on purpose:
   # it reports, and blocks nothing, until it has been stable for a couple of weeks.
@@ -366,8 +372,6 @@ jobs:
           cache: true
       - name: Create the app database
         run: createdb db
-      - name: Install Atlas
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
       - name: Start Valkey
         run: |
           docker run -d --name valkey -p 6379:6379 valkey/valkey:9.1.3-alpine \
@@ -377,6 +381,15 @@ jobs:
             sleep 2
           done
           echo "Valkey did not answer PONG" >&2
+          exit 1
+      - name: Start NATS
+        run: |
+          docker run -d --name nats -p 4222:4222 -p 8222:8222 nats:2.15.2-alpine -js -m 8222
+          for _ in $(seq 30); do
+            curl -sf -o /dev/null "http://localhost:8222/healthz?js-enabled-only=true" && exit 0
+            sleep 2
+          done
+          echo "NATS did not become healthy" >&2
           exit 1
       - name: Start Mailpit
         run: docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.3
@@ -457,10 +470,6 @@ jobs:
           go-version: '1.27'
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      # make sqlc renders the schema against a docker:// dev database, which
-      # the runner's Docker starts.
-      - name: Install Atlas
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=v1.3.4 sh -s -- -y
       # The lint job's golangci-lint: the release go.mod pins.
       - uses: golangci/golangci-lint-action@v9
         with:

@@ -9,15 +9,14 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/usecase/mail"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
 	"github.com/m7medvision/go-clean-template/pkg/smtp"
-	"github.com/m7medvision/go-clean-template/pkg/worker"
 )
 
-// mailModule is email delivery, which only the worker runs: the mail queue and the DeliverEmail
+// mailModule is email delivery, which only the worker runs: the mail topic and the DeliverEmail
 // handler its messages send to, rendering with the embedded templates and sending through the relay
 // the Mail settings name.
 func mailModule() module {
 	return module{
-		queues: func(d *deps, b cqrs.Buses, w *worker.Worker) error {
+		queues: func(d *deps, b cqrs.Buses, r queueRouter) error {
 			// A broken template or a MAIL_FROM that is not one address stops the worker at startup.
 			renderer, err := mailtmpl.New()
 			if err != nil {
@@ -32,7 +31,7 @@ func mailModule() module {
 			}
 
 			mail.Register(b.Commands, b.Queries, mail.Deps{Renderer: renderer, Mailer: mailer.New(client)})
-			workerv1.NewMailRoutes(w, b.Commands, d.l)
+			workerv1.NewMailRoutes(r, b.Commands, d.l)
 
 			return nil
 		},

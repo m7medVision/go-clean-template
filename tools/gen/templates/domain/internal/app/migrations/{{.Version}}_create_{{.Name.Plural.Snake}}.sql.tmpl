@@ -1,0 +1,16 @@
+-- The {{.Name.Words}} read model: written only by the {{.Name.Words}} projector, from the {{.Name.Words}} events. It has no
+-- foreign key to users, because each projector advances on its own and the {{.Name.Words}} one can be ahead.
+-- Its columns are in the order of entity.{{.Name.Go}}'s fields, so a row converts to one as it is.
+
+-- +goose Up
+CREATE TABLE "{{.Name.Plural.Snake}}" (
+  "id" uuid NOT NULL,
+  "user_id" uuid NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id")
+);
+CREATE INDEX "idx_{{.Name.Plural.Snake}}_user_id" ON "{{.Name.Plural.Snake}}" ("user_id");
+
+-- +goose Down
+DROP TABLE "{{.Name.Plural.Snake}}";

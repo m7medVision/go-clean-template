@@ -52,8 +52,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	buses := newBuses(b.pg, projectors(b.pg), cfg.CQRS.ConsistencyTimeout, b.metrics, b.l, behavior.Limit(lim, b.l))
 
-	if err = syncSchema(ctx, b.l, cfg.PG.URL); err != nil {
-		return fmt.Errorf("app - Run - syncSchema: %w", err)
+	if err = migrateSchema(ctx, b.l, cfg.PG.URL); err != nil {
+		return fmt.Errorf("app - Run - migrateSchema: %w", err)
 	}
 
 	store := newEventStore(b.pg, cfg.CQRS.SnapshotEvery)

@@ -9,6 +9,9 @@ import "github.com/m7medvision/go-clean-template/tools/gen/names"
 // ProtoDir holds the .proto files, which are one proto package, grpc.v1.
 const ProtoDir = "docs/proto/v1"
 
+// MigrationsDir holds the goose migrations; a new domain's table is one of them.
+const MigrationsDir = "internal/app/migrations"
+
 // _openAPI is the OpenAPI document make openapi exports from the REST API: every REST operation
 // the app registers.
 const _openAPI = "docs/openapi/v1.json"
