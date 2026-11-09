@@ -495,7 +495,7 @@ func TestASubscriberThatStartsAtHeadSkipsTheHistory(t *testing.T) {
 	start(t, s, time.Millisecond, fresh, kept)
 
 	require.Eventually(t, handledUpTo(s, &kept.recorder, 5), time.Second, time.Millisecond)
+	require.Eventually(t, handledUpTo(s, &fresh.recorder, 5), time.Second, time.Millisecond)
 	assert.Empty(t, fresh.positions())
 	assert.Equal(t, []int64{3, 4, 5}, kept.positions())
-	assert.Equal(t, int64(5), s.checkpoint("fresh"))
 }
