@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -105,9 +106,13 @@ func TestGRPCServesNoReflectionWithoutDocs(t *testing.T) {
 
 	stream, err := reflectionpb.NewServerReflectionClient(conn).ServerReflectionInfo(t.Context())
 	require.NoError(t, err)
-	require.NoError(t, stream.Send(&reflectionpb.ServerReflectionRequest{
+
+	err = stream.Send(&reflectionpb.ServerReflectionRequest{
 		MessageRequest: &reflectionpb.ServerReflectionRequest_ListServices{},
-	}))
+	})
+	if !errors.Is(err, io.EOF) {
+		require.NoError(t, err)
+	}
 
 	_, err = stream.Recv()
 	assert.Equal(t, codes.Unimplemented, status.Code(err))
