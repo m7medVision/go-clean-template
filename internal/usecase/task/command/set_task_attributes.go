@@ -8,6 +8,7 @@ import (
 	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/flags"
 )
 
 // SetTaskAttributes patches the attributes of UserID's task. It is the one command that writes
@@ -30,10 +31,15 @@ func (c SetTaskAttributes) Validate() error { return c.Patch.Validate() }
 type SetTaskAttributesHandler struct {
 	Tasks      repo.TaskReadModel
 	Attributes repo.TaskAttributesStore
+	Flags      *flags.Client
 }
 
 //nolint:gocritic // the buses pass every message by value
 func (h SetTaskAttributesHandler) Handle(ctx context.Context, cmd SetTaskAttributes) (entity.Written, error) {
+	if f := entity.FlagTaskAttributes(); !h.Flags.Bool(ctx, f.Key, f.Default, cmd.UserID) {
+		return entity.Written{}, fmt.Errorf("SetTaskAttributes: %w", entity.ErrFeatureDisabled)
+	}
+
 	task, err := h.Tasks.Get(ctx, cmd.TaskID)
 	if err != nil {
 		return entity.Written{}, fmt.Errorf("SetTaskAttributes - h.Tasks.Get: %w", err)

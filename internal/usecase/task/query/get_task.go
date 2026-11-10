@@ -9,6 +9,7 @@ import (
 	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/flags"
 )
 
 // GetTask reads UserID's task: entity.ErrTaskNotFound when there is none, entity.ErrTaskForbidden
@@ -23,6 +24,7 @@ type GetTask struct {
 type GetTaskHandler struct {
 	Tasks      repo.TaskReadModel
 	Attributes repo.TaskAttributesStore
+	Flags      *flags.Client
 }
 
 func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (mongotask.TaskWithAttributes, error) {
@@ -33,6 +35,10 @@ func (h GetTaskHandler) Handle(ctx context.Context, q GetTask) (mongotask.TaskWi
 
 	if err = task.ReadableBy(q.UserID); err != nil {
 		return mongotask.TaskWithAttributes{}, fmt.Errorf("GetTask: %w", err)
+	}
+
+	if !attributesOn(ctx, h.Flags, q.UserID) {
+		return mongotask.TaskWithAttributes{Task: task}, nil
 	}
 
 	attrs, err := h.Attributes.Get(ctx, q.TaskID)

@@ -8,6 +8,7 @@ import (
 	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/repo"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/flags"
 )
 
 // ListAllTasks lists every user's tasks, as ListTasks pages them. Only a caller holding
@@ -30,6 +31,7 @@ func (q ListAllTasks) Validate() error { return validateList(q.Status, q.Page) }
 type ListAllTasksHandler struct {
 	Tasks      repo.TaskReadModel
 	Attributes repo.TaskAttributesStore
+	Flags      *flags.Client
 }
 
 func (h ListAllTasksHandler) Handle(ctx context.Context, q ListAllTasks) (entity.List[mongotask.TaskWithAttributes], error) {
@@ -38,5 +40,5 @@ func (h ListAllTasksHandler) Handle(ctx context.Context, q ListAllTasks) (entity
 		return entity.List[mongotask.TaskWithAttributes]{}, fmt.Errorf("ListAllTasks - h.Tasks.ListAll: %w", err)
 	}
 
-	return withAttributes(ctx, h.Attributes, tasks, "ListAllTasks")
+	return withAttributes(ctx, h.Attributes, tasks, attributesOn(ctx, h.Flags, q.Principal.UserID), "ListAllTasks")
 }
