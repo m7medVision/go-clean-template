@@ -1,0 +1,16 @@
+{
+  "name": "go-clean-template-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/starlight": "^0.42.10",
+    "astro": "^7.4.8",
+    "typescript": "^6"
+  },
+  "packageManager": "bun@1.4.3"
+}

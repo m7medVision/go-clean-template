@@ -23,6 +23,7 @@ GO_DIRS = $(patsubst %/,%,$(wildcard */))
 # web/ is excluded: its node_modules can ship .go files. Every frontend target runs Vite+ inside web/.
 GO_DIRS := $(filter-out web,$(GO_DIRS))
 WEB = vp -C web
+DOCS = vp -C site
 
 # HELP =================================================================================================================
 # This will output the help for each task
@@ -99,6 +100,28 @@ web-check: ### format check, lint, type check and unit-test the frontend
 web-build: ### build the frontend into web/dist
 	$(WEB) build
 .PHONY: web-build
+
+docs-deps: ### install the docs site dependencies (Vite+, frozen lockfile)
+	$(DOCS) install --frozen-lockfile
+.PHONY: docs-deps
+
+docs-dev: ### run the docs site on http://localhost:4321/go-clean-template/
+	$(DOCS) exec astro dev
+.PHONY: docs-dev
+
+docs-build: ### type-check and build the docs site into site/dist
+	$(DOCS) exec astro check
+	$(DOCS) exec astro build
+.PHONY: docs-build
+
+docs-format: ### format the docs site
+	$(DOCS) fmt .
+.PHONY: docs-format
+
+docs-check: ### format check and build the docs site
+	$(DOCS) fmt --check .
+	$(MAKE) docs-build
+.PHONY: docs-check
 
 web-e2e: ### run the Playwright suite against the running app and worker (make dev, or make run and make run-worker)
 	@curl -fs http://localhost:$(HTTP_PORT)/healthz >/dev/null || { echo "web-e2e needs the app on HTTP_PORT=$(HTTP_PORT); start the stack first (make dev)"; exit 1; }
