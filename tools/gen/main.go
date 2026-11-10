@@ -1,6 +1,6 @@
 // Command gen writes the files a new domain or use case needs: every layer, with its package,
 // imports, types and signatures, and handler bodies that return entity.ErrNotImplemented. It
-// checks every rule before it writes anything (docs/specs/generator.md).
+// checks every rule before it writes anything.
 //
 // It is its own module, so no binary or image of the app includes it. Run it through
 // make new-domain and make new-usecase, which also run the regenerators its output needs.

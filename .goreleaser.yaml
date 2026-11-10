@@ -1,6 +1,5 @@
 # GoReleaser publishes the GitHub release for the tag `make release-version` names: notes from
-# the commits since the last tag, and no binaries. .github/workflows/release.yml runs it; see
-# docs/releasing.md.
+# the commits since the last tag, and no binaries. .github/workflows/release.yml runs it.
 version: 2
 
 builds:

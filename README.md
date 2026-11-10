@@ -56,9 +56,6 @@ Inside the use-case layer, every change is a command and every read a query: con
 through the buses, command handlers record events, and query handlers read projections.
 
 These are rules, not suggestions: a change that breaks one is not merged.
-[docs/architecture.md](docs/architecture.md) lists them with where each kind of code goes,
-[docs/cqrs.md](docs/cqrs.md) explains the commands, events and projections, and
-[docs/request-flow.md](docs/request-flow.md) follows one request through every layer.
 
 ## Quick start
 
@@ -80,23 +77,6 @@ Then open:
 
 If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` first.
 If something else holds 6379, set `VALKEY_PORT=6380` the same way; 27017, `MONGO_PORT=27018`.
-
-## Docs
-
-- [Architecture](docs/architecture.md): the rules, where code goes, packages, Clean Architecture
-- [A request, end to end](docs/request-flow.md): one request through every layer, file by file
-- [Generator](docs/generator.md): new domains and use cases, the safety rules, changing the templates
-- [API](docs/api.md): every endpoint on every transport, errors, versioning
-- [Development](docs/development.md): dev mode, tests, the full stack behind Caddy
-- [Configuration](docs/configuration.md): every environment variable, tracing
-- [Error tracking](docs/error-tracking.md): what reaches GlitchTip, what never does
-- [Passkeys](docs/passkeys.md): the WebAuthn ceremonies, replay protection, relying-party setup
-- [SSO and roles](docs/sso.md): OpenID Connect sign-in, the dev Keycloak, role mapping, other providers
-- [Queue and worker](docs/worker.md)
-- [Product analytics](docs/analytics.md)
-- [Feature flags](docs/feature-flags.md)
-- [Web client](docs/web.md)
-- [Releases](docs/releasing.md): how versions are named from commits and what each release ships
 
 ## License
 

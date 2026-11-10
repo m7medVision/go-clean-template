@@ -11,4 +11,3 @@ Next:
     of its todo field.
   - Once the handler is written, drop http.StatusNotImplemented from the Errors of its REST
     operation, internal/controller/restapi/v1/widget/count_widgets.go.
-  - Add a row for count-widgets to the widget table in docs/api.md.

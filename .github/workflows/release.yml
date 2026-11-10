@@ -1,7 +1,7 @@
 name: Release
 # Every master commit whose CI passed gets a release when its commits call for
 # one: a feat, fix or breaking change since the last tag
-# (`make release-version`, svu). GoReleaser publishes it. See docs/releasing.md.
+# (`make release-version`, svu). GoReleaser publishes it.
 on:
   workflow_run:
     workflows: [CI]

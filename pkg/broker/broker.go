@@ -96,9 +96,9 @@ func newRouter(pub message.Publisher, s Settings, logger watermill.LoggerAdapter
 		return nil, fmt.Errorf("broker - New - router: %w", err)
 	}
 
-	//nolint:godox // the owner asked for this TODO; the decision is tracked in the spec.
+	//nolint:godox // an open decision, kept visible on purpose.
 	// TODO: decide how poison messages are inspected, replayed or discarded; until then they only
-	// land on PoisonTopic and are logged. See docs/specs/nats-queue.md, section TODO.
+	// land on PoisonTopic and are logged.
 	poison, err := middleware.PoisonQueue(pub, PoisonTopic)
 	if err != nil {
 		return nil, fmt.Errorf("broker - New - poison queue: %w", err)
