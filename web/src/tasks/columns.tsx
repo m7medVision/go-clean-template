@@ -46,7 +46,8 @@ const byProgress = (a: { original: Task }, b: { original: Task }) =>
   statusProgress[a.original.status] - statusProgress[b.original.status];
 
 // taskColumns builds the column set; memoise it on the actions so the table keeps its row models.
-export function taskColumns(actions: TaskRowActions) {
+// The priority and labels columns appear only while the task-attributes flag is on.
+export function taskColumns(actions: TaskRowActions, { attributes }: { attributes: boolean }) {
   return helper.columns([
     // Title and description both feed the search box; the cell shows them stacked.
     helper.accessor((task) => `${task.title}\n${task.description}`, {
@@ -68,35 +69,7 @@ export function taskColumns(actions: TaskRowActions) {
         </Badge>
       ),
     }),
-    helper.accessor((task) => task.attributes.priority ?? "", {
-      id: "priority",
-      header,
-      meta: { label: "Priority" },
-      cell: ({ row }) => {
-        const priority = row.original.attributes.priority;
-
-        return priority ? (
-          <Badge variant="outline" className="font-normal">
-            {priority[0] + priority.slice(1).toLowerCase()}
-          </Badge>
-        ) : null;
-      },
-    }),
-    helper.accessor((task) => (task.attributes.labels ?? []).join(" "), {
-      id: "labels",
-      header,
-      meta: { label: "Labels" },
-      enableSorting: false,
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {(row.original.attributes.labels ?? []).map((label) => (
-            <Badge key={label} variant="secondary" className="font-normal">
-              {label}
-            </Badge>
-          ))}
-        </div>
-      ),
-    }),
+    ...(attributes ? attributeColumns() : []),
     helper.accessor((task) => statusProgress[task.status], {
       id: "progress",
       header,
@@ -137,6 +110,40 @@ const tileStyle: Record<TaskStatus, { icon: typeof CircleDotIcon; className: str
     className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
   },
 };
+
+function attributeColumns() {
+  return [
+    helper.accessor((task) => task.attributes.priority ?? "", {
+      id: "priority",
+      header,
+      meta: { label: "Priority" },
+      cell: ({ row }) => {
+        const priority = row.original.attributes.priority;
+
+        return priority ? (
+          <Badge variant="outline" className="font-normal">
+            {priority[0] + priority.slice(1).toLowerCase()}
+          </Badge>
+        ) : null;
+      },
+    }),
+    helper.accessor((task) => (task.attributes.labels ?? []).join(" "), {
+      id: "labels",
+      header,
+      meta: { label: "Labels" },
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1">
+          {(row.original.attributes.labels ?? []).map((label) => (
+            <Badge key={label} variant="secondary" className="font-normal">
+              {label}
+            </Badge>
+          ))}
+        </div>
+      ),
+    }),
+  ];
+}
 
 // TaskCell stands in for the product thumbnail and name: a status-coloured tile, then the text.
 function TaskCell({ task }: { task: Task }) {
