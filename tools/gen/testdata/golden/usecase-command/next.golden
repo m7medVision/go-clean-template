@@ -8,4 +8,3 @@ Next:
     internal/repo/persistent/widget/projector.go.
   - Once the handler is written, drop http.StatusNotImplemented from the Errors of its REST
     operation, internal/controller/restapi/v1/widget/archive_widget.go.
-  - Add a row for archive-widget to the widget table in docs/api.md.

@@ -10,7 +10,6 @@ Next:
   - Once a handler is written, drop http.StatusNotImplemented from its REST operation's Errors, in
     internal/controller/restapi/v1/{{.Name.Pkg}}/, and make openapi.
 {{- end}}
-  - Add the {{.Name.Words}} section to docs/api.md, and a bullet for it to What you get in README.md.
-  - Add the {{.Name.Words}} aggregate and projector rows to docs/cqrs.md.
+  - Add a bullet for {{.Name.Words}} to What you get in README.md.
   - Write {{.Name.Words}} before you generate another domain: until one of them has fields and bodies
     of its own, dupl finds two generated domains to be clones, and make linter-golangci fails.
