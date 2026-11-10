@@ -3,7 +3,7 @@
 
 # The web client, built with the Vite+ toolchain image (vp provisions web/.node-version and bun) from
 # the web-src context: web/, narrowed by web/.dockerignore.
-FROM ghcr.io/voidzero-dev/vite-plus:1.5.0 AS web
+FROM ghcr.io/voidzero-dev/vite-plus:1.5.1 AS web
 
 WORKDIR /web
 
@@ -14,7 +14,7 @@ COPY --from=web-src --chown=vp:vp . ./
 RUN vp build
 
 # Souin ships no storage of its own since v1.7.0, so the in-memory otter storage is built in too.
-FROM caddy:2.11.8-builder AS builder
+FROM caddy:2.11.9-builder AS builder
 
 ARG CADDY_WAF_VERSION=v0.4.15
 
