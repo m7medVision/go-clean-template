@@ -1,0 +1,144 @@
+---
+title: Packages
+description: Every package under internal/ and pkg/, with what it holds.
+sidebar:
+  order: 6
+---
+
+Every Go package in the app, one line each. Packages marked **generated** are written by a Make
+target and never edited by hand; packages marked **test** are imported only by tests. Directories
+that hold no Go code (`testdata/`, templates, schema files) are listed where they matter. The
+dependency rule between these layers is described in
+[The dependency rule](/go-clean-template/concepts/dependency-rule/).
+
+## internal/app: wiring
+
+| Package                   | Holds                                                                                                                                                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/app`            | The one place everything is wired: a module per domain (`task.go`, `user.go`, …), `modules.go`, the buses (`buses.go`), the HTTP mux (`http.go`), the gRPC server (`grpc.go`), the backfill, and `Run` / `RunWorker`. |
+| `internal/app/migrations` | The goose SQL migrations, embedded into the binary (`migrations.FS`).                                                                                                                                                 |
+
+## internal/entity: the domain
+
+| Package                      | Holds                                                                                                                                          |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/entity`            | Read shapes, aggregates and their events, claims, sentinel errors and their kinds, email data, roles, paging. Imports nothing from the module. |
+| `internal/entity/analytics`  | The analytics events the capture handlers send, one file per domain.                                                                           |
+| `internal/entity/mongo/task` | A task's attributes (priority, estimate, labels), their rules, and `TaskWithAttributes`.                                                       |
+
+## internal/usecase: commands, queries, event handlers
+
+| Package                              | Holds                                                                                     |
+| ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `internal/usecase/aggregate`         | `Load`, `Save`, `Change` and `Now`: what every command handler does with the event store. |
+| `internal/usecase/behavior`          | The app's pipeline steps: stamp, limit, wait, retry, authorize, validate.                 |
+| `internal/usecase/task`              | The task domain's `Deps` and `Register`.                                                  |
+| `internal/usecase/task/command`      | Task commands with their handlers, one file each.                                         |
+| `internal/usecase/task/query`        | Task queries with their handlers.                                                         |
+| `internal/usecase/task/event`        | Task event handlers (analytics capture).                                                  |
+| `internal/usecase/user`              | The user domain's `Deps` and `Register`.                                                  |
+| `internal/usecase/user/command`      | `RegisterUser` (sign-up).                                                                 |
+| `internal/usecase/user/query`        | `LogIn` (password sign-in) and `GetUser`.                                                 |
+| `internal/usecase/user/event`        | `send-welcome-email` and analytics capture.                                               |
+| `internal/usecase/exchange`          | The exchange domain's `Deps` and `Register`.                                              |
+| `internal/usecase/exchange/command`  | `ConvertCurrency`.                                                                        |
+| `internal/usecase/exchange/query`    | `GetConversion` and the history query.                                                    |
+| `internal/usecase/exchange/event`    | Exchange analytics capture.                                                               |
+| `internal/usecase/passkey`           | The passkey domain's `Deps` and `Register`.                                               |
+| `internal/usecase/passkey/command`   | Finishing passkey registration and login, rename and delete.                              |
+| `internal/usecase/passkey/query`     | Passkey get and list, and the begin steps of registration and login.                      |
+| `internal/usecase/oidc`              | SSO sign-in: the domain's `Register`.                                                     |
+| `internal/usecase/oidc/command`      | `FinishOIDCLogin`.                                                                        |
+| `internal/usecase/oidc/query`        | The SSO status and the begin step of sign-in.                                             |
+| `internal/usecase/flags`             | The flags domain's `Register`.                                                            |
+| `internal/usecase/flags/query`       | The caller's feature flags.                                                               |
+| `internal/usecase/mail`              | Email delivery: the domain's `Register` (worker only).                                    |
+| `internal/usecase/mail/command`      | `DeliverEmail`.                                                                           |
+| `internal/usecase/analytics`         | Analytics delivery: the domain's `Register` (worker only).                                |
+| `internal/usecase/analytics/command` | `DeliverAnalytics`.                                                                       |
+
+## internal/repo: ports and their implementations
+
+| Package                               | Holds                                                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/repo`                       | The ports handlers call: `contracts.go` (event store, subscriber, checkpoints, session, limiter) and one file per domain (read model and outbound ports). |
+| `internal/repo/repomock`              | **generated** (`make mock`): gomock mocks of the contracts, one file per contract file.                                                                   |
+| `internal/repo/memstore`              | **test**: the in-memory event store command-handler tests use.                                                                                            |
+| `internal/repo/eventstoretest`        | **test**: the contract suite every event store passes.                                                                                                    |
+| `internal/repo/eventcodec`            | What every event store shares: the codec (with upcasting), the snapshot rule, claims and metadata. Its `testdata/events/` holds the frozen event samples. |
+| `internal/repo/persistent/eventstore` | The Postgres event store (`events`, `snapshots`, `claims`), its reader, and the backfill.                                                                 |
+| `internal/repo/persistent/projection` | The projection runner the worker runs, `NewProjector`, checkpoints, rebuilds and the lag metric.                                                          |
+| `internal/repo/persistent/queries`    | **generated** (`make sqlc`): typed Go from the `.sql` query files beside it.                                                                              |
+| `internal/repo/persistent/task`       | The task read model (`tasks`), its projector and importer.                                                                                                |
+| `internal/repo/persistent/user`       | The user read model (`users`, `user_identities`), its projector and importer.                                                                             |
+| `internal/repo/persistent/passkey`    | The passkey read model (`webauthn_credentials`), its projector and importer.                                                                              |
+| `internal/repo/persistent/exchange`   | The exchange read model (`exchange_history`), its projector and importer.                                                                                 |
+| `internal/repo/mongo/task`            | The task attributes store on MongoDB.                                                                                                                     |
+| `internal/repo/webapi`                | Outbound HTTP: the ExchangeRate-API rate client and its cache port.                                                                                       |
+| `internal/repo/limiter`               | The sign-in limiter on Valkey.                                                                                                                            |
+| `internal/repo/session`               | Issues the JWT a sign-in answers with.                                                                                                                    |
+| `internal/repo/ceremony`              | The WebAuthn ceremonies of passkey registration and login.                                                                                                |
+| `internal/repo/ceremony/ceremonytest` | **test**: plays the browser and the authenticator.                                                                                                        |
+| `internal/repo/sso`                   | The OpenID Connect sign-in ceremony (authorization code with PKCE).                                                                                       |
+| `internal/repo/sso/ssotest`           | **test**: an OpenID Connect provider on `httptest`.                                                                                                       |
+| `internal/repo/notify`                | Publishes emails for the worker (`repo.UserNotifier`).                                                                                                    |
+| `internal/repo/mailtmpl`              | Renders email from the embedded templates in `templates/`; goldens in `testdata/`.                                                                        |
+| `internal/repo/mailer`                | Delivers rendered email through `pkg/smtp`.                                                                                                               |
+| `internal/repo/analytics`             | Publishes analytics events for the worker, one message per sink.                                                                                          |
+| `internal/repo/analytics/posthog`     | The PostHog analytics sink.                                                                                                                               |
+| `internal/repo/analytics/sinktest`    | **test**: the contract every analytics sink passes.                                                                                                       |
+
+## internal/controller: transports
+
+| Package                                   | Holds                                                                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `internal/controller/authn`               | Reads the caller from a token, for every transport.                                          |
+| `internal/controller/httpmw`              | The middleware around every HTTP request: client address, log, tracing, metrics, recovery.   |
+| `internal/controller/restapi`             | The REST API: Huma, its docs, and `Document` for the OpenAPI export.                         |
+| `internal/controller/restapi/middleware`  | REST's `Auth`, which enforces each operation's declared `Security`.                          |
+| `internal/controller/restapi/resttest`    | **test**: serves the real REST handler to the REST tests.                                    |
+| `internal/controller/restapi/v1/apidoc`   | What several domains share in the OpenAPI document: the `BearerAuth` scheme, the `auth` tag. |
+| `internal/controller/restapi/v1/apierr`   | `Problem`: error kind to RFC 9457 problem; `CommandErrors`, `QueryErrors`.                   |
+| `internal/controller/restapi/v1/response` | Response DTOs several domains return (`Token`).                                              |
+| `internal/controller/restapi/v1/task`     | v1 task operations.                                                                          |
+| `internal/controller/restapi/v1/user`     | v1 sign-up, password sign-in and profile.                                                    |
+| `internal/controller/restapi/v1/exchange` | v1 currency conversion and history.                                                          |
+| `internal/controller/restapi/v1/passkey`  | v1 passkey sign-in and management.                                                           |
+| `internal/controller/restapi/v1/oidc`     | v1 SSO status and sign-in.                                                                   |
+| `internal/controller/restapi/v1/flags`    | v1 feature flags.                                                                            |
+| `internal/controller/grpc/middleware`     | The gRPC interceptors: client address, log, metrics, recovery, auth.                         |
+| `internal/controller/grpc/v1/rpcerr`      | `Status`: error kind to gRPC status.                                                         |
+| `internal/controller/grpc/v1/response`    | Timestamps and counts as proto fields.                                                       |
+| `internal/controller/grpc/v1/user`        | `AuthService`.                                                                               |
+| `internal/controller/grpc/v1/task`        | `TaskService`.                                                                               |
+| `internal/controller/grpc/v1/exchange`    | `ExchangeService`.                                                                           |
+| `internal/controller/graphql`             | The GraphQL handler, playground and root resolver. Its schema files are in `schema/`.        |
+| `internal/controller/graphql/generated`   | **generated** (`make graphql`): gqlgen's executable schema.                                  |
+| `internal/controller/graphql/model`       | **generated** (`make graphql`): the types autobind does not cover.                           |
+| `internal/controller/graphql/middleware`  | Reads the caller from the bearer token; `Caller`.                                            |
+| `internal/controller/graphql/gqlerr`      | `Map`: error kind to `extensions.code`.                                                      |
+| `internal/controller/graphql/graphqltest` | **test**: sends requests to the real GraphQL handler.                                        |
+| `internal/controller/graphql/task`        | Task field resolvers.                                                                        |
+| `internal/controller/graphql/exchange`    | Exchange field resolvers.                                                                    |
+| `internal/controller/graphql/flags`       | Feature-flag field resolvers.                                                                |
+| `internal/controller/worker/v1`           | Queue message handlers the worker consumes (mail, analytics).                                |
+
+## pkg: infrastructure with no domain knowledge
+
+| Package               | Holds                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `pkg/cqrs`            | The command and query buses, their step pipeline, and the trace, log and metrics steps. |
+| `pkg/postgres`        | The pgx pool, transactions (`InTx`) and `Executor(ctx)`, traced by otelpgx.             |
+| `pkg/migrate`         | Applies the embedded goose migrations.                                                  |
+| `pkg/valkey`          | The Valkey client and `Cache`.                                                          |
+| `pkg/mongo`           | The MongoDB client and its command tracing.                                             |
+| `pkg/broker`          | NATS JetStream through Watermill: publish, consume, retries and the poison topic.       |
+| `pkg/jwt`             | Signs and parses JWTs.                                                                  |
+| `pkg/clientip`        | Resolves the client address, behind a trusted proxy too.                                |
+| `pkg/flags`           | Feature flags through OpenFeature.                                                      |
+| `pkg/flags/flagstest` | **test**: a flags client with fixed values.                                             |
+| `pkg/smtp`            | Sends email over SMTP.                                                                  |
+| `pkg/tracing`         | OpenTelemetry tracing with an OTLP/gRPC exporter.                                       |
+| `pkg/sentrylog`       | Reports unexpected errors to a Sentry-protocol server (GlitchTip).                      |
+
+`pkg/` never imports `internal/`.

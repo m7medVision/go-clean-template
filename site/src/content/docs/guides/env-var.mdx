@@ -1,0 +1,75 @@
+---
+title: Add an environment variable
+description: Add a setting to the config, give it a default, wire it into the env files and pass it to the code that needs it.
+sidebar:
+  order: 8
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+Configuration comes only from the environment. `config/config.go` parses it with `caarlos0/env`
+into exported sections (`config.Worker`, `config.OIDC`, ...), and both binaries parse the same
+config. There are no config files and no on/off toggle variables: a feature that needs settings is
+on when its settings are present.
+
+<Steps>
+
+1. **Add the field** to the section it belongs to in `config/config.go`, or a new section. The
+   `env` tag names the variable; `envDefault` gives its default. Write a comment above the field:
+   it becomes the field's description in the
+   [configuration reference](/go-clean-template/reference/configuration/), which is generated from
+   this file.
+
+   ```go
+   AuthLimit struct {
+   	ClientAttempts  int           `env:"AUTH_LIMIT_CLIENT_ATTEMPTS" envDefault:"20"`
+   	AccountFailures int           `env:"AUTH_LIMIT_ACCOUNT_FAILURES" envDefault:"5"`
+   	Window          time.Duration `env:"AUTH_LIMIT_WINDOW" envDefault:"15m"`
+   }
+   ```
+
+2. **Decide whether it is required.** `required` makes the binary fail at startup when the variable
+   is unset. Use it only for a setting both binaries need (`PG_URL`, `LOG_LEVEL`). A setting only
+   one binary needs has no `required` tag, because the other binary parses the same config and
+   would refuse to start. That binary checks it itself instead: `app.Run` answers `ErrNoJWTSecret`,
+   `ErrNoValkeyURL` or `ErrNoMongoURL`, and `RunWorker` answers `ErrNoNATSURL`.
+
+3. **Add it to `.env.example`.** `make` reads this file with `include` and CI reads it with the
+   shell, so a value must need no quoting: no spaces.
+
+   ```sh
+   AUTH_LIMIT_WINDOW=15m
+   ```
+
+4. **Add it to `docker-compose.yml`** if a container needs it, in the `environment` block of the
+   service, or in the shared `x-backend-app-environment` anchor when both the app and the worker
+   read it.
+
+5. **Pass the section, not the config.** Wiring in `internal/app` hands each part the section or
+   the values it reads. A `pkg/` constructor takes explicit values; when a `pkg` type has the
+   section's fields, convert it:
+
+   ```go
+   br, err := broker.New(cfg.NATS.URL, broker.Settings(cfg.Worker), b.l)
+   ```
+
+</Steps>
+
+<Aside>
+  The configuration reference reads `config/config.go`, so the variable, its section, its type, its
+  default and whether it is required appear there without editing any docs page.
+</Aside>
+
+## Rules
+
+- Defaults are written only in `config/`: a `pkg/` constructor takes explicit values, so one place
+  says what the template runs with.
+- Never pass `*config.Config` below `internal/app`, and no controller imports `config`: each part
+  sees only what it reads.
+- `required` is for settings both binaries need; a one-binary setting is checked by that binary's
+  `Run`.
+- Every variable has an `.env.example` entry with an unquoted value: `make` and the CI shell both
+  read the file.
+- No on/off toggle variables: a feature is enabled by the presence of its required settings.
+- A setting a container needs is in `docker-compose.yml`: the compose stack otherwise runs without
+  it.

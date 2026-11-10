@@ -1,0 +1,99 @@
+---
+title: A tour of the running stack
+description: Every service the stack starts, where to reach it, and a first request against the API.
+sidebar:
+  order: 3
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+## What is running and where
+
+With `make dev` (default ports from `.env.example`):
+
+| What                               | Where                                                                       |
+| ---------------------------------- | --------------------------------------------------------------------------- |
+| Web client (Vite dev server)       | http://localhost:3000                                                       |
+| REST API                           | http://localhost:8080/v1/...                                                |
+| REST docs (Stoplight Elements)     | http://localhost:8080/docs, document at `/openapi.json` and `/openapi.yaml` |
+| GraphQL                            | http://localhost:8080/graphql                                               |
+| GraphiQL playground                | http://localhost:8080/graphql/playground                                    |
+| gRPC                               | `localhost:8081`, with server reflection                                    |
+| Health check                       | http://localhost:8080/healthz                                               |
+| Prometheus metrics                 | http://localhost:8080/metrics                                               |
+| Mailpit (caught email, UI and API) | http://localhost:8025, SMTP on `localhost:1025`                             |
+| Keycloak (SSO provider)            | http://keycloak.lvh.me:8180, realm `app`, admin console `admin` / `admin`   |
+| Postgres, Valkey, MongoDB, NATS    | `localhost` on `PG_PORT`, `VALKEY_PORT`, `MONGO_PORT`, `NATS_PORT`          |
+
+The docs, the OpenAPI document and the playground are served only when `DOCS_ENABLED` is true, and
+`/metrics` only when `METRICS_ENABLED` is true. Both are on in `.env.example`.
+
+The Vite server proxies the paths the Go app owns (`/v1`, `/graphql`, `/docs`, `/openapi.*`,
+`/schemas`, `/healthz`, `/metrics`) to the app, so the client and the API share one origin.
+
+`*.lvh.me` resolves to `127.0.0.1`, so these names work without editing your hosts file.
+
+With `make compose-up-all`, Caddy on port 80 adds:
+
+| What                            | Where                                           |
+| ------------------------------- | ----------------------------------------------- |
+| Web client and API behind Caddy | http://app.lvh.me                               |
+| gRPC over h2c                   | `grpc.lvh.me:80`                                |
+| Jaeger traces                   | http://jaeger.lvh.me, or http://localhost:16686 |
+
+The app still publishes `8080` and `8081` directly. Tracing is off in `make dev`, so Jaeger has
+traces only in the full stack.
+
+## Sign in
+
+The Keycloak realm in `keycloak/realm.json` has two users:
+
+| User    | Password | Role in the app |
+| ------- | -------- | --------------- |
+| `alice` | `alice`  | admin           |
+| `bob`   | `bob`    | user            |
+
+Open the web client, choose the SSO sign-in and log in as one of them. You can also register a
+local account with an email and a password, or add a passkey to it from the profile page.
+
+## A first request
+
+<Steps>
+
+1. Register a user. The response is the new user:
+
+   ```sh
+   curl -s localhost:8080/v1/auth/register \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"johndoe","email":"john@example.com","password":"secret123"}'
+   ```
+
+   A welcome email for the new user lands in Mailpit at http://localhost:8025.
+
+2. Log in with the email and password. The response holds a JWT; keep it:
+
+   ```sh
+   TOKEN=$(curl -s localhost:8080/v1/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"john@example.com","password":"secret123"}' | jq -r .token)
+   ```
+
+3. Create a task and list your tasks:
+
+   ```sh
+   curl -s localhost:8080/v1/tasks -H "Authorization: Bearer $TOKEN" \
+     -H 'Content-Type: application/json' -d '{"title":"My task"}'
+   curl -s localhost:8080/v1/tasks -H "Authorization: Bearer $TOKEN"
+   ```
+
+</Steps>
+
+<Aside>
+  The create call answers with the task itself. Behind it the app saved an event, waited for the
+  worker to project it, then read it back. See [request
+  flow](/go-clean-template/concepts/request-flow/).
+</Aside>
+
+Every operation is listed in the [REST reference](/go-clean-template/reference/rest/), the
+[GraphQL reference](/go-clean-template/reference/graphql/) and the
+[gRPC reference](/go-clean-template/reference/grpc/).

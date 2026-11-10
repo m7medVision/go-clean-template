@@ -1,0 +1,90 @@
+---
+title: Add a migration
+description: Change the database schema with a new goose migration, prove it rolls back, and regenerate the SQL code.
+sidebar:
+  order: 9
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+The schema is a series of SQL migrations run by goose, one file per change in
+`internal/app/migrations/`. The files are embedded in the app binary, and the app applies the
+pending ones when it starts, so a deploy never needs a separate migration step. The worker never
+migrates.
+
+<Steps>
+
+1. **Create the file:**
+
+   ```sh
+   make migrate-new name=add_task_priority
+   ```
+
+   It writes an empty `internal/app/migrations/<timestamp>_add_task_priority.sql`.
+
+2. **Write both sections.** `Up` makes the change; `Down` undoes exactly that change:
+
+   ```sql
+   -- +goose Up
+   ALTER TABLE "tasks" ADD COLUMN "priority" integer NOT NULL DEFAULT 0;
+
+   -- +goose Down
+   ALTER TABLE "tasks" DROP COLUMN "priority";
+   ```
+
+   A read-model table has no foreign keys. Only its projector writes it, and each projector
+   advances on its own, so a row may arrive before the row it refers to.
+
+3. **Apply it locally** to the database in `PG_URL`:
+
+   ```sh
+   make migrate-status
+   make migrate-up
+   make migrate-down version=<previous version>
+   ```
+
+   `make run` and `make dev` also apply it, because they build the app with the `migrate` build tag:
+
+   <RepoCode path="internal/app/migrate.go" symbol="migrateSchema" />
+
+4. **Prove it round-trips:**
+
+   ```sh
+   make schema-roundtrip
+   ```
+
+   This runs every migration up, down to zero and up again on a throwaway Postgres, and fails if a
+   migration already merged to master was edited or removed. CI runs it too.
+
+5. **Regenerate the SQL code.** sqlc reads the migrations as its schema, ignoring the `Down`
+   sections:
+
+   ```sh
+   make sqlc
+   ```
+
+   The generated row structs share the entities' field order, so `entity.Task(row)` is a plain
+   conversion. A new column needs the matching field in the entity, or the conversion stops
+   compiling. Then update the queries in `internal/repo/persistent/queries/<domain>.sql` and the
+   projector that writes the table.
+
+6. **Rebuild the projection** if existing rows need the new column filled from their events:
+   [Rebuild a projection](/go-clean-template/guides/rebuild-projection/).
+
+</Steps>
+
+<Aside type="caution">
+  There is one database. Do not add a second (dev or shadow) database for migrations: the round-trip
+  check uses a throwaway Postgres of its own.
+</Aside>
+
+## Rules
+
+- A migration merged to master is never edited or removed: databases already ran it, so a change is
+  a new file. `make schema-roundtrip` enforces this.
+- Every `Down` undoes its `Up`: the round-trip check proves it, and a rollback depends on it.
+- Create files with `make migrate-new`: the timestamped name keeps the order goose applies them in.
+- Read-model tables have no foreign keys: projectors advance independently.
+- Run `make sqlc` after a schema change: generated code and entities must match the migrations.
+- Only the app migrates, at startup under goose's advisory lock: running replicas never race.

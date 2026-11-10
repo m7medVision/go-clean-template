@@ -1,0 +1,96 @@
+---
+title: Add a REST operation
+description: Write a Huma operation by hand, document and enforce its rules, test it and regenerate the OpenAPI document and client types.
+sidebar:
+  order: 6
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+REST is chi plus Huma v2. Each operation lives in its own file in
+`internal/controller/restapi/v1/<domain>/`, named after its operation ID, and the OpenAPI document
+is generated from the same registration the server runs. `make new-usecase` writes this file for
+you; this page is the recipe by hand and what to check in the generated one. The worked example is
+`transition-task`.
+
+<Steps>
+
+1. **Create the file** `transition_task.go` with the operation's own input and output structs. The
+   body is a DTO from `request.go`; never decode into an `entity` type.
+
+   <RepoCode
+     path="internal/controller/restapi/v1/task/transition_task.go"
+     symbol="transitionTaskInput"
+   />
+
+2. **Write the DTO** in `request.go` (or `response.go` for output). Huma tags document the limits
+   and reject a bad request before it is decoded:
+
+   <RepoCode path="internal/controller/restapi/v1/task/request.go" symbol="TransitionTask" />
+
+   The tags must say what the domain says. `internal/app/openapi_test.go` checks the exported
+   document against the entity constants (`entity.TaskStatuses()` for status enums, the text
+   lengths, the page limits), so a tag that drifts from the rule fails the tests.
+
+3. **Register the operation.** Declare `Security` when it needs a token: that one field is both the
+   documentation and the enforcement, because the `Auth` middleware checks what the document states.
+   List errors with `apierr.CommandErrors(...)` or `apierr.QueryErrors(...)`, which add the statuses
+   every command or query can answer.
+
+   <RepoCode
+     path="internal/controller/restapi/v1/task/transition_task.go"
+     symbol="transitionTask"
+   />
+
+   The handler follows the same order on every transport: get the caller with
+   `authn.MustCaller(ctx)`, send the message with the Huma `ctx`, map the error with
+   `apierr.Problem`, and return a response type. A command answers only `entity.Written`, so the
+   operation sends a query to read the resource back.
+
+4. **Add it to `NewRoutes`** in the domain's `controller.go`, one line:
+
+   <RepoCode path="internal/controller/restapi/v1/task/controller.go" symbol="NewRoutes" />
+
+5. **Test it** in the domain folder. `fake_test.go` registers fake handlers on real buses, and
+   `resttest.Do` sends a request through the real router with a token from `resttest.Token(t)`:
+
+   ```go
+   resp := resttest.Do(t.Context(), handler, http.MethodPatch, "/v1/tasks/task-1/status",
+   	resttest.Token(t), `{"status":"in_progress"}`)
+   ```
+
+6. **Regenerate the document and the client types:**
+
+   ```sh
+   make openapi
+   make web-api
+   make web-check
+   ```
+
+   Commit the diff in `docs/openapi/v1.json` and `web/src/api/schema.gen.ts`. CI fails when the
+   document is stale.
+
+</Steps>
+
+<Aside>
+  Huma names each schema after its Go type, so a DTO's type name is part of the API contract.
+  Renaming `TaskList` renames the schema in `docs/openapi/v1.json` and in the web client's types. A
+  name that repeats its folder carries a `//nolint:revive` saying so.
+</Aside>
+
+Return an `entity` type directly only when its JSON is already the API shape. Anything else, and
+anything holding `decimal.Decimal`, gets a response type.
+
+## Rules
+
+- One file per operation, named after its operation ID: adding an op changes `controller.go` by one
+  line.
+- An op that reads a caller declares `Security`: without it the request reaches the handler with no
+  token and `MustCaller` panics.
+- Errors go through `apierr.Problem`, and statuses are listed with `CommandErrors` or `QueryErrors`:
+  one mapping for every kind.
+- Huma tags mirror the entity's rules, and `openapi_test.go` pins them: the docs never promise a
+  limit the domain does not enforce.
+- Never pass a request DTO into a command or query: build the message from its fields.
+- Commit `docs/openapi/v1.json` and the generated client types with the change: CI checks both.

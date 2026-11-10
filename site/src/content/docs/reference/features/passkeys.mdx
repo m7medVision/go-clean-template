@@ -1,0 +1,160 @@
+---
+title: Passkeys
+description: WebAuthn sign-in next to passwords, with stateless ceremonies and a one-time challenge burn.
+sidebar:
+  order: 1
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import RepoCode from "../../../../components/RepoCode.astro";
+
+Passkeys (WebAuthn) sit next to passwords. A signed-in user adds passkeys from the profile screen.
+Anyone signs in with one, from a button or from the browser's autofill on the email field, and gets
+the same JWT a password login returns. Everything after the token is unchanged, so every transport
+accepts it.
+
+The ceremonies are REST only: the browser drives them, and the sign-in forms already use REST.
+
+## Where the code lives
+
+| Layer          | Package                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Entity         | `internal/entity/passkey.go`, `passkey_aggregate.go`, `passkey_events.go`                                                     |
+| Use case       | `internal/usecase/passkey`: the `begin` steps and the reads are queries; the `finish` steps, rename and delete are commands   |
+| Adapter        | `internal/repo/ceremony`, the only package that imports go-webauthn; `ceremonytest/` drives a software authenticator in tests |
+| Read model     | `internal/repo/persistent/passkey`: the read model, the `passkey` projector and the challenge guard                           |
+| Ceremony token | `pkg/jwt/scoped.go`                                                                                                           |
+| REST           | `internal/controller/restapi/v1/passkey/`                                                                                     |
+| Web            | `web/src/passkey/` and the login route                                                                                        |
+
+No WebAuthn type reaches `entity` or a controller. Controllers pass the browser's JSON in as bytes
+and hand the options JSON back out.
+
+## Ceremonies
+
+Each ceremony is two requests. `begin` answers `{options, ceremony_token}`: the WebAuthn options for
+the browser, and the ceremony's state, signed. `finish` takes the browser's
+`PublicKeyCredential.toJSON()` as the body and the token in the `X-Ceremony-Token` header. The token
+is a header, not a query parameter, because request URIs are logged and end up in proxy logs.
+
+### Adding a passkey
+
+1. `POST /v1/passkeys/register/begin` checks that the caller signed in recently, then returns
+   creation options. The user's existing passkeys go in `excludeCredentials`. The options require a
+   discoverable credential and user verification, with attestation `none`.
+2. The browser runs `navigator.credentials.create`.
+3. `POST /v1/passkeys/register/finish?name=…` verifies the token and the credential. The ceremony
+   must belong to the caller. The answer is `201` with the passkey. The credential ID names the
+   stream (`passkey-<id>`), so finishing twice is `ErrPasskeyExists`, a `409`.
+
+A passkey outlives the session that adds it, so a stolen JWT must not be enough to add one. The
+`BeginPasskeyRegistration` query refuses a token older than `WEBAUTHN_REAUTH_MAX_AGE`, or one with no
+issue time, with `ErrPasskeyReauthRequired`:
+
+<RepoCode path="internal/repo/ceremony/ceremony.go" symbol="CheckReauth" />
+
+REST answers it with a `401` whose `detail` is exactly `reauthentication required`. Clients match on
+that string. The token is still valid, so a client must not sign the user out on it: the web client
+asks for the password, signs in again and restarts the ceremony.
+
+### Signing in
+
+1. `POST /v1/auth/passkey/begin` returns request options with no `allowCredentials`, so the
+   authenticator offers any passkey it holds for the site. Nothing is written.
+2. The browser runs `navigator.credentials.get`, from the button or with `mediation: "conditional"`
+   for autofill.
+3. `POST /v1/auth/passkey/finish` loads the user and passkey the assertion names, verifies the token
+   and the signature, rejects a sign count that did not advance, **burns the challenge**, stores the
+   credential's new state and `last_used_at`, and answers `{token}`.
+
+A sign count that stood still or went back is treated as a cloned authenticator. The check applies
+only to non-zero counters: synced passkeys always report `0`.
+
+Both ceremonies require user verification (PIN or biometric), not just presence.
+
+## Sign on begin, burn on finish
+
+`begin` stores nothing: the state is an HS256 JWT ([`jwt.Scoped`](/go-clean-template/reference/packages/))
+holding go-webauthn's session data. Loading the login page, which starts an autofill ceremony,
+therefore costs no write.
+
+`finish`, once the signature verifies, inserts a SHA-256 hash of the challenge into
+`webauthn_used_challenges`. No row back means the challenge was used before:
+`ErrPasskeyChallengeUsed`, a `409`. The guard opens the transaction and records the passkey's use
+inside it, so the burn and the use commit together. Expired rows are deleted on the same path, so
+there is no cleanup job.
+
+<RepoCode path="internal/repo/persistent/passkey/passkey.go" symbol="Burn" />
+
+The burn comes after the signature check: only a signature from a registered passkey can consume a
+challenge, so a forged body cannot burn a ceremony its owner is still completing.
+
+The ceremony token's key is `HKDF-SHA256(JWT_SECRET, "webauthn-ceremony")`, and its audience is that
+purpose. It can never pass for an auth token, or the reverse. Rotating `JWT_SECRET` ends ceremonies
+in flight. It lives `WEBAUTHN_CEREMONY_TIMEOUT`, which is also the `timeout` the browser gets.
+
+## Errors
+
+Every ceremony failure (bad or expired token, unparseable body, bad signature, unknown credential,
+another user's ceremony, sign-count regression, no user verification) is one sentinel,
+`ErrPasskeyCeremonyInvalid`. The log has the reason; the caller gets a generic message.
+
+| Sentinel                    | `register/finish` | `auth/passkey/finish` | `PATCH`/`DELETE /v1/passkeys/{id}` |
+| --------------------------- | ----------------- | --------------------- | ---------------------------------- |
+| `ErrPasskeyCeremonyInvalid` | `400`             | `401`                 |                                    |
+| `ErrPasskeyExists`          | `409`             |                       |                                    |
+| `ErrPasskeyChallengeUsed`   |                   | `409`                 |                                    |
+| `ErrPasskeyNotFound`        |                   |                       | `404`                              |
+
+Another user's passkey is a `404`, not a `403`, so passkey IDs do not leak. A missing
+`X-Ceremony-Token` header fails validation with `422`.
+
+## Endpoints
+
+All REST; see the [REST reference](/go-clean-template/reference/rest/).
+
+| Method and path                     | Auth          | What it does                |
+| ----------------------------------- | ------------- | --------------------------- |
+| `POST /v1/passkeys/register/begin`  | token, recent | creation options            |
+| `POST /v1/passkeys/register/finish` | token         | stores the passkey          |
+| `GET /v1/passkeys`                  | token         | the caller's passkeys       |
+| `PATCH /v1/passkeys/{id}`           | token         | rename                      |
+| `DELETE /v1/passkeys/{id}`          | token         | delete                      |
+| `POST /v1/auth/passkey/begin`       | public        | request options             |
+| `POST /v1/auth/passkey/finish`      | public        | signs in, answers `{token}` |
+
+The API returns `id`, `name`, `created_at` and `last_used_at`. The stored credential never leaves
+the server.
+
+## Settings
+
+See [configuration](/go-clean-template/reference/configuration/).
+
+| Variable                    | Default                                                        |                                               |
+| --------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| `WEBAUTHN_RP_ID`            | `localhost`                                                    | the relying party ID, a registrable domain    |
+| `WEBAUTHN_RP_NAME`          | `Go Clean Template`                                            | the name shown in the passkey prompt          |
+| `WEBAUTHN_RP_ORIGINS`       | `http://localhost,http://localhost:3000,http://localhost:8080` | origins the browser may report                |
+| `WEBAUTHN_CEREMONY_TIMEOUT` | `5m`                                                           | ceremony token lifetime                       |
+| `WEBAUTHN_REAUTH_MAX_AGE`   | `5m`                                                           | how recent a sign-in must be to add a passkey |
+
+A browser runs a ceremony only on an origin whose host is the RP ID or a subdomain of it, in a secure
+context (HTTPS, or `http://localhost`).
+
+- **`make dev`**: the client runs on `http://localhost:3000` and the defaults fit. Open it as
+  `localhost`, not `127.0.0.1`: an RP ID cannot be an IP address.
+- **Behind Caddy** (`http://app.lvh.me`): plain HTTP on a non-localhost host is not a secure
+  context, so browsers offer no passkeys. Use `make dev`, or serve HTTPS and set the RP values.
+- **Production**: serve HTTPS, set `WEBAUTHN_RP_ID` to the registrable domain (`example.com`), set
+  `WEBAUTHN_RP_ORIGINS` to the exact client origins and drop the `localhost` ones.
+
+<Aside type="caution">
+  Choose the RP ID before anyone registers. Changing it later orphans every passkey: the browser no
+  longer offers them.
+</Aside>
+
+## Turning it off
+
+Passkeys sit beside the other sign-ins and are always on; there is no switch. A user signed up with
+a password keeps it, so deleting the last passkey is always allowed. To remove the feature, drop
+`passkeyModule()` from `modules()` in `internal/app/modules.go` and the `web/src/passkey/` folder.

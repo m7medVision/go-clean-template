@@ -1,0 +1,73 @@
+---
+title: Release a version
+description: How commit messages decide releases, and how a release is tagged and published from master.
+sidebar:
+  order: 17
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+There is no manual release step. Every commit on `master` whose CI passes is checked by the
+`Release` workflow (`.github/workflows/release.yml`); if the commits since the last tag call for a
+release, it tags the commit and GoReleaser publishes a GitHub release with notes. No binaries are
+built (`builds: skip` in `.goreleaser.yaml`): the release is the tag and its notes.
+
+## Commit messages decide
+
+Commit subjects are [Conventional Commits](https://www.conventionalcommits.org/). The type
+decides what a merge releases:
+
+| Subject                                                    | Releases                                  |
+| ---------------------------------------------------------- | ----------------------------------------- |
+| `feat: ...`                                                | the next minor version                    |
+| `fix: ...`                                                 | the next patch version                    |
+| `feat!: ...`, `fix(api)!: ...` (any type with `!`)         | a breaking change; below 1.0 a minor bump |
+| `perf`, `docs`, `ci`, `chore`, `test`, `build`, `refactor` | nothing                                   |
+
+The version comes from [svu](https://github.com/caarlos0/svu), run with `--v0`, which keeps a
+breaking change below 1.0 to a minor bump. The release notes list only breaking changes, features,
+fixes and performance commits, grouped under those headings.
+
+## Steps
+
+<Steps>
+
+1. **Write the subject** for what the change does to users: `feat(task): archive tasks`,
+   `fix(exchange): round the converted amount`.
+
+2. **See what master would be released as** before merging:
+
+   ```sh
+   make release-version
+   ```
+
+   It prints the next version, or says there is nothing to release (no `feat`, `fix` or breaking
+   commit since the last tag, or a newer tag already covers this commit).
+
+3. **Preview the notes** with a dry run. Starting the workflow by hand (`workflow_dispatch`) runs
+   GoReleaser with `--skip=publish`: it prints the version and notes in the run summary and
+   publishes nothing.
+
+   ```sh
+   gh workflow run release.yml
+   ```
+
+4. **Merge to master.** After CI succeeds on the push, the workflow checks out the exact commit CI
+   tested, runs `make release-version`, tags it, and GoReleaser creates the release on that commit
+   (`release.target_commitish`). Runs are queued one at a time, in order, and never cancelled.
+
+</Steps>
+
+<Aside type="danger">
+  Never move or delete a `v*` tag. The next version is computed from the existing tags, and anyone
+  who pulled a tag expects it to name the same commit forever. A bad release is fixed by a new `fix`
+  commit and the release it produces.
+</Aside>
+
+## Rules
+
+- Every commit subject is a Conventional Commit, because the subject is what decides the release.
+- Use `feat` and `fix` only for changes a user of the service sees; internal work uses the other types.
+- Mark a breaking change with `!`, so it is never released as a patch.
+- Do not tag by hand: the workflow tags the commit CI checked.
+- Never move or delete a `v*` tag.

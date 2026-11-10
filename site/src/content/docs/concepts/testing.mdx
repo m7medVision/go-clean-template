@@ -1,0 +1,149 @@
+---
+title: Testing
+description: The test levels, what each one replaces, and where each kind of test lives.
+sidebar:
+  order: 9
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+import { Aside } from "@astrojs/starlight/components";
+
+Each layer is tested at its own boundary, with the layer below replaced by something cheap and
+exact. Most of the suite needs no database, no network and no containers, so `make test` runs it in
+seconds; one integration suite then proves the pieces fit.
+
+| Level                     | Where                                        | What stands in below                                |
+| ------------------------- | -------------------------------------------- | --------------------------------------------------- |
+| Aggregates and rules      | `internal/entity`                            | nothing: plain values                               |
+| Command handlers          | `internal/usecase/<domain>/command`          | the in-memory event store, `internal/repo/memstore` |
+| Query handlers            | `internal/usecase/<domain>/query`            | gomock read models, `internal/repo/repomock`        |
+| Projectors                | `internal/repo/persistent/<domain>`          | a fake of sqlc's `Querier`                          |
+| Event stores              | `internal/repo/eventstoretest`               | the shared contract suite, run by both stores       |
+| Transports                | `internal/controller/<transport>/…/<domain>` | fake handlers on real buses                         |
+| The whole mux and servers | `internal/app`                               | fake handlers, real routing and middleware          |
+| Integration               | `integration-test/`                          | nothing: the whole stack in Docker                  |
+
+## Two rules for every Go test
+
+- **Every test calls `t.Parallel()`.** The `paralleltest` linter enforces it. Tests that cannot run
+  in parallel share state they should not.
+- **Tests run with the race detector.** `make test` adds `-race -covermode atomic` and scopes the
+  run to `./config/... ./internal/... ./pkg/...`. Run the target, not `go test`.
+
+Tests are table-driven where there are cases.
+
+## Aggregates
+
+An aggregate's rules are tested in `internal/entity` against plain values: build or replay the
+aggregate, call a behavior method, and check the events it recorded or the error it returned.
+
+## Command handlers against memstore
+
+A command handler is tested against `memstore`, an in-memory `repo.EventStore` that shares the
+codec, snapshot rule and claim handling with the Postgres store (`internal/repo/eventcodec`). The
+test sends the command and reads back the events the handler stored:
+
+<RepoCode
+  path="internal/usecase/exchange/command/convert_currency_test.go"
+  symbol="TestConvertCurrencyRecordsTheConversionAtTheRate"
+/>
+
+Outbound ports the handler calls, such as the rate client, are gomock mocks from `repomock`.
+
+## Query handlers with repomock
+
+A query handler reads only its read model, so its test hands it a mock read model that answers
+fixed rows, then checks the result and the ownership rule (`ReadableBy`). The mocks are generated:
+each file in `internal/repo/repomock/` comes from the `go:generate` directive of the contract file
+it is named after. After changing a contract, run `make mock`.
+
+## Projectors with a fake Querier
+
+A projector's `project` function takes the sqlc `Querier` interface, so its test hands it a fake
+that records the calls. The package exposes `project` to its external test through
+`export_test.go`:
+
+<RepoCode
+  path="internal/repo/persistent/exchange/projector_test.go"
+  symbol="TestCurrencyConvertedInsertsAHistoryRow"
+/>
+
+Each projector also has a test that it has a case for every event it `Handles`.
+
+## The event store contract suite
+
+`internal/repo/eventstoretest` holds the tests every `repo.EventStore` must pass: save and load,
+version conflicts, claims, snapshots. `memstore` runs it in its unit tests, and the Postgres store
+runs it in `integration-test/eventstore_test.go`. Because both pass the same suite, a command
+handler tested on `memstore` behaves the same in production.
+
+<RepoCode path="internal/repo/eventstoretest/suite.go" symbol="Run" />
+
+## Transport tests
+
+Transport tests go through the real server and real buses, with fake handlers registered for the
+domain's messages, from the domain's own folder:
+
+- **REST**: `restapi/resttest` serves the real Huma handler (`resttest.NewRouter`, `resttest.Do`,
+  `resttest.Token`). Each domain folder keeps its fake handlers in `fake_test.go`. REST-wide tests
+  (auth following each operation's `Security`, response shape, validation) are in
+  `restapi/router_test.go`.
+- **GraphQL**: `graphql/graphqltest` sends requests to the real GraphQL handler.
+- **gRPC**: each test starts the server over `bufconn`, in memory.
+
+These tests check what the transport owns: decoding, the status for each error kind, the response
+shape. The rules themselves are already tested in the entity and the handlers.
+
+## internal/app tests
+
+The tests in `internal/app` cover what only the wiring knows: the whole HTTP mux (public routes,
+panics, metrics, GraphQL beside REST, the documented security enforced), the gRPC server (public
+methods, panics), the buses' steps, the modules, and the exported OpenAPI document.
+`openapi_test.go` also pins the Huma tags to the entity's constants, so the documented limits cannot
+drift from the rules.
+
+## Integration tests
+
+`integration-test/` runs inside the Docker network, against the app, the worker, Postgres, Valkey,
+MongoDB, NATS and Mailpit. It reaches the app by its compose service name, so it cannot run on the
+host.
+
+```sh
+make compose-up-integration-test
+```
+
+<Aside type="caution">
+  `make integration-test` runs the suite on the host, where it cannot resolve the container
+  hostnames, so it always fails. Use `make compose-up-integration-test`.
+</Aside>
+
+The worker must be running, because every write waits for the projections. The event store tests
+write only scratch streams (IDs starting with `_`), so they never disturb it. The exchange tests
+use a stub serving a recorded provider response, so the suite never calls the real API; the mail
+tests assert on what reaches Mailpit.
+
+## Golden tests
+
+Some outputs are compared against checked-in files. After an intended change, regenerate the
+goldens and review the diff:
+
+| What            | Goldens                                      | Regenerate                                                                       |
+| --------------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
+| Email templates | `internal/repo/mailtmpl/testdata/*.golden.*` | `UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/`                              |
+| Event samples   | `internal/repo/eventcodec/testdata/events/`  | `UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/` |
+| The generator   | `tools/gen/testdata/golden/`                 | `UPDATE_GOLDEN=1 go -C tools/gen test ./...`                                     |
+
+The event samples are frozen: the codec tests fail when an event's current shape no longer matches
+its sample, or an old sample no longer decodes. A new event or a new schema version needs a new
+sample; an old one is never edited.
+
+The generator is its own Go module, so `make test` does not reach it. `make gen-check` lints it and
+runs its unit and golden tests, and `make gen-e2e` generates a domain and use cases in a throwaway
+worktree and lints and tests the result.
+
+## Web tests
+
+The React client's tests sit next to the code as `*.test.ts` and import from `vite-plus/test`. A
+screen test is a `*.test.tsx` with `// @vitest-environment happy-dom` that renders the real routes
+through `web/src/testing`, with MSW handlers typed from the generated API types. Run them with
+`make web-check`.

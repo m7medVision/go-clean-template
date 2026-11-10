@@ -1,0 +1,77 @@
+---
+title: Version an API
+description: Add a v2 of an operation as a sibling package, registered next to v1, without touching v1.
+sidebar:
+  order: 14
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+Each transport keeps its handlers under a version folder: `restapi/v1/<domain>/`,
+`grpc/v1/<domain>/`. A breaking change to an operation's contract is a v2: a sibling folder with
+the same layout. v1 stays untouched, so existing clients keep working.
+
+A version is only a transport concern. Both versions build and send the same commands and
+queries; the domain, the buses and the read models do not know about versions. If a v2 needs new
+behavior, add a [command](/go-clean-template/guides/add-endpoint/) or a
+[query](/go-clean-template/guides/queries/) first, then expose it.
+
+## Steps
+
+<Steps>
+
+1. **Create the v2 folder** with the same layout as v1, for example
+   `internal/controller/restapi/v2/task/` with its `controller.go`, one file per operation,
+   `request.go`, `response.go` and tests. Copy only the operations that change.
+
+2. **REST: use `/v2/...` paths on the same Huma API.** Both versions share one OpenAPI document.
+   A v2 operation needs a token when it declares `Security`, exactly as in v1; the path plays no
+   part.
+
+3. **gRPC: add the new protos** in `docs/proto/v2/`. `make proto-v1` compiles only
+   `docs/proto/v1/*.proto`, so add a `proto-v2` target beside it in the `Makefile`. Then write the v2 service in `internal/controller/grpc/v2/<domain>/`. A v2 method needs a
+   token unless its module lists it in `grpcPublic`.
+
+4. **Register v2 next to v1** in the domain's module, `internal/app/<domain>.go`. Today the task
+   module registers v1 only:
+
+   <RepoCode path="internal/app/task.go" symbol="taskModule" />
+
+   With a v2 the `rest` and `grpc` fields call both:
+
+   ```go
+   rest: func(api huma.API, b cqrs.Buses, l *slog.Logger) {
+   	resttask.NewRoutes(api, b, l)   // restapi/v1/task
+   	resttaskv2.NewRoutes(api, b, l) // restapi/v2/task
+   },
+   grpc: func(s grpc.ServiceRegistrar, b cqrs.Buses, l *slog.Logger) {
+   	pb.RegisterTaskServiceServer(s, grpctask.New(b, l))
+   	pbv2.RegisterTaskServiceServer(s, grpctaskv2.New(b, l))
+   },
+   ```
+
+5. **Regenerate and check**: `make openapi`, `make web-api`, `make format`,
+   `make linter-golangci`, `make test`.
+
+</Steps>
+
+## GraphQL has no versions
+
+GraphQL has no `v1/` folder. A schema evolves by adding fields and marking old ones
+`@deprecated(reason: "...")`; clients select only the fields they use, so an addition breaks no
+one. Remove a deprecated field once no client reads it. See
+[add a GraphQL field](/go-clean-template/guides/graphql-field/).
+
+<Aside type="caution">
+  A v2 folder never imports a v1 folder. What both versions share goes in the transport's shared
+  packages (REST `v1/response/`, `v1/apidoc/`), as between domains.
+</Aside>
+
+## Rules
+
+- v1 is never edited to make room for v2: existing clients depend on it.
+- Both versions send the same commands and queries; version logic stays in the transport.
+- A version folder has the same layout as v1 and never imports another version's domain folder.
+- Registration happens in the domain's module, next to v1, not in a transport-wide list.
+- GraphQL changes by adding fields and `@deprecated`, never by a version folder.

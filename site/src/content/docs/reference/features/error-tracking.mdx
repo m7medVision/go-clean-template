@@ -1,0 +1,87 @@
+---
+title: Error tracking
+description: Unexpected errors from the app, the worker and the web client reported to GlitchTip through the Sentry SDK.
+sidebar:
+  order: 7
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import RepoCode from "../../../../components/RepoCode.astro";
+
+An unexpected error in the app or the worker becomes an issue in GlitchTip, with the log lines that
+led to it. The integration uses the Sentry SDK, so any server that speaks the Sentry protocol works;
+the DSN picks it. The template does not run a GlitchTip: point the DSN at one you run. With no
+`SENTRY_DSN`, nothing is sent and nothing changes.
+
+## How it is enabled
+
+Each binary checks `SENTRY_DSN` when it builds its logger. Empty returns the logger unchanged:
+
+<RepoCode path="internal/app/bootstrap.go" symbol="errorTracking" />
+
+Each binary reports to its own project. Both read `SENTRY_DSN`; compose gives the `app` service
+`SENTRY_APP_DSN` and the `worker` service `SENTRY_WORKER_DSN`. The web client reports to a third
+project through `VITE_SENTRY_DSN`.
+
+## How it works
+
+`pkg/sentrylog` wraps the binary's `slog` handler. Nothing else calls the Sentry SDK.
+
+<RepoCode path="pkg/sentrylog/sentrylog.go" symbol="Handle" />
+
+- **An `Error` record is an event**, its `error` attribute the exception. The transports' error
+  mappers log only internal and upstream failures at `Error`, so a 404, 403, 409, 422 or 429 is never
+  sent. A recovered panic, a queue message the worker gave up on and a stuck projection are logged at
+  `Error` too.
+- **A record below `Error` is a breadcrumb** on the hub of its own request, gRPC call, queue message
+  or projection loop (`sentrylog.Fork`). An event shows what its unit of work did, never another's.
+  Breadcrumbs include `Debug` lines even when `LOG_LEVEL` keeps them off stdout.
+- **Grouping.** The fingerprint is the log message plus the outermost operation of the error (such
+  as `CreateTask - aggregate.Save`) or the panic value, so two different 500s are two issues.
+- **A stuck projection is one issue.** The runner logs `Error` the first time a subscriber fails at
+  an event, then `Warn` while it keeps failing there.
+- **Flushed on shutdown**, after the servers stop.
+
+GlitchTip's logs and performance tracing are not used: logs stay on stdout and traces go to the
+OpenTelemetry backend.
+
+## What is never sent
+
+Only these log attributes leave the process: `op`, `name`, `kind`, `duration`, `subscriber`,
+`topic`, `status`, `method` and `panic`.
+
+<RepoCode path="pkg/sentrylog/event.go" symbol="allowed" />
+
+A client address, URI, body, header or email is never sent. The user is their ID only. Tags are
+`service` (`app` or `worker`), `trace_id`, `release` (`APP_VERSION`) and `environment`.
+
+## The web client
+
+With `VITE_SENTRY_DSN` set at build time, `web/src/lib/error-tracking.ts` loads `@sentry/react`.
+Without it nothing is loaded.
+
+- `shouldReport` (`web/src/api/report.ts`) reports server faults (a 5xx problem, GraphQL `INTERNAL`),
+  network failures and render crashes; never a 4xx problem, `UNAUTHENTICATED` or `BAD_USER_INPUT`.
+- Each error is sent once with the signed-in user's ID and nothing else. The scrubber removes query
+  strings, request headers, cookies, bodies and console breadcrumbs.
+- With `SENTRY_AUTH_TOKEN` set, `make web-build` builds hidden source maps, uploads them and deletes
+  them from `dist/`. Without it no maps are built, so none are ever served.
+
+## Settings
+
+See [configuration](/go-clean-template/reference/configuration/).
+
+| Variable                                                                          | Read by          |                                        |
+| --------------------------------------------------------------------------------- | ---------------- | -------------------------------------- |
+| `SENTRY_DSN`                                                                      | app, worker      | the project DSN; empty is off          |
+| `SENTRY_ENVIRONMENT`                                                              | app, worker      | default `development`                  |
+| `SENTRY_APP_DSN`, `SENTRY_WORKER_DSN`                                             | compose          | passed to each service as `SENTRY_DSN` |
+| `VITE_SENTRY_DSN`                                                                 | web build        | the web project's DSN                  |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_URL`, `SENTRY_ORG`, `SENTRY_PROJECT`, `VITE_RELEASE` | `make web-build` | source map upload                      |
+
+<Aside>An error that stops a binary before it has a logger goes to stdout only.</Aside>
+
+## Turning it off
+
+Leave `SENTRY_DSN` and `VITE_SENTRY_DSN` empty. To report elsewhere, change only `pkg/sentrylog`:
+it is the one place that knows the SDK.

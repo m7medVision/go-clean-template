@@ -1,0 +1,128 @@
+---
+title: GraphQL API
+description: The GraphQL endpoint, its schema layout, every field per domain, and how it authenticates and reports errors.
+sidebar:
+  order: 5
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+import { Aside } from "@astrojs/starlight/components";
+
+The GraphQL API is served by [gqlgen](https://gqlgen.com/) on the REST port (`HTTP_PORT`, default
+`8080`), beside the REST API on the same chi mux:
+
+| Path                  | What                                              |
+| --------------------- | ------------------------------------------------- |
+| `POST /graphql`       | the API; queries and mutations are sent as `POST` |
+| `/graphql/playground` | GraphiQL, served only with `DOCS_ENABLED=true`    |
+
+It covers tasks, the exchange history and the caller's feature flags. The web client reads every
+table through it.
+
+## Schema layout
+
+The schema lives in `internal/controller/graphql/schema/`:
+
+| File                      | Holds                                                                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema.graphqls`         | the empty `Query` and `Mutation` roots                                                                                                        |
+| `<domain>_types.graphqls` | a domain's shared types (`task_types.graphqls`)                                                                                               |
+| `<field>.graphqls`        | one field, as `extend type Query` or `extend type Mutation`, with any input type only it takes (`create_task.graphqls` declares `createTask`) |
+| `scalars.graphqls`        | the `Time` scalar                                                                                                                             |
+
+A schema type binds to the `entity` type of the same name (gqlgen's `autobind`), so a read shape
+needs no mapping. `make graphql` regenerates `generated/` and `model/`. gqlgen writes no resolver
+code: each field's resolver is a hand-written file in `internal/controller/graphql/<domain>/`,
+named after the field. A schema field with no resolver fails the build with `missing method`.
+
+## Tasks
+
+<RepoCode path="internal/controller/graphql/schema/task_types.graphqls" symbol="Task" />
+
+<RepoCode path="internal/controller/graphql/schema/task.graphqls" symbol="Query" />
+
+<RepoCode path="internal/controller/graphql/schema/tasks.graphqls" symbol="Query" />
+
+<RepoCode path="internal/controller/graphql/schema/all_tasks.graphqls" symbol="Query" />
+
+`allTasks` lists every user's tasks and requires the `admin` role.
+
+<RepoCode path="internal/controller/graphql/schema/create_task.graphqls" />
+
+<RepoCode path="internal/controller/graphql/schema/update_task.graphqls" />
+
+<RepoCode path="internal/controller/graphql/schema/transition_task.graphqls" symbol="Mutation" />
+
+<RepoCode path="internal/controller/graphql/schema/delete_task.graphqls" symbol="Mutation" />
+
+<RepoCode path="internal/controller/graphql/schema/update_task_attributes.graphqls" />
+
+An attribute left out of the input stays as it is; one set to `null` is cleared. The task queries
+merge the attributes in when the `task-attributes` feature flag is on.
+
+## Exchange
+
+<RepoCode path="internal/controller/graphql/schema/exchange_types.graphqls" symbol="Conversion" />
+
+<RepoCode path="internal/controller/graphql/schema/exchange_history.graphqls" symbol="Query" />
+
+Converting is a form, and forms use REST: `POST /v1/exchange/convert`
+([REST API](/go-clean-template/reference/rest/)).
+
+## Feature flags
+
+<RepoCode path="internal/controller/graphql/schema/flags.graphqls" symbol="Query" />
+
+<RepoCode path="internal/controller/graphql/schema/flags_types.graphqls" symbol="FlagValues" />
+
+## Authentication
+
+Send the token as `Authorization: Bearer <token>`. The handler lets every request through, with or
+without a token, and stores the caller of a valid one in the context. Each resolver that needs a
+caller asks for it with `middleware.Caller(ctx)`, which answers `UNAUTHENTICATED`:
+
+<RepoCode path="internal/controller/graphql/middleware/auth.go" symbol="Caller" />
+
+<Aside>
+  GraphQL reports a missing or expired token as an `UNAUTHENTICATED` error inside a `200` response,
+  not as a 401. The web client (`web/src/api/graphql.ts`) turns that error into the same sign-out a
+  REST 401 triggers.
+</Aside>
+
+In the playground, put `{"Authorization": "Bearer <token>"}` in the headers pane.
+
+Introspection (`__schema`, `__type`) is part of the docs: it answers only with `DOCS_ENABLED=true`,
+and needs no token. The web client's types come from the schema files (`make web-graphql`), not from
+introspection.
+
+## Errors
+
+Every resolver maps a failed command or query with `gqlerr.Map`, which puts a code in
+`extensions.code` ([Errors](/go-clean-template/concepts/errors/)):
+
+```json
+{
+  "errors": [
+    { "message": "task not found", "path": ["task"], "extensions": { "code": "NOT_FOUND" } }
+  ],
+  "data": null
+}
+```
+
+| Code              | When                                                                           |
+| ----------------- | ------------------------------------------------------------------------------ |
+| `UNAUTHENTICATED` | no valid token                                                                 |
+| `BAD_USER_INPUT`  | invalid input: a title, a status, paging                                       |
+| `FORBIDDEN`       | another user's task, or `allTasks` without the `admin` role                    |
+| `NOT_FOUND`       | a missing task, or a feature that is off                                       |
+| `CONFLICT`        | a write that lost to a concurrent one, or a value already taken                |
+| `UNAVAILABLE`     | the read models had not caught up with a write in time, or an upstream is down |
+| `NOT_IMPLEMENTED` | a generated handler that is still a stub                                       |
+| `RATE_LIMITED`    | a spent sign-in budget (no GraphQL operation signs in today)                   |
+| `INTERNAL`        | anything else, panics included; the details go to the log                      |
+
+## Evolving the schema
+
+GraphQL has no `v1/` folder and no versions. The schema evolves by adding fields, and an old field
+is marked `@deprecated(reason: "...")` until no client uses it, then removed. Removing or renaming a
+schema file leaves its generated file behind: delete that by hand.

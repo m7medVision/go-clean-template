@@ -1,0 +1,105 @@
+---
+title: Test what you add
+description: Which test each layer gets, what it runs against, and how to run unit and integration tests.
+sidebar:
+  order: 16
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+Every layer has one kind of test, with a fake at its boundary and the real code everywhere else.
+The table says what to write when you add a piece; the sections below show one real example of
+each. For the reasoning behind the split, see [testing](/go-clean-template/concepts/testing/).
+
+| You added         | Test it in                                            | Against                                                 |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| an aggregate rule | `internal/entity/<domain>_aggregate_test.go`          | nothing: plain values                                   |
+| a command handler | beside it in `usecase/<domain>/command/`              | `internal/repo/memstore`, the in-memory event store     |
+| a query handler   | beside it in `usecase/<domain>/query/`                | gomock read models from `internal/repo/repomock`        |
+| a projector case  | `internal/repo/persistent/<domain>/projector_test.go` | a fake of sqlc's `Querier`                              |
+| a REST operation  | the domain folder in `restapi/v1/<domain>/`           | the real Huma API and buses, fake handlers (`resttest`) |
+| a gRPC method     | `grpc/v1/<domain>/`                                   | a real server over `bufconn`, fake handlers             |
+| a GraphQL field   | `graphql/<domain>/`                                   | the real gqlgen server, fake handlers (`graphqltest`)   |
+| a whole flow      | `integration-test/<domain>_test.go`                   | the running compose stack, worker included              |
+
+## Conventions
+
+- Every test and subtest calls `t.Parallel()`; the `paralleltest` linter rejects one that does not.
+- Use table-driven tests where there are cases, with `t.Run` per case.
+- Assert with `testify` (`require` for what must hold before going on, `assert` for the rest).
+- After changing a repository contract, run `make mock` before the tests.
+
+## Examples per layer
+
+<Tabs>
+<TabItem label="Aggregate">
+An aggregate's behavior method checks its rule and records an event. Test it directly.
+
+<RepoCode path="internal/entity/task_aggregate_test.go" symbol="TestTaskAggregateRefusesAnotherUser" />
+</TabItem>
+<TabItem label="Command">
+A command handler runs against `memstore`. Assert on the events it stored, not on a read model.
+
+<RepoCode path="internal/usecase/task/command/create_task_test.go" symbol="TestCreateTaskRecordsTaskCreated" />
+</TabItem>
+<TabItem label="Query">
+A query handler reads only read models, so mock them. This one also checks the ownership rule.
+
+<RepoCode path="internal/usecase/task/query/query_test.go" symbol="TestGetTaskReadsTheCallersTaskOnly" />
+</TabItem>
+<TabItem label="Projector">
+The unexported `project` is reached through `export_test.go` and writes to a fake `Querier`.
+
+<RepoCode path="internal/repo/persistent/task/projector_test.go" symbol="TestTaskCreatedInsertsATodoRow" />
+</TabItem>
+<TabItem label="REST">
+`resttest` builds the real REST handler with the real buses; `fake_test.go` registers fake
+handlers for the domain's messages.
+
+<RepoCode path="internal/controller/restapi/v1/task/task_test.go" symbol="TestCreateTask" />
+</TabItem>
+<TabItem label="gRPC">
+The test starts the real server with its auth interceptor on an in-memory `bufconn` listener.
+
+<RepoCode path="internal/controller/grpc/v1/task/task_test.go" symbol="dial" />
+</TabItem>
+<TabItem label="GraphQL">
+`graphqltest` runs the query through the real gqlgen server.
+
+<RepoCode path="internal/controller/graphql/task/mutation_test.go" symbol="TestCreateTask" />
+</TabItem>
+<TabItem label="Integration">
+Integration tests call the running app as host `app` inside the compose network, with the worker
+running, so every write waits for its projections as in production.
+
+<RepoCode path="integration-test/task_test.go" symbol="TestHTTPTaskV1" />
+</TabItem>
+</Tabs>
+
+## Running them
+
+```sh
+make test                          # unit tests, with -race, over config/, internal/ and pkg/
+make compose-up-integration-test   # the integration suite inside the compose network
+```
+
+<Aside type="caution">
+  `make integration-test` runs the suite on the host, where it cannot resolve the compose hostnames,
+  so it always fails. Use `make compose-up-integration-test`.
+</Aside>
+
+Other suites have their own targets: `make web-check` for the web client, `make gen-check` for the
+generator. Email templates and event samples have golden files; regenerate them with
+`UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/` and
+`UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/`, then review the
+diff.
+
+## Rules
+
+- Each layer is tested at its own boundary: a command handler against `memstore`, never a mocked event store, so the real version checks run.
+- A query handler is tested with generated mocks; mocks are never written by hand.
+- Transport tests go through the real server and buses with fake handlers, so routing, auth and error mapping are covered.
+- Every test calls `t.Parallel()`, and cases are table-driven.
+- A new domain gets an integration test over the transports it exposes.
+- Golden files are regenerated only for an intended change, and the diff is reviewed.

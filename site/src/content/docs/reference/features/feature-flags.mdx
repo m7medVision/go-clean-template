@@ -1,0 +1,87 @@
+---
+title: Feature flags
+description: OpenFeature flags in pkg/flags, decided by the backend and exposed to the client per caller.
+sidebar:
+  order: 5
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import RepoCode from "../../../../components/RepoCode.astro";
+
+A feature can ship dark and be turned on or off without a deploy. The backend decides every flag.
+The web client asks the backend for the caller's flags and never evaluates one itself.
+
+Flags are read through the OpenFeature Go SDK in `pkg/flags`, and nowhere else. No vendor SDK
+appears outside that package.
+
+## Providers
+
+| `FEATURE_FLAGS_FILE`                                                         | What answers a flag                                                                                                 |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| set (`config/flags.yaml` in `.env.example`, `/config/flags.yaml` in compose) | GO Feature Flag, in process, on that file. It is polled every 10 seconds, so an edit takes effect without a restart |
+| unset (production, as shipped)                                               | no provider: every flag answers its default in code                                                                 |
+
+<RepoCode path="pkg/flags/flags.go" symbol="New" />
+
+To use a production provider (a GO Feature Flag relay proxy, flagd, a vendor), build its OpenFeature
+provider and pass it to `NewWithProvider`. Nothing else changes.
+
+Every client carries two hooks, so handlers carry no flag logging or tracing:
+
+- OpenFeature's traces hook adds a `feature_flag.evaluation` event to the message's span.
+- A log hook writes one `Warn` when the provider fails and the default is used. It is `Warn`, not
+  `Error`, because the request still succeeds and `Error` would reach
+  [error tracking](/go-clean-template/reference/features/error-tracking/).
+
+## The flags the template ships
+
+A flag is a key and a default, defined in `internal/entity/flag.go` and listed in `Flags()`:
+
+<RepoCode path="internal/entity/flag.go" symbol="FlagTaskAttributes" />
+
+| Flag              | Default | When off                                                                                                                                                                                                                        |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task-attributes` | on      | setting task attributes answers not found (`ErrFeatureDisabled`) on every transport; task reads leave `attributes` empty without reading MongoDB; the web client hides the priority and labels columns and the attribute fields |
+
+## Where a flag is checked
+
+In the handler, never in a controller or the browser. The caller's user ID is the evaluation
+context, so a provider can target users:
+
+<RepoCode path="internal/usecase/task/command/set_task_attributes.go" symbol="Handle" />
+
+A command whose feature is off answers `entity.ErrFeatureDisabled`, a not-found error. Handlers are
+tested with `pkg/flags/flagstest`, which answers fixed values.
+
+## The caller's flags over the API
+
+The `GetFlags` query (`internal/usecase/flags/query`) evaluates every flag for the caller and answers
+`entity.FlagValues`:
+
+<RepoCode path="internal/usecase/flags/query/get_flags.go" symbol="Handle" />
+
+| Transport | Operation                                                                                                |
+| --------- | -------------------------------------------------------------------------------------------------------- |
+| REST      | `GET /v1/flags` (token required); see the [REST reference](/go-clean-template/reference/rest/)           |
+| GraphQL   | `query { flags { taskAttributes } }`; see the [GraphQL reference](/go-clean-template/reference/graphql/) |
+| gRPC      | none                                                                                                     |
+
+The web client reads them through `flagsQuery` in `web/src/api/flags.ts`.
+
+## Settings
+
+| Variable             | Default |                                                   |
+| -------------------- | ------- | ------------------------------------------------- |
+| `FEATURE_FLAGS_FILE` | empty   | a GO Feature Flag file; empty means code defaults |
+
+See [configuration](/go-clean-template/reference/configuration/). To add or remove a flag, see
+[add a feature flag](/go-clean-template/guides/feature-flag/).
+
+<Aside type="caution">
+  Flags are not permissions. Roles travel in the token and are checked by the buses' authorize step.
+</Aside>
+
+## Turning it off
+
+Leave `FEATURE_FLAGS_FILE` empty: every flag answers its code default. Each flag is meant to be
+removed once its rollout is done, keeping the code path it was on.

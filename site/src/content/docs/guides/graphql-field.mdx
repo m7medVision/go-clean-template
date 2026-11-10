@@ -1,0 +1,94 @@
+---
+title: Add a GraphQL field
+description: Add a query or mutation field to the GraphQL schema, resolve it, test it and call it from the web client.
+sidebar:
+  order: 5
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+GraphQL is served by gqlgen at `/graphql` on the REST port. The schema is split into one file per
+field, and every field has its own hand-written resolver file. gqlgen generates the server code
+but never writes or rewrites a resolver. The worked example is the `transitionTask` mutation.
+
+<Steps>
+
+1. **Write the schema file** `internal/controller/graphql/schema/<field>.graphqls`, extending the
+   `Query` or `Mutation` root. An input type only this field takes goes in the same file; types the
+   domain shares go in `<domain>_types.graphqls`.
+
+   <RepoCode path="internal/controller/graphql/schema/transition_task.graphqls" symbol="Mutation" />
+
+   A schema type binds to the `entity` type of the same name (`autobind` in `gqlgen.yml`), so a
+   field returning a domain type needs no model entry.
+
+2. **Generate** the server code:
+
+   ```sh
+   make graphql
+   ```
+
+3. **Read the build error.** `go build ./...` now fails with `missing method TransitionTask`:
+   the generated `MutationResolver` (or `QueryResolver`) interface has a method nobody
+   implements. Copy its signature from `internal/controller/graphql/generated/`.
+
+4. **Write the resolver** in a new file `internal/controller/graphql/<domain>/<field>.go`, as a
+   method on the domain's `Mutation` or `Query`. It gets the caller, sends the message and maps
+   the error with `gqlerr.Map`:
+
+   <RepoCode path="internal/controller/graphql/task/transition_task.go" symbol="TransitionTask" />
+
+   GraphQL lets every request through, so a resolver that needs a user calls
+   `middleware.Caller(ctx)`, which answers `UNAUTHENTICATED`. It checks no input of its own: the
+   message's `Validate()` does.
+
+5. **Test it** beside the resolver. The domain's `fake_test.go` registers fake handlers on real
+   buses, and `graphqltest.Post` runs a query through the real server. Assert on the data and on
+   the error code a failure reaches the client with:
+
+   <RepoCode path="internal/controller/graphql/task/mutation_test.go" symbol="TestTransitionTask" />
+
+6. **Regenerate the client types** after the schema change:
+
+   ```sh
+   make web-graphql
+   ```
+
+7. **Use it in `web/`.** Write the operation with `graphql(...)` from `#/graphql` in the domain's
+   `web/src/<domain>/api.ts`, run `make web-graphql` again so it gets typed, and wrap it with
+   `graphqlQueryOptions` or `graphqlMutationOptions` from `web/src/api/graphql.ts`:
+
+   ```ts
+   const TransitionTaskMutation = graphql(`
+     mutation TransitionTask($id: ID!, $status: TaskStatus!) {
+       transitionTask(id: $id, status: $status) {
+         id
+       }
+     }
+   `);
+
+   export const transitionTask = graphqlMutationOptions(TransitionTaskMutation);
+   ```
+
+   Select only the fields the screen shows. Then `make web-check`.
+
+</Steps>
+
+<Aside>
+  A new domain also needs its `Query` and `Mutation` embedded in `graphql/resolver.go` through a
+  type alias (`taskQuery = task.Query`), because two embedded types named `Query` would clash.
+</Aside>
+
+GraphQL has no version folder. A field changes by adding a new one and marking the old one
+`@deprecated`.
+
+## Rules
+
+- One schema file and one resolver file per field: adding a field never edits another field's file.
+- Never hand-edit `generated/` or `model/`: `make graphql` overwrites them. When you remove or
+  rename a schema file, delete its generated file by hand, since gqlgen leaves it.
+- A resolver checks no input itself: the message's `Validate()` is the one rule for every transport.
+- Errors go through `gqlerr.Map`: it is the one place a kind becomes a GraphQL error code.
+- Client operations use `graphql(...)` and the generated types: never a hand-written query type.
+- Fields evolve by addition and `@deprecated`, never by changing what an existing field means.

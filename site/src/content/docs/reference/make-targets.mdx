@@ -1,0 +1,54 @@
+---
+title: Make targets
+description: Every Make target, and the traps in the few that need more than a checkout.
+sidebar:
+  order: 2
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import Make from "../../../generated/make.md";
+
+Drive everything through the `Makefile`. It loads `.env` (falling back to `.env.example`) and
+exports it into every target, and several targets add flags that matter: `make test` adds `-race`
+and scopes the packages, `make format` runs the repo's import grouping, `make sqlc` runs the sqlc
+version pinned in `go.mod`. Running the underlying tool directly runs it with different settings
+than CI. `make help` lists every target.
+
+## Traps
+
+<Aside type="caution" title="make integration-test is not the one you want">
+  It runs the integration suite on the host, where it cannot resolve the container hostnames it
+  needs, so it always fails. Run `make compose-up-integration-test`, which runs the suite inside the
+  Docker network next to the app and the worker.
+</Aside>
+
+- **`proto-v1` needs `protoc` on `PATH`.** `make run` and `make pre-commit` depend on it. Run
+  `make bin-deps` for the other tool binaries; `protoc` itself is not installed by it.
+- **The frontend targets need `vp` (Vite+) on `PATH`.** That includes `make pre-commit`, which runs
+  them too. `vp` provisions the Node version in `web/.node-version` and bun. Install the frontend's
+  dependencies once with `make web-deps`.
+- **The generator needs a clean tree.** `make new-domain` and `make new-usecase` refuse to run while
+  a tracked file has uncommitted changes: commit first. Untracked files may stay, as long as they are
+  outside what the generator writes. Run either with `dry-run=1` first to see the plan.
+- **The generator runs the regenerators.** `make new-domain`, `make new-usecase` and `make gen-e2e`
+  run `proto-v1`, `graphql`, `sqlc`, `mock`, `openapi`, `web-api`, `web-graphql` and `format`, so they
+  need `protoc`, `vp` and `make web-deps` as those targets do.
+
+## Before you push
+
+A change is done when `make format`, `make linter-golangci` and `make test` pass. Add:
+
+- `make web-api` and `make web-check` for a change under `web/` or to any Huma input or output
+  struct;
+- `make web-graphql` for a change to a GraphQL schema file or to an operation in `web/src/`;
+- `make gen-check` and `make gen-e2e` for a change under `tools/gen`, or to a file a generator
+  template mirrors.
+
+`make pre-commit` runs the full check.
+
+## All targets
+
+This table is generated from the help comments on each target in the `Makefile`, the same text `make help`
+prints.
+
+<Make />

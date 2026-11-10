@@ -25,7 +25,15 @@ export default defineConfig({
         baseUrl: "https://github.com/m7medVision/go-clean-template/edit/master/site/",
       },
       plugins: [
-        starlightLinksValidator({ errorOnFallbackPages: false }),
+        starlightLinksValidator({
+          errorOnFallbackPages: false,
+          exclude: [
+            "http://localhost:*",
+            "http://localhost:*/**",
+            "/go-clean-template/reference/rest/",
+            "/go-clean-template/reference/rest/**",
+          ],
+        }),
         starlightOpenAPI([
           {
             base: "reference/rest",

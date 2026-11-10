@@ -1,0 +1,118 @@
+---
+title: Add a web page
+description: Add a screen to the React client with a route, a domain folder, a GraphQL table, a Zod form and tests.
+sidebar:
+  order: 13
+---
+
+import { Aside, FileTree, Steps } from "@astrojs/starlight/components";
+
+The client in `web/` is a client-rendered React app: TanStack Router with file-based routes,
+TanStack Query for all server state, shadcn components, built and checked with Vite+. It reaches
+the Go app over REST and GraphQL on the same origin. Every screen follows the same shape, so a new
+one is mostly copying the exchange or tasks screen.
+
+<FileTree>
+  - web/src - api/ shared: REST and GraphQL clients, flags, problem messages - components/ shared:
+  data-table/, form/, ui/ - routes/ - _authed.tsx layout that requires a signed-in user - _authed/ -
+  tasks.tsx - **invoices.tsx** your route - tasks/ a domain: api.ts, columns.tsx, schema.ts, tests -
+  **invoices/** your domain folder - testing/ renderRoute, MSW handlers, signInAs
+</FileTree>
+
+## Steps
+
+<Steps>
+
+1. **Make sure the data has a GraphQL query.** Every list shown in a table is read through
+   GraphQL, selecting only the columns the table shows, and its row actions are GraphQL mutations.
+   A domain without a GraphQL schema gets one first
+   ([add a GraphQL field](/go-clean-template/guides/graphql-field/)). Forms and single-record
+   screens outside a table may use REST.
+
+2. **Create the domain folder** `web/src/<domain>/` and add it to the `domains` list in
+   `web/vite.config.ts`, which enforces the import boundaries:
+
+   ```ts
+   const domains = ["tasks", "exchange", "passkey", "sso"];
+   ```
+
+3. **Write `api.ts`.** Declare each operation with `graphql(...)` from `#/graphql`, run
+   `make web-graphql` to generate its types, and export query options, mutation options and the
+   key prefix writes invalidate:
+
+   ```ts
+   export const tasksQuery = (variables: TasksQueryVariables) =>
+     graphqlQueryOptions(TasksQuery, variables);
+   export const tasksKey = graphqlKey(TasksQuery);
+   export const createTask = graphqlMutationOptions(CreateTaskMutation);
+   ```
+
+   For REST, use `$api.queryOptions(...)` and `$api.useMutation(...)` from `#/api/client`, typed
+   from `docs/openapi/v1.json` by `make web-api`.
+
+4. **Write `columns.tsx`** with `dataTableColumns<T>()`. Give each column a `meta.label` and
+   `DataTableColumnHeader` as its header.
+
+5. **Write `schema.ts`**: a Zod schema that mirrors the server's rules (the Huma tags for REST, the
+   message's `Validate()` for GraphQL). The server stays the authority.
+
+6. **Add the route** in `web/src/routes/_authed/<name>.tsx` (under `_authed` when it needs a
+   signed-in user). The loader fills the cache; the component reads the same options, so both share
+   one entry:
+
+   ```ts
+   loader: ({ context, deps }) => context.queryClient.ensureQueryData(listQuery(deps)),
+   // in the component
+   const { data } = useSuspenseQuery(listQuery(search));
+   ```
+
+   Keep the page number in the URL (`validateSearch`), set `staticData: { title }` for the
+   breadcrumb, and add a link in `web/src/components/app-sidebar.tsx`.
+
+7. **Render the table** with `useDataTable` and `DataTable`, with `DataTableSearch`,
+   `DataTableViewOptions` and `DataTablePagination` around it. Paging is server-side
+   (`limit`/`offset`, `rowCount` from the query's `total`); sorting and search apply to the current
+   page. See `web/src/routes/_authed/exchange.tsx`.
+
+8. **Build forms with `useAppForm`.** Spread `zodValidation(schema)` into it, render each input as
+   a `<form.AppField name>` with `field.TextField` (or another field from `fields.tsx`), and submit
+   the parsed value:
+
+   ```tsx
+   const form = useAppForm({
+     defaultValues: { title: "", description: "" },
+     ...zodValidation(taskSchema),
+     onSubmit: ({ value }) => create.mutateAsync({ input: taskSchema.parse(value) }),
+   });
+   ```
+
+   Show the server's rejection with `<FormError error={mutation.error} />`. On success, call
+   `queryClient.invalidateQueries({ queryKey: tasksKey })`.
+
+9. **Test the screen** in a `*.test.tsx` beside it, starting with
+   `// @vitest-environment happy-dom`. `renderRoute` from `#/testing/render` mounts the real route
+   tree; `onOperation` and `onRest` from `#/testing/handlers` answer through MSW with typed data;
+   `signInAs` from `#/testing/session` sets the token. See
+   `web/src/exchange/exchange-screen.test.tsx`.
+
+10. **Run the checks**: `make web-format` and `make web-check` (lint, type check, tests,
+    boundaries). Use `make web-dev` to try it against `make dev`.
+
+</Steps>
+
+<Aside type="caution">
+  Client routes must not start with a prefix the Go app owns: `/v1`, `/graphql`, `/docs`,
+  `/openapi.*`, `/schemas`, `/healthz`, `/metrics`. The Go app serves them on the same origin, and
+  the dev proxy (`backendPaths` in `web/vite.config.ts`) forwards most of them to it.
+</Aside>
+
+## Rules
+
+- Imports run one way: shared code (`api`, `auth`, `components`, `hooks`, `lib`) to domains to `routes`. A domain never imports another domain, and nothing imports `routes/`.
+- Every table is a GraphQL query on `useDataTable` and `DataTable`; no hand-rolled `<Table>` with its own sort or visibility state.
+- Every form is `useAppForm` with a Zod schema; no `useState` per input and no `required` or `minLength` attributes.
+- All server state goes through TanStack Query: no `fetch` in components and no copying server data into `useState`.
+- Loaders call `ensureQueryData` and components `useSuspenseQuery` on the same options.
+- Writes invalidate their domain's key prefix, so every list refreshes.
+- API types are generated (`make web-api`, `make web-graphql`), never written by hand.
+- Feature flags come from the backend; the client never evaluates one.

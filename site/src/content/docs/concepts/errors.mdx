@@ -1,0 +1,132 @@
+---
+title: Errors
+description: How a domain failure becomes the right status on every transport, and why everything else stays in the log.
+sidebar:
+  order: 8
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+
+There are two kinds of error, and they travel differently:
+
+- A **domain failure** the caller may be told about: a missing task, an invalid amount. It is a
+  sentinel `*entity.Error` carrying a **kind** and a safe message.
+- **Everything else**: a database error, a bug, a provider's raw response. It is wrapped with the
+  layer path, logged, and answered as a generic 500. The caller never sees its text.
+
+## Kinds
+
+`entity.Kind` says what a failure means to the caller, whatever the transport:
+
+<RepoCode path="internal/entity/errors.go" lines="9-26" />
+
+An `entity.Error` has a kind and a message, and nothing else:
+
+<RepoCode path="internal/entity/errors.go" symbol="Error" />
+
+`entity.KindOf(err)` finds the first `*entity.Error` in the chain, and `entity.Message(err)` its
+message. An error with no `*entity.Error` in its chain is `KindInternal`, answered with
+`"internal server error"`.
+
+## Sentinels
+
+Each domain declares its failures in its entity file, built with the unexported `newError`, so every
+sentinel lives in `internal/entity`:
+
+```go
+var (
+	ErrInvalidConversion   = newError(KindInvalid, "invalid conversion")
+	ErrConversionNotFound  = newError(KindNotFound, "conversion not found")
+	ErrUnsupportedCurrency = newError(KindInvalid, "unsupported currency")
+	ErrRatesUnavailable    = newError(KindUpstream, "exchange rate provider unavailable")
+)
+```
+
+The ones every domain can answer are in `internal/entity/errors.go`: `ErrAdminRequired`,
+`ErrInvalidPage`, `ErrConcurrencyConflict`, `ErrReadModelBehind`, `ErrNotImplemented` and
+`ErrFeatureDisabled` (which is not found: to the caller, a feature that is off does not exist).
+
+The `err113` linter rejects new dynamic errors (`errors.New`, `fmt.Errorf` without `%w`) outside
+that file. A new failure the caller should see is a new sentinel with the right kind. It needs no
+change in any transport.
+
+## Wrapping with the layer path
+
+Every layer wraps what it passes up with where it came from:
+
+```go
+return entity.Written{}, fmt.Errorf("ConvertCurrency - aggregate.Save: %w", err)
+```
+
+`%w` keeps the chain, so `KindOf` still finds a sentinel underneath, and the log shows the whole
+path from the handler down to the failing call.
+
+## One mapping function per transport
+
+A controller never picks a status. It calls its transport's one function, which reads the kind,
+logs as the kind says, and builds the transport's error:
+
+| Transport | Function                          | Package                                 |
+| --------- | --------------------------------- | --------------------------------------- |
+| REST      | `apierr.Problem(ctx, l, err, op)` | `internal/controller/restapi/v1/apierr` |
+| gRPC      | `rpcerr.Status(ctx, l, err, op)`  | `internal/controller/grpc/v1/rpcerr`    |
+| GraphQL   | `gqlerr.Map(ctx, l, err, op)`     | `internal/controller/graphql/gqlerr`    |
+
+<RepoCode path="internal/controller/restapi/v1/apierr/apierr.go" symbol="Problem" />
+
+Each mapping is a switch over every kind. The `exhaustive` linter fails the build when a new kind
+is missing from one.
+
+| Kind                             | REST | gRPC                | GraphQL `extensions.code` | Logged |
+| -------------------------------- | ---- | ------------------- | ------------------------- | ------ |
+| `KindInvalid`                    | 400  | `InvalidArgument`   | `BAD_USER_INPUT`          | no     |
+| `KindUnauthenticated`            | 401  | `Unauthenticated`   | `UNAUTHENTICATED`         | no     |
+| `KindForbidden`                  | 403  | `PermissionDenied`  | `FORBIDDEN`               | no     |
+| `KindNotFound`                   | 404  | `NotFound`          | `NOT_FOUND`               | no     |
+| `KindExists`                     | 409  | `AlreadyExists`     | `CONFLICT`                | no     |
+| `KindConflict`                   | 409  | `Aborted`           | `CONFLICT`                | warn   |
+| `KindUnavailable`                | 503  | `Unavailable`       | `UNAVAILABLE`             | warn   |
+| `KindUpstream`                   | 502  | `Unavailable`       | `UNAVAILABLE`             | error  |
+| `KindNotImplemented`             | 501  | `Unimplemented`     | `NOT_IMPLEMENTED`         | warn   |
+| `KindRateLimited`                | 429  | `ResourceExhausted` | `RATE_LIMITED`            | no     |
+| `KindInternal` (any other error) | 500  | `Internal`          | `INTERNAL`                | error  |
+
+The log level comes from the kind itself: the caller's own mistakes are not logged, passing
+conditions (a lost race, a lagging read model, a stub) are warnings, and the app's own faults are
+errors.
+
+<RepoCode path="internal/entity/errors.go" symbol="LogLevel" />
+
+A rate-limited sign-in carries an `*entity.RetryAfterError` with the wait: REST adds a
+`Retry-After` header, gRPC a `RetryInfo` detail.
+
+## RFC 9457 problems on REST
+
+`apierr.Problem` returns a `huma.Error*`, which Huma renders as an RFC 9457
+`application/problem+json` body:
+
+```json
+{
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "unsupported currency"
+}
+```
+
+A request that fails a Huma tag never reaches the handler: Huma answers 422 with the same problem
+model, listing the failing fields.
+
+An operation lists the statuses it can answer, for the OpenAPI document, with
+`apierr.CommandErrors(...)` or `apierr.QueryErrors(...)`. They add what every command or query can
+answer: 409 and 503 for a command, and 500 for both.
+
+<RepoCode path="internal/controller/restapi/v1/apierr/apierr.go" symbol="CommandErrors" />
+
+## Before the handler
+
+Some failures never reach a mapping function:
+
+- A missing or invalid token: REST's `Auth` middleware answers 401, gRPC's `Auth` interceptor
+  `Unauthenticated`. GraphQL resolvers ask for the caller with `middleware.Caller(ctx)`, which
+  answers `UNAUTHENTICATED`.
+- A panic: each transport's recovery turns it into a logged 500 or `Internal`.

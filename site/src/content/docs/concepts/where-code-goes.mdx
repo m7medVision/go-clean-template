@@ -1,0 +1,61 @@
+---
+title: Where code goes
+description: Decide which folder new code belongs in by what it knows about, and follow the layout rules.
+sidebar:
+  order: 3
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+
+Pick a place by asking what the code knows about. The less it knows, the further in it goes.
+
+## The decision table
+
+| The code knows about…                                         | It belongs in                                                                                         | Shape                                                                                                  |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| nothing but the domain                                        | `internal/entity/<name>.go`                                                                           | a struct and its methods (`TaskStatus.CanMoveTo`, `entity.ValidateTaskText`)                           |
+| a state change and its rules                                  | `internal/entity/<name>_aggregate.go`, events in `<name>_events.go`                                   | an aggregate method that checks the rule and records an event; the event type listed in `EventTypes()` |
+| one change a caller asks for                                  | `internal/usecase/<domain>/command/<name>.go`                                                         | a command type and its handler returning `entity.Written`, one line in `register.go`                   |
+| one thing a caller reads                                      | `internal/usecase/<domain>/query/<name>.go`                                                           | a query type and its handler reading a read model, one line in `register.go`                           |
+| a side effect that follows an event                           | `internal/usecase/<domain>/event/<name>.go`                                                           | a `repo.Subscriber` (`Name`, `Handles`, `Handle`), returned by its module's `eventHandlers`            |
+| a concern every message shares (auth, retry, logging)         | `internal/usecase/behavior` for app rules, `pkg/cqrs` for generic ones                                | a `cqrs.Step`, added in `newBuses`                                                                     |
+| SQL text                                                      | `internal/repo/persistent/queries/<domain>.sql`                                                       | an sqlc-annotated query, then `make sqlc`                                                              |
+| a read-model table or a driver error code                     | `internal/repo/persistent/<domain>/<domain>.go`                                                       | a read-model method calling the generated query                                                        |
+| how events change a read-model table                          | `internal/repo/persistent/<domain>/projector.go`                                                      | one case per event in the projector                                                                    |
+| a document kept in MongoDB                                    | `internal/entity/mongo/<domain>/` for its types, `internal/repo/mongo/<domain>/` for the store        | a port in `internal/repo/<domain>.go`                                                                  |
+| an outbound HTTP API                                          | `internal/repo/webapi/<name>.go`                                                                      | a method on the webapi client                                                                          |
+| a transport status, error code or message envelope            | `internal/controller/<transport>/v1/<domain>/<operation>.go` (GraphQL: `graphql/<domain>/<field>.go`) | a handler                                                                                              |
+| a queue message (decode, send a command, ack or retry)        | `internal/controller/worker/v1/<name>.go`                                                             | a broker handler and the function that registers it                                                    |
+| the data an email shows                                       | `internal/entity/email_<name>.go`                                                                     | a struct with `Template()` and `Recipient()`, listed in `EmailTypes()`                                 |
+| an email's wording and markup                                 | `internal/repo/mailtmpl/templates/<name>.{html,txt}.tmpl`                                             | the templates, with a golden test                                                                      |
+| a server, pool, client or middleware with no domain knowledge | `pkg/<name>/`                                                                                         | a reusable package                                                                                     |
+
+A command shows several of these at once. The rule (`ValidateTaskText`) is the entity's, the
+storage is a port (`repo.EventStore`), and the handler only connects them:
+
+<RepoCode path="internal/usecase/task/command/create_task.go" symbol="CreateTaskHandler" />
+
+## Layout rules
+
+- **One file per message.** In `usecase/<domain>/`, each command, query and event handler has its
+  own file in `command/`, `query/` or `event/`, named after it in snake case (`create_task.go`),
+  with its test beside it (`create_task_test.go`).
+- **One file per operation.** In a transport's domain folder, each REST operation, gRPC method or
+  GraphQL field has its own file, named the same way. Adding one creates a file; the shared files
+  change by a line at most. See [transports](/go-clean-template/concepts/transports/).
+- **Elsewhere, one file per domain per layer**, named after the domain: `repo/task.go`,
+  `persistent/task/task.go`, `app/task.go`.
+- **The package name is the directory name.** A repository package shares its name with the use
+  case package of its domain, so `internal/app` imports repositories under aliases such as
+  `persistTaskRepo`.
+- **Dependencies are arguments.** Repository constructors take what they need. A handler is a
+  struct whose exported fields are its dependencies, filled in by `register.go`.
+- **No package-level state.** `gochecknoglobals` and `gochecknoinits` reject global variables and
+  `init` functions. Build values in a constructor and pass them down.
+- **Unexported constants start with an underscore**: `_commandAttempts`, `_tracerName`. The `mnd`
+  linter rejects bare numbers, so name a constant instead of inlining one.
+
+## When unsure
+
+Start with the generator: `make new-usecase` and `make new-domain` put every file where it belongs.
+Then compare with the same file in the `task` domain, which the generated code copies.

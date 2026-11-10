@@ -1,0 +1,123 @@
+---
+title: Add a command or query
+description: Add a use case to an existing domain with make new-usecase, then fill in what the generator leaves to you.
+sidebar:
+  order: 1
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+A use case is either a command, which changes state, or a query, which reads it. Both live in the
+domain's `internal/usecase/<domain>/` folder, one file per message, and every transport sends the
+same message. The generator writes the skeleton on every layer, so you only write the parts that
+need thought.
+
+## Generate it
+
+<Steps>
+
+1. Commit or stash your changes. The generator refuses to run while a tracked file has
+   uncommitted changes, so the undo it prints can restore the tree exactly.
+
+2. Preview the plan. A dry run writes nothing and runs no regenerator:
+
+   ```sh
+   make new-usecase domain=task name=archive-task kind=command dry-run=1
+   ```
+
+   It lists every file it would create and shows each edit as a diff. For a command on a domain
+   with all three transports that is nine new files and three edits: the `.proto` service, the
+   REST `controller.go` (`NewRoutes`) and the domain's `register.go`.
+
+3. Pick the route and transports if the defaults do not fit. A command defaults to
+   `POST /v1/<plural>/{id}/<verb>`, a query to `GET /v1/<plural>/<verb>`:
+
+   ```sh
+   make new-usecase domain=task name=count-tasks kind=query \
+     method=GET path=/v1/tasks/count transports=rest,graphql dry-run=1
+   ```
+
+   The generator checks the route against `docs/openapi/v1.json` and refuses one that another
+   operation already uses. Two use cases starting with the same word get the same default path, so
+   give the second its own `path=`.
+
+4. Run it without `dry-run=1`. After writing, it runs the regenerators (`proto-v1`, `graphql`,
+   `sqlc`, `mock`, `openapi`, `web-api`, `web-graphql`, `format`) and `go build ./...`. They need
+   `protoc` and `vp` on `PATH` and `make web-deps` done. If any fails, run the undo it printed.
+
+</Steps>
+
+## What it writes
+
+- `internal/usecase/<domain>/command/<name>.go` (or `query/`): the message embedding
+  `cqrs.Command[entity.Written]` or `cqrs.Query[R]`, and a handler that returns
+  `entity.ErrNotImplemented`, with a test that asserts exactly that.
+- One line in `register.go`, so the buses know the handler.
+- On each transport: the REST operation in its own file (and its line in `NewRoutes`), the gRPC
+  method with its rpc and messages in the `.proto`, and the GraphQL schema file and resolver. Each
+  has a self-contained test with a fake handler on its own buses.
+
+It relies on the names every domain uses: `Deps.Store` for commands, `Deps.<Plural>` for queries,
+the REST `_tag`, the GraphQL `Query` and `Mutation` types, and `<Domain>Service` in the proto.
+
+## What is left to you
+
+<Steps>
+
+1. **The handler body.** Look at a neighbour first. A command loads the aggregate, calls one
+   behavior method and saves what it recorded:
+
+   <RepoCode path="internal/usecase/task/command/transition_task.go" symbol="Handle" />
+
+   Replace the stub's test with tests of what the handler does.
+
+2. **For a command, the event.** Add it to `internal/entity/<domain>_events.go`, give the aggregate
+   a behavior method and an `Apply` case, and handle it in the projector. See
+   [Record and change events](/go-clean-template/guides/events/).
+
+3. **For a query, the read-model method** and its SQL, then `make sqlc` and `make mock`, and the
+   result's fields on each transport. See [Add a query](/go-clean-template/guides/queries/).
+
+4. **Rules on the message.** Add `Validate()` built from entity functions, `ActorID()` when it acts
+   for a user, and `AdminOnly()` when only an admin may send it.
+
+5. **Remove `http.StatusNotImplemented`** from the REST operation's `Errors`, then `make openapi`.
+
+6. **Document it** in the domain's table on the API reference pages.
+
+</Steps>
+
+Then run `make format`, `make linter-golangci` and `make test`; for the REST and GraphQL changes,
+`make web-api`, `make web-graphql` and `make web-check` too.
+
+## By hand
+
+When a generator rule refuses (for example the domain lacks one of the conventional names), the
+same steps by hand are:
+
+1. Write the message and handler in `command/<name>.go` or `query/<name>.go`, with its test
+   (commands against `internal/repo/memstore`, queries against `internal/repo/repomock`).
+2. Add one line to `register.go`.
+3. Add the operation on each transport you want:
+   [REST](/go-clean-template/guides/rest-operation/),
+   [gRPC](/go-clean-template/guides/grpc-method/),
+   [GraphQL](/go-clean-template/guides/graphql-field/).
+
+<Aside>
+  Exposing a use case on only one transport is a valid choice. Say which ones you covered in the
+  change description.
+</Aside>
+
+## Rules
+
+- Every message has a line in `register.go`: a message without a handler fails with
+  `cqrs.ErrNoHandler` on its first send.
+- A command answers only `entity.Written` (or a result embedding it): a transport that returns the
+  resource sends a query next, so reads always come from the read model.
+- Input rules live in the message's `Validate()`, built from `entity` functions: the validate step
+  runs them for every transport.
+- No auth, retry or logging code in a handler: the buses' pipeline steps do that for every message.
+- No stub left behind: a handler still returning `entity.ErrNotImplemented`, or a REST op still
+  listing `http.StatusNotImplemented`, is not finished.
+- One file per message, named after it in snake case, with its test beside it.

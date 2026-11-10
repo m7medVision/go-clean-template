@@ -1,0 +1,161 @@
+---
+title: SSO and roles
+description: OpenID Connect sign-in through any discovery-capable provider, and the admin role it can grant.
+sidebar:
+  order: 2
+---
+
+import { Aside } from "@astrojs/starlight/components";
+import RepoCode from "../../../../components/RepoCode.astro";
+
+SSO sign-in goes through an OpenID Connect provider. In development the provider is Keycloak, with a
+checked-in realm. Any provider that implements OpenID Connect discovery works the same way (Okta,
+Microsoft Entra ID, Auth0, Zitadel): point `OIDC_ISSUER` at it and set the role mapping.
+
+The app still issues the tokens. A finished SSO sign-in returns the same JWT a password login
+returns, with the caller's roles in a `roles` claim. Nothing after that token knows how the user
+signed in.
+
+## Where the code lives
+
+| Layer        | Package                                                                                                                                                                    |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entity       | `internal/entity/role.go` (`Role`, `Principal`); `NewOIDCUserAggregate` in `user_aggregate.go` records `UserRegisteredViaOIDC` and claims the identity, email and username |
+| Use case     | `internal/usecase/oidc`: queries `BeginOIDCLogin`, `GetOIDCStatus`; command `FinishOIDCLogin`                                                                              |
+| Adapter      | `internal/repo/sso`, the only package that imports go-oidc and `oauth2`                                                                                                    |
+| Read model   | the `user` projector writes `users` and `user_identities`                                                                                                                  |
+| REST         | `internal/controller/restapi/v1/oidc/`                                                                                                                                     |
+| Web          | `web/src/sso/` and the `/sso/callback` route                                                                                                                               |
+| Dev provider | `keycloak/realm.json`, the `keycloak` compose service                                                                                                                      |
+
+## The sign-in
+
+Authorization code with PKCE and a confidential client. The browser follows the redirects; the
+backend only answers JSON.
+
+1. `POST /v1/auth/oidc/begin` returns the provider's authorize URL and a `ceremony_token`: a
+   short-lived signed payload holding the `state`, the `nonce` and the PKCE verifier. Nothing is
+   written.
+2. The web client keeps the token in `sessionStorage` and sends the browser to the URL. After
+   sign-in, the provider redirects to `APP_BASE_URL/sso/callback?code=…&state=…`.
+3. The callback route posts `{code, state}` to `POST /v1/auth/oidc/finish` with the token in
+   `X-Ceremony-Token`. The handler checks the state, exchanges the code, verifies the ID token
+   (signature, issuer, audience, expiry, nonce), finds or creates the user, and answers `{token}`.
+
+<RepoCode path="internal/usecase/oidc/command/finish_oidc_login.go" symbol="Handle" />
+
+The identity's claim lives on the write side, so a second sign-in finds its user even before the
+projector has written it. A code works once at the provider, so a replayed callback is refused.
+
+The provider is discovered at the first sign-in, not at startup, so the app starts while the
+provider is down. `GET /v1/auth/oidc` never calls it. Each provider step has a 5-second deadline. A
+provider that rejects the code, or an ID token that does not verify, is a `401`; a provider that
+cannot be reached or fails is a `502`.
+
+## Users and identities
+
+An identity is `(issuer, subject)`. Its first sign-in creates a user with the provider's
+`preferred_username` (or the email), its `email`, and no password; password login refuses that user.
+
+Accounts are never linked by email. If the email or username belongs to another account, the
+sign-in is a `409`: a provider's email claim does not prove its holder owns the local account. An ID
+token without an email is a `401`, so request the `email` scope.
+
+## Roles
+
+There are two roles, `admin` and `user`.
+
+- Every other sign-in grants only `user`. `admin` only comes from the provider.
+- An SSO sign-in reads role names from the claim at `OIDC_ROLES_CLAIM` (a dotted path), maps each
+  through `OIDC_ROLE_MAP`, and ignores names the map does not list. A sign-in that maps to nothing
+  gets `user`.
+- Every role the map names must be `admin` or `user`. Any other value stops the app at startup,
+  instead of silently granting nothing.
+
+<RepoCode path="internal/repo/sso/sso.go" symbol="parseRoleMap" />
+
+Roles are fixed when the token is issued. Removing someone from the admin group takes effect at
+their next sign-in, at most `JWT_TOKEN_EXPIRY` later.
+
+A message that only admins may send declares `AdminOnly()`, and the buses' authorize step refuses it
+for anyone else with `ErrAdminRequired` (`403`, `FORBIDDEN`, `PERMISSION_DENIED`). Today that is the
+admin task list, `ListAllTasks`:
+
+<RepoCode path="internal/usecase/task/query/list_all_tasks.go" symbol="AdminOnly" />
+
+It is exposed as `GET /v1/admin/tasks`, GraphQL `allTasks` and `TaskService/ListAllTasks`, and shown
+in the web client as **All tasks**.
+
+## Endpoints
+
+REST only; see the [REST reference](/go-clean-template/reference/rest/).
+
+| Method and path             | What it does                     |
+| --------------------------- | -------------------------------- |
+| `GET /v1/auth/oidc`         | whether SSO is configured        |
+| `POST /v1/auth/oidc/begin`  | authorize URL and ceremony token |
+| `POST /v1/auth/oidc/finish` | signs in, answers `{token}`      |
+
+| Case                                                       | Sentinel                 | REST  |
+| ---------------------------------------------------------- | ------------------------ | ----- |
+| `OIDC_ISSUER` is empty                                     | `ErrOIDCDisabled`        | `404` |
+| provider unreachable, failing or slow                      | `ErrOIDCUnavailable`     | `502` |
+| bad, expired or replayed state, code or ID token; no email | `ErrOIDCCeremonyInvalid` | `401` |
+| email or username taken by another account                 | `ErrAccountConflict`     | `409` |
+
+## Settings
+
+See [configuration](/go-clean-template/reference/configuration/).
+
+| Variable             | Default              |                                                 |
+| -------------------- | -------------------- | ----------------------------------------------- |
+| `OIDC_ISSUER`        | empty                | the provider's issuer URL; empty turns SSO off  |
+| `OIDC_CLIENT_ID`     | empty                | the client registered at the provider           |
+| `OIDC_CLIENT_SECRET` | empty                | its secret                                      |
+| `OIDC_ROLES_CLAIM`   | `realm_access.roles` | dotted path to the role names in the ID token   |
+| `OIDC_ROLE_MAP`      | empty                | `provider-role:app-role` pairs, comma-separated |
+| `APP_BASE_URL`       | `http://localhost`   | the callback is `APP_BASE_URL/sso/callback`     |
+
+The callback URL must be one of the client's redirect URIs at the provider.
+
+## Keycloak in development
+
+`make dev`, `make compose-up` and the integration stack start Keycloak, importing
+`keycloak/realm.json` on every start, so a recreated container comes back the same.
+
+|               |                                                                               |
+| ------------- | ----------------------------------------------------------------------------- |
+| Realm         | `app`, issuer `http://keycloak.lvh.me:8180/realms/app`                        |
+| Client        | `go-clean-template`, secret `go-clean-template-dev-secret`                    |
+| Users         | `alice` / `alice` (roles `app-admin`, `app-user`); `bob` / `bob` (`app-user`) |
+| Role map      | `OIDC_ROLE_MAP=app-admin:admin,app-user:user` in `.env.example`               |
+| Admin console | `http://keycloak.lvh.me:8180`, `admin` / `admin`                              |
+
+Sign in as `alice` to see **All tasks**. `keycloak.lvh.me` resolves to `127.0.0.1` through public
+DNS, and the container has the same name as a network alias, so the browser, the app and the tests
+all see the same issuer. Offline, add `127.0.0.1 keycloak.lvh.me` to `/etc/hosts`.
+
+<Aside>
+  Under `make compose-up-all` the client is on `http://app.lvh.me`, but the compose `app` service
+  sets `APP_BASE_URL=http://localhost`, so the provider redirects to an origin Caddy does not serve.
+  Use SSO under `make dev`.
+</Aside>
+
+## Adding another provider
+
+Register a confidential web client with the redirect URI `https://<your app>/sso/callback`, the
+scopes `openid email profile`, and a claim that carries roles or groups. Then set the `OIDC_*`
+variables. No code changes.
+
+| Provider | `OIDC_ISSUER`                                     | `OIDC_ROLES_CLAIM`   | Notes                                                                                   |
+| -------- | ------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
+| Keycloak | `https://<host>/realms/<realm>`                   | `realm_access.roles` | realm roles reach the ID token only through a protocol mapper with _Add to ID token_ on |
+| Entra ID | `https://login.microsoftonline.com/<tenant>/v2.0` | `roles`              | use App Roles; the `groups` claim is dropped past about 200 groups                      |
+| Okta     | `https://<org>.okta.com/oauth2/default`           | `groups`             | add a `groups` claim to the authorization server                                        |
+
+The app supports one provider at a time.
+
+## Turning it off
+
+Leave `OIDC_ISSUER` empty. The begin and finish endpoints answer `404`, `GET /v1/auth/oidc` reports
+SSO off, and the login screen shows no SSO button.

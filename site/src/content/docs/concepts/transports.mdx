@@ -1,0 +1,125 @@
+---
+title: Transports
+description: REST, gRPC and GraphQL side by side, sending one set of commands and queries, with one handler contract.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem, FileTree } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+The app serves three transports from one set of commands and queries:
+
+| Transport | Built with      | Where                                                          |
+| --------- | --------------- | -------------------------------------------------------------- |
+| REST      | chi and Huma v2 | `HTTP_PORT` (8080), under `/v1`, docs at `/docs`               |
+| GraphQL   | gqlgen          | `/graphql` on the REST port, GraphiQL at `/graphql/playground` |
+| gRPC      | grpc-go         | `GRPC_PORT` (8081)                                             |
+
+GraphQL covers tasks, the exchange history and the feature flags the client reads; REST and gRPC
+cover more. A transport holds no
+business logic. Each one decodes its request, sends a command or query on the buses, and encodes
+the answer, so the same rules apply whichever one a client uses. Exposing an operation on only
+some transports is a valid choice.
+
+## Controller layout
+
+Every transport is split by domain, then by operation: **folders by domain, one file per
+operation, tests beside the code.**
+
+<FileTree>
+
+- internal/controller/
+  - restapi/v1/task/
+    - controller.go the struct, `NewRoutes` and helpers several operations share
+    - create_task.go one Huma operation, named after its operation ID
+    - request.go
+    - response.go
+    - task_test.go
+    - fake_test.go
+  - grpc/v1/task/
+    - controller.go `New`, returning the proto server interface
+    - create_task.go one RPC
+    - response.go
+  - graphql/
+    - task/
+      - resolver.go `Query`, `Mutation` and `New`
+      - create_task.go resolves `createTask`
+    - schema/
+      - task_types.graphqls a domain's types
+      - create_task.graphqls one field: `extend type Mutation`
+    - resolver.go the root, embedding each domain's resolvers
+
+</FileTree>
+
+- **A domain folder never imports another domain folder.** What several domains share has its own
+  package in that transport: REST `v1/response/`, `v1/apidoc/` and `v1/apierr/`; gRPC
+  `v1/response/` and `v1/rpcerr/`; GraphQL `middleware/` and `gqlerr/`.
+- **What every transport shares** is `internal/controller/authn`: it turns a token into the caller
+  (principal and issue time). Each transport reads only its own header.
+- **The version comes first.** A v2 is a sibling folder (`restapi/v2/`) with the same domain
+  folders inside. GraphQL has no version: its schema grows by adding fields and deprecating old
+  ones.
+- **No transport lists the domains.** Each domain's module in `internal/app/<domain>.go` registers
+  its REST operations and gRPC services. GraphQL is the one exception: gqlgen needs a single root
+  resolver, so `graphql/resolver.go` embeds each domain's `Query` and `Mutation`.
+
+## The handler contract
+
+Every handler, on every transport, does the same six things in the same order:
+
+1. **Get the caller.** REST and gRPC call `authn.MustCaller(ctx)`, with no check of their own:
+   the auth middleware has already answered 401 or `Unauthenticated` to a request without a valid
+   token. GraphQL calls `middleware.Caller(ctx)`, which answers `UNAUTHENTICATED`.
+2. **Decode into a transport-local DTO.** On REST that is the `Body` of a small Huma input
+   struct. Never decode into an `entity` type, and never put a DTO into a message.
+3. **Leave the rules to the domain.** Input rules are each message's `Validate()`, which the
+   buses run for every transport. REST repeats the limits as Huma tags because they are the API
+   documentation; a test pins those tags to the entity constants. gRPC and GraphQL check nothing.
+4. **Send the command or query** with the request's context, through `cqrs.SendCommand` or
+   `cqrs.SendQuery`. A command answers only `entity.Written`, so a handler that returns the
+   resource sends a query for it next.
+5. **Map the error** with the transport's single function: `apierr.Problem`, `rpcerr.Status` or
+   `gqlerr.Map`. Each turns the kind of an `entity` error into a status and logs what needs
+   logging. See [errors](/go-clean-template/concepts/errors/).
+6. **Encode the response**, through a type in the folder's `response.go` unless the entity's JSON
+   shape is already the API's.
+
+Here is the same operation, creating a task, on each transport:
+
+<Tabs>
+  <TabItem label="REST">
+    <RepoCode path="internal/controller/restapi/v1/task/create_task.go" symbol="createTask" />
+  </TabItem>
+  <TabItem label="gRPC">
+    <RepoCode path="internal/controller/grpc/v1/task/create_task.go" symbol="CreateTask" />
+  </TabItem>
+  <TabItem label="GraphQL">
+    <RepoCode path="internal/controller/graphql/task/create_task.go" symbol="CreateTask" />
+  </TabItem>
+</Tabs>
+
+All three send the same `command.CreateTask`. Its `Validate()` checks the title on every path,
+and its handler saves the same event.
+
+## Declaring an operation public
+
+Whether an operation needs a token is declared once, beside the operation:
+
+- **REST**: an operation needs a token exactly when it declares
+  `Security: []map[string][]string{{apidoc.BearerAuthScheme: {}}}`. The `Auth` Huma middleware
+  enforces what the OpenAPI document states, so the docs and the check cannot disagree. An
+  operation without `Security` is public.
+- **gRPC**: every method needs a token unless its domain's module lists it in `grpcPublic`, by
+  its generated full method name:
+
+  <RepoCode path="internal/controller/grpc/v1/user/controller.go" symbol="PublicMethods" />
+
+- **GraphQL**: every request gets through, and each resolver asks for the caller it needs. A
+  field that does not call `middleware.Caller` is public.
+
+## Testing a transport
+
+Transport tests go through the real server and the real buses, with fake handlers registered for
+the domain's messages: REST through `restapi/resttest`, GraphQL through `graphql/graphqltest`, gRPC
+over an in-memory `bufconn` listener. See [testing](/go-clean-template/concepts/testing/).
