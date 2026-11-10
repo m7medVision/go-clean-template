@@ -9,7 +9,7 @@ import type {
   TasksQuery,
   TransitionTaskMutation,
 } from "#/graphql/graphql";
-import { onOperation } from "#/testing/handlers";
+import { onOperation, onRest } from "#/testing/handlers";
 import { renderRoute } from "#/testing/render";
 import { signInAs } from "#/testing/session";
 
@@ -101,5 +101,31 @@ describe("the tasks screen", () => {
 
     await waitFor(() => expect(screen.queryByText("Write the spec")).toBeNull());
     expect(screen.getByText("Review the plan")).toBeTruthy();
+  });
+
+  it("shows the attribute columns and fields while the flag is on", async () => {
+    serve([row("1", "Write the spec")]);
+    const { user } = renderRoute("/tasks");
+    await screen.findByText("Write the spec");
+
+    expect(screen.getByRole("columnheader", { name: /Priority/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Actions for Write the spec" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    expect(within(await screen.findByRole("dialog")).getByLabelText("Priority")).toBeTruthy();
+  });
+
+  it("hides the attribute columns and fields while the flag is off", async () => {
+    serve([row("1", "Write the spec")]);
+    onRest("get", "/v1/flags", { taskAttributes: false });
+    const { user } = renderRoute("/tasks");
+    await screen.findByText("Write the spec");
+
+    expect(screen.queryByRole("columnheader", { name: /Priority/ })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /Labels/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Actions for Write the spec" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByLabelText("Priority")).toBeNull();
+    expect(within(dialog).queryByLabelText(/^Labels/)).toBeNull();
   });
 });

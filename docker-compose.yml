@@ -196,6 +196,7 @@ services:
     environment:
       <<: *x-backend-app-environment
       SENTRY_DSN: "${SENTRY_APP_DSN:-}"
+      FEATURE_FLAGS_FILE: "/config/flags.yaml"
     ports:
       - "8080:8080"
       - "8081:8081"

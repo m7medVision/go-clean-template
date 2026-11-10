@@ -89,6 +89,9 @@ var (
 	// ErrNotImplemented is a command or query whose handler is still the stub the generator wrote
 	// (tools/gen).
 	ErrNotImplemented = newError(KindNotImplemented, "not implemented")
+	// ErrFeatureDisabled is a request to a feature whose flag is off for the caller. It is not found:
+	// to the caller a feature that is off does not exist.
+	ErrFeatureDisabled = newError(KindNotFound, "not found")
 
 	// ErrStreamNotFound is a load of a stream that has no events. Command handlers turn it into
 	// their domain's not-found error.

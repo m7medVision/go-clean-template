@@ -1,0 +1,5 @@
+"Every feature flag as the caller sees it, with the values the backend uses."
+type FlagValues {
+  "Task attributes: priority, estimate and labels."
+  taskAttributes: Boolean!
+}

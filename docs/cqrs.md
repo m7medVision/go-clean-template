@@ -135,7 +135,9 @@ records no event and answers an `entity.Written` with none, so the wait step doe
 the cost of the exception: attributes have no history, no projector rebuilds them, and MongoDB must
 be backed up on its own. `DeleteTask` deletes the task through the aggregate, then its document; a
 MongoDB failure there is logged and the command still succeeds, leaving an unreachable document.
-Use this shape only for data whose history nobody needs.
+Use this shape only for data whose history nobody needs. The command and the task queries check
+the `task-attributes` [flag](feature-flags.md) first: off, the command answers
+`entity.ErrFeatureDisabled` and the queries skip MongoDB.
 
 The begin steps of the passkey and SSO ceremonies are queries: they record nothing, since the token
 they return carries the ceremony's state.

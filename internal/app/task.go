@@ -24,7 +24,7 @@ func taskModule() module {
 		handlers: func(d *deps, b cqrs.Buses) error {
 			task.Register(b.Commands, b.Queries, task.Deps{
 				Store: d.store, Tasks: persistTaskRepo.NewReadModel(d.pg),
-				Attributes: mongoTaskRepo.NewAttributesStore(d.mongo), Logger: d.l,
+				Attributes: mongoTaskRepo.NewAttributesStore(d.mongo), Logger: d.l, Flags: d.flags,
 			})
 
 			return nil

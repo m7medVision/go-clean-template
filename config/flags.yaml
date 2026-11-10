@@ -1,0 +1,8 @@
+# Feature flags for development (GO Feature Flag's format), read when FEATURE_FLAGS_FILE names this
+# file. The app polls it: an edit takes effect within seconds, with no restart.
+task-attributes:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: enabled

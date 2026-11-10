@@ -1,0 +1,12 @@
+on-flag:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: enabled
+off-flag:
+  variations:
+    enabled: true
+    disabled: false
+  defaultRule:
+    variation: disabled

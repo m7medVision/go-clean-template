@@ -8,6 +8,7 @@ import (
 	mongotask "github.com/m7medvision/go-clean-template/internal/entity/mongo/task"
 	"github.com/m7medvision/go-clean-template/internal/repo/repomock"
 	"github.com/m7medvision/go-clean-template/internal/usecase/task/command"
+	"github.com/m7medvision/go-clean-template/pkg/flags/flagstest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -43,7 +44,7 @@ func TestSetTaskAttributes(t *testing.T) {
 				attrs.EXPECT().Patch(gomock.Any(), taskID, patch).Return(nil)
 			}
 
-			written, err := command.SetTaskAttributesHandler{Tasks: tasks, Attributes: attrs}.
+			written, err := command.SetTaskAttributesHandler{Tasks: tasks, Attributes: attrs, Flags: flagstest.New(t, nil)}.
 				Handle(context.Background(), command.SetTaskAttributes{UserID: owner, TaskID: taskID, Patch: patch})
 
 			if tt.want != nil {
@@ -56,6 +57,22 @@ func TestSetTaskAttributes(t *testing.T) {
 			assert.Equal(t, entity.Written{ID: taskID}, written)
 		})
 	}
+}
+
+func TestSetTaskAttributesIsNotFoundWhileTheFlagIsOff(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	h := command.SetTaskAttributesHandler{
+		Tasks:      repomock.NewMockTaskReadModel(ctrl),
+		Attributes: repomock.NewMockTaskAttributesStore(ctrl),
+		Flags:      flagstest.New(t, map[string]bool{entity.FlagTaskAttributes().Key: false}),
+	}
+
+	_, err := h.Handle(context.Background(), command.SetTaskAttributes{UserID: owner, TaskID: taskID})
+
+	require.ErrorIs(t, err, entity.ErrFeatureDisabled)
+	assert.Equal(t, entity.KindNotFound, entity.KindOf(err))
 }
 
 func TestSetTaskAttributesValidatesThePatch(t *testing.T) {

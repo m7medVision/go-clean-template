@@ -14,6 +14,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/eventstore"
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/internal/usecase/behavior"
+	"github.com/m7medvision/go-clean-template/pkg/flags"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/mongo"
 	"github.com/m7medvision/go-clean-template/pkg/valkey"
@@ -66,7 +67,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	store := newEventStore(b.pg, cfg.CQRS.SnapshotEvery)
-	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), valkey: client, mongo: db}
+	d := &deps{cfg: cfg, pg: b.pg, store: store, l: b.l, tokens: jwt.New(cfg.JWT.Secret, cfg.JWT.TokenExpiry), valkey: client, mongo: db, flags: stores.flags}
 
 	if err = eventstore.Backfill(ctx, b.pg, store, importers(b.pg)...); err != nil {
 		return fmt.Errorf("app - Run - eventstore.Backfill: %w", err)
@@ -98,6 +99,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 type stores struct {
 	valkey     vk.Client
 	mongo      *mgo.Database
+	flags      *flags.Client
 	disconnect func(context.Context) error
 	l          *slog.Logger
 }
@@ -115,10 +117,25 @@ func openStores(ctx context.Context, cfg *config.Config, l *slog.Logger) (*store
 		return nil, fmt.Errorf("mongo.New: %w", err)
 	}
 
-	return &stores{valkey: client, mongo: db, disconnect: disconnect, l: l}, nil
+	ff, err := flags.New(ctx, cfg.FeatureFlags.File, l)
+	if err != nil {
+		client.Close()
+
+		if dErr := disconnect(context.WithoutCancel(ctx)); dErr != nil {
+			l.Error("app - Run - mongo disconnect", "error", dErr)
+		}
+
+		return nil, fmt.Errorf("flags.New: %w", err)
+	}
+
+	return &stores{valkey: client, mongo: db, flags: ff, disconnect: disconnect, l: l}, nil
 }
 
 func (s *stores) close(ctx context.Context) {
+	if err := s.flags.Close(context.WithoutCancel(ctx)); err != nil {
+		s.l.Error("app - Run - close flags", "error", err)
+	}
+
 	if err := s.disconnect(context.WithoutCancel(ctx)); err != nil {
 		s.l.Error("app - Run - mongo disconnect", "error", err)
 	}

@@ -12,27 +12,28 @@ type (
 	// Config is every setting, one section per concern. The binaries pass each part only the
 	// sections it reads.
 	Config struct {
-		App       App
-		HTTP      HTTP
-		Log       Log
-		PG        PG
-		GRPC      GRPC
-		JWT       JWT
-		Valkey    Valkey
-		Mongo     Mongo
-		NATS      NATS
-		AuthLimit AuthLimit
-		Metrics   Metrics
-		Docs      Docs
-		Tracing   Tracing
-		Worker    Worker
-		CQRS      CQRS
-		Mail      Mail
-		Analytics Analytics
-		Exchange  Exchange
-		WebAuthn  WebAuthn
-		OIDC      OIDC
-		Sentry    Sentry
+		App          App
+		HTTP         HTTP
+		Log          Log
+		PG           PG
+		GRPC         GRPC
+		JWT          JWT
+		Valkey       Valkey
+		Mongo        Mongo
+		NATS         NATS
+		AuthLimit    AuthLimit
+		Metrics      Metrics
+		Docs         Docs
+		Tracing      Tracing
+		Worker       Worker
+		CQRS         CQRS
+		Mail         Mail
+		Analytics    Analytics
+		Exchange     Exchange
+		WebAuthn     WebAuthn
+		OIDC         OIDC
+		Sentry       Sentry
+		FeatureFlags FeatureFlags
 	}
 
 	App struct {

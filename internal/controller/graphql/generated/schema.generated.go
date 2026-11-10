@@ -29,6 +29,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	AllTasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
 	ExchangeHistory(ctx context.Context, limit int, offset int) (*model.ConversionList, error)
+	Flags(ctx context.Context) (*entity.FlagValues, error)
 	Task(ctx context.Context, id string) (*task.TaskWithAttributes, error)
 	Tasks(ctx context.Context, status *entity.TaskStatus, limit int, offset int) (*model.TaskList, error)
 }
@@ -553,6 +554,38 @@ func (ec *executionContext) fieldContext_Query_exchangeHistory(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_flags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_flags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().Flags(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *entity.FlagValues) graphql.Marshaler {
+			return ec.marshalNFlagValues2ᚖgithubᚗcomᚋm7medvisionᚋgoᚑcleanᚑtemplateᚋinternalᚋentityᚐFlagValues(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_flags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FlagValues(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_task(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -830,6 +863,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_exchangeHistory(ctx, field)
+				})
+		case "flags":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_flags(ctx, field)
 				})
 		case "task":
 			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,

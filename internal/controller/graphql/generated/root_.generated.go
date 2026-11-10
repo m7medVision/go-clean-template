@@ -45,6 +45,10 @@ type ComplexityRoot struct {
 		Total       func(childComplexity int) int
 	}
 
+	FlagValues struct {
+		TaskAttributes func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateTask           func(childComplexity int, input model.CreateTaskInput) int
 		DeleteTask           func(childComplexity int, id string) int
@@ -56,6 +60,7 @@ type ComplexityRoot struct {
 	Query struct {
 		AllTasks        func(childComplexity int, status *entity.TaskStatus, limit int, offset int) int
 		ExchangeHistory func(childComplexity int, limit int, offset int) int
+		Flags           func(childComplexity int) int
 		Task            func(childComplexity int, id string) int
 		Tasks           func(childComplexity int, status *entity.TaskStatus, limit int, offset int) int
 	}
@@ -147,6 +152,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ConversionList.Total(childComplexity), true
 
+	case "FlagValues.taskAttributes":
+		if e.ComplexityRoot.FlagValues.TaskAttributes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FlagValues.TaskAttributes(childComplexity), true
+
 	case "Mutation.createTask":
 		if e.ComplexityRoot.Mutation.CreateTask == nil {
 			break
@@ -225,6 +237,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ExchangeHistory(childComplexity, args["limit"].(int), args["offset"].(int)), true
+	case "Query.flags":
+		if e.ComplexityRoot.Query.Flags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.Flags(childComplexity), true
 
 	case "Query.task":
 		if e.ComplexityRoot.Query.Task == nil {
@@ -453,6 +471,17 @@ type Conversion {
 
 type ConversionList { conversions: [Conversion!]!  total: Int! }
 `, BuiltIn: false},
+	{Name: "../schema/flags.graphqls", Input: `extend type Query {
+  "The caller's feature flags."
+  flags: FlagValues!
+}
+`, BuiltIn: false},
+	{Name: "../schema/flags_types.graphqls", Input: `"Every feature flag as the caller sees it, with the values the backend uses."
+type FlagValues {
+  "Task attributes: priority, estimate and labels."
+  taskAttributes: Boolean!
+}
+`, BuiltIn: false},
 	{Name: "../schema/scalars.graphqls", Input: `scalar Time
 `, BuiltIn: false},
 	{Name: "../schema/schema.graphqls", Input: `# The root types. Each field is declared in its own file, named after it (createTask in
@@ -551,6 +580,14 @@ func (ec *executionContext) childFields_ConversionList(ctx context.Context, fiel
 		return ec.fieldContext_ConversionList_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ConversionList", field.Name)
+}
+
+func (ec *executionContext) childFields_FlagValues(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "taskAttributes":
+		return ec.fieldContext_FlagValues_taskAttributes(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FlagValues", field.Name)
 }
 
 func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {

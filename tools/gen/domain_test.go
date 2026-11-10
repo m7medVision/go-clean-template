@@ -648,9 +648,9 @@ func TestNewDomainTwiceFailsR1TheSecondTimeAndWritesNothing(t *testing.T) {
 
 	for _, want := range []string{
 		"\tinvoiceQuery    = invoice.Query\n\tinvoiceMutation = invoice.Mutation\n)",
-		"\texchangeQuery\n\tinvoiceQuery\n}",
+		"\tflagsQuery\n\tinvoiceQuery\n}",
 		"\ttaskMutation\n\tinvoiceMutation\n}",
-		"exchange.New(b, l)\n\tr.query.invoiceQuery, r.mutation.invoiceMutation = invoice.New(b, l)\n",
+		"flags.New(b, l)\n\tr.query.invoiceQuery, r.mutation.invoiceMutation = invoice.New(b, l)\n",
 		"\t\"github.com/m7medvision/go-clean-template/internal/controller/graphql/invoice\"\n",
 	} {
 		assert.Contains(t, string(resolver), want)

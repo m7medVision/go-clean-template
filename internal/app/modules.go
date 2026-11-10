@@ -11,6 +11,7 @@ import (
 	"github.com/m7medvision/go-clean-template/internal/repo/persistent/projection"
 	"github.com/m7medvision/go-clean-template/pkg/broker"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
+	"github.com/m7medvision/go-clean-template/pkg/flags"
 	"github.com/m7medvision/go-clean-template/pkg/jwt"
 	"github.com/m7medvision/go-clean-template/pkg/postgres"
 	vk "github.com/valkey-io/valkey-go"
@@ -56,6 +57,8 @@ type deps struct {
 	tokens *jwt.Manager
 	valkey vk.Client
 	mongo  *mgo.Database
+	// flags evaluates feature flags. Only the app has one: no worker handler checks a flag.
+	flags *flags.Client
 	// broker publishes to NATS. Only the worker has one: the app never connects to NATS.
 	broker notify.Publisher
 	// sinks are the analytics vendors configured, and analytics publishes to them; only the worker
@@ -79,6 +82,7 @@ func modules() []module {
 		oidcModule(),
 		mailModule(),
 		analyticsModule(),
+		flagsModule(),
 	}
 }
 

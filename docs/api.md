@@ -105,6 +105,17 @@ CRUD with a status state machine. Tasks are scoped to the authenticated user.
   value sets it (gRPC: the `update_mask` names the fields, and a named field left unset clears it;
   GraphQL: an input field left out stays). It answers the task with its attributes. Deleting a task
   deletes its attributes.
+- Attributes sit behind the `task-attributes` [feature flag](feature-flags.md), on by default: off,
+  the update answers `404` and reads return empty attributes.
+
+## Feature flags
+
+The caller's [feature flags](feature-flags.md), with the values the handlers use. No gRPC: only the
+web client asks.
+
+| Operation | REST | GraphQL |
+| --- | --- | --- |
+| Get the caller's flags | `GET /v1/flags` | `flags` |
 
 ## Currency exchange
 

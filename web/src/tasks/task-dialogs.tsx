@@ -34,13 +34,16 @@ import {
 } from "./schema";
 import type { Task } from "./status";
 
-// TaskFormDialog creates a task, or edits `task` when one is given.
+// TaskFormDialog creates a task, or edits `task` when one is given. The attributes section shows only
+// while the task-attributes flag is on.
 export function TaskFormDialog({
   task,
+  attributes,
   open,
   onOpenChange,
 }: {
   task?: Task;
+  attributes: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -49,15 +52,32 @@ export function TaskFormDialog({
       <DialogContent className="sm:max-w-lg">
         {/* Keyed so each opening starts from the task's current values. */}
         {open && (
-          <TaskForm key={task?.id ?? "new"} task={task} onDone={() => onOpenChange(false)} />
+          <TaskForm
+            key={task?.id ?? "new"}
+            task={task}
+            attributes={attributes}
+            onDone={() => onOpenChange(false)}
+          />
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function TaskForm({ task, onDone }: { task?: Task; onDone: () => void }) {
-  return task ? <EditTaskForm task={task} onDone={onDone} /> : <CreateTaskForm onDone={onDone} />;
+function TaskForm({
+  task,
+  attributes,
+  onDone,
+}: {
+  task?: Task;
+  attributes: boolean;
+  onDone: () => void;
+}) {
+  return task ? (
+    <EditTaskForm task={task} attributes={attributes} onDone={onDone} />
+  ) : (
+    <CreateTaskForm onDone={onDone} />
+  );
 }
 
 function CreateTaskForm({ onDone }: { onDone: () => void }) {
@@ -116,7 +136,15 @@ const priorityOptions = [
   ...priorities.map((p) => ({ value: p, label: p[0] + p.slice(1).toLowerCase() })),
 ];
 
-function EditTaskForm({ task, onDone }: { task: Task; onDone: () => void }) {
+function EditTaskForm({
+  task,
+  attributes,
+  onDone,
+}: {
+  task: Task;
+  attributes: boolean;
+  onDone: () => void;
+}) {
   const queryClient = useQueryClient();
   const update = useMutation(updateTask);
   const updateAttributes = useMutation(updateTaskAttributes);
@@ -133,7 +161,7 @@ function EditTaskForm({ task, onDone }: { task: Task; onDone: () => void }) {
       await update.mutateAsync({ id: task.id, input: { title, description } });
 
       const patch = attributesPatch(task.attributes, value);
-      if (Object.keys(patch).length > 0) {
+      if (attributes && Object.keys(patch).length > 0) {
         await updateAttributes.mutateAsync({ id: task.id, input: patch });
       }
 
@@ -146,7 +174,11 @@ function EditTaskForm({ task, onDone }: { task: Task; onDone: () => void }) {
     <>
       <DialogHeader>
         <DialogTitle>Edit task</DialogTitle>
-        <DialogDescription>Change the title, the description or the attributes.</DialogDescription>
+        <DialogDescription>
+          {attributes
+            ? "Change the title, the description or the attributes."
+            : "Change the title or the description."}
+        </DialogDescription>
       </DialogHeader>
       <form.AppForm>
         <form.Form>
@@ -162,17 +194,25 @@ function EditTaskForm({ task, onDone }: { task: Task; onDone: () => void }) {
               />
             )}
           </form.AppField>
-          <form.AppField name="priority">
-            {(field) => <field.SelectField label="Priority" options={priorityOptions} />}
-          </form.AppField>
-          <form.AppField name="estimate">
-            {(field) => (
-              <field.TextField label="Estimate" description="Hours, 0.5–200." inputMode="decimal" />
-            )}
-          </form.AppField>
-          <form.AppField name="labels">
-            {(field) => <field.TextField label="Labels" description="Separated by commas." />}
-          </form.AppField>
+          {attributes && (
+            <>
+              <form.AppField name="priority">
+                {(field) => <field.SelectField label="Priority" options={priorityOptions} />}
+              </form.AppField>
+              <form.AppField name="estimate">
+                {(field) => (
+                  <field.TextField
+                    label="Estimate"
+                    description="Hours, 0.5–200."
+                    inputMode="decimal"
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="labels">
+                {(field) => <field.TextField label="Labels" description="Separated by commas." />}
+              </form.AppField>
+            </>
+          )}
           <FormError error={update.error ?? updateAttributes.error} />
           <DialogFooter className="mt-2">
             <DialogClose asChild>

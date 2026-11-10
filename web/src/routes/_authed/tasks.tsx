@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { flagsQuery } from "#/api/flags";
 import { problemMessage } from "#/api/problem";
 import { DataTable } from "#/components/data-table/data-table";
 import { DataTablePagination } from "#/components/data-table/pagination";
@@ -42,7 +43,11 @@ export const Route = createFileRoute("/_authed/tasks")({
     };
   },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps }) => context.queryClient.ensureQueryData(listQuery(deps)),
+  loader: ({ context, deps }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(listQuery(deps)),
+      context.queryClient.ensureQueryData(flagsQuery),
+    ]),
   component: Tasks,
 });
 
@@ -51,6 +56,7 @@ function Tasks() {
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(listQuery(search));
+  const attributes = useSuspenseQuery(flagsQuery).data.taskAttributes;
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Task>();
@@ -77,8 +83,8 @@ function Tasks() {
       onDelete: setDeleting,
     };
 
-    return taskColumns(actions);
-  }, [move]);
+    return taskColumns(actions, { attributes });
+  }, [move, attributes]);
 
   const table = useDataTable({
     data: data.tasks.tasks,
@@ -163,7 +169,12 @@ function Tasks() {
         <DataTablePagination table={table} />
       </div>
 
-      <TaskFormDialog task={editing} open={formOpen} onOpenChange={setFormOpen} />
+      <TaskFormDialog
+        task={editing}
+        attributes={attributes}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+      />
       <DeleteTaskDialog task={deleting} onOpenChange={(open) => !open && setDeleting(undefined)} />
     </div>
   );
