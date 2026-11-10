@@ -39,6 +39,17 @@ the web client. The template shows it on one real feature, task attributes. Done
 5. **The web reads flags from the backend:** a `GetFlags` query, `GET /v1/flags` and GraphQL
    `flags`, answering `{ "task-attributes": true }` for the caller; TanStack Query, one cache entry.
 6. **Every flag has an owner and is removed after rollout**; the docs say so.
+7. **Evaluations are observed through OpenFeature hooks**, registered once in `pkg/flags`; handlers
+   carry no logging or tracing code for flags (agreed 2026-11-10):
+   - **Trace:** the traces hook from OpenFeature's contrib package (`hooks/open-telemetry`) adds
+     each evaluation (key, variant, reason) as an event on the message's span, so a trace tells
+     "flag off" from "task missing".
+   - **Log:** our own hook implements only the `Error` stage: one `Warn` with the flag key and the
+     error when the provider fails and the code default is used. `Warn`, not `Error`: the request
+     still succeeds, and `Error` would reach GlitchTip on every evaluation. A successful evaluation
+     is not logged: every task read evaluates the flag.
+   - **Metrics:** none in this module. A counter per flag and variant comes with the first flag
+     that needs a removal decision.
 
 ## Configuration
 
@@ -52,7 +63,7 @@ the web client. The template shows it on one real feature, task attributes. Done
 | --- | --- |
 | `internal/entity/flag.go` | `Flag`, the flags list |
 | `flags.yaml` | the development flags |
-| `pkg/flags/` | build the OpenFeature client, with GO Feature Flag when a file is given |
+| `pkg/flags/` | build the OpenFeature client, with GO Feature Flag when a file is given; the trace and log hooks |
 | `internal/usecase/flags/query/get_flags.go`, `register.go` | the query |
 | `internal/usecase/task/...` | the `task-attributes` checks |
 | `internal/controller/restapi/v1/flags/`, `graphql/schema/flags.graphqls`, `graphql/flags/` | the transports (no gRPC) |
@@ -64,7 +75,8 @@ the web client. The template shows it on one real feature, task attributes. Done
 
 - **Handlers:** with OpenFeature's in-memory provider: flag off → `ErrTaskNotFound`-shaped answer
   and no attributes; on → as `task-attributes`.
-- **`pkg/flags`:** no file → defaults; a file → its values.
+- **`pkg/flags`:** no file → defaults; a file → its values; a failing provider → the default and
+  one `Warn`; an evaluation → an event on the active span.
 - **Transports:** `GET /v1/flags` and `flags` for a caller.
 - **Web:** the columns and dialog section hidden when off.
 - **Integration:** the dev `flags.yaml` turns `task-attributes` on, so its tests run.
