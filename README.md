@@ -1,86 +1,20 @@
 ![Go Clean Template](docs/img/logo.svg)
 
-# Go Clean template
+Go Clean Template is a starting point for Go services built on Clean Architecture, with CQRS and
+event sourcing at its core. Every change is a command that records events, every read is a query
+against a projection, and REST, gRPC and GraphQL all send the same commands and queries. It ships
+with users, passkeys, SSO, tasks and currency exchange as working examples, a worker that runs the
+projections and a queue, and a React client typed from the API.
 
-A Go service laid out with Clean Architecture: three domains behind one use-case layer that every
-transport shares.
+The code is split into layers whose dependencies only point inward: entities know nothing, use
+cases know the entities, and transports and storage sit at the edge. A generator writes a new
+domain or use case across every layer and transport, so the rules hold from the first line.
 
-[![Go version](https://img.shields.io/github/go-mod/go-version/m7medVision/go-clean-template)](go.mod)
-[![License](https://img.shields.io/github/license/m7medVision/go-clean-template)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/m7medVision/go-clean-template)](https://github.com/m7medVision/go-clean-template/releases)
+To try it, you need Docker, Go, `tmux`, `curl` and the [Vite+](https://viteplus.dev/) `vp` CLI.
+Run `cp .env.example .env`, `make web-deps` and `make dev`, then open <http://localhost:3000> and
+sign in with SSO as `alice` / `alice`.
 
-Forked from [evrone/go-clean-template](https://github.com/evrone/go-clean-template).
-
-## What you get
-
-- **CQRS with event sourcing.** Every change is a command and every read a query, sent through
-  typed buses. The stored truth is the events each aggregate records; the tables queries read are
-  projections of them.
-- **One set of commands and queries under every transport:**
-  - REST ([chi](https://github.com/go-chi/chi) + [Huma](https://github.com/danielgtaylor/huma),
-    OpenAPI generated from the code).
-  - gRPC.
-  - GraphQL ([gqlgen](https://github.com/99designs/gqlgen)).
-- **Three domains.** User auth (JWT), tasks with a status state machine, and currency exchange
-  against an outbound HTTP API.
-- **Passkeys alongside passwords.** Add one from the profile, sign in with it from a button or the
-  browser's autofill; each sign-in challenge works once.
-- **Roles** carried in the auth token and checked once, on the buses, for every transport.
-- **SSO.** Sign in through any OpenID Connect provider (Keycloak ships ready in dev, with an admin
-  and a user), with the provider's roles mapped to the app's.
-- **Postgres for everything durable.** Typed queries with [sqlc](https://sqlc.dev/) and versioned
-  [goose](https://github.com/pressly/goose) migrations applied at startup.
-  The event store is ordinary tables too.
-  [Valkey](https://valkey.io/) runs beside it, for state a restart may lose, and
-  [MongoDB](https://www.mongodb.com/) for data kept as documents instead of rows.
-- **A worker binary.** It runs the projections, and consumes its queue on
-  [NATS JetStream](https://nats.io/) through [Watermill](https://watermill.io/), with retries and a
-  poison topic.
-  It sends email from templates embedded in the binary.
-- **A React client.** TanStack Router, Query, Table and Form, typed from the OpenAPI document and the
-  GraphQL schema.
-- **OpenTelemetry tracing** through every layer, Prometheus metrics, and a Caddy front end with a WAF.
-- **Generated code wherever it can be:** SQL, mocks, protobuf, GraphQL, frontend types, and the
-  OpenAPI document.
-- **A domain and use-case generator.** `make new-domain` and `make new-usecase` write every layer and
-  every transport's handlers and tests, with stub bodies for you to fill in, and check every edit
-  before writing anything.
-
-## Clean Architecture
-
-The code is split into layers, and **dependencies only point inward**:
-
-![Clean Architecture](docs/img/layers-1.png)
-
-Inside the use-case layer, every change is a command and every read a query: controllers send them
-through the buses, command handlers record events, and query handlers read projections.
-
-These are rules, not suggestions: a change that breaks one is not merged.
-
-The [documentation](https://m7medvision.github.io/go-clean-template/) explains each layer, walks a
-request through all of them, and has a guide for every kind of change.
-
-## Quick start
-
-Needs Docker, Go, `tmux` and `curl`.
-The web client also needs the [Vite+](https://viteplus.dev/) `vp` CLI, and its dependencies installed once with `make web-deps`.
-
-```sh
-cp .env.example .env
-make dev        # the app's dependencies in docker, everything else with hot reload
-```
-
-Then open:
-
-- <http://localhost:3000>: the web client, where you register a user.
-  **Sign in with SSO** as `alice` / `alice` to try the admin role.
-- <http://127.0.0.1:8080/docs>: the REST API reference
-- <http://127.0.0.1:8080/graphql/playground>: GraphQL
-- <http://127.0.0.1:8025>: Mailpit, which catches the email the app sends
-
-If Postgres already runs on the host's port 5432, set `PG_PORT=5433` in `.env` first.
-If something else holds 6379, set `VALKEY_PORT=6380` the same way; 27017, `MONGO_PORT=27018`.
-
-## License
-
-[MIT](LICENSE)
+The [documentation](https://m7medvision.github.io/go-clean-template/) covers the architecture, a
+guide for every kind of change, and a reference for every setting and endpoint. Released under the
+[MIT License](LICENSE); originally forked from
+[evrone/go-clean-template](https://github.com/evrone/go-clean-template).

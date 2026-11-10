@@ -13,7 +13,8 @@ export default defineConfig({
     mermaid({ theme: "neutral", autoTheme: true, enableLog: false }),
     starlight({
       title: "Go Clean Template",
-      logo: { src: "../docs/img/logo.svg", replacesTitle: false },
+      logo: { src: "../docs/img/mark.svg", replacesTitle: false },
+      favicon: "/favicon.svg",
       social: [
         {
           icon: "github",

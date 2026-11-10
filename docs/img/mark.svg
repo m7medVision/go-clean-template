@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Go Clean Template">
+  <circle cx="60" cy="60" r="52" fill="none" stroke="#00ADD8" stroke-opacity="0.3" stroke-width="10"/>
+  <circle cx="60" cy="60" r="34" fill="none" stroke="#00ADD8" stroke-opacity="0.6" stroke-width="10"/>
+  <circle cx="60" cy="60" r="15" fill="#00ADD8"/>
+  <path d="M118 60H86" stroke="#0B3B4C" stroke-width="7" stroke-linecap="round"/>
+  <path d="M95 49 82 60l13 11" fill="none" stroke="#0B3B4C" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
