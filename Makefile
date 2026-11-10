@@ -105,11 +105,15 @@ docs-deps: ### install the docs site dependencies (Vite+, frozen lockfile)
 	$(DOCS) install --frozen-lockfile
 .PHONY: docs-deps
 
-docs-dev: ### run the docs site on http://localhost:4321/go-clean-template/
+docs-gen: ### generate the docs site's environment and make target tables from config/ and this Makefile
+	$(DOCS) node scripts/gen.ts
+.PHONY: docs-gen
+
+docs-dev: docs-gen ### run the docs site on http://localhost:4321/go-clean-template/
 	$(DOCS) exec astro dev
 .PHONY: docs-dev
 
-docs-build: ### type-check and build the docs site into site/dist
+docs-build: docs-gen ### type-check and build the docs site into site/dist
 	$(DOCS) exec astro check
 	$(DOCS) exec astro build
 .PHONY: docs-build
