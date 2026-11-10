@@ -282,5 +282,5 @@ release-version: ### print the next release version from the commits since the l
 .PHONY: release-version
 
 pre-commit: deps mock format linter-golangci test gen-check ### run pre-commit
-pre-commit: web-api web-graphql web-format web-check
+pre-commit: web-api web-graphql web-format web-check docs-format docs-check
 .PHONY: pre-commit
