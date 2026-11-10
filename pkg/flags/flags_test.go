@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/m7medvision/go-clean-template/pkg/flags"
@@ -15,16 +16,35 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-func newClient(t *testing.T, file string) (*flags.Client, *bytes.Buffer) {
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.String()
+}
+
+func newClient(t *testing.T, file string) (*flags.Client, *syncBuffer) {
 	t.Helper()
 
-	var logs bytes.Buffer
+	logs := &syncBuffer{}
 
-	c, err := flags.New(t.Context(), file, slog.New(slog.NewTextHandler(&logs, nil)))
+	c, err := flags.New(t.Context(), file, slog.New(slog.NewTextHandler(logs, nil)))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, c.Close(context.WithoutCancel(t.Context()))) })
 
-	return c, &logs
+	return c, logs
 }
 
 func TestNoFileAnswersDefaults(t *testing.T) {
