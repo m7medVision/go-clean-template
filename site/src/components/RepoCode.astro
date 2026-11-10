@@ -1,0 +1,16 @@
+---
+import { Code } from "@astrojs/starlight/components";
+import { excerpt } from "../lib/repo-code";
+
+interface Props {
+  path: string;
+  symbol?: string;
+  lines?: string;
+  title?: string;
+}
+
+const { path, symbol, lines, title } = Astro.props;
+const { code, lang } = excerpt(path, { symbol, lines });
+---
+
+<Code code={code} lang={lang} title={title ?? path} />

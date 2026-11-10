@@ -12,5 +12,8 @@
     "astro": "^7.4.8",
     "typescript": "^6"
   },
+  "devDependencies": {
+    "vite-plus": "1.4.0"
+  },
   "packageManager": "bun@1.4.3"
 }

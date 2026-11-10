@@ -118,8 +118,9 @@ docs-format: ### format the docs site
 	$(DOCS) fmt .
 .PHONY: docs-format
 
-docs-check: ### format check and build the docs site
+docs-check: ### format check, unit-test and build the docs site
 	$(DOCS) fmt --check .
+	$(DOCS) test
 	$(MAKE) docs-build
 .PHONY: docs-check
 
