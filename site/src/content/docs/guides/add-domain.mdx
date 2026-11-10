@@ -1,0 +1,136 @@
+---
+title: Add a domain
+description: Generate a new domain on every layer and transport with make new-domain, then give it its fields.
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+A domain is a set of records with its own aggregate, events, read model, use cases and
+transports, like `task` or `exchange`. `make new-domain` writes all of it for a user-owned record
+with create, update, delete, get and list on the base fields (`id`, `user_id`, `created_at`,
+`updated_at`). Everything is real except the five handlers, which are stubs.
+
+## Generate it
+
+<Steps>
+
+1. Commit your work. The generator refuses while a tracked file has uncommitted changes.
+
+2. Preview:
+
+   ```sh
+   make new-domain name=invoice dry-run=1
+   ```
+
+   Pass `plural=` when English pluralisation gets it wrong, and `transports=rest,grpc` (any subset
+   of `rest,grpc,graphql`) for fewer than three transports.
+
+3. Run it without `dry-run=1`. It writes the files, then runs the regenerators and
+   `go build ./...`, and prints the next steps and an undo command.
+
+</Steps>
+
+## What it writes
+
+For `widget` on all three transports, the generated tree (kept as goldens in
+`tools/gen/testdata/golden/domain/`) holds:
+
+- `internal/entity/widget.go`, `widget_aggregate.go`, `widget_events.go` and the aggregate test.
+- A migration `internal/app/migrations/<timestamp>_create_widgets.sql` and
+  `internal/repo/persistent/queries/widget.sql`.
+- The contract `internal/repo/widget.go`, and `internal/repo/persistent/widget/` with the read
+  model, projector and their tests.
+- `internal/usecase/widget/` with `command/`, `query/` and `register.go`.
+- `internal/app/widget.go`, the module that wires it.
+- The REST, gRPC (with `docs/proto/v1/widget.proto`) and GraphQL folders, with tests.
+- `integration-test/widget_test.go`.
+
+It also edits the lists a domain joins: `entity.EventTypes()`, `modules()` in
+`internal/app/modules.go`, and, with GraphQL, `internal/controller/graphql/resolver.go`.
+
+Every operation answers 501 / `Unimplemented` / `NOT_IMPLEMENTED` until you write its handler.
+
+## The generator's safety rules
+
+Before writing anything, the generator checks five rules and stops at the first that fails:
+
+- **R1, the name is free.** It is a valid identifier and nothing uses it yet: no use-case or
+  read-model folder, entity, contract, module, table, controller folder, proto service, GraphQL type
+  or package of that name.
+- **R2, the targets fit.** No file it creates exists, every file it edits does, and a new REST
+  route clashes with no route in `docs/openapi/v1.json`.
+- **R3, the tree is clean.** No tracked file has changes, and it neither edits an untracked file
+  nor creates one in an untracked folder. So `git checkout` and `git clean` on what it lists undo
+  everything.
+- **R4, every edit finds its place** exactly once in the file it edits.
+- **R5, everything parses** after the edit.
+
+<RepoCode path="tools/gen/rules/r1_name.go" symbol="DomainFree" />
+
+## Fill in the fields
+
+Work outward from the entity. Each generated file has a comment where its fields go, and each has
+a counterpart in `task` to copy from.
+
+<Steps>
+
+1. **Entity.** Add the fields to the read shape in `internal/entity/<domain>.go`, to the events in
+   `<domain>_events.go` and to `Apply` in `<domain>_aggregate.go`. Put sentinel errors and
+   validation functions in `<domain>.go`. A value unique across records is a claim, saved with the
+   events, not a unique index.
+
+2. **Migration.** Add the columns to the generated migration; it has not been merged, so you may
+   still edit it. No foreign keys. See [Add a migration](/go-clean-template/guides/migration/).
+
+3. **SQL.** Edit `queries/<domain>.sql`, then `make sqlc`.
+
+4. **Read model and projector.** Map the new columns in the read model and in each case of the
+   projector's `project`, then `make mock` if the contract changed.
+
+5. **Commands and queries.** Add the fields to the messages and write the five handler bodies.
+   Replace each stub test.
+
+6. **Transports.** Add the fields to the REST DTOs in `request.go` and `response.go`, the proto
+   messages, and the GraphQL type in `schema/<domain>_types.graphqls`. Drop
+   `http.StatusNotImplemented` from each REST op's `Errors`.
+
+7. **Event samples.** The codec tests compare each event type with a frozen JSON sample, and fail
+   without one. Write them once the events have their fields:
+
+   ```sh
+   UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/
+   ```
+
+   Review the new files in `internal/repo/eventcodec/testdata/events/` and commit them.
+
+8. **Integration test.** Extend `integration-test/<domain>_test.go` and run it with
+   `make compose-up-integration-test`, which starts the worker the writes wait for.
+
+9. **Docs.** `make openapi`, then add the domain to the API reference and the README's feature list.
+
+</Steps>
+
+The module ties it together, the way `task` does:
+
+<RepoCode path="internal/app/task.go" symbol="taskModule" />
+
+<Aside type="caution">
+  Write the new domain before generating another one. Two untouched generated domains are clones of
+  each other, `dupl` reports them, and `make linter-golangci` fails.
+</Aside>
+
+## Rules
+
+- Start with `make new-domain`, not by copying `task`: the generator checks every rule before it
+  writes and gives you an undo.
+- Read-model tables have no foreign keys: each projector advances on its own, so a reference may
+  arrive before its target.
+- Uniqueness across records is a claim saved with the events, never a unique index on a read model.
+- Every event type has a committed sample in `internal/repo/eventcodec/testdata/events/`: it is what
+  catches an accidental change to a stored shape.
+- A domain is wired only in its module file in `internal/app/` and listed in `modules()`; no other
+  place lists domains (GraphQL's `resolver.go` aside).
+- No handler stays a stub, and no REST op keeps `http.StatusNotImplemented`.

@@ -1,0 +1,94 @@
+---
+title: gRPC API
+description: The gRPC services and methods, how calls authenticate, and the status codes they answer.
+sidebar:
+  order: 4
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+import { Aside } from "@astrojs/starlight/components";
+
+The gRPC server listens on `GRPC_PORT` (default `8081`). The services are defined in
+`docs/proto/v1/*.proto`, package `grpc.v1`; `make proto-v1` regenerates the Go code beside them.
+Each domain's module in `internal/app/<domain>.go` registers its service, and each method sends the
+same commands and queries the REST and GraphQL operations do.
+
+## Services
+
+### AuthService
+
+<RepoCode path="docs/proto/v1/auth.proto" symbol="AuthService" />
+
+`Register` and `Login` are public. `GetProfile` answers the caller's profile.
+
+### TaskService
+
+<RepoCode path="docs/proto/v1/task.proto" symbol="TaskService" />
+
+`ListAllTasks` requires the `admin` role. `UpdateTaskAttributes` takes a field mask: it sets the
+attributes the mask names and leaves the rest.
+
+### ExchangeService
+
+<RepoCode path="docs/proto/v1/exchange.proto" symbol="ExchangeService" />
+
+Amounts and rates are decimal strings, so no precision is lost to floating point.
+
+## Authentication
+
+A call carries its token in the `authorization` metadata, **as it is, with no `Bearer` prefix**.
+The `Auth` interceptor (`internal/controller/grpc/middleware/auth.go`) reads it, turns it into the
+caller with `authn.ReadToken`, and answers `Unauthenticated` when it is missing, invalid or expired.
+
+A method needs a token unless its domain's module lists it in `grpcPublic`, by its generated
+`FullMethodName` constant. Today that is `AuthService/Register` and `AuthService/Login`:
+
+<RepoCode path="internal/controller/grpc/v1/user/controller.go" symbol="PublicMethods" />
+
+A new public method goes in its module's `grpcPublic`; everything else is protected by default.
+
+## Interceptors
+
+Every unary call passes these interceptors, in order: error reporting, the client address, the call
+log, metrics, panic recovery (a panic answers `Internal` instead of ending the process), and auth.
+The server also opens an OpenTelemetry span per call.
+
+<RepoCode path="internal/app/grpc.go" symbol="newGRPCServer" />
+
+## Status codes
+
+Every method maps its errors with `rpcerr.Status`, from the kind of the domain error
+([Errors](/go-clean-template/concepts/errors/)):
+
+| Code                | When                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `InvalidArgument`   | invalid input: a bad title, status, amount, or an unknown currency                          |
+| `Unauthenticated`   | no valid token, or wrong credentials on `Login`                                             |
+| `PermissionDenied`  | another user's task, or `ListAllTasks` without the `admin` role                             |
+| `NotFound`          | a missing task or user                                                                      |
+| `AlreadyExists`     | a taken username or email on `Register`                                                     |
+| `Aborted`           | a write that lost to a concurrent one after the retries                                     |
+| `Unavailable`       | the read models had not caught up with a write in time, or the rate provider is down        |
+| `Unimplemented`     | a generated handler that is still a stub                                                    |
+| `ResourceExhausted` | a spent sign-in budget on `Register` or `Login`, with a `RetryInfo` detail holding the wait |
+| `Internal`          | anything else; the details go to the log                                                    |
+
+## Reflection
+
+With `DOCS_ENABLED=true`, the server registers gRPC server reflection, the gRPC API's equivalent of
+the OpenAPI document. Without it, reflection is off, as the REST and GraphQL docs are.
+
+With reflection on, a client such as [grpcurl](https://github.com/fullstorydev/grpcurl) can list
+and call the services without the `.proto` files:
+
+```sh
+grpcurl -plaintext 127.0.0.1:8081 list
+
+grpcurl -plaintext -d '{"email": "ada@example.com", "password": "correct horse"}' \
+  127.0.0.1:8081 grpc.v1.AuthService/Login
+
+grpcurl -plaintext -H "authorization: <token>" -d '{"limit": 10}' \
+  127.0.0.1:8081 grpc.v1.TaskService/ListTasks
+```
+
+<Aside>grpcurl is not installed by `make bin-deps`; install it yourself if you want it.</Aside>

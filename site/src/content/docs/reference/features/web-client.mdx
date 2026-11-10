@@ -1,0 +1,126 @@
+---
+title: Web client
+description: The React client in web/, its stack, how it talks to the API, and the files it generates.
+sidebar:
+  order: 8
+---
+
+import { Aside, FileTree } from "@astrojs/starlight/components";
+import RepoCode from "../../../../components/RepoCode.astro";
+
+`web/` is a client-rendered React app. It imports nothing from Go, and nothing in Go imports or
+embeds it: `go.mod` ignores `./web`, and `make format` skips it.
+
+## Stack
+
+| Concern          | Library                                                                    |
+| ---------------- | -------------------------------------------------------------------------- |
+| Routing          | TanStack Router, file-based routes in `web/src/routes/`                    |
+| Server state     | TanStack Query                                                             |
+| Tables           | TanStack Table v9 in shadcn data tables (`web/src/components/data-table/`) |
+| Forms            | TanStack Form with shadcn `Field` and Zod (`web/src/components/form/`)     |
+| Components       | shadcn/ui, generated into `web/src/components/ui/`                         |
+| Build and checks | Vite+ (`vp`: Vite, Oxlint, Oxfmt, Vitest) and bun                          |
+
+## Talking to the API
+
+The client and the API share one origin: the Vite proxy in development, Caddy in the full stack. So
+there is no CORS. Types are generated, never hand-written.
+
+- **REST** goes through `api` (openapi-fetch) or `$api` (openapi-react-query), typed from
+  `docs/openapi/v1.json`. A middleware adds the bearer token and signs the user out on a 401 that is
+  not a reauthentication request.
+- **GraphQL** operations are written with `graphql(...)` from `#/graphql`, typed by GraphQL Code
+  Generator from the gqlgen schema, and called through `web/src/api/graphql.ts`. An
+  `UNAUTHENTICATED` error triggers the same sign-out as a REST 401.
+
+<RepoCode path="web/src/api/client.ts" lines="1-13" />
+
+Every request goes through TanStack Query. Each domain keeps its query and mutation options in
+`web/src/<domain>/api.ts`. Route loaders call `ensureQueryData` and components read with
+`useSuspenseQuery` on the same options, so they share one cache entry. Writes invalidate their
+domain's key prefix.
+
+- **Tables read over GraphQL**, selecting only the columns they show, paged on the server with
+  `limit` and `offset`.
+- **Forms and single-record screens** (auth, profile, the exchange form) use REST.
+
+## Token storage and the CSP
+
+The JWT lives in memory, mirrored to `sessionStorage` (`web/src/auth/token.ts`), so it survives a
+reload but not a closed tab. Scripts can read it, so what protects it is the Content Security
+Policy Caddy sends in the full stack (`caddy/Caddyfile`): scripts, styles, images and connections
+only from the same origin, no framing.
+
+```text
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+```
+
+<Aside type="caution">
+  Serve the built client behind a policy at least this strict in production. Loading a third-party
+  script would let it read the token.
+</Aside>
+
+## Routes
+
+| Path                  | Screen                                                                          |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `/login`, `/register` | sign-in and sign-up, with a button for each other sign-in method (passkey, SSO) |
+| `/sso/callback`       | finishes an SSO sign-in                                                         |
+| `/tasks`              | the user's tasks, a data table over GraphQL                                     |
+| `/exchange`           | a REST conversion form and the history table                                    |
+| `/profile`            | the profile and passkeys                                                        |
+| `/admin/tasks`        | every user's tasks, for admins                                                  |
+
+Signed-in screens sit under the `_authed` layout route. The admin link appears when the token's
+`roles` claim includes `admin`; this is a UI hint only, since the server checks the role.
+
+Client routes must not use the prefixes the Go app owns: `/v1`, `/graphql`, `/docs`, `/openapi.*`,
+`/schemas`, `/healthz`, `/metrics`.
+
+## Folders and import layers
+
+<FileTree>
+  - web/src/ - routes/ file-based routes; the only place that composes domains - tasks/ exchange/
+  passkey/ sso/ domains - api/ REST and GraphQL clients, problem messages, generated types - auth/
+  token, roles, reauthentication - components/ shadcn ui/, data-table/, form/ - hooks/ lib/ shared
+  helpers - testing/ MSW handlers and render helpers
+</FileTree>
+
+Imports run one way: shared folders, then domains, then `routes`. A domain never imports another
+domain, and nothing imports `routes/`. `make web-check` enforces this through `web/vite.config.ts`.
+
+## Make targets
+
+| Target             | What it does                                                        |
+| ------------------ | ------------------------------------------------------------------- |
+| `make web-deps`    | installs dependencies from the frozen lockfile                      |
+| `make web-dev`     | the dev server on `WEB_PORT`, proxying the API to `HTTP_PORT`       |
+| `make web-api`     | refreshes `docs/openapi/v1.json`, then the REST types               |
+| `make web-graphql` | the GraphQL types, from the schema and the operations in `web/src/` |
+| `make web-format`  | formats and autofixes                                               |
+| `make web-check`   | format check, lint, type check and unit tests                       |
+| `make web-build`   | builds into `web/dist`                                              |
+| `make web-e2e`     | the Playwright suite against a running app and worker               |
+
+See [make targets](/go-clean-template/reference/make-targets/).
+
+## Generated files
+
+Do not edit these by hand:
+
+- `web/src/api/schema.gen.ts` from `make web-api`.
+- `web/src/graphql/` from `make web-graphql`.
+- `web/src/routeTree.gen.ts` from the TanStack Router plugin, on every dev or build run.
+
+A Huma or GraphQL schema change that breaks the client fails the type check in the same change.
+
+## Tests
+
+Pure logic is tested in `*.test.ts` beside the code. A screen is a `*.test.tsx` starting with
+`// @vitest-environment happy-dom` that renders the real routes through `web/src/testing`. MSW
+answers at the `fetch` level with handlers typed from the generated API types, so a contract change
+fails type checking in the test.
+
+To add a screen, see [add a web page](/go-clean-template/guides/web-page/).

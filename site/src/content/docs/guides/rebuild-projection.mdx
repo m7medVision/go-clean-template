@@ -1,0 +1,75 @@
+---
+title: Rebuild a projection
+description: Empty a projector's read model and let the worker replay every event into it.
+sidebar:
+  order: 15
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+A read model is derived data: the event store holds the truth, and a projector turns events into
+table rows. When a projector's logic changes (a new column, a bug fixed in how it writes), you
+rebuild it: empty its tables, reset its checkpoint, and let the worker replay every event.
+
+## What a rebuild does
+
+<RepoCode path="internal/repo/persistent/projection/rebuild.go" symbol="Rebuild" />
+
+In one transaction it:
+
+1. truncates the tables the projector declares (the second argument to `projection.NewProjector`:
+   `tasks` for `task`, `users` and `user_identities` for `user`, and so on);
+2. resets the projector's checkpoint to the start;
+3. sends `NOTIFY events`, which wakes the running worker.
+
+The running worker then replays every event into the empty tables. The command itself exits at
+once; it does not wait for the replay. Until the projector catches up, reads from its tables are
+incomplete, and commands that wait on it may answer `entity.ErrReadModelBehind`.
+
+## Steps
+
+<Steps>
+
+1. **Deploy the new projector code** to the worker first, so the replay runs the new logic. If
+   the change needs a new column, add a [migration](/go-clean-template/guides/migration/) and let
+   the app apply it.
+
+2. **Find the projector's name.** It is the first argument to `projection.NewProjector` in
+   `internal/repo/persistent/<domain>/projector.go`:
+
+   <RepoCode path="internal/repo/persistent/task/projector.go" symbol="NewProjector" />
+
+3. **Run the rebuild** against the same database the worker uses:
+
+   ```sh
+   make projection-rebuild name=task
+   ```
+
+   An unknown name fails and lists the known ones.
+
+4. **Watch the worker catch up** in its logs or traces before relying on the read model.
+
+</Steps>
+
+## When it refuses
+
+- **An import is pending** (`eventstore.ErrImportPending`). The backfill's importers read the
+  read-model tables to turn rows written before event sourcing into events. Emptying a table
+  before its import has run would lose those rows. Start the app once, so the backfill runs, then
+  rebuild.
+- **The name is an event handler** (`projection.ErrUnknownProjector`). Only projectors can be
+  rebuilt; see below.
+
+<Aside type="caution">
+  Event handlers cannot be rebuilt. Replaying `send-welcome-email` would send every user their
+  welcome email again.
+</Aside>
+
+## Rules
+
+- Rebuild with `make projection-rebuild`, never by editing `projection_checkpoints` by hand: the target truncates and resets in one transaction and wakes the worker.
+- A projector writes only its own tables, through `pg.Executor(ctx)`, so a rebuild can empty them safely.
+- A projector that inserts `*Imported` rows uses `ON CONFLICT DO NOTHING`, so a replay is safe.
+- Never rebuild while an import is pending.
+- Event handlers are never rebuilt: their side effects would repeat.

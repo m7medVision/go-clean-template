@@ -1,0 +1,62 @@
+---
+title: Releases
+description: What a release of the template is, what it ships, and how its version is named from commits.
+sidebar:
+  order: 9
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A release is a `v*` Git tag on a master commit plus a GitHub release with its notes. Nobody picks a
+version or pushes a tag: every master commit whose CI passes is released when its commits call for
+it.
+
+## What a release ships
+
+|                      |                                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| A tag                | `vMAJOR.MINOR.PATCH` on the commit CI checked, which the Go module proxy serves as a module version |
+| GitHub release notes | the commits since the last tag, grouped                                                             |
+| Binaries             | none: `.goreleaser.yaml` skips every build                                                          |
+| Container image      | none: the release workflow pushes no image; build one from the `Dockerfile` yourself                |
+
+The notes list commits under **Breaking changes**, **Features**, **Fixes** and **Performance**, each
+commit once, under the first heading its subject matches. Other types are left out. Only subjects
+are read, so a commit whose only breaking marker is a `BREAKING CHANGE:` footer is listed under its
+type.
+
+## How a version is named
+
+svu (pinned in `go.mod`) names the version from the Conventional Commit subjects since the last
+`v*` tag. `make release-version` prints it, or nothing with the reason on stderr.
+
+| Commits since the last tag                                            | Below 1.0  | From 1.0   |
+| --------------------------------------------------------------------- | ---------- | ---------- |
+| a breaking change (`feat!:`, `fix(api)!:`, a `BREAKING CHANGE:` line) | minor      | major      |
+| a `feat`                                                              | minor      | minor      |
+| a `fix`                                                               | patch      | patch      |
+| only `perf`, `docs`, `ci`, `chore`, `test`, `build`, `refactor`       | no release | no release |
+
+The highest bump wins. Merge commits change nothing; the commits of a merged branch count. A `perf`
+alone releases nothing, but appears in the next release's notes. `make release-version` also prints
+nothing when a newer tag already exists that HEAD does not contain.
+
+## What happens on a merge
+
+1. CI runs on the push to master.
+2. When it succeeds, `.github/workflows/release.yml` checks out the commit CI checked and runs
+   `make release-version`. No output ends the run.
+3. Otherwise it tags the commit in its checkout and runs GoReleaser, which creates the GitHub
+   release. GitHub creates the tag on that commit; the workflow never pushes it.
+
+Releases run one at a time, in order. Running the workflow by hand
+(`gh workflow run release.yml`) is a dry run: GoReleaser skips publishing and the run summary shows
+the version and notes.
+
+<Aside type="caution">
+  Tags are never moved or deleted. The Go module proxy and checksum database keep every version
+  forever, so a moved tag breaks everyone who fetched it. If a release is wrong, fix it and let the
+  next merge release a new version.
+</Aside>
+
+For the day-to-day steps, see [releasing](/go-clean-template/guides/releasing/).

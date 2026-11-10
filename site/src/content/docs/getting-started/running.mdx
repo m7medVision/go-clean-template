@@ -1,0 +1,102 @@
+---
+title: Running the stack
+description: Start the app, the worker and the web client in dev mode, in containers, or by hand.
+sidebar:
+  order: 2
+---
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+The template is two Go binaries and a web client. `cmd/app` serves REST, GraphQL and gRPC.
+`cmd/worker` runs the projections that keep the read models current and consumes the mail queue.
+Pick one of three ways to run them.
+
+<Tabs>
+<TabItem label="Dev mode">
+
+```sh
+make dev       # start everything
+make dev-down  # stop it
+```
+
+`make dev` runs `scripts/dev.sh`. It starts the dependency containers (Postgres, Valkey, NATS,
+MongoDB, Mailpit and Keycloak) and opens one tmux window, named after your checkout's directory,
+with a pane each for:
+
+- **app**: `cmd/app` under air. It rebuilds and restarts when a `.go`, `.sql` or `.tmpl` file
+  changes, and applies new migrations on start.
+- **worker**: `cmd/worker` under air. It waits until the app answers `/healthz`, because only the
+  app applies the schema.
+- **web**: the Vite+ dev server on `WEB_PORT` (3000), with hot module reload. It proxies the
+  backend's paths to the app on `HTTP_PORT`.
+- the container logs.
+
+Panes stay open when their process exits, so a build error stays on screen. Running `make dev`
+again reattaches to the session. Dev mode turns tracing off and points the links the app builds
+(in emails, for example) at the Vite server.
+
+`make dev-down` closes the tmux session and stops the containers. It keeps their data.
+
+</TabItem>
+<TabItem label="All in containers">
+
+```sh
+make compose-up-all
+make compose-down
+```
+
+This builds the app and worker image and starts every service, plus Caddy in front on port 80.
+Caddy serves the built web client and the app at `http://app.lvh.me`, gRPC at `grpc.lvh.me`, and
+Jaeger at `http://jaeger.lvh.me`. Use it to check the production shape; there is no hot reload.
+
+</TabItem>
+<TabItem label="By hand">
+
+```sh
+make compose-up   # Postgres, Valkey, NATS, MongoDB and Mailpit, then follows their logs
+make run          # in a second terminal: the app
+make run-worker   # in a third: the worker, once the app is up
+make web-dev      # optional: the web client on WEB_PORT
+```
+
+`make run` regenerates the protobuf code and builds with the `migrate` tag, so the app applies
+pending migrations at start. Start it before the worker: the worker never migrates. `make
+compose-up` does not start Keycloak, so SSO sign-in is off unless you run it yourself.
+
+</TabItem>
+</Tabs>
+
+## Why the worker must run
+
+Every write waits for its read models. After a command saves its events, the app waits until the
+projections that handle those events have passed them, so the API can answer with what you just
+wrote. The projections run in the worker. Without it, every write fails with a "read model behind"
+error after `CQRS_CONSISTENCY_TIMEOUT` (2 seconds by default). Reads still work.
+
+See [projections](/go-clean-template/concepts/projections/) for how this works.
+
+The app also refuses to start without Valkey (`VALKEY_URL`) or MongoDB (`MONGO_URL`), and the
+worker refuses to start without NATS (`NATS_URL`).
+
+## Integration tests
+
+```sh
+make compose-up-integration-test
+```
+
+This builds a test container next to the whole stack (app, worker, databases, Mailpit, Keycloak and
+a stub of the exchange-rate API), runs the suite inside the compose network, and tears it all down
+with the suite's exit code.
+
+<Aside type="caution" title="Not make integration-test">
+  `make integration-test` runs the same suite on your machine, where the service host names (`app`,
+  `db`, `mailpit`, …) do not resolve, so it always fails. Use `make compose-up-integration-test`.
+</Aside>
+
+<Aside type="caution">
+  The integration stack runs in the same compose project as `make dev`, and its teardown removes
+  that project's containers, the dev database and Mailpit included. Stop dev mode first, or expect
+  to restart it afterwards.
+</Aside>
+
+Next, [take the tour](/go-clean-template/getting-started/tour/).

@@ -1,0 +1,56 @@
+---
+title: Configuration
+description: Every environment variable the app and the worker read, and how configuration works.
+sidebar:
+  order: 1
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+import Env from "../../../generated/env.md";
+
+## How configuration works
+
+Configuration comes only from environment variables. There are no config files and no flags.
+`config.NewConfig` in `config/config.go` parses them with
+[caarlos0/env](https://github.com/caarlos0/env) into one struct with a section per concern
+(`App`, `PG`, `CQRS`, `Worker`, …):
+
+<RepoCode path="config/config.go" symbol="NewConfig" />
+
+- **Defaults live only in `config/`**, as `envDefault` tags. A constructor in `pkg/` takes explicit
+  values and has no defaults of its own.
+- **A part gets the section it reads**, never the whole `*config.Config`. No controller imports
+  `config`.
+- **Both binaries parse the same struct.** The app (`cmd/app`) and the worker (`cmd/worker`) read
+  the same variables, each using the sections it needs.
+
+### Required settings, and settings the app checks
+
+A field tagged `required` makes both binaries refuse to start without it (`APP_NAME`, `PG_URL`, …).
+A setting that only one binary needs cannot carry that tag, because the other binary parses the same
+config. Those are checked by the binary that uses them instead:
+
+| Setting      | Checked by                   | Error                |
+| ------------ | ---------------------------- | -------------------- |
+| `JWT_SECRET` | the app (`app.Run`)          | `app.ErrNoJWTSecret` |
+| `VALKEY_URL` | the app                      | `app.ErrNoValkeyURL` |
+| `MONGO_URL`  | the app                      | `app.ErrNoMongoURL`  |
+| `NATS_URL`   | the worker (`app.RunWorker`) | `app.ErrNoNATSURL`   |
+
+A feature is turned on by the presence of the settings it needs, not by an on/off variable.
+
+### `.env` and `.env.example`
+
+The `Makefile` loads `.env`, falling back to `.env.example`, and exports it into every target.
+`.env.example` is also read by the shell in CI (`. ./.env.example`), so **a value there must not
+need quoting**: no spaces. That is why `MAIL_FROM` is a bare address rather than `Name <address>`.
+
+A new setting needs three things: the struct field in `config/`, an entry in `.env.example`, and, if
+the container needs it, the `environment` block of its service in `docker-compose.yml`.
+
+## Variables
+
+The table below is generated from the structs in `config/`. **Required** means the field is tagged
+`required`; the settings in the table above are not, though the binary that uses them checks them.
+
+<Env />

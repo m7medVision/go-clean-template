@@ -1,0 +1,23 @@
+{
+  "name": "go-clean-template-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/starlight": "^0.42.10",
+    "astro": "^7.4.8",
+    "astro-mermaid": "^2.2.0",
+    "mermaid": "^12.3.0",
+    "starlight-links-validator": "^0.27.0",
+    "starlight-openapi": "^0.27.1",
+    "typescript": "^6"
+  },
+  "devDependencies": {
+    "vite-plus": "1.4.0"
+  },
+  "packageManager": "bun@1.4.3"
+}

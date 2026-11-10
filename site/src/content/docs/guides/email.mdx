@@ -1,0 +1,84 @@
+---
+title: Add an email
+description: Add a new transactional email, its templates and its render test, and send it through the mail queue.
+sidebar:
+  order: 11
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+An email is three things: a struct in `internal/entity` that holds the data it shows, a pair of
+templates that render it, and the code that puts it on the `mail` topic. The worker reads the
+topic and sends the `DeliverEmail` command, which renders the templates and hands the result to
+SMTP. Only the worker renders and sends email, and it refuses to start if a template is broken.
+
+The example is the welcome email.
+
+## Steps
+
+<Steps>
+
+1. **Add the type** in `internal/entity/email_<name>.go`: a struct with JSON tags, a `Template()`
+   naming its templates and a `Recipient()`.
+
+   <RepoCode path="internal/entity/email_welcome.go" symbol="WelcomeEmail" />
+
+2. **List it in `EmailTypes()`.** `DecodeEmail` reads only the types listed there; an unknown
+   template is `entity.ErrUnknownEmail`, which the queue handler sends straight to the poison topic.
+
+   <RepoCode path="internal/entity/email.go" symbol="EmailTypes" />
+
+3. **Write the templates** in `internal/repo/mailtmpl/templates/`:
+   - `<name>.html.tmpl` defines `content`, built from the shared layout's blocks (`heading`,
+     `paragraph`, `button`, `footnote`).
+   - `<name>.txt.tmpl` defines `subject` and `text`.
+
+   The fields are those of your struct (`.Username`, `.LoginURL`). A template that reads a field
+   the type does not have fails the render test.
+
+4. **Add the fixtures** in `internal/repo/mailtmpl/mailtmpl_test.go`: one with every field set,
+   one zero value. A template without a fixture fails `TestEveryTemplateHasAFixture`.
+
+   <RepoCode path="internal/repo/mailtmpl/mailtmpl_test.go" symbol="fixtures" />
+
+5. **Write the goldens.** The render test compares the output with
+   `internal/repo/mailtmpl/testdata/<name>.golden.html` and `.golden.txt`. Create them, then read
+   the diff:
+
+   ```sh
+   UPDATE_GOLDEN=1 go test ./internal/repo/mailtmpl/
+   git diff internal/repo/mailtmpl/testdata/
+   ```
+
+   Run the same command after any intended change to a template.
+
+6. **Send it.** Encode the email with `entity.EncodeEmail` and publish it on `entity.EmailQueue`
+   through a port, from an [event handler](/go-clean-template/guides/event-handler/), with an ID
+   derived from the event so a retry does not send it twice:
+
+   <RepoCode path="internal/repo/notify/notify.go" symbol="Welcome" />
+
+7. **Check it in Mailpit.** `make dev` (or `make compose-up-all`) starts Mailpit, which catches
+   every email. Trigger the event, then open the Mailpit UI at
+   [http://localhost:8025](http://localhost:8025). Add an assertion to
+   `integration-test/mail_test.go`, which reads Mailpit's API, and run it with
+   `make compose-up-integration-test`.
+
+8. **Run the checks**: `make format`, `make linter-golangci`, `make test`.
+
+</Steps>
+
+<Aside>
+  Delivery is at-least-once. If the worker stops after the SMTP relay accepts the email but before
+  the message is acknowledged, the recipient gets it twice. For transactional email that is
+  accepted.
+</Aside>
+
+## Rules
+
+- The data an email shows is an `entity` type listed in `EmailTypes()`; without the entry it cannot be decoded and goes to poison.
+- Wording and markup live only in the templates, so changing text never touches Go code.
+- Every template has a fixture and goldens; a changed golden is reviewed, never regenerated blindly.
+- An email is queued from the worker with a deduplicating ID, never sent from a request.
+- Only the worker renders and sends email.

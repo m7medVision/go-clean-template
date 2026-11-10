@@ -1,0 +1,67 @@
+---
+title: Repository layout
+description: What each top-level folder holds and where the main pieces of the Go code live.
+sidebar:
+  order: 4
+---
+
+import { FileTree } from "@astrojs/starlight/components";
+
+<FileTree>
+
+- cmd/
+  - app/ the API binary: REST, GraphQL and gRPC
+  - worker/ the projections and the queue consumer
+  - migrate/ applies and rolls back migrations for the `migrate-*` targets
+  - openapi/ prints the REST OpenAPI document for `make openapi`
+- config/ every setting, parsed from the environment
+- internal/
+  - entity/ domain types, aggregates, events and sentinel errors; imports nothing from the module
+    - mongo/ documents kept in MongoDB (task attributes)
+  - usecase/
+    - task/ one domain: `command/`, `query/`, `event/` and `register.go`
+    - aggregate/ load, change and save an aggregate, shared by every domain
+    - behavior/ the app's pipeline steps (authorize, limit, wait for projections)
+    - …
+  - repo/
+    - task.go a domain's ports: its read model and outbound interfaces
+    - contracts.go the ports every domain shares (event store, subscriber, …)
+    - persistent/
+      - eventstore/ the Postgres event store
+      - projection/ the projection runner the worker runs
+      - queries/ SQL files and the code sqlc generates from them
+      - task/ a domain's read model, projector and importer
+    - mongo/ the MongoDB stores
+    - webapi/ outbound HTTP clients
+    - memstore/ the in-memory event store for tests
+    - repomock/ generated mocks
+  - controller/
+    - restapi/v1/ REST on Huma, one folder per domain
+    - grpc/v1/ gRPC, one folder per domain
+    - graphql/ gqlgen schema, generated code and resolvers
+    - worker/v1/ queue message handlers
+    - authn/ the caller read from a token, shared by every transport
+    - httpmw/ the middleware around every HTTP request
+  - app/ the wiring: one module per domain, the buses, the servers, `Run` and `RunWorker`
+    - migrations/ goose SQL migrations, embedded in the binary
+- pkg/ infrastructure with no domain knowledge: buses, broker, Postgres, Valkey, Mongo, JWT, tracing
+- docs/
+  - proto/v1/ the `.proto` files and the Go code generated from them
+  - openapi/v1.json the exported REST document
+- web/ the React client (TanStack Router and Query, Vite+)
+- integration-test/ the end-to-end suite, run inside the compose network
+- tools/gen/ the domain and use-case generator, a separate Go module
+- site/ this documentation site
+- caddy/ the reverse proxy for the full stack
+- keycloak/ the development SSO realm
+- scripts/ helpers such as `dev.sh` behind `make dev`
+- Makefile every command you run
+- docker-compose.yml the services, and the app and worker images
+- .env.example the default settings
+- sqlc.yaml the SQL code generation settings
+
+</FileTree>
+
+The arrows between these folders are fixed: see
+[the dependency rule](/go-clean-template/concepts/dependency-rule/). To decide which folder new code
+goes in, see [where code goes](/go-clean-template/concepts/where-code-goes/).

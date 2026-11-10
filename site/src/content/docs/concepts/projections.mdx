@@ -1,0 +1,146 @@
+---
+title: Projections
+description: How the worker turns stored events into read-model tables, exactly once, and how writes wait for it.
+sidebar:
+  order: 6
+---
+
+import RepoCode from "../../../components/RepoCode.astro";
+import { Aside } from "@astrojs/starlight/components";
+
+A command stores events; a query reads tables. Something has to turn the first into the second.
+That is the projection runner (`internal/repo/persistent/projection`), and it runs in the worker
+(`cmd/worker`), not in the app. The app needs the worker running: every write waits for it.
+
+## Subscribers
+
+The runner drives **subscribers**. A subscriber has a name, the event types it handles, and a
+`Handle` method:
+
+<RepoCode path="internal/repo/contracts.go" lines="34-43" />
+
+There are two kinds, and the difference matters:
+
+| Kind          | Writes                         | Rebuildable | Waited for | Examples                                                 |
+| ------------- | ------------------------------ | ----------- | ---------- | -------------------------------------------------------- |
+| Projector     | read-model tables in Postgres  | yes         | yes        | `task`, `user`, `passkey`, `exchange`                    |
+| Event handler | a side effect (a NATS publish) | no          | no         | `send-welcome-email`, the analytics `capture-*` handlers |
+
+A projector is built with `projection.NewProjector`: its name, the tables a rebuild empties, the
+events it handles and an unexported `project` function with one case per event, writing through the
+sqlc `Querier` it is handed:
+
+<RepoCode path="internal/repo/persistent/exchange/projector.go" symbol="NewProjector" />
+
+An event handler lives in `internal/usecase/<domain>/event/` and is returned by its module's
+`eventHandlers` in `internal/app/<domain>.go`. Each domain's projector is returned by the module's
+`projector`. The worker refuses to start when an event type in `entity.EventTypes()` has no
+projector, or when two subscribers share a name (`projection.Check`).
+
+## Checkpoints
+
+Each subscriber has a checkpoint in `projection_checkpoints`: the position of the last event it
+finished. The runner runs one loop per subscriber:
+
+1. Read the events after the checkpoint, in position order, up to `PROJECTION_BATCH_SIZE`.
+2. Hand each event of a type the subscriber `Handles` to it, and move the checkpoint past it.
+3. Move the checkpoint past the events of other types without calling the subscriber.
+4. Sleep until `NOTIFY events` arrives (`LISTEN events`), or `PROJECTION_POLL_INTERVAL` passes as a
+   fallback.
+
+A subscriber that implements `repo.StartsAtHead` starts at the store's last event the first time it
+runs, not at zero. The analytics handlers do this, so adding a vendor sends no past events.
+
+The app's `/metrics` reports `projection_lag_events{projector}`: how many events each subscriber is
+behind.
+
+## Exactly once
+
+Each event is handled in **one transaction together with its checkpoint's move**:
+
+<RepoCode path="internal/repo/persistent/projection/runner.go" symbol="move" />
+
+The subscriber writes through `pg.Executor(ctx)` (`pkg/postgres`), which returns the transaction
+the context carries. Its rows and the new checkpoint commit together or not at all. A crash between
+them can neither lose the row nor apply it twice. A failure rolls both back, and the event is
+retried.
+
+<Aside type="caution">
+Anything that escapes that transaction breaks exactly-once: a second pool, a goroutine, a write that
+does not go through `pg.Executor(ctx)`. A side effect outside Postgres, such as a NATS publish, is
+at-least-once instead, so it carries an ID derived from the event (`welcome-<user id>`) that the
+broker deduplicates.
+</Aside>
+
+Several workers can run. A transaction-scoped advisory lock per subscriber (`TryLock`) keeps two
+workers off the same subscriber, and the checkpoint moves only from the position it was read at, so
+even a lost lock cannot apply an event twice. Read-model tables have no foreign keys, because each
+projector advances on its own and one can be ahead of another.
+
+## Reads after writes: the wait step
+
+A command's answer waits until the projectors that handle the events it wrote have passed its
+position. A read sent right after a write then sees it; the web client relies on this when it
+reloads a list after a mutation.
+
+<RepoCode path="internal/usecase/behavior/behavior.go" symbol="Wait" />
+
+- `newBuses` builds a map from event type to projector names once (`projectorsByEvent`). A command
+  waits only for the projectors of the types in its `entity.Written`, so a stuck projector holds up
+  only the writes it projects.
+- A command that wrote no events waits for nothing.
+- Event handlers are never waited for.
+- After `CQRS_CONSISTENCY_TIMEOUT` (default `2s`), the step answers `entity.ErrReadModelBehind`:
+  the write is committed, but a read could still miss it. REST answers 503, gRPC `Unavailable`,
+  GraphQL `UNAVAILABLE`. The client should read again shortly, not write again.
+
+## Retry on a concurrency conflict
+
+Two commands that load the same aggregate and both save race on the stream's version. The loser
+gets `entity.ErrConcurrencyConflict`. The retry step, inside the wait step, runs the handler again,
+up to three attempts in all. The handler loads the aggregate afresh each time, so the next attempt
+starts from the write that won.
+
+<RepoCode path="internal/usecase/behavior/behavior.go" symbol="Retry" />
+
+A write that still loses after the last attempt answers 409 (gRPC `Aborted`, GraphQL `CONFLICT`).
+
+## The backfill
+
+Some domains had rows before they stored events. At start, the app runs each domain's **importer**
+once (`eventstore.Backfill`, called from `app.Run`). An importer reads the old rows and returns one
+new aggregate per row, holding an `*Imported` event and the claims the row holds:
+
+<RepoCode path="internal/repo/persistent/eventstore/backfill.go" symbol="Importer" />
+
+- Each importer runs in one transaction with its marker, the domain's row in `backfill_markers`,
+  under the store's lock. It imports everything and is marked done, or nothing and runs again next
+  start.
+- A stream that exists already is skipped: its row came from its events.
+- Projectors insert `*Imported` rows with `ON CONFLICT DO NOTHING`, so a row already in the table
+  stays as it was.
+- A new domain needs no importer: it never had rows without events.
+
+## Rebuilding a projection
+
+To replay a projector from the first event, for example after changing what it writes:
+
+```sh
+make projection-rebuild name=task
+```
+
+In one transaction this empties the projector's tables and resets its checkpoint to zero; the
+running worker then replays every event into them. Until it catches up, reads from those tables are
+incomplete. It refuses while an import is pending (`eventstore.ErrImportPending`), because the
+importers read the tables a rebuild empties. Never edit a checkpoint by hand.
+
+Event handlers cannot be rebuilt: replaying one would repeat its side effects, such as sending every
+welcome email again.
+
+## Configuration
+
+| Variable                   | Default | Effect                                      |
+| -------------------------- | ------- | ------------------------------------------- |
+| `CQRS_CONSISTENCY_TIMEOUT` | `2s`    | how long a command waits for its projectors |
+| `PROJECTION_POLL_INTERVAL` | `1s`    | fallback poll when no notification arrives  |
+| `PROJECTION_BATCH_SIZE`    | `100`   | events a subscriber reads at a time         |

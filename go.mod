@@ -2,8 +2,12 @@ module github.com/m7medvision/go-clean-template
 
 go 1.27.3
 
-// The React frontend; npm packages can ship .go files that must not join ./... patterns.
-ignore ./web
+// The React frontend and the docs site; npm packages can ship .go files that must not join ./...
+// patterns.
+ignore (
+	./site
+	./web
+)
 
 tool (
 	github.com/99designs/gqlgen

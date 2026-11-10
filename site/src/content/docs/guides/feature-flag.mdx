@@ -1,0 +1,115 @@
+---
+title: Add a feature flag
+description: Ship a feature dark behind an OpenFeature flag, check it in handlers, expose it to the client and remove it later.
+sidebar:
+  order: 12
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+A feature flag turns a feature on or off without a deploy. The backend decides every flag: command
+and query handlers check it, and the web client asks the backend for the caller's flags and never
+evaluates one itself.
+
+Flags are read through the OpenFeature Go SDK, wrapped in `pkg/flags`. Which provider answers
+depends on one setting:
+
+| `FEATURE_FLAGS_FILE`                                                         | What answers a flag                                                                                                     |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| set (`config/flags.yaml` in `.env.example`, `/config/flags.yaml` in compose) | GO Feature Flag, in process, reading that file. The app polls it every 10 seconds, so an edit applies without a restart |
+| unset (production as shipped)                                                | no provider: every flag answers the default written in code                                                             |
+
+<RepoCode path="pkg/flags/flags.go" symbol="New" />
+
+A production provider (a relay proxy, flagd, a vendor) plugs in at `flags.New`: build its
+OpenFeature provider and pass it to `NewWithProvider`. Nothing else changes.
+
+The example is `task-attributes`, which switches task attributes off: setting them answers an
+error, task reads leave `attributes` empty without reading MongoDB, and the web hides the priority
+and labels columns.
+
+## Steps
+
+<Steps>
+
+1. **Declare the flag** in `internal/entity/flag.go`: a function returning its `Flag` (key and
+   default), listed in `Flags()`, and a field in `FlagValues`. Say in its comment who owns it and
+   when it goes.
+
+   <RepoCode path="internal/entity/flag.go" symbol="FlagTaskAttributes" />
+   <RepoCode path="internal/entity/flag.go" symbol="FlagValues" />
+
+2. **Add it to `config/flags.yaml`**, in GO Feature Flag's format (`variations` and a
+   `defaultRule`), so development can flip it.
+
+3. **Check it in the handler.** Give the handler a `Flags *flags.Client` field, filled in by the
+   domain's `register.go`, and call `Bool` with the user ID as the evaluation context, so a provider
+   can target users. A command whose feature is off answers `entity.ErrFeatureDisabled`:
+
+   <RepoCode path="internal/usecase/task/command/set_task_attributes.go" symbol="Handle" />
+
+   A query keeps working and leaves the feature's data out:
+
+   <RepoCode path="internal/usecase/task/query/list_tasks.go" symbol="attributesOn" />
+
+4. **Expose it to the client.** Add its value in the `GetFlags` query
+   (`internal/usecase/flags/query`). REST serves it at `GET /v1/flags`; GraphQL at the `flags`
+   field, whose `FlagValues` type is in `internal/controller/graphql/schema/flags_types.graphqls`.
+
+   <RepoCode path="internal/usecase/flags/query/get_flags.go" symbol="Handle" />
+
+   Regenerate what reads it:
+
+   ```sh
+   make graphql
+   make openapi
+   make web-api
+   make web-graphql
+   ```
+
+5. **Hide the UI in the web client.** The route loader fetches the flags with the other data, and
+   the component reads them with `useSuspenseQuery`:
+
+   ```ts
+   // web/src/routes/_authed/tasks.tsx
+   loader: ({ context, deps }) =>
+     Promise.all([
+       context.queryClient.ensureQueryData(listQuery(deps)),
+       context.queryClient.ensureQueryData(flagsQuery),
+     ]),
+   // ...
+   const attributes = useSuspenseQuery(flagsQuery).data.taskAttributes;
+   ```
+
+   `flagsQuery` is in `web/src/api/flags.ts`. Hiding UI is a convenience; the handler is still the
+   check.
+
+6. **Test both states.** Build the client with `pkg/flags/flagstest`, which answers fixed values:
+   `flagstest.New(t, map[string]bool{"task-attributes": false})`. See
+   `TestTaskReadsLeaveAttributesOutWhileTheFlagIsOff` in `internal/usecase/task/query/query_test.go`.
+
+7. **Run the checks**: `make format`, `make linter-golangci`, `make test`, `make web-check`.
+
+</Steps>
+
+## Removing a flag
+
+Every flag goes once its rollout is done. Delete its function and its entry in `Flags()`, its
+`FlagValues` field, its checks, its entry in `config/flags.yaml`, and its UI branch. Keep the code
+path the flag was on. On GraphQL, mark the field `@deprecated` first while a client still reads it.
+Then regenerate as in step 4.
+
+<Aside>
+  Every evaluation adds a `feature_flag.evaluation` event to the message's span, and a failed one
+  logs a single `Warn` and uses the default. Handlers carry no flag logging or tracing of their own.
+</Aside>
+
+## Rules
+
+- Flags are checked in command and query handlers, never in controllers or the browser, so every transport behaves the same.
+- Only `pkg/flags` imports an OpenFeature or vendor SDK.
+- Every flag has a default in code that production relies on; the YAML file is for development.
+- The user ID is passed as the evaluation context, so targeting works without code changes.
+- A flag is not a permission: roles come from the token.
+- Every flag has an owner and a removal condition, and is removed when it is met.

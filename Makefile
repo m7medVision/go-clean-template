@@ -20,9 +20,10 @@ DEV_SERVICES += keycloak
 
 # Top-level directories holding Go code.
 GO_DIRS = $(patsubst %/,%,$(wildcard */))
-# web/ is excluded: its node_modules can ship .go files. Every frontend target runs Vite+ inside web/.
-GO_DIRS := $(filter-out web,$(GO_DIRS))
+# web/ and site/ are excluded: their node_modules can ship .go files. Their targets run Vite+ inside them.
+GO_DIRS := $(filter-out site web,$(GO_DIRS))
 WEB = vp -C web
+DOCS = vp -C site
 
 # HELP =================================================================================================================
 # This will output the help for each task
@@ -99,6 +100,33 @@ web-check: ### format check, lint, type check and unit-test the frontend
 web-build: ### build the frontend into web/dist
 	$(WEB) build
 .PHONY: web-build
+
+docs-deps: ### install the docs site dependencies (Vite+, frozen lockfile)
+	$(DOCS) install --frozen-lockfile
+.PHONY: docs-deps
+
+docs-gen: ### generate the docs site's environment and make target tables from config/ and this Makefile
+	$(DOCS) node scripts/gen.ts
+.PHONY: docs-gen
+
+docs-dev: docs-gen ### run the docs site on http://localhost:4321/go-clean-template/
+	$(DOCS) exec astro dev
+.PHONY: docs-dev
+
+docs-build: docs-gen ### type-check and build the docs site into site/dist
+	$(DOCS) exec astro check
+	$(DOCS) exec astro build
+.PHONY: docs-build
+
+docs-format: ### format the docs site
+	$(DOCS) fmt .
+.PHONY: docs-format
+
+docs-check: ### format check, unit-test and build the docs site
+	$(DOCS) fmt --check .
+	$(DOCS) test
+	$(MAKE) docs-build
+.PHONY: docs-check
 
 web-e2e: ### run the Playwright suite against the running app and worker (make dev, or make run and make run-worker)
 	@curl -fs http://localhost:$(HTTP_PORT)/healthz >/dev/null || { echo "web-e2e needs the app on HTTP_PORT=$(HTTP_PORT); start the stack first (make dev)"; exit 1; }
@@ -254,5 +282,5 @@ release-version: ### print the next release version from the commits since the l
 .PHONY: release-version
 
 pre-commit: deps mock format linter-golangci test gen-check ### run pre-commit
-pre-commit: web-api web-graphql web-format web-check
+pre-commit: web-api web-graphql web-format web-check docs-format docs-check
 .PHONY: pre-commit

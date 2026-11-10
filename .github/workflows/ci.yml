@@ -521,6 +521,21 @@ jobs:
       - name: Generate, then regenerate, lint and test
         run: make gen-e2e
 
+  # The docs site reads code, config and the Makefile from the whole repository, so it is built on
+  # every change rather than behind a paths filter.
+  docs:
+    name: runner / docs / check + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          working-directory: site
+          node-version-file: .node-version
+          cache: true
+      - name: Check and build
+        run: make docs-check
+
   ci-ok:
     name: runner / ci-ok
     needs:
@@ -533,6 +548,7 @@ jobs:
       - integration-tests
       - gen-check
       - gen-e2e
+      - docs
     if: always()
     runs-on: ubuntu-latest
     steps:

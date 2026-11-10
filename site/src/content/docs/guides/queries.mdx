@@ -1,0 +1,85 @@
+---
+title: Add a query
+description: Write a query, the read-model method it calls and its SQL, and test it with generated mocks.
+sidebar:
+  order: 4
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+A query reads one thing a caller asks for. It reads only a read model, the tables the projectors
+keep up to date, and never loads an aggregate. Start with
+`make new-usecase domain=<domain> name=<name> kind=query`
+([Add a command or query](/go-clean-template/guides/add-endpoint/)); this page covers the parts it
+leaves to you.
+
+## Steps
+
+<Steps>
+
+1. **The query type** in `internal/usecase/<domain>/query/<name>.go` embeds `cqrs.Query[R]`, where
+   `R` is what it answers. Its fields are plain values, never a transport DTO:
+
+   <RepoCode path="internal/usecase/task/query/get_task.go" symbol="GetTask" />
+
+   Add `Validate()` for input rules (paging, filters), built from `entity` functions such as
+   `entity.Page`.
+
+2. **The handler** is a struct whose exported fields are its dependencies. It reads the record by
+   ID, whoever owns it, then asks the record whether the caller may read it:
+
+   <RepoCode path="internal/usecase/task/query/get_task.go" symbol="Handle" />
+
+   Ownership is the entity's `ReadableBy` rule, not a `WHERE user_id = ...` in the SQL, so every
+   query answers the same error for the same case:
+
+   <RepoCode path="internal/entity/task.go" symbol="ReadableBy" />
+
+3. **The SQL** goes in `internal/repo/persistent/queries/<domain>.sql` as an sqlc-annotated query
+   (`-- name: GetTask :one`). Run `make sqlc`; it reads the migrations as its schema and writes
+   typed Go beside the file.
+
+4. **The contract.** Add the method to the domain's read-model interface in
+   `internal/repo/<domain>.go`:
+
+   <RepoCode path="internal/repo/task.go" symbol="TaskReadModel" />
+
+   Then `make mock`, which regenerates `internal/repo/repomock/<domain>.go` from the file's
+   `go:generate` directive.
+
+5. **The implementation** in `internal/repo/persistent/<domain>/<domain>.go` calls the generated
+   query through `pg.Executor(ctx)` (so it joins any transaction the context carries) and maps
+   driver errors such as `pgx.ErrNoRows` to the domain's sentinel.
+
+6. **Register it**: one `cqrs.HandleQuery` line in `register.go`, passing the read model from
+   `Deps`.
+
+7. **Test the handler** against the mock, table-driven, with `t.Parallel()`:
+
+   ```go
+   ctrl := gomock.NewController(t)
+   tasks := repomock.NewMockTaskReadModel(ctrl)
+   tasks.EXPECT().Get(gomock.Any(), "t1").Return(want, nil)
+   ```
+
+   See `internal/usecase/task/query/query_test.go`.
+
+8. **Expose it** and add its result's fields on each transport:
+   [REST](/go-clean-template/guides/rest-operation/),
+   [gRPC](/go-clean-template/guides/grpc-method/),
+   [GraphQL](/go-clean-template/guides/graphql-field/).
+
+</Steps>
+
+## Rules
+
+- A query reads only a read model and never loads an aggregate: reads and writes are separate on
+  purpose.
+- Ownership is checked with the record's `ReadableBy`, never in SQL: one rule, one error per case.
+- SQL lives only in `queries/<domain>.sql` and is compiled with `make sqlc`: no query building at
+  runtime and no hand-edited generated code.
+- After a contract change, run `make mock`: the mocks are generated, never written.
+- The read model returns `entity` types: the query answers domain types, and each transport shapes
+  its own response.
+- Input rules are the query's `Validate()`: the validate step runs them for every transport.

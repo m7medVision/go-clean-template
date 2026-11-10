@@ -57,6 +57,9 @@ through the buses, command handlers record events, and query handlers read proje
 
 These are rules, not suggestions: a change that breaks one is not merged.
 
+The [documentation](https://m7medvision.github.io/go-clean-template/) explains each layer, walks a
+request through all of them, and has a guide for every kind of change.
+
 ## Quick start
 
 Needs Docker, Go, `tmux` and `curl`.

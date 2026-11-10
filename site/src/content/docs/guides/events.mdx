@@ -1,0 +1,115 @@
+---
+title: Record and change events
+description: Add a new event to a domain, and change the shape of one that is already stored.
+sidebar:
+  order: 3
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+An event is a fact an aggregate recorded. Events are the stored truth: an aggregate's state is
+whatever its events add up to, and every read model is built from them. That is why a stored event
+is never rewritten. Production databases hold events written by every past version of your code,
+and the code must keep reading all of them.
+
+## Record a new event
+
+The worked example is `TaskTransitioned`, which the `TransitionTask` command records.
+
+<Steps>
+
+1. **Declare the type** in `internal/entity/<domain>_events.go`, with JSON tags on every field:
+
+   <RepoCode path="internal/entity/task_events.go" symbol="TaskTransitioned" />
+
+   Give it `EventType()` (the name in the store, which never changes once events of the type are
+   stored) and `SchemaVersion()` (start at 1):
+
+   ```go
+   func (TaskTransitioned) EventType() string { return "TaskTransitioned" }
+
+   func (TaskTransitioned) SchemaVersion() int { return 1 }
+   ```
+
+2. **List it.** Add a zero value to the domain's list (`TaskEvents()`), which `EventTypes()` joins.
+   The store decodes only these types, so an unlisted event fails to load.
+
+   <RepoCode path="internal/entity/event.go" symbol="EventTypes" />
+
+3. **Record it from a behavior method** on the aggregate in `<domain>_aggregate.go`. The method
+   checks the rules first, then calls `entity.Record`, which applies the event and queues it for
+   the store:
+
+   <RepoCode path="internal/entity/task_aggregate.go" symbol="Transition" />
+
+4. **Apply it.** Add a case to the aggregate's `Apply` that changes only the state its rules read.
+   `Apply` runs both when recording and when loading the stream, so it must not check rules or fail.
+
+   <RepoCode path="internal/entity/task_aggregate.go" symbol="Apply" />
+
+   Test the behavior method and `Apply` in `internal/entity`.
+
+5. **Project it.** Add a case to the projector's `project` in
+   `internal/repo/persistent/<domain>/projector.go`, with any new SQL in `queries/<domain>.sql`
+   and `make sqlc`. Test it against the fake `Querier`.
+
+   <RepoCode path="internal/repo/persistent/task/projector.go" symbol="project" />
+
+6. **Write its sample:**
+
+   ```sh
+   UPDATE_GOLDEN=1 go test -run TestWriteEventSamples ./internal/repo/eventcodec/
+   ```
+
+   This writes `internal/repo/eventcodec/testdata/events/<Type>.v1.json`. Commit it.
+
+</Steps>
+
+## Change an event's shape
+
+Renaming a field, changing its type or its meaning changes the shape. Adding a field that old
+events can do without is also a change to the frozen sample, so treat it the same way.
+
+<Steps>
+
+1. **Raise `SchemaVersion()`** by one and change the struct.
+
+2. **Add an upcast** to `entity.Upcasts()` that rewrites a stored payload from the previous
+   version to the new one. The codec applies it as it loads, so old events reach your code in
+   the new shape.
+
+   <RepoCode path="internal/entity/event.go" symbol="Upcast" />
+
+   ```go
+   func Upcasts() []Upcast {
+   	return []Upcast{
+   		{Type: "TaskTransitioned", From: 1, Up: taskTransitionedV1ToV2},
+   	}
+   }
+   ```
+
+3. **Keep the old sample.** Leave `<Type>.v1.json` in `testdata/events/` and write the new one
+   with the `UPDATE_GOLDEN=1` command above. The codec tests decode every sample, so the old one
+   proves the upcast still reads what is stored.
+
+4. **Rebuild the projection** only if the read model needs the new data for old events:
+   [Rebuild a projection](/go-clean-template/guides/rebuild-projection/).
+
+</Steps>
+
+<Aside type="caution">
+  Never rename `EventType()`, edit a sample to match a new shape, or delete one. The codec tests
+  fail when a stored shape drifts from its sample, and that failure is the point.
+</Aside>
+
+## Rules
+
+- Only behavior methods call `entity.Record`, after their rules pass: anything else skips a rule.
+- `Apply` changes state and nothing else: it runs on every load, so it cannot fail or check rules.
+- Every event type is in `EventTypes()`, in `Apply` and in the projector: the store cannot decode an
+  unlisted type, and the projector answers `entity.ErrUnhandledEvent` for a missing case.
+- A shape change raises `SchemaVersion()` and adds an `Upcast`: stored events are never rewritten.
+- Old samples stay in `internal/repo/eventcodec/testdata/events/`: they are the proof that every
+  stored version still decodes.
+- `EventType()` never changes once events of the type exist.

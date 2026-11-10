@@ -1,0 +1,74 @@
+---
+title: Add a gRPC method
+description: Add an rpc to a domain's proto service, implement it in its own file and test it over bufconn.
+sidebar:
+  order: 7
+---
+
+import { Steps } from "@astrojs/starlight/components";
+import RepoCode from "../../../components/RepoCode.astro";
+
+Each domain has one gRPC service, declared in `docs/proto/v1/<domain>.proto`, and one controller
+folder `internal/controller/grpc/v1/<domain>/` with a file per rpc. `make new-usecase` writes all of
+this; the steps below are the recipe by hand. The worked example is `TransitionTask`.
+
+<Steps>
+
+1. **Change the proto.** Add the rpc to the domain's service and its request and response messages:
+
+   ```proto
+   service TaskService {
+     rpc TransitionTask (TransitionTaskRequest) returns (TaskResponse);
+   }
+   ```
+
+   <RepoCode path="docs/proto/v1/task.proto" symbol="TransitionTaskRequest" />
+
+   Proto fields are numbered; never reuse or renumber a field another client may already send.
+
+2. **Generate the Go code:**
+
+   ```sh
+   make proto-v1
+   ```
+
+   It needs `protoc` on `PATH`. The build now fails, because the controller does not implement the
+   new method of the generated server interface.
+
+3. **Write the method** in a new file `internal/controller/grpc/v1/<domain>/<rpc>.go`. It reads the
+   caller with `authn.MustCaller(ctx)`, sends the message built from the request's getters, and maps
+   every error with `rpcerr.Status`:
+
+   <RepoCode path="internal/controller/grpc/v1/task/transition_task.go" symbol="TransitionTask" />
+
+   It checks no input itself: the message's `Validate()` runs on the buses, and `rpcerr.Status`
+   turns the `entity.Err*` kind into a gRPC code.
+
+4. **Map the response** in the folder's `response.go`, through a `New*Response` function. gRPC
+   always converts; it never returns an entity:
+
+   <RepoCode path="internal/controller/grpc/v1/task/response.go" symbol="NewTaskResponse" />
+
+5. **Make it public, only if it must be.** Every method needs a token unless its module lists it
+   in `grpcPublic` by its generated `FullMethodName` constant. Today that is only `AuthService`
+   `Register` and `Login`:
+
+   <RepoCode path="internal/controller/grpc/v1/user/controller.go" symbol="PublicMethods" />
+
+6. **Test it over `bufconn`** in the domain folder: the test starts the real server with its
+   interceptors on an in-memory listener, with fake handlers on real buses, and dials it. See the
+   `dial` helper in `internal/controller/grpc/v1/task/task_test.go`.
+
+</Steps>
+
+## Rules
+
+- One file per rpc; shared mapping lives in `response.go`: adding a method never edits another
+  method's file.
+- Errors go through `rpcerr.Status`: it is the one place an error kind becomes a gRPC code and the
+  place that logs internal errors.
+- Responses are built with `New*Response`: proto types never leak into or out of the domain.
+- A method is public only by being listed in its module's `grpcPublic`: authentication is denied
+  by default.
+- Never hand-edit `docs/proto/v1/*.pb.go`: `make proto-v1` overwrites them.
+- Never renumber or reuse a proto field: deployed clients decode by number.
