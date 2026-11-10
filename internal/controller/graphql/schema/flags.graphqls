@@ -1,0 +1,4 @@
+extend type Query {
+  "The caller's feature flags."
+  flags: FlagValues!
+}

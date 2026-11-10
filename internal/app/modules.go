@@ -82,6 +82,7 @@ func modules() []module {
 		oidcModule(),
 		mailModule(),
 		analyticsModule(),
+		flagsModule(),
 	}
 }
 

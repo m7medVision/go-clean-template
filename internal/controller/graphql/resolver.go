@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/exchange"
+	"github.com/m7medvision/go-clean-template/internal/controller/graphql/flags"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/generated"
 	"github.com/m7medvision/go-clean-template/internal/controller/graphql/task"
 	"github.com/m7medvision/go-clean-template/pkg/cqrs"
@@ -17,11 +18,13 @@ type (
 	taskQuery     = task.Query
 	taskMutation  = task.Mutation
 	exchangeQuery = exchange.Query
+	flagsQuery    = flags.Query
 )
 
 type query struct {
 	taskQuery
 	exchangeQuery
+	flagsQuery
 }
 
 type mutation struct {
@@ -39,6 +42,7 @@ func newResolver(b cqrs.Buses, l *slog.Logger) *resolver {
 	r := &resolver{}
 	r.query.taskQuery, r.mutation.taskMutation = task.New(b, l)
 	r.query.exchangeQuery = exchange.New(b, l)
+	r.query.flagsQuery = flags.New(b, l)
 
 	return r
 }
