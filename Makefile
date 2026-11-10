@@ -20,8 +20,8 @@ DEV_SERVICES += keycloak
 
 # Top-level directories holding Go code.
 GO_DIRS = $(patsubst %/,%,$(wildcard */))
-# web/ is excluded: its node_modules can ship .go files. Every frontend target runs Vite+ inside web/.
-GO_DIRS := $(filter-out web,$(GO_DIRS))
+# web/ and site/ are excluded: their node_modules can ship .go files. Their targets run Vite+ inside them.
+GO_DIRS := $(filter-out site web,$(GO_DIRS))
 WEB = vp -C web
 DOCS = vp -C site
 
