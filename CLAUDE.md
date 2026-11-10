@@ -120,7 +120,7 @@ internal/usecase/<domain> → internal/repo/*.go (interfaces) → internal/entit
   (the middleware around every HTTP request: client address, log, tracing, metrics, recovery),
   which REST's `Auth` borrows its problem writer from; see **Controller layout** below.
 - `pkg/` — transport-agnostic infrastructure (buses, servers, jwt, postgres, migrate, valkey,
-  mongo, tracing, clientip).
+  mongo, flags, tracing, clientip).
   Logging is `log/slog`, built once in `internal/app` and passed as a `*slog.Logger`. Must
   not import `internal/`.
 - `tools/gen` — the domain and use-case generator (`make new-domain`, `make new-usecase`), its own Go
@@ -321,7 +321,9 @@ A read model returns a record by its ID, whoever owns it; the query handler then
 conversion `ErrConversionNotFound`), never the SQL. The task aggregate changes a task by that rule.
 The one exception is a task's attributes (`internal/entity/mongo/task`, stored in MongoDB by
 `internal/repo/mongo/task`): `SetTaskAttributes` writes them directly, with no event, and the task
-queries merge them in (`docs/cqrs.md`).
+queries merge them in (`docs/cqrs.md`), unless the `task-attributes` feature flag is off.
+Feature flags are checked in handlers through `pkg/flags` (OpenFeature), never in controllers or the
+browser; `docs/feature-flags.md` says how to add and remove one.
 
 **Mocks are generated, not written.** Each file in `internal/repo/repomock/` comes from the
 `go:generate` directive of the contract file it is named after (`repo/task.go` →

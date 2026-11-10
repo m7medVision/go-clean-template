@@ -92,6 +92,12 @@ None can be turned off: a value of zero or less stops the app at startup.
 | `MONGO_URL` | required by the app | `mongodb://user:password@host:port/database?authSource=admin`; the path names the database the app uses. The app connects and pings at startup and stops when MongoDB cannot be reached. The worker does not read it |
 | `MONGO_PORT` | `27017` | the host port the compose `mongo` service publishes, and `MONGO_URL` in `.env.example` is built from it, as `PG_URL` is from `PG_PORT`. The app does not read it |
 
+## Feature flags
+
+| Env var | Default | |
+| --- | --- | --- |
+| `FEATURE_FLAGS_FILE` | empty | read only by the app: the [GO Feature Flag](feature-flags.md) file it polls (`config/flags.yaml` in `.env.example`, `/config/flags.yaml` in compose). Empty, every flag answers its default in code |
+
 ## Exchange
 
 | Env var | Default | |

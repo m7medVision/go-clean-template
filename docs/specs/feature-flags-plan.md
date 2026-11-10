@@ -8,8 +8,10 @@ One branch, `feat/feature-flags`, one PR. The flag client goes in first and noth
 `task-attributes` checks come next, then the `GetFlags` query and its transports, then the web,
 then the docs. Seven tasks, one commit each.
 
-**Built on the review picks below, which still need the user's confirmation.** The spec stays
-"awaiting review" until they are confirmed. If one changes, only the tasks named next to it change.
+Built 2026-11-10 on the review picks below, confirmed by the request to build every task. Tasks 2
+and 3 landed as one commit (`feat(task): turn task attributes off with their flag`): they share
+`register.go`. Tasks 4 and 5 likewise. The flags file is `config/flags.yaml`, not the root: the
+image already copies `config/`.
 
 | # | Review point | Pick the plan assumes | Tasks it changes |
 | --- | --- | --- | --- |
