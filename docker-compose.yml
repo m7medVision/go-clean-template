@@ -99,7 +99,7 @@ services:
           - valkey.lvh.me
 
   mongo:
-    image: mongo:9.0.4
+    image: mongo:9.0.8
     environment:
       MONGO_INITDB_ROOT_USERNAME: "user"
       MONGO_INITDB_ROOT_PASSWORD: "mongoPa55w0rd"
@@ -119,7 +119,7 @@ services:
           - mongo.lvh.me
   # The worker's queue: NATS with JetStream, its streams kept on a volume.
   nats:
-    image: nats:2.15.2-alpine
+    image: nats:2.15.3-alpine
     command: ["-js", "-sd", "/data", "-m", "8222"]
     ports:
       - "${NATS_PORT:-4222}:4222"
