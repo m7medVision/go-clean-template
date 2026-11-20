@@ -48,9 +48,9 @@ require (
 	github.com/shopspring/decimal v1.6.0
 	github.com/stretchr/testify v1.12.1
 	github.com/thomaspoignant/go-feature-flag v1.58.1
-	github.com/valkey-io/valkey-go v1.0.79
-	github.com/valkey-io/valkey-go/valkeylimiter v1.0.79
-	github.com/valkey-io/valkey-go/valkeyotel v1.0.79
+	github.com/valkey-io/valkey-go v1.0.80
+	github.com/valkey-io/valkey-go/valkeylimiter v1.0.80
+	github.com/valkey-io/valkey-go/valkeyotel v1.0.80
 	github.com/vektah/gqlparser/v2 v2.5.64
 	go.mongodb.org/mongo-driver/v2 v2.10.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
@@ -352,7 +352,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/exp v0.0.0-20261109185158-a52e3aef5920 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f // indirect
-	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/mod v0.43.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261010193011-f71dc92da45e // indirect
